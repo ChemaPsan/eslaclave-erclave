@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ERClave | Propuesta Frontend</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell" data-theme="light">
+      <aside class="sidebar" aria-label="Navegacion principal">
+        <div class="brand-block">
+          <div class="brand-mark">ER</div>
+          <div>
+            <strong>ERClave</strong>
+            <span>Operacion modular</span>
+          </div>
+        </div>
+
+        <nav class="module-nav" id="moduleNav"></nav>
+
+        <div class="sidebar-footer">
+          <button class="icon-button" id="themeToggle" type="button" aria-label="Cambiar tema" title="Cambiar tema">
+            <span class="icon">◐</span>
+          </button>
+          <button class="icon-button" id="langToggle" type="button" aria-label="Cambiar idioma" title="Cambiar idioma">
+            <span class="icon">ES</span>
+          </button>
+          <button class="icon-button" type="button" aria-label="Configuracion" title="Configuracion">
+            <span class="icon">⚙</span>
+          </button>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" data-i18n="tenant">Cliente piloto</p>
+            <h1 data-i18n="title">Centro operativo</h1>
+          </div>
+          <div class="topbar-actions">
+            <label class="search-field">
+              <span>⌕</span>
+              <input id="searchInput" type="search" placeholder="Buscar orden, producto, cliente" data-i18n-placeholder="search" />
+            </label>
+            <button class="primary-action" type="button">
+              <span>＋</span>
+              <span data-i18n="newOrder">Nueva orden</span>
+            </button>
+          </div>
+        </header>
+
+        <section class="status-strip" aria-label="Indicadores principales">
+          <article class="metric-card">
+            <span class="metric-label" data-i18n="metricProduction">Produccion activa</span>
+            <strong>18</strong>
+            <small class="trend positive">+12%</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label" data-i18n="metricInventory">Inventario critico</span>
+            <strong>7</strong>
+            <small class="trend warning">3 faltantes</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label" data-i18n="metricMargin">Margen estimado</span>
+            <strong>32.4%</strong>
+            <small class="trend positive">estable</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label" data-i18n="metricAccounting">Pendiente contable</span>
+            <strong>11</strong>
+            <small class="trend danger">requiere mapeo</small>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <section class="main-panel" id="modulePanel"></section>
+
+          <aside class="insight-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow" data-i18n="synergy">Sinergia</p>
+                <h2 data-i18n="flowTitle">Flujo vivo</h2>
+              </div>
+              <span class="chip active">Live</span>
+            </div>
+
+            <div class="flow-list" id="flowList"></div>
+
+            <div class="validation-card">
+              <div class="panel-head compact">
+                <div>
+                  <p class="eyebrow" data-i18n="recipe">Receta</p>
+                  <h3>Playera basica</h3>
+                </div>
+                <span class="chip warning">Faltante</span>
+              </div>
+              <div class="requirement-row ok">
+                <span>Tela algodon</span>
+                <strong>200 / 220 m</strong>
+              </div>
+              <div class="requirement-row ok">
+                <span>Etiqueta</span>
+                <strong>100 / 100 pz</strong>
+              </div>
+              <div class="requirement-row risk">
+                <span>Hilo morado</span>
+                <strong>12 / 18 cr</strong>
+              </div>
+              <button class="secondary-action full" type="button" data-i18n="createPurchase">Generar requisicion</button>
+            </div>
+          </aside>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="modalBackdrop" hidden>
+      <section class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div id="modalContent"></div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
