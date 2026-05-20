@@ -1,668 +1,13 @@
-const resourceCatalog = [
-  { id: "tela_algodon", name: "Tela algodon", unit: "m", available: 220, cost: 42, type: "Materia prima", source: "Almacenes" },
-  { id: "hilo_morado", name: "Hilo morado", unit: "cr", available: 12, cost: 85, type: "Materia prima", source: "Almacenes" },
-  { id: "etiqueta", name: "Etiqueta", unit: "pz", available: 140, cost: 2.5, type: "Materia prima", source: "Almacenes" },
-  { id: "empaque_bolsa", name: "Bolsa empaque", unit: "pz", available: 80, cost: 1.2, type: "Materia prima", source: "Almacenes" },
-  { id: "tijeras", name: "Tijeras industriales", unit: "pz", available: 3, cost: 0, type: "Herramienta", source: "Almacenes" },
-  { id: "molde_playera", name: "Molde playera", unit: "pz", available: 2, cost: 0, type: "Herramienta", source: "Almacenes" },
-  { id: "maquina_recta", name: "Maquina recta", unit: "min", available: 480, cost: 1.8, type: "Maquinaria", source: "Almacenes" },
-  { id: "maquina_overlock", name: "Maquina overlock", unit: "min", available: 360, cost: 2.1, type: "Maquinaria", source: "Almacenes" },
-  { id: "operador_corte", name: "Operador de corte", unit: "min", available: 420, cost: 1.9, type: "Mano de obra", source: "Recursos Humanos" },
-  { id: "costurero", name: "Costurero", unit: "min", available: 960, cost: 2.2, type: "Mano de obra", source: "Recursos Humanos" },
-  { id: "supervisor", name: "Supervisor", unit: "min", available: 240, cost: 3.4, type: "Mano de obra", source: "Recursos Humanos" }
-];
-
-const defaultRecipes = [
-  {
-    id: "REC-221",
-    product: "Playera basica morada",
-    version: 3,
-    quantityBase: 1,
-    unit: "pieza",
-    status: "Activa",
-    center: "Produccion / Costura",
-    resources: [
-      { resourceId: "tela_algodon", quantity: 2 },
-      { resourceId: "hilo_morado", quantity: 0.18 },
-      { resourceId: "etiqueta", quantity: 1 },
-      { resourceId: "maquina_recta", quantity: 30 },
-      { resourceId: "costurero", quantity: 45 }
-    ],
-    steps: ["Corte", "Costura", "Calidad", "Empaque"],
-    createdAt: "2026-05-18"
-  }
-];
-
-const defaultOrders = [
-  {
-    id: "OP-1042",
-    recipeId: "REC-221",
-    recipeName: "Playera basica morada",
-    quantity: 100,
-    unit: "pieza",
-    status: "En produccion",
-    priority: "Alta",
-    dueDate: "2026-05-25",
-    center: "Produccion / Costura",
-    responsible: "Mariana Torres",
-    areas: [
-      { area: "Corte", responsible: "Luis Perez", status: "En proceso" },
-      { area: "Costura", responsible: "Ana Ruiz", status: "Pendiente" },
-      { area: "Calidad", responsible: "Sofia Mendez", status: "Pendiente" },
-      { area: "Empaque", responsible: "Carlos Diaz", status: "Pendiente" }
-    ],
-    createdAt: "2026-05-18"
-  }
-];
-
-const mockDb = {
-  loadRecipes() {
-    const raw = localStorage.getItem("erclave-recipes");
-    return raw ? JSON.parse(raw) : defaultRecipes;
-  },
-  saveRecipes(recipes) {
-    localStorage.setItem("erclave-recipes", JSON.stringify(recipes));
-  },
-  addRecipe(recipe) {
-    const recipes = this.loadRecipes();
-    recipes.unshift(recipe);
-    this.saveRecipes(recipes);
-    return recipes;
-  },
-  updateRecipe(recipe) {
-    const recipes = this.loadRecipes().map((item) => (item.id === recipe.id ? recipe : item));
-    this.saveRecipes(recipes);
-    return recipes;
-  },
-  deleteRecipe(recipeId) {
-    const recipes = this.loadRecipes().filter((item) => item.id !== recipeId);
-    const nextRecipes = recipes.length ? recipes : defaultRecipes;
-    this.saveRecipes(nextRecipes);
-    return nextRecipes;
-  },
-  findRecipe(recipeId) {
-    return this.loadRecipes().find((item) => item.id === recipeId);
-  },
-  loadOrders() {
-    const raw = localStorage.getItem("erclave-orders");
-    return raw ? JSON.parse(raw) : defaultOrders;
-  },
-  saveOrders(orders) {
-    localStorage.setItem("erclave-orders", JSON.stringify(orders));
-  },
-  addOrder(order) {
-    const orders = this.loadOrders();
-    orders.unshift(order);
-    this.saveOrders(orders);
-    return orders;
-  },
-  updateOrder(order) {
-    const orders = this.loadOrders().map((item) => (item.id === order.id ? order : item));
-    this.saveOrders(orders);
-    return orders;
-  },
-  findOrder(orderId) {
-    return this.loadOrders().find((item) => item.id === orderId);
-  }
-};
-
-function getResource(id) {
-  return resourceCatalog.find((item) => item.id === id);
-}
-
-function calculateRecipe(recipe, batchQuantity = 100) {
-  const rows = recipe.resources.map((item) => {
-    const resource = getResource(item.resourceId);
-    const required = Number(item.quantity) * batchQuantity;
-    const available = resource?.available || 0;
-    const cost = required * (resource?.cost || 0);
-    return {
-      name: resource?.name || item.resourceId,
-      unit: resource?.unit || "",
-      type: resource?.type || "",
-      source: resource?.source || "",
-      required,
-      available,
-      cost,
-      ok: available >= required
-    };
-  });
-
-  return {
-    rows,
-    totalCost: rows.reduce((sum, row) => sum + row.cost, 0),
-    missing: rows.filter((row) => !row.ok)
-  };
-}
-
-function getProductionModuleData() {
-  const recipes = mockDb.loadRecipes();
-  const orders = mockDb.loadOrders();
-  const selectedRecipeId = localStorage.getItem("erclave-selected-recipe");
-  const activeRecipe = recipes.find((recipe) => recipe.id === selectedRecipeId) || recipes[0] || defaultRecipes[0];
-  const validationQuantity = Number(localStorage.getItem("erclave-validation-qty") || 100);
-  const validation = calculateRecipe(activeRecipe, validationQuantity);
-
-  return {
-    records: [
-      ...orders.slice(0, 2).map((order) => [
-        order.id,
-        `${order.recipeName} · ${order.quantity} ${order.unit}`,
-        order.status
-      ]),
-      ...recipes.slice(0, 3).map((recipe) => [
-        recipe.id,
-        `${recipe.product} · version ${recipe.version}`,
-        recipe.status
-      ]),
-      [
-        "VAL-REC",
-        validation.missing.length
-          ? `${activeRecipe.product} · ${validation.missing.length} recursos faltantes`
-          : `${activeRecipe.product} · recursos suficientes`,
-        validation.missing.length ? "Faltante" : "Validada"
-      ]
-    ],
-    rows: [
-      ...orders.slice(0, 4).map((order) => {
-        const recipe = recipes.find((item) => item.id === order.recipeId) || activeRecipe;
-        const calc = calculateRecipe(recipe, order.quantity);
-        return [
-          order.id,
-          `${order.recipeName} · ${order.quantity} ${order.unit}`,
-          order.status,
-          calc.missing.length ? `${calc.missing.length} faltantes` : "Sin riesgo"
-        ];
-      })
-    ],
-    validation
-  };
-}
-
-const modules = [
-  {
-    id: "produccion",
-    icon: "PR",
-    count: 18,
-    title: "Produccion",
-    titleEn: "Production",
-    eyebrow: "Modulo operativo",
-    summary: "Recetas, ordenes, recursos, etapas y validacion automatica contra almacenes.",
-    primary: "Generar orden",
-    status: "18 ordenes activas",
-    kpis: [
-      ["Ordenes activas", "18", "positive"],
-      ["Faltantes", "3", "warning"],
-      ["Merma real", "2.8%", "warning"]
-    ],
-    submodules: [
-      ["Productos y servicios", "Catalogo base para fabricar o ejecutar servicios repetibles."],
-      ["Recetas", "Versiones, recursos, etapas, tiempos, merma y rendimiento."],
-      ["Ordenes", "Programacion, estados, responsables, prioridad y cantidades."],
-      ["Entregables por area", "Corte, ensamble, calidad, empaque y responsables."],
-      ["Validacion de recursos", "Disponibilidad, reservas, faltantes y compras sugeridas."]
-    ],
-    workflow: [
-      "Seleccionar receta activa",
-      "Calcular recursos por cantidad",
-      "Validar inventario y herramientas",
-      "Reservar insumos",
-      "Ejecutar etapas",
-      "Cerrar produccion y generar producto terminado"
-    ],
-    table: {
-      columns: ["Orden", "Producto", "Estado", "Riesgo"],
-      rows: []
-    },
-    validations: [
-      ["Almacenes", "Consulta existencias, reservas y faltantes antes de programar."],
-      ["Compras", "Recibe requisiciones automaticas si no hay insumos."],
-      ["Costos", "Calcula costo estimado y real por orden."],
-      ["Contabilidad", "Prepara mapeos para consumo, merma y producto terminado."]
-    ],
-    form: [
-      ["Producto", "Playera basica morada"],
-      ["Cantidad", "100 piezas"],
-      ["Almacen origen", "Materia prima · Planta 1"],
-      ["Centro de costos", "Produccion / Costura"]
-    ],
-    records: []
-  },
-  {
-    id: "almacenes",
-    icon: "AL",
-    count: 7,
-    title: "Almacenes",
-    titleEn: "Warehouses",
-    eyebrow: "Inventario vivo",
-    summary: "Existencias, reservas, movimientos, kardex, ubicaciones y merma.",
-    primary: "Reservar inventario",
-    status: "7 articulos criticos",
-    kpis: [
-      ["Disponible", "$428k", "positive"],
-      ["Reservado", "$96k", "warning"],
-      ["Mermas mes", "2.1%", "danger"]
-    ],
-    submodules: [
-      ["Almacenes", "Materia prima, herramientas, producto en proceso y terminado."],
-      ["Ubicaciones", "Pasillos, racks, zonas y ubicaciones por centro de negocio."],
-      ["Movimientos", "Entradas, salidas, transferencias, ajustes y devoluciones."],
-      ["Reservas", "Apartado para ordenes de produccion o pedidos de venta."],
-      ["Kardex", "Historial completo por articulo, lote, serie o ubicacion."]
-    ],
-    workflow: [
-      "Recibir o registrar movimiento",
-      "Validar documento origen",
-      "Actualizar existencia",
-      "Actualizar reserva o disponibilidad",
-      "Actualizar kardex",
-      "Notificar costos, ventas o produccion"
-    ],
-    table: {
-      columns: ["Articulo", "Disponible", "Reservado", "Estado"],
-      rows: [
-        ["Tela algodon", "220 m", "200 m", "Suficiente"],
-        ["Hilo morado", "12 cr", "18 cr", "Faltante"],
-        ["Playera basica", "86 pz", "40 pz", "Disponible"]
-      ]
-    },
-    validations: [
-      ["Produccion", "Responde disponibilidad por receta y genera reservas."],
-      ["Ventas", "Reserva producto terminado y registra entregas."],
-      ["Compras", "Recibe materiales y actualiza costos de adquisicion."],
-      ["Contabilidad", "Genera documentos origen por ajustes, merma y entradas."]
-    ],
-    form: [
-      ["Tipo movimiento", "Reserva por produccion"],
-      ["Articulo", "Hilo morado"],
-      ["Cantidad", "18 carretes"],
-      ["Origen", "Almacen MP / Planta 1"]
-    ],
-    records: [
-      ["MAT-004", "Tela algodon · 220 m disponibles", "Disponible"],
-      ["HER-011", "Tijeras industriales · 3 asignables", "Asignable"],
-      ["PT-118", "Playera basica · 40 pz reservadas", "Reservado"]
-    ]
-  },
-  {
-    id: "compras",
-    icon: "CO",
-    count: 5,
-    title: "Compras",
-    titleEn: "Purchasing",
-    eyebrow: "Abastecimiento",
-    summary: "Requisiciones, ordenes de compra, recepciones y reabastecimiento.",
-    primary: "Nueva requisicion",
-    status: "5 compras pendientes",
-    kpis: [
-      ["Requisiciones", "9", "warning"],
-      ["Recepciones", "14", "positive"],
-      ["Ahorro precio", "6.4%", "positive"]
-    ],
-    submodules: [
-      ["Proveedores", "Datos fiscales, condiciones, tiempos y productos relacionados."],
-      ["Requisiciones", "Solicitudes desde faltantes, usuarios o ordenes de produccion."],
-      ["Ordenes de compra", "Autorizacion, envio, estado y seguimiento."],
-      ["Recepciones", "Parciales, totales y validacion contra pedido."],
-      ["Reabastecimiento", "Minimos, puntos de reorden y compras sugeridas."]
-    ],
-    workflow: [
-      "Recibir necesidad o faltante",
-      "Crear requisicion",
-      "Autorizar por monto o centro",
-      "Emitir orden de compra",
-      "Registrar recepcion",
-      "Enviar a inventario, gasto y contabilidad"
-    ],
-    table: {
-      columns: ["Documento", "Proveedor", "Estado", "Relacion"],
-      rows: [
-        ["REQ-087", "Textiles Norte", "Solicitada", "OP-1042"],
-        ["OC-051", "Hilos MX", "Enviada", "Faltante"],
-        ["REC-044", "Avios Centro", "Parcial", "Almacen MP"]
-      ]
-    },
-    validations: [
-      ["Almacenes", "Recepcion incrementa existencias y kardex."],
-      ["Gastos", "Factura recibida crea cuenta por pagar."],
-      ["Costos", "Actualiza costo de adquisicion y fletes."],
-      ["Contabilidad", "Mapea inventario, proveedor, impuestos y pagos."]
-    ],
-    form: [
-      ["Necesidad", "Hilo morado faltante"],
-      ["Proveedor sugerido", "Hilos MX"],
-      ["Fecha requerida", "24 mayo"],
-      ["Centro de costos", "Produccion / Costura"]
-    ],
-    records: [
-      ["REQ-087", "Hilo morado · OP-1042", "Solicitada"],
-      ["OC-051", "Tela algodon · Proveedor Norte", "Enviada"],
-      ["REC-044", "Recepcion parcial · 80%", "Parcial"]
-    ]
-  },
-  {
-    id: "ventas",
-    icon: "VE",
-    count: 12,
-    title: "Ventas",
-    titleEn: "Sales",
-    eyebrow: "Demanda conectada",
-    summary: "Clientes, cotizaciones, pedidos, reservas, entregas y margen.",
-    primary: "Crear cotizacion",
-    status: "12 pedidos abiertos",
-    kpis: [
-      ["Pedidos", "12", "positive"],
-      ["Margen", "32.4%", "positive"],
-      ["Entregas riesgo", "2", "warning"]
-    ],
-    submodules: [
-      ["Clientes", "Datos comerciales, contactos, direcciones y condiciones."],
-      ["Cotizaciones", "Precios, descuentos, vigencia y margen estimado."],
-      ["Pedidos", "Aprobacion, reserva, produccion o surtido."],
-      ["Entregas", "Parciales, totales, evidencia y devoluciones."],
-      ["Margen", "Costo estimado, costo real y rentabilidad por cliente."]
-    ],
-    workflow: [
-      "Crear cotizacion",
-      "Aprobar pedido",
-      "Validar inventario disponible",
-      "Reservar o solicitar produccion",
-      "Entregar parcial o total",
-      "Calcular margen y asiento"
-    ],
-    table: {
-      columns: ["Pedido", "Cliente", "Estado", "Margen"],
-      rows: [
-        ["PED-220", "Uniformes Delta", "En preparacion", "34%"],
-        ["COT-144", "Servicios Vega", "Cotizado", "38%"],
-        ["PED-228", "Textil Bravo", "Produccion", "29%"]
-      ]
-    },
-    validations: [
-      ["Almacenes", "Reserva producto terminado y descuenta en entrega."],
-      ["Produccion", "Genera orden si no hay stock suficiente."],
-      ["Costos", "Calcula margen estimado y real."],
-      ["Contabilidad", "Mapea ingresos, cuentas por cobrar, impuestos y costo de venta."]
-    ],
-    form: [
-      ["Cliente", "Uniformes Delta"],
-      ["Producto", "Playera basica morada"],
-      ["Cantidad", "140 piezas"],
-      ["Fecha prometida", "Viernes 25"]
-    ],
-    records: [
-      ["PED-220", "Uniformes Delta · entrega viernes", "En preparacion"],
-      ["COT-144", "Servicio de ensamble · margen 38%", "Cotizado"],
-      ["DEV-009", "Devolucion parcial · revision", "Calidad"]
-    ]
-  },
-  {
-    id: "gastos",
-    icon: "GA",
-    count: 9,
-    title: "Gastos",
-    titleEn: "Expenses",
-    eyebrow: "Documentos y pagos",
-    summary: "XML, PDF, proveedores, cuentas por pagar, anexos y asignaciones.",
-    primary: "Cargar XML",
-    status: "9 documentos por validar",
-    kpis: [
-      ["Por pagar", "$82k", "warning"],
-      ["Sin asignar", "4", "danger"],
-      ["Pagados", "21", "positive"]
-    ],
-    submodules: [
-      ["Carga documental", "XML, PDF, comprobantes y anexos operativos."],
-      ["Clasificacion", "Tipo de gasto, proveedor, impuestos y moneda."],
-      ["Asignacion", "Centro de costos, orden, producto, servicio o proyecto."],
-      ["Cuentas por pagar", "Vencimientos, pagos parciales y estado."],
-      ["Pagos", "Comprobantes, trazabilidad y asiento contable."]
-    ],
-    workflow: [
-      "Cargar XML/PDF",
-      "Extraer datos fiscales",
-      "Clasificar gasto",
-      "Asignar centro o documento origen",
-      "Generar cuenta por pagar",
-      "Enviar a costos y contabilidad"
-    ],
-    table: {
-      columns: ["Gasto", "Proveedor", "Estado", "Destino"],
-      rows: [
-        ["XML-330", "CFE", "Pendiente pago", "Produccion general"],
-        ["GTO-212", "Mecatronica SA", "Asignado", "Maquina recta"],
-        ["PAG-081", "Textiles Norte", "Pagado", "OC-051"]
-      ]
-    },
-    validations: [
-      ["Compras", "Compara factura contra orden y recepcion."],
-      ["Costos", "Envio de gastos directos, indirectos y prorrateos."],
-      ["Contabilidad", "Anexo XML/PDF, cuenta por pagar y asiento."],
-      ["Reportes", "Gastos por proveedor, centro y periodo."]
-    ],
-    form: [
-      ["Documento", "XML + PDF"],
-      ["Proveedor", "Mecatronica SA"],
-      ["Concepto", "Mantenimiento maquina"],
-      ["Asignacion", "Centro mantenimiento"]
-    ],
-    records: [
-      ["XML-330", "Energia planta · mayo", "Pendiente pago"],
-      ["GTO-212", "Mantenimiento maquina recta", "Asignado"],
-      ["PAG-081", "Pago proveedor · transferencia", "Registrado"]
-    ]
-  },
-  {
-    id: "costos",
-    icon: "CS",
-    count: 6,
-    title: "Costos",
-    titleEn: "Costs",
-    eyebrow: "Rentabilidad",
-    summary: "Costo estimado, real, variaciones, centros de costos y costo de venta.",
-    primary: "Ver variacion",
-    status: "6 variaciones relevantes",
-    kpis: [
-      ["Costo real", "$18.9k", "warning"],
-      ["Variacion", "+4.2%", "warning"],
-      ["Rentabilidad", "31%", "positive"]
-    ],
-    submodules: [
-      ["Centros de costos", "Areas, centros de negocio, maquinas y responsables."],
-      ["Costo estimado", "Desde receta, insumos, mano de obra y maquinaria."],
-      ["Costo real", "Desde consumos, gastos, compras, tiempos y merma."],
-      ["Variaciones", "Diferencias entre planeado, real y estandar."],
-      ["Rentabilidad", "Margen por producto, servicio, cliente y periodo."]
-    ],
-    workflow: [
-      "Tomar costo estimado de receta",
-      "Recibir consumos reales",
-      "Sumar gastos asignados",
-      "Comparar variaciones",
-      "Calcular costo de venta",
-      "Publicar a reportes y contabilidad"
-    ],
-    table: {
-      columns: ["Objeto", "Estimado", "Real", "Variacion"],
-      rows: [
-        ["OP-1042", "$18,420", "$19,194", "+4.2%"],
-        ["CC-CORTE", "$8,100", "$7,980", "-1.5%"],
-        ["MER-020", "$620", "$870", "+40%"]
-      ]
-    },
-    validations: [
-      ["Produccion", "Costo por orden, merma y horas."],
-      ["Almacenes", "Valuacion de insumos y producto terminado."],
-      ["Ventas", "Costo de venta y margen."],
-      ["Contabilidad", "Variaciones, costo de venta y producto en proceso."]
-    ],
-    form: [
-      ["Centro", "Costura"],
-      ["Orden", "OP-1042"],
-      ["Costo base", "Receta v3"],
-      ["Metodo", "Promedio + real"]
-    ],
-    records: [
-      ["OP-1042", "Costo estimado $18,420", "Vs real +4.2%"],
-      ["CC-CORTE", "Centro de costo corte", "Dentro rango"],
-      ["MER-020", "Merma tela · 2.8%", "Advertencia"]
-    ]
-  },
-  {
-    id: "contabilidad",
-    icon: "CT",
-    count: 11,
-    title: "Contabilidad",
-    titleEn: "Accounting",
-    eyebrow: "Asientos y anexos",
-    summary: "Cuentas, periodos, polizas, mapeos contables y documentos origen.",
-    primary: "Validar asiento",
-    status: "11 pendientes contables",
-    kpis: [
-      ["Asientos", "54", "positive"],
-      ["Sin mapeo", "11", "danger"],
-      ["Periodo", "Mayo", "positive"]
-    ],
-    submodules: [
-      ["Catalogo de cuentas", "Cuentas, niveles, naturaleza y movimiento."],
-      ["Periodos", "Apertura, revision, cierre y reapertura autorizada."],
-      ["Asientos", "Cargos, abonos, polizas, estados y reversos."],
-      ["Mapeos", "Reglas por modulo, operacion, producto, gasto o impuesto."],
-      ["Anexos", "XML, PDF, pagos, ordenes, entregas y documentos origen."]
-    ],
-    workflow: [
-      "Recibir documento origen",
-      "Evaluar regla de mapeo",
-      "Generar asiento balanceado",
-      "Adjuntar anexos",
-      "Validar o dejar pendiente",
-      "Contabilizar en periodo"
-    ],
-    table: {
-      columns: ["Asiento", "Origen", "Estado", "Periodo"],
-      rows: [
-        ["ASI-510", "Venta PED-220", "Generado", "Mayo"],
-        ["MAP-018", "Merma ALM-338", "Sin mapeo", "Mayo"],
-        ["POL-090", "Gasto XML-330", "Contabilizado", "Mayo"]
-      ]
-    },
-    validations: [
-      ["Ventas", "Ingresos, clientes, impuestos y costo de venta."],
-      ["Gastos", "Cuentas por pagar, pagos y anexos."],
-      ["Almacenes", "Inventario, ajustes, merma y transferencias."],
-      ["Costos", "Variaciones, producto en proceso y rentabilidad."]
-    ],
-    form: [
-      ["Periodo", "Mayo 2026"],
-      ["Documento origen", "PED-220"],
-      ["Regla", "Venta producto nacional"],
-      ["Estado", "Pendiente validar"]
-    ],
-    records: [
-      ["ASI-510", "Venta PED-220 · ingreso", "Generado"],
-      ["MAP-018", "Merma sin cuenta contable", "Pendiente"],
-      ["POL-090", "Gasto energia · XML anexo", "Contabilizado"]
-    ]
-  },
-  {
-    id: "reportes",
-    icon: "RP",
-    count: 14,
-    title: "Reportes",
-    titleEn: "Reports",
-    eyebrow: "Inteligencia operativa",
-    summary: "Indicadores por modulo, periodo, centro, producto, cliente y proveedor.",
-    primary: "Ver tablero",
-    status: "14 reportes listos",
-    kpis: [
-      ["Dashboards", "8", "positive"],
-      ["Exportaciones", "36", "positive"],
-      ["Alertas", "5", "warning"]
-    ],
-    submodules: [
-      ["Produccion", "Ordenes, avance, cumplimiento, carga y merma."],
-      ["Inventarios", "Disponibles, reservas, kardex, rotacion y criticos."],
-      ["Finanzas", "Gastos, costos, asientos, cuentas y rentabilidad."],
-      ["Comercial", "Ventas, pedidos, clientes, margen y demanda."],
-      ["Constructor", "Filtros, columnas, agrupaciones y exportaciones."]
-    ],
-    workflow: [
-      "Elegir indicador",
-      "Aplicar filtros por dimension",
-      "Cruzar datos de modulos",
-      "Guardar vista por rol",
-      "Exportar o compartir",
-      "Dar seguimiento a alertas"
-    ],
-    table: {
-      columns: ["Reporte", "Dimension", "Estado", "Uso"],
-      rows: [
-        ["RPT-01", "Produccion por area", "Actualizado", "Diario"],
-        ["RPT-08", "Margen por cliente", "Listo", "Semanal"],
-        ["RPT-12", "Asientos por periodo", "Finanzas", "Mensual"]
-      ]
-    },
-    validations: [
-      ["Administracion", "Respeta rol, alcance y centro de negocio."],
-      ["Contabilidad", "Periodos, cuentas y asientos."],
-      ["Costos", "Rentabilidad y variaciones."],
-      ["Todos", "Usa dimensiones comunes y documentos origen."]
-    ],
-    form: [
-      ["Vista", "Margen por cliente"],
-      ["Periodo", "Mayo 2026"],
-      ["Centro", "Planta 1"],
-      ["Exportacion", "Excel / PDF"]
-    ],
-    records: [
-      ["RPT-01", "Produccion pendiente por area", "Actualizado"],
-      ["RPT-08", "Margen por cliente", "Listo"],
-      ["RPT-12", "Asientos por periodo", "Finanzas"]
-    ]
-  }
-];
-
-const flow = [
-  ["1", "Pedido aprobado", "Ventas reserva inventario o solicita produccion."],
-  ["2", "Orden programada", "Produccion valida receta contra almacenes."],
-  ["3", "Faltante detectado", "Compras recibe requisicion automatica."],
-  ["4", "Insumos consumidos", "Almacen descuenta y Costos calcula real."],
-  ["5", "Asiento generado", "Contabilidad recibe documento origen y anexo."]
-];
-
-const translations = {
-  es: {
-    tenant: "Cliente piloto",
-    title: "Centro operativo",
-    search: "Buscar orden, producto, cliente",
-    newOrder: "Nueva orden",
-    metricProduction: "Produccion activa",
-    metricInventory: "Inventario critico",
-    metricMargin: "Margen estimado",
-    metricAccounting: "Pendiente contable",
-    synergy: "Sinergia",
-    flowTitle: "Flujo vivo",
-    recipe: "Receta",
-    createPurchase: "Generar requisicion"
-  },
-  en: {
-    tenant: "Pilot customer",
-    title: "Operations center",
-    search: "Search order, product, customer",
-    newOrder: "New order",
-    metricProduction: "Active production",
-    metricInventory: "Critical inventory",
-    metricMargin: "Estimated margin",
-    metricAccounting: "Accounting pending",
-    synergy: "Synergy",
-    flowTitle: "Live flow",
-    recipe: "Recipe",
-    createPurchase: "Create requisition"
-  }
-};
+import { modules, erpSubmoduleCatalog } from "./data/modules.js";
+import { resourceCatalog, defaultRecipes } from "./data/resources.js";
+import { mockDb } from "./data/mockDb.js";
+import { translations } from "./i18n/translations.js";
+import { calculateRecipe, getProductionModuleData, getResource } from "./utils/production.js";
+import { diffDays, formatCurrency, formatNumber, startOfDay } from "./utils/format.js";
 
 const state = {
   active: modules[0].id,
+  activeSubmodule: null,
   theme: localStorage.getItem("erclave-theme") || "light",
   lang: localStorage.getItem("erclave-lang") || "es"
 };
@@ -671,6 +16,7 @@ const shell = document.querySelector(".app-shell");
 const moduleNav = document.getElementById("moduleNav");
 const modulePanel = document.getElementById("modulePanel");
 const flowList = document.getElementById("flowList");
+const notificationSummary = document.getElementById("notificationSummary");
 const themeToggle = document.getElementById("themeToggle");
 const langToggle = document.getElementById("langToggle");
 const topbarPrimary = document.querySelector(".topbar .primary-action");
@@ -678,26 +24,79 @@ const modalBackdrop = document.getElementById("modalBackdrop");
 const modalContent = document.getElementById("modalContent");
 const toast = document.getElementById("toast");
 
+function t(key, values = {}) {
+  const template = translations[state.lang]?.[key] || translations.es[key] || key;
+  return Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, value), template);
+}
+
+function normalizeSubmodules(module) {
+  return module.submodules.map(([name, detail, id]) => {
+    const submoduleId = id || slugify(name);
+    return {
+      id: submoduleId,
+      fallbackName: name,
+      fallbackDetail: detail,
+      ...getSubmoduleCopy(module.id, submoduleId, name, detail)
+    };
+  });
+}
+
+function getSubmoduleCopy(moduleId, id, fallbackName = "", fallbackDetail = "") {
+  const catalogItem = erpSubmoduleCatalog[moduleId]?.[id];
+  if (!catalogItem) return { name: fallbackName, detail: fallbackDetail };
+  return {
+    name: state.lang === "en" ? catalogItem.enName : fallbackName,
+    detail: state.lang === "en" ? catalogItem.enDetail : fallbackDetail,
+    focus: catalogItem.focus?.[state.lang] || catalogItem.focus?.es || []
+  };
+}
+
 function renderNav() {
   moduleNav.innerHTML = modules
     .map((module) => {
       const label = state.lang === "en" ? module.titleEn : module.title;
       return `
-        <button class="nav-button ${module.id === state.active ? "active" : ""}" type="button" data-module="${module.id}" title="${label}">
-          <span class="nav-icon">${module.icon}</span>
-          <span>${label}</span>
-          <small class="nav-count">${module.count}</small>
-        </button>
+        <div class="nav-group ${module.id === state.active ? "open" : ""}">
+          <button class="nav-button ${module.id === state.active && !state.activeSubmodule ? "active" : ""}" type="button" data-module-root="${module.id}" title="${label}">
+            <span class="nav-icon">${module.icon}</span>
+            <span>${label}</span>
+            <small class="nav-count">${module.count}</small>
+          </button>
+          ${renderSubnav(module)}
+        </div>
       `;
     })
     .join("");
 
-  moduleNav.querySelectorAll("button").forEach((button) => {
+  moduleNav.querySelectorAll("[data-module-root]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.active = button.dataset.module;
+      state.active = button.dataset.moduleRoot;
+      state.activeSubmodule = null;
       render();
     });
   });
+
+  moduleNav.querySelectorAll("[data-submodule-nav]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.active = button.dataset.module;
+      state.activeSubmodule = button.dataset.submoduleNav;
+      render();
+    });
+  });
+}
+
+function renderSubnav(module) {
+  return `
+    <div class="submodule-nav" aria-label="Submodulos de ${module.title}">
+      ${normalizeSubmodules(module)
+        .map((submodule) => `
+            <button class="subnav-button ${state.active === module.id && state.activeSubmodule === submodule.id ? "active" : ""}" type="button" data-module="${module.id}" data-submodule-nav="${submodule.id}">
+              <span>${submodule.name}</span>
+            </button>
+          `)
+        .join("")}
+    </div>
+  `;
 }
 
 function renderPanel() {
@@ -711,6 +110,13 @@ function renderPanel() {
       ["Faltantes", String(production.validation.missing.length), production.validation.missing.length ? "warning" : "positive"],
       [`Costo lote ${Number(localStorage.getItem("erclave-validation-qty") || 100)}`, formatCurrency(production.validation.totalCost), "positive"]
     ];
+    if (state.activeSubmodule) {
+      renderProductionSubmodulePanel(module);
+      return;
+    }
+  } else if (state.activeSubmodule) {
+    renderGenericSubmodulePanel(module);
+    return;
   }
   const label = state.lang === "en" ? module.titleEn : module.title;
 
@@ -751,18 +157,20 @@ function renderPanel() {
       <section class="section-card wide">
         <div class="section-title">
           <span class="section-icon">▦</span>
-          <strong>Submodulos</strong>
+          <strong>${t("submodulesLabel")}</strong>
         </div>
         <div class="submodule-grid">
           ${module.submodules
-            .map(
-              ([name, detail]) => `
-                <article class="submodule-card">
-                  <strong>${name}</strong>
-                  <p>${detail}</p>
-                </article>
-              `
-            )
+            .map(([name, detail, id]) => {
+              const submoduleId = id || slugify(name);
+              const copy = getSubmoduleCopy(module.id, submoduleId, name, detail);
+              return `
+                <button class="submodule-card" type="button" data-module="${module.id}" data-submodule="${submoduleId}">
+                  <strong>${copy.name}</strong>
+                  <p>${copy.detail}</p>
+                </button>
+              `;
+            })
             .join("")}
         </div>
       </section>
@@ -770,7 +178,7 @@ function renderPanel() {
       <section class="section-card">
         <div class="section-title">
           <span class="section-icon">↳</span>
-          <strong>Flujo operativo</strong>
+          <strong>${t("operatingFlow")}</strong>
         </div>
         <ol class="workflow-list">
           ${module.workflow.map((step) => `<li>${step}</li>`).join("")}
@@ -780,7 +188,7 @@ function renderPanel() {
       <section class="section-card">
         <div class="section-title">
           <span class="section-icon">✓</span>
-          <strong>Compatibilidad</strong>
+          <strong>${t("compatibility")}</strong>
         </div>
         <div class="compat-list">
           ${module.validations
@@ -801,7 +209,7 @@ function renderPanel() {
       <section class="section-card table-card">
         <div class="section-title">
           <span class="section-icon">☷</span>
-          <strong>Vista de trabajo</strong>
+          <strong>${t("workView")}</strong>
         </div>
         <div class="data-table" role="table">
           <div class="table-row table-head" role="row">
@@ -822,7 +230,7 @@ function renderPanel() {
       <section class="section-card form-preview">
         <div class="section-title">
           <span class="section-icon">✎</span>
-          <strong>Captura rapida</strong>
+          <strong>${t("quickCapture")}</strong>
         </div>
         ${module.form
           .map(
@@ -834,7 +242,7 @@ function renderPanel() {
             `
           )
           .join("")}
-        <button class="secondary-action full" type="button" data-action="${module.id === "produccion" ? "open-recipe" : "module-primary"}">${module.id === "produccion" ? "Nueva receta" : "Abrir formulario"}</button>
+        <button class="secondary-action full" type="button" data-action="${module.id === "produccion" ? "open-recipe" : "module-primary"}">${module.id === "produccion" ? t("newRecipe") : t("openForm")}</button>
       </section>
     </div>
 
@@ -857,6 +265,387 @@ function renderPanel() {
     </div>
   `;
 
+  bindProductionPanelActions();
+}
+
+function renderGenericSubmodulePanel(module) {
+  const submodule = getGenericSubmodule(module, state.activeSubmodule);
+  const sampleRows = buildGenericSubmoduleRows(module, submodule);
+  const columns = getGenericSubmoduleColumns(module);
+  const formFields = getGenericSubmoduleForm(module, submodule);
+  const integrations = getGenericSubmoduleIntegrations(module);
+  const label = state.lang === "en" ? module.titleEn : module.title;
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        <button class="primary-action" type="button" data-action="module-primary">
+          <span>＋</span>
+          <span>${t("openForm")}</span>
+        </button>
+      </div>
+
+      <div class="submodule-layout">
+        <section class="section-card">
+          <div class="section-title">
+            <span class="section-icon">▦</span>
+            <strong>${t("recommendedSetup")}</strong>
+          </div>
+          <div class="catalog-grid compact-catalog">
+            ${submodule.focus
+              .map((item) => `
+                <article class="catalog-card compact-card">
+                  <div>
+                    <span class="muted-label">${t("keyData")}</span>
+                    <strong>${item}</strong>
+                    <p>${submodule.detail}</p>
+                  </div>
+                </article>
+              `)
+              .join("")}
+          </div>
+        </section>
+
+        <section class="section-card">
+          <div class="section-title">
+            <span class="section-icon">↳</span>
+            <strong>${t("operatingFlow")}</strong>
+          </div>
+          <ol class="workflow-list">
+            ${module.workflow.slice(0, 5).map((step) => `<li>${step}</li>`).join("")}
+          </ol>
+        </section>
+      </div>
+
+      <div class="module-workbench">
+        <section class="section-card table-card">
+          <div class="section-title">
+            <span class="section-icon">☷</span>
+            <strong>${t("workView")}</strong>
+          </div>
+          <div class="data-table" role="table">
+            <div class="table-row table-head" role="row">
+              ${columns.map((column) => `<span role="columnheader">${column}</span>`).join("")}
+            </div>
+            ${sampleRows
+              .map((row) => `
+                <div class="table-row" role="row">
+                  ${row.map((cell) => `<span role="cell">${cell}</span>`).join("")}
+                </div>
+              `)
+              .join("")}
+          </div>
+        </section>
+
+        <section class="section-card form-preview">
+          <div class="section-title">
+            <span class="section-icon">✎</span>
+            <strong>${t("quickCapture")}</strong>
+          </div>
+          ${formFields
+            .map(([labelText, value]) => `
+              <label class="preview-field">
+                <span>${labelText}</span>
+                <input type="text" value="${value}" readonly />
+              </label>
+            `)
+            .join("")}
+          <button class="secondary-action full" type="button" data-action="module-primary">${t("openForm")}</button>
+        </section>
+      </div>
+
+      <section class="section-card">
+        <div class="section-title">
+          <span class="section-icon">✓</span>
+          <strong>${t("integrations")}</strong>
+        </div>
+        <div class="compat-list">
+          ${integrations
+            .map(([name, detail]) => `
+              <article>
+                <strong>${name}</strong>
+                <p>${detail}</p>
+              </article>
+            `)
+            .join("")}
+        </div>
+      </section>
+
+      <div class="records module-records">
+        ${getGenericSubmoduleRecords(module, submodule)
+          .map(([code, desc, status]) => `
+            <article class="record-row">
+              <div class="record-main">
+                <strong>${code}</strong>
+                <span>${desc}</span>
+              </div>
+              <span class="chip">${status}</span>
+            </article>
+          `)
+          .join("")}
+      </div>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
+    state.activeSubmodule = null;
+    render();
+  });
+  bindProductionPanelActions();
+}
+
+function getGenericSubmodule(module, id) {
+  return normalizeSubmodules(module).find((item) => item.id === id) || normalizeSubmodules(module)[0];
+}
+
+function buildGenericSubmoduleRows(module, submodule) {
+  if (state.lang === "en") {
+    return (submodule.focus.length ? submodule.focus : [submodule.name]).slice(0, 3).map((item, index) => [
+      item,
+      submodule.detail,
+      index === 0 ? "Required" : "Recommended",
+      state.lang === "en" ? module.titleEn : module.title
+    ]);
+  }
+  if (module.table.rows?.length) return module.table.rows;
+  return [
+    [submodule.name, submodule.detail, t("recommendedRecords"), module.status]
+  ];
+}
+
+function getGenericSubmoduleColumns(module) {
+  if (state.lang === "en") return ["Item", "Detail", "Status", "Area"];
+  return module.table.columns;
+}
+
+function getGenericSubmoduleForm(module, submodule) {
+  if (state.lang === "en") {
+    return [
+      ["Reference", submodule.name],
+      ["Owner", module.titleEn],
+      ["Status", "Draft"],
+      ["Notes", "Recommended ERP setup"]
+    ];
+  }
+  return module.form;
+}
+
+function getGenericSubmoduleIntegrations(module) {
+  if (state.lang === "en") {
+    return module.validations.map(([name]) => [
+      translateModuleName(name),
+      `Keeps ${module.titleEn.toLowerCase()} synchronized with ${translateModuleName(name).toLowerCase()} documents and operational status.`
+    ]);
+  }
+  return module.validations;
+}
+
+function getGenericSubmoduleRecords(module, submodule) {
+  if (state.lang === "en") {
+    return [
+      [submodule.id.toUpperCase(), submodule.detail, t("recommendedRecords")],
+      [`${module.icon}-FLOW`, "Suggested operating flow and validations.", "Ready"],
+      [`${module.icon}-SYNC`, "Recommended integration with related modules.", "Draft"]
+    ];
+  }
+  return module.records.length ? module.records : [[submodule.id.toUpperCase(), submodule.detail, t("recommendedRecords")]];
+}
+
+function translateModuleName(name) {
+  const match = modules.find((module) => module.title === name || module.titleEn === name);
+  const aliases = {
+    Todos: "All modules",
+    Administracion: "Administration"
+  };
+  return match ? match.titleEn : aliases[name] || name;
+}
+
+function renderProductionSubmodulePanel(module) {
+  const submodule = getProductionSubmodule(state.activeSubmodule, module);
+  const body = renderProductionSubmoduleBody(submodule.id);
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${t("productionSubmodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-production">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        ${renderProductionSubmoduleAction(submodule.id)}
+      </div>
+      ${body}
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-production']").addEventListener("click", () => {
+    state.activeSubmodule = null;
+    render();
+  });
+  bindProductionPanelActions();
+}
+
+function getProductionSubmodule(id, module = modules[0]) {
+  const [name, detail, submoduleId] = module.submodules.find((item) => item[2] === id) || module.submodules[0];
+  return { id: submoduleId, ...getSubmoduleCopy(module.id, submoduleId, name, detail) };
+}
+
+function renderProductionSubmoduleAction(id) {
+  const actions = {
+    "productos-servicios": `<button class="primary-action" type="button" data-action="open-recipe"><span>＋</span><span>${t("newProduct")}</span></button>`,
+    recetas: `<button class="primary-action" type="button" data-action="open-recipe"><span>＋</span><span>${t("newRecipe")}</span></button>`,
+    ordenes: `<button class="primary-action" type="button" data-action="open-order"><span>＋</span><span>${t("newProductionOrder")}</span></button>`,
+    entregables: `<button class="secondary-action" type="button" data-action="open-order">${t("assignOrder")}</button>`,
+    "validacion-recursos": `<button class="primary-action" type="button" data-action="open-order"><span>＋</span><span>${t("generateOrder")}</span></button>`
+  };
+  return actions[id] || "";
+}
+
+function renderProductionSubmoduleBody(id) {
+  const recipes = mockDb.loadRecipes();
+  const orders = mockDb.loadOrders();
+  if (id === "productos-servicios") return renderProductsServicesScreen(recipes);
+  if (id === "recetas") return renderRecipesScreen(recipes);
+  if (id === "ordenes") return renderOrdersScreen(orders);
+  if (id === "entregables") return renderDeliverablesScreen(orders);
+  if (id === "validacion-recursos") return renderValidationScreen(recipes);
+  return "";
+}
+
+function renderProductsServicesScreen(recipes) {
+  const products = recipes.map((recipe) => ({
+    code: recipe.id.replace("REC", "PROD"),
+    name: recipe.product,
+    type: t("buildableProduct"),
+    detail: t("baseRecipeVersion", {
+      version: recipe.version,
+      quantity: recipe.quantityBase,
+      unit: recipe.unit,
+      center: recipe.center
+    }),
+    status: recipe.status
+  }));
+  const services = [
+    { code: "SER-014", name: t("assemblyService"), type: t("repeatableService"), detail: t("assemblyServiceDetail"), status: t("configurable") },
+    { code: "SER-022", name: t("specialPacking"), type: t("operationalService"), detail: t("specialPackingDetail"), status: t("activeStatus") }
+  ];
+
+  return `
+    <div class="catalog-grid">
+      ${[...products, ...services].map((item) => `
+        <article class="catalog-card">
+          <div>
+            <span class="muted-label">${item.code} · ${item.type}</span>
+            <strong>${item.name}</strong>
+            <p>${item.detail}</p>
+          </div>
+          <span class="chip ${item.status === "Activo" || item.status === "Activa" || item.status === "Active" ? "active" : ""}">${translateStatus(item.status)}</span>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderRecipesScreen(recipes) {
+  return `
+    <div class="submodule-layout">
+      ${renderRecipeList(recipes)}
+      <section class="section-card">
+        <div class="section-title">
+          <span class="section-icon">↳</span>
+          <strong>${t("expectedStages")}</strong>
+        </div>
+        <ol class="workflow-list">
+          <li>${t("stageProduct")}</li>
+          <li>${t("stageResources")}</li>
+          <li>${t("stageTimes")}</li>
+          <li>${t("stageOwners")}</li>
+          <li>${t("stageValidation")}</li>
+        </ol>
+      </section>
+    </div>
+  `;
+}
+
+function renderOrdersScreen(orders) {
+  return `
+    <div class="submodule-layout">
+      <section>
+        ${renderOrderList(orders)}
+      </section>
+      <section class="section-card">
+        <div class="section-title">
+          <span class="section-icon">✓</span>
+          <strong>${t("orderControl")}</strong>
+        </div>
+        <div class="compat-list">
+          <article><strong>${t("scheduling")}</strong><p>${t("schedulingDetail")}</p></article>
+          <article><strong>${t("statuses")}</strong><p>${t("statusesDetail")}</p></article>
+          <article><strong>${t("document")}</strong><p>${t("documentDetail")}</p></article>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderDeliverablesScreen(orders) {
+  const deliverables = orders.flatMap((order) =>
+    order.areas.map((area) => ({
+      order: order.id,
+      product: order.recipeName,
+      quantity: `${order.quantity} ${order.unit}`,
+      ...area
+    }))
+  );
+
+  return `
+    <div class="deliverable-board">
+      ${deliverables.map((item) => `
+        <article class="deliverable-card">
+          <div>
+            <span class="muted-label">${item.order} · ${item.quantity}</span>
+            <strong>${item.area}</strong>
+            <p>${item.product}</p>
+          </div>
+          <div>
+            <span>${item.responsible}</span>
+            <span class="chip ${item.status === "En proceso" ? "warning" : ""}">${translateStatus(item.status)}</span>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderValidationScreen(recipes) {
+  return `
+    <section class="section-card">
+      <p class="helper-copy">${t("validationScreenHelper")}</p>
+      ${renderRecipeValidationOnly(recipes)}
+    </section>
+  `;
+}
+
+function bindProductionPanelActions() {
   modulePanel.querySelectorAll("[data-action='open-recipe']").forEach((button) => {
     button.addEventListener("click", openRecipeModal);
   });
@@ -889,17 +678,34 @@ function renderPanel() {
   modulePanel.querySelectorAll("[data-action='advance-order']").forEach((button) => {
     button.addEventListener("click", () => advanceOrderStatus(button.dataset.orderId));
   });
+  modulePanel.querySelectorAll("[data-submodule]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.active = button.dataset.module || state.active;
+      state.activeSubmodule = button.dataset.submodule;
+      render();
+    });
+  });
 }
 
 function renderRecipeValidationCard() {
   const recipes = mockDb.loadRecipes();
+
+  return `
+    <section class="section-card recipe-validator">
+      ${renderRecipeValidationOnly(recipes)}
+    </section>
+    ${renderOrderList(mockDb.loadOrders())}
+    ${renderRecipeList(recipes)}
+  `;
+}
+
+function renderRecipeValidationOnly(recipes = mockDb.loadRecipes()) {
   const selectedRecipeId = localStorage.getItem("erclave-selected-recipe");
   const recipe = recipes.find((item) => item.id === selectedRecipeId) || recipes[0] || defaultRecipes[0];
   const validationQuantity = Number(localStorage.getItem("erclave-validation-qty") || 100);
   const validation = calculateRecipe(recipe, validationQuantity);
 
   return `
-    <section class="section-card recipe-validator">
       <div class="section-title">
         <span class="section-icon">✓</span>
         <strong>Validacion de receta contra almacen</strong>
@@ -951,9 +757,6 @@ function renderRecipeValidationCard() {
           )
           .join("")}
       </div>
-    </section>
-    ${renderOrderList(mockDb.loadOrders())}
-    ${renderRecipeList(recipes)}
   `;
 }
 
@@ -1019,34 +822,176 @@ function renderRecipeList(recipes) {
 }
 
 function renderFlow() {
-  flowList.innerHTML = flow
+  const notifications = buildNotifications();
+  flowList.innerHTML = notifications.items
     .map(
-      ([step, title, detail]) => `
-        <article class="flow-item">
-          <span class="flow-step">${step}</span>
+      (item) => `
+        <article class="flow-item notification-item ${item.tone}">
+          <span class="flow-step">${item.icon}</span>
           <div>
-            <strong>${title}</strong>
-            <p>${detail}</p>
+            <strong>${item.title}</strong>
+            <p>${item.detail}</p>
           </div>
         </article>
       `
     )
     .join("");
+  notificationSummary.innerHTML = renderNotificationSummary(notifications);
+  notificationSummary.querySelector("[data-action='open-order']").addEventListener("click", () => {
+    state.active = "produccion";
+    state.activeSubmodule = "ordenes";
+    render();
+  });
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    maximumFractionDigits: 0
-  }).format(value);
+function buildNotifications() {
+  const today = startOfDay(new Date());
+  const orders = mockDb.loadOrders();
+  const items = [];
+  let overdue = 0;
+  let dueSoon = 0;
+  let missingResources = 0;
+
+  orders.forEach((order) => {
+    const dueDate = order.dueDate ? startOfDay(new Date(`${order.dueDate}T00:00:00`)) : null;
+    const isClosed = ["Terminada", "Cancelada"].includes(order.status);
+    const recipe = mockDb.findRecipe(order.recipeId) || defaultRecipes[0];
+    const validation = calculateRecipe(recipe, order.quantity);
+
+    if (dueDate && !isClosed) {
+      const days = diffDays(today, dueDate);
+      if (days < 0) {
+        const absDays = Math.abs(days);
+        overdue += 1;
+        items.push({
+          tone: "danger",
+          icon: "!",
+          title: t("overdueOrderTitle", { id: order.id }),
+          detail: t("overdueOrderDetail", {
+            name: order.recipeName,
+            days: absDays,
+            dayLabel: t(absDays === 1 ? "day" : "days"),
+            responsible: order.responsible
+          })
+        });
+      } else if (days <= 3) {
+        dueSoon += 1;
+        items.push({
+          tone: "warning",
+          icon: "T",
+          title: t("dueSoonTitle", { id: order.id }),
+          detail: t("dueSoonDetail", {
+            name: order.recipeName,
+            days: days || "0",
+            dayLabel: t(days === 1 ? "day" : "days")
+          })
+        });
+      }
+    }
+
+    if (!isClosed && validation.missing.length) {
+      missingResources += validation.missing.length;
+      items.push({
+        tone: "warning",
+        icon: "R",
+        title: t("missingResourcesTitle", { id: order.id }),
+        detail: t("missingResourcesDetail", {
+          resources: validation.missing.map((row) => row.name).join(", "),
+          quantity: order.quantity,
+          unit: order.unit
+        })
+      });
+    }
+
+    if (!isClosed && order.priority === "Alta") {
+      items.push({
+        tone: "info",
+        icon: "P",
+        title: t("highPriorityTitle", { id: order.id }),
+        detail: t("highPriorityDetail", {
+          name: order.recipeName,
+          status: translateStatus(order.status).toLowerCase(),
+          responsible: order.responsible
+        })
+      });
+    }
+  });
+
+  if (!overdue) {
+    items.push({
+      tone: "ok",
+      icon: "✓",
+      title: t("noOverdueTitle"),
+      detail: t("noOverdueDetail")
+    });
+  }
+
+  if (!items.length) {
+    items.push({
+      tone: "ok",
+      icon: "✓",
+      title: t("stableOperationTitle"),
+      detail: t("stableOperationDetail")
+    });
+  }
+
+  return {
+    overdue,
+    dueSoon,
+    missingResources,
+    items: items.slice(0, 5)
+  };
 }
 
-function formatNumber(value) {
-  return new Intl.NumberFormat("es-MX", {
-    maximumFractionDigits: 2
-  }).format(value);
+function renderNotificationSummary({ overdue, dueSoon, missingResources }) {
+  const tone = overdue ? "danger" : missingResources || dueSoon ? "warning" : "active";
+  const label = overdue ? t("attention") : missingResources || dueSoon ? t("review") : t("stable");
+  return `
+    <div class="panel-head compact">
+      <div>
+        <p class="eyebrow">${t("summary")}</p>
+        <h3>${t("production")}</h3>
+      </div>
+      <span class="chip ${tone}">${label}</span>
+    </div>
+    <div class="requirement-row ${overdue ? "risk" : "ok"}">
+      <span>${t("overdueOrders")}</span>
+      <strong>${overdue}</strong>
+    </div>
+    <div class="requirement-row ${dueSoon ? "risk" : "ok"}">
+      <span>${t("dueSoon")}</span>
+      <strong>${dueSoon}</strong>
+    </div>
+    <div class="requirement-row ${missingResources ? "risk" : "ok"}">
+      <span>${t("missingResources")}</span>
+      <strong>${missingResources}</strong>
+    </div>
+    <button class="secondary-action full" type="button" data-action="open-order">${t("reviewOrders")}</button>
+  `;
 }
+
+function translateStatus(status) {
+  const statusMap = {
+    Activo: { es: "Activo", en: "Active" },
+    Activa: { es: "Activa", en: "Active" },
+    Configurable: { es: "Configurable", en: "Configurable" },
+    "En produccion": { es: "En produccion", en: "In production" },
+    Pausada: { es: "Pausada", en: "Paused" },
+    Terminada: { es: "Terminada", en: "Finished" },
+    Cancelada: { es: "Cancelada", en: "Canceled" },
+    Pendiente: { es: "Pendiente", en: "Pending" },
+    "En proceso": { es: "En proceso", en: "In progress" }
+  };
+  return statusMap[status]?.[state.lang] || status;
+}
+
+
+
+
+
+
+
+
 
 function showToast(message) {
   toast.textContent = message;

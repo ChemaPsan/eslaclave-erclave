@@ -111,6 +111,11 @@ button {
   gap: 6px;
 }
 
+.nav-group {
+  display: grid;
+  gap: 4px;
+}
+
 .nav-button {
   width: 100%;
   min-height: 44px;
@@ -155,6 +160,43 @@ button {
   border-radius: 999px;
   color: #fff;
   background: rgba(245, 87, 211, 0.28);
+}
+
+.submodule-nav {
+  display: none;
+  gap: 4px;
+  padding: 2px 0 8px 44px;
+}
+
+.nav-group.open .submodule-nav {
+  display: grid;
+}
+
+.subnav-button {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 7px 10px;
+  color: rgba(255, 255, 255, 0.68);
+  background: transparent;
+  text-align: left;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.subnav-button:hover,
+.subnav-button.active {
+  color: #fff;
+  background: rgba(245, 87, 211, 0.18);
+  border-color: rgba(245, 87, 211, 0.2);
+}
+
+.subnav-button span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-footer {
@@ -526,6 +568,14 @@ h3 {
   border-radius: 12px;
   background: var(--surface-soft);
   border: 1px solid var(--line);
+  color: var(--text);
+  text-align: left;
+}
+
+.submodule-card[data-submodule]:hover {
+  border-color: rgba(155, 15, 201, 0.28);
+  box-shadow: 0 10px 24px rgba(48, 12, 87, 0.08);
+  transform: translateY(-1px);
 }
 
 .submodule-card strong,
@@ -645,6 +695,97 @@ h3 {
 
 .module-records {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.submodule-screen {
+  display: grid;
+  gap: 14px;
+}
+
+.submodule-screen-head {
+  min-height: 170px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 14px;
+  color: #fff;
+  background:
+    linear-gradient(135deg, rgba(48, 12, 87, 0.96), rgba(97, 6, 160, 0.9), rgba(245, 87, 211, 0.7)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0 1px, transparent 1px 22px);
+}
+
+.submodule-screen-head p {
+  max-width: 680px;
+  margin-bottom: 0;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.submodule-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.catalog-grid,
+.deliverable-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.catalog-card,
+.deliverable-card {
+  min-height: 120px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.catalog-card strong,
+.catalog-card span,
+.deliverable-card strong,
+.deliverable-card span {
+  display: block;
+}
+
+.catalog-card strong,
+.deliverable-card strong {
+  margin-top: 4px;
+  font-size: 1rem;
+}
+
+.catalog-card p,
+.deliverable-card p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.compact-catalog {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compact-card {
+  min-height: 104px;
+}
+
+.deliverable-card > div:last-child {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .recipe-validator {
@@ -1198,6 +1339,10 @@ h3 {
   justify-content: flex-start;
 }
 
+.notification-item {
+  align-items: flex-start;
+}
+
 .flow-step {
   flex: 0 0 auto;
   width: 32px;
@@ -1208,6 +1353,22 @@ h3 {
   color: #fff;
   background: var(--brand);
   font-weight: 900;
+}
+
+.notification-item.danger .flow-step {
+  background: var(--danger);
+}
+
+.notification-item.warning .flow-step {
+  background: var(--warning);
+}
+
+.notification-item.info .flow-step {
+  background: var(--info);
+}
+
+.notification-item.ok .flow-step {
+  background: var(--success);
 }
 
 .flow-item p {
@@ -1249,6 +1410,10 @@ h3 {
     justify-items: center;
   }
 
+  .submodule-nav {
+    display: none !important;
+  }
+
   .nav-count {
     display: none;
   }
@@ -1266,7 +1431,8 @@ h3 {
   }
 
   .module-section-grid,
-  .module-workbench {
+  .module-workbench,
+  .submodule-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -1338,6 +1504,8 @@ h3 {
   }
 
   .submodule-grid,
+  .catalog-grid,
+  .deliverable-board,
   .resource-check-grid,
   .resource-check-grid.compact,
   .recipe-resource-list,
@@ -1347,6 +1515,12 @@ h3 {
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .submodule-screen-head {
+    min-height: 190px;
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .resource-input {

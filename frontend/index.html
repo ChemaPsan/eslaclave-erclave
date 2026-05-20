@@ -79,36 +79,15 @@
           <aside class="insight-panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow" data-i18n="synergy">Sinergia</p>
-                <h2 data-i18n="flowTitle">Flujo vivo</h2>
+                <p class="eyebrow" data-i18n="notifications">Notificaciones</p>
+                <h2 data-i18n="alertsTitle">Alertas operativas</h2>
               </div>
-              <span class="chip active">Live</span>
+              <span class="chip active" data-i18n="alertNow">Ahora</span>
             </div>
 
             <div class="flow-list" id="flowList"></div>
 
-            <div class="validation-card">
-              <div class="panel-head compact">
-                <div>
-                  <p class="eyebrow" data-i18n="recipe">Receta</p>
-                  <h3>Playera basica</h3>
-                </div>
-                <span class="chip warning">Faltante</span>
-              </div>
-              <div class="requirement-row ok">
-                <span>Tela algodon</span>
-                <strong>200 / 220 m</strong>
-              </div>
-              <div class="requirement-row ok">
-                <span>Etiqueta</span>
-                <strong>100 / 100 pz</strong>
-              </div>
-              <div class="requirement-row risk">
-                <span>Hilo morado</span>
-                <strong>12 / 18 cr</strong>
-              </div>
-              <button class="secondary-action full" type="button" data-i18n="createPurchase">Generar requisicion</button>
-            </div>
+            <div class="validation-card" id="notificationSummary"></div>
           </aside>
         </section>
       </main>
@@ -122,6 +101,6 @@
 
     <div class="toast" id="toast" hidden></div>
 
-    <script src="./app.js"></script>
+    <script type="module" src="./app.js"></script>
   </body>
 </html>
