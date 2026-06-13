@@ -8,6 +8,7 @@ ERClave es una propuesta SaaS modular bajo la marca EsLaClave para gestionar pro
 - Requerimientos no funcionales e infraestructura Google Cloud.
 - Documentación funcional por módulos.
 - Manual de identidad visual.
+- Trazabilidad detallada de cambios en `TRAZABILIDAD.md`.
 - Prototipo frontend navegable con mock DB en `localStorage`.
 
 ## Frontend local
@@ -34,5 +35,6 @@ ERClave_documento_base.md
 ERClave_requerimientos_no_funcionales_e_infraestructura.md
 ERClave_funcionalidades_y_valor_para_analisis_de_mercado.md
 manual_identidad_paleta_morado.md
+TRAZABILIDAD.md
 ```
 

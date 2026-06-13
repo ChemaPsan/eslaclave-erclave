@@ -232,6 +232,34 @@ button {
   margin-bottom: 18px;
 }
 
+.topbar-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.back-button {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--brand-strong);
+  background: var(--surface);
+  font-weight: 900;
+}
+
+.back-button:not(:disabled):hover {
+  border-color: rgba(155, 15, 201, 0.28);
+  background: var(--field);
+}
+
+.back-button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
 .eyebrow {
   margin: 0 0 4px;
   color: var(--brand-strong);
@@ -607,6 +635,106 @@ h3 {
   line-height: 1.35;
 }
 
+.flow-guide-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.flow-guide-summary {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.flow-guide-summary::-webkit-details-marker {
+  display: none;
+}
+
+.flow-guide-toggle-copy {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.flow-guide-steps {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.flow-guide-step {
+  min-height: 96px;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.flow-guide-step > span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--brand-strong);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.flow-guide-step strong {
+  font-size: 0.84rem;
+}
+
+.flow-guide-step p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.flow-guide-step.current {
+  border-color: rgba(155, 15, 201, 0.38);
+  box-shadow: 0 10px 24px rgba(48, 12, 87, 0.08);
+}
+
+.catalog-workspace:has(> .flow-guide-card),
+.flow-guided-layout,
+.submodule-layout:has(> .flow-guide-card),
+.submodule-layout:has(> .section-card > .flow-guide-card) {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.catalog-workspace:has(> .flow-guide-card) > .flow-guide-card,
+.flow-guided-layout > .flow-guide-card,
+.submodule-layout > .flow-guide-card,
+.submodule-layout > .section-card:has(> .flow-guide-card) {
+  grid-column: 1;
+  grid-row: 1 / span 30;
+}
+
+.catalog-workspace:has(> .flow-guide-card) > :not(.flow-guide-card),
+.flow-guided-layout > :not(.flow-guide-card),
+.submodule-layout:has(> .flow-guide-card) > :not(.flow-guide-card),
+.submodule-layout:has(> .section-card > .flow-guide-card) > :not(.section-card:has(> .flow-guide-card)) {
+  grid-column: 2;
+}
+
 .compat-list {
   display: grid;
   gap: 8px;
@@ -693,6 +821,32 @@ h3 {
   background: var(--field);
 }
 
+.preview-field input[readonly],
+.preview-field input:disabled,
+.preview-field select:disabled,
+.preview-field textarea[readonly],
+.preview-field textarea:disabled {
+  color: var(--muted);
+  border-color: rgba(155, 15, 201, 0.28);
+  background: repeating-linear-gradient(
+      -45deg,
+      rgba(155, 15, 201, 0.08) 0,
+      rgba(155, 15, 201, 0.08) 8px,
+      transparent 8px,
+      transparent 16px
+    ),
+    var(--surface-soft);
+  cursor: not-allowed;
+}
+
+.preview-field input[readonly]:focus,
+.preview-field input:disabled:focus,
+.preview-field select:disabled:focus,
+.preview-field textarea[readonly]:focus,
+.preview-field textarea:disabled:focus {
+  outline: 2px solid rgba(155, 15, 201, 0.18);
+}
+
 .module-records {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -736,6 +890,145 @@ h3 {
   gap: 12px;
 }
 
+.area-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.area-card {
+  min-height: 112px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.area-card strong,
+.area-card span {
+  display: block;
+}
+
+.area-card p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.catalog-workspace {
+  display: grid;
+  gap: 12px;
+}
+
+.catalog-workspace:has(> .flow-guide-card),
+.flow-guided-layout,
+.submodule-layout:has(> .flow-guide-card),
+.submodule-layout:has(> .section-card > .flow-guide-card) {
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.catalog-workspace:has(> .flow-guide-card) > .flow-guide-card,
+.flow-guided-layout > .flow-guide-card,
+.submodule-layout > .flow-guide-card,
+.submodule-layout > .section-card:has(> .flow-guide-card) {
+  grid-column: 1;
+  grid-row: 1 / span 30;
+}
+
+.catalog-workspace:has(> .flow-guide-card) > :not(.flow-guide-card),
+.flow-guided-layout > :not(.flow-guide-card),
+.submodule-layout:has(> .flow-guide-card) > .recipe-list-card,
+.submodule-layout:has(> .section-card > .flow-guide-card) > section:first-child {
+  grid-column: 2;
+}
+
+.catalog-workspace:has(> .flow-guide-card:not([open])),
+.flow-guided-layout:has(> .flow-guide-card:not([open])),
+.submodule-layout:has(> .flow-guide-card:not([open])),
+.submodule-layout:has(> .section-card > .flow-guide-card:not([open])) {
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+
+.catalog-workspace:has(> .flow-guide-card:not([open])) > .flow-guide-card,
+.flow-guided-layout:has(> .flow-guide-card:not([open])) > .flow-guide-card,
+.submodule-layout:has(> .flow-guide-card:not([open])) > .flow-guide-card,
+.submodule-layout:has(> .section-card > .flow-guide-card:not([open])) > .section-card:has(> .flow-guide-card) {
+  grid-column: 1;
+  grid-row: 1 / span 30;
+}
+
+.catalog-workspace:has(> .flow-guide-card:not([open])) > :not(.flow-guide-card),
+.flow-guided-layout:has(> .flow-guide-card:not([open])) > :not(.flow-guide-card),
+.submodule-layout:has(> .flow-guide-card:not([open])) > :not(.flow-guide-card),
+.submodule-layout:has(> .section-card > .flow-guide-card:not([open])) > section:first-child {
+  grid-column: 2;
+  grid-row: auto;
+}
+
+.flow-guide-card:not([open]) {
+  min-height: 210px;
+  padding: 6px;
+  border-color: rgba(155, 15, 201, 0.2);
+  background: linear-gradient(180deg, var(--surface-soft), var(--panel));
+  box-shadow: 0 8px 22px rgba(48, 12, 87, 0.08);
+}
+
+.flow-guide-card:not([open]) .flow-guide-summary {
+  position: relative;
+  min-height: 196px;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  align-content: center;
+  gap: 10px;
+  text-align: center;
+  border-radius: 13px;
+  background: var(--panel);
+  writing-mode: horizontal-tb;
+  transform: none;
+}
+
+.flow-guide-card:not([open]) .flow-guide-summary::after {
+  content: "Abrir flujo";
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 0;
+}
+
+.flow-guide-card:not([open]) .flow-guide-summary .section-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.flow-guide-card:not([open]) .flow-guide-summary strong {
+  display: none;
+}
+
+.flow-guide-card:not([open]) .flow-guide-toggle-copy {
+  display: none;
+}
+
+.catalog-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.catalog-search {
+  width: min(420px, 100%);
+}
+
 .catalog-card,
 .deliverable-card {
   min-height: 120px;
@@ -747,6 +1040,124 @@ h3 {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
+}
+
+.catalog-card-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+  align-content: start;
+}
+
+.catalog-card-main {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.status-control {
+  display: grid;
+  gap: 5px;
+}
+
+.status-control span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.status-control select {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 0 10px;
+  color: var(--text);
+  background: var(--field);
+  font-weight: 800;
+}
+
+.compact-status {
+  min-width: 178px;
+}
+
+.compact-status select {
+  min-height: 34px;
+  font-size: 0.82rem;
+}
+
+.product-history {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 7px;
+}
+
+.product-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.product-history-head strong {
+  margin: 0;
+  color: var(--brand-strong);
+}
+
+.product-history-list {
+  display: grid;
+  gap: 5px;
+}
+
+.product-history-list span,
+.product-history p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.cost-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cost-summary-grid span {
+  min-height: 58px;
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.cost-summary-grid strong {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.recipe-context-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.recipe-context-card strong,
+.recipe-context-card span {
+  display: block;
+}
+
+.recipe-context-card p {
+  margin: 5px 0 0;
+  color: var(--muted);
 }
 
 .catalog-card strong,
@@ -889,6 +1300,7 @@ h3 {
 .row-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .small-action {
@@ -948,6 +1360,46 @@ h3 {
   margin-bottom: 0;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.stage-progress-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.stage-pill {
+  min-height: 46px;
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface-soft);
+  text-align: left;
+}
+
+.stage-pill strong,
+.stage-pill span {
+  margin: 0;
+}
+
+.stage-pill span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.stage-pill.active {
+  border-color: rgba(217, 119, 6, 0.3);
+  background: rgba(217, 119, 6, 0.1);
+}
+
+.stage-pill.done {
+  border-color: rgba(5, 150, 105, 0.26);
+  background: rgba(5, 150, 105, 0.1);
 }
 
 .resource-check.ok p {
@@ -1015,6 +1467,65 @@ h3 {
 
 .form-section-title {
   margin-top: 16px;
+}
+
+.product-lookup-field {
+  position: relative;
+}
+
+.lookup-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  max-height: 292px;
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.lookup-results[hidden] {
+  display: none;
+}
+
+.lookup-option {
+  width: 100%;
+  min-height: 50px;
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface-soft);
+  text-align: left;
+}
+
+.lookup-option:hover {
+  border-color: rgba(155, 15, 201, 0.28);
+  background: var(--field);
+}
+
+.lookup-option strong,
+.lookup-option span {
+  display: block;
+}
+
+.lookup-option span,
+.lookup-empty {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.lookup-empty {
+  padding: 10px;
+  font-weight: 800;
 }
 
 .recipe-resource-list {
@@ -1432,8 +1943,24 @@ h3 {
 
   .module-section-grid,
   .module-workbench,
-  .submodule-layout {
+  .submodule-layout,
+  .catalog-workspace:has(> .flow-guide-card),
+  .flow-guided-layout,
+  .submodule-layout:has(> .flow-guide-card),
+  .submodule-layout:has(> .section-card > .flow-guide-card) {
     grid-template-columns: 1fr;
+  }
+
+  .catalog-workspace:has(> .flow-guide-card) > .flow-guide-card,
+  .catalog-workspace:has(> .flow-guide-card) > :not(.flow-guide-card),
+  .flow-guided-layout > .flow-guide-card,
+  .flow-guided-layout > :not(.flow-guide-card),
+  .submodule-layout > .flow-guide-card,
+  .submodule-layout:has(> .flow-guide-card) > .recipe-list-card,
+  .submodule-layout > .section-card:has(> .flow-guide-card),
+  .submodule-layout:has(> .section-card > .flow-guide-card) > section:first-child {
+    grid-column: 1;
+    grid-row: auto;
   }
 }
 
@@ -1505,6 +2032,8 @@ h3 {
 
   .submodule-grid,
   .catalog-grid,
+  .area-summary-grid,
+  .cost-summary-grid,
   .deliverable-board,
   .resource-check-grid,
   .resource-check-grid.compact,
@@ -1521,6 +2050,24 @@ h3 {
     min-height: 190px;
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .catalog-toolbar,
+  .recipe-context-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .catalog-card {
+    flex-direction: column;
+  }
+
+  .area-card {
+    flex-direction: column;
+  }
+
+  .catalog-card-actions {
+    justify-items: stretch;
   }
 
   .resource-input {

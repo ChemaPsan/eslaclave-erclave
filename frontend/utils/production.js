@@ -2,13 +2,23 @@ import { resourceCatalog, defaultRecipes } from "../data/resources.js";
 import { mockDb } from "../data/mockDb.js";
 
 export function getResource(id) {
-  return resourceCatalog.find((item) => item.id === id);
+  return getRecipeResourceCatalog().find((item) => item.id === id);
+}
+
+export function getRecipeResourceCatalog() {
+  return [
+    ...resourceCatalog,
+    ...mockDb.loadLaborRoles(),
+    ...mockDb.loadMachines()
+  ];
 }
 
 export function calculateRecipe(recipe, batchQuantity = 100) {
+  const baseQuantity = Math.max(1, Number(recipe.quantityBase || 1));
+  const multiplier = Number(batchQuantity || 1) / baseQuantity;
   const rows = recipe.resources.map((item) => {
     const resource = getResource(item.resourceId);
-    const required = Number(item.quantity) * batchQuantity;
+    const required = Number(item.quantity) * multiplier;
     const available = resource?.available || 0;
     const cost = required * (resource?.cost || 0);
     return {
@@ -27,6 +37,55 @@ export function calculateRecipe(recipe, batchQuantity = 100) {
     rows,
     totalCost: rows.reduce((sum, row) => sum + row.cost, 0),
     missing: rows.filter((row) => !row.ok)
+  };
+}
+
+export function getRecipeApprovalStatus(recipe) {
+  return recipe.approvalStatus || (recipe.status === "Activa" ? "Aprobada" : "Borrador");
+}
+
+export function isRecipeApproved(recipe) {
+  return getRecipeApprovalStatus(recipe) === "Aprobada";
+}
+
+export function getRecipeStandardCost(recipe) {
+  const baseQuantity = Math.max(1, Number(recipe.quantityBase || 1));
+  return calculateRecipe(recipe, baseQuantity).totalCost / baseQuantity;
+}
+
+export function getOrderCostSnapshot(order, recipe) {
+  const plannedCost = Number(order.plannedCost || calculateRecipe(recipe, order.quantity).totalCost);
+  const actualCost = Number(order.actualCost || plannedCost * getOrderProgressFactor(order));
+  return {
+    plannedCost,
+    actualCost,
+    variance: actualCost - plannedCost,
+    variancePct: plannedCost ? ((actualCost - plannedCost) / plannedCost) * 100 : 0
+  };
+}
+
+export function getOrderProgressFactor(order) {
+  const stages = order.areas || [];
+  if (!stages.length) return 1;
+  const avgFactor = stages.reduce((sum, stage) => sum + Number(stage.actualCostFactor || 1), 0) / stages.length;
+  return avgFactor;
+}
+
+export function getOrderProgress(order) {
+  const stages = order.areas || [];
+  if (!stages.length) return 0;
+  return stages.reduce((sum, stage) => sum + Number(stage.progress || (stage.status === "Terminada" ? 100 : 0)), 0) / stages.length;
+}
+
+export function getReleaseReview(recipe, quantity) {
+  const validation = calculateRecipe(recipe, quantity);
+  const issues = [];
+  if (!isRecipeApproved(recipe)) issues.push("Receta pendiente de aprobacion");
+  validation.missing.forEach((row) => issues.push(`Falta ${row.name}`));
+  return {
+    validation,
+    canRelease: !issues.length,
+    issues
   };
 }
 

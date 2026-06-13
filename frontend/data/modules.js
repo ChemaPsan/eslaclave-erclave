@@ -19,7 +19,9 @@ export const modules = [
       ["Recetas", "Versiones, recursos, etapas, tiempos, merma y rendimiento.", "recetas"],
       ["Ordenes", "Programacion, estados, responsables, prioridad y cantidades.", "ordenes"],
       ["Entregables por area", "Corte, ensamble, calidad, empaque y responsables.", "entregables"],
-      ["Validacion de recursos", "Disponibilidad, reservas, faltantes y compras sugeridas.", "validacion-recursos"]
+      ["Validacion de recursos", "Disponibilidad, reservas, faltantes y compras sugeridas.", "validacion-recursos"],
+      ["Areas y puestos", "Areas operativas, roles, capacidad y costo de mano de obra.", "areas-puestos"],
+      ["Maquinaria", "Equipos productivos, area, disponibilidad y costo hora maquina.", "maquinaria"]
     ],
     workflow: [
       "Seleccionar receta activa",
