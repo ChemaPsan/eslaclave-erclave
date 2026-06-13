@@ -12,7 +12,8 @@ Su propósito es conectar la operación física con producción, compras, ventas
 
 - almacenes configurables;
 - tipos de almacén;
-- ubicaciones internas;
+- ubicaciones fisicas internas como configuracion opcional del almacen;
+- catalogo maestro de articulos inventariables;
 - existencias;
 - entradas;
 - salidas;
@@ -47,8 +48,8 @@ Su propósito es conectar la operación física con producción, compras, ventas
 | Entidad | Descripción |
 |---|---|
 | Almacén | Contenedor principal de inventario. |
-| Ubicación | Espacio interno dentro de un almacén. |
-| Artículo | Producto, materia prima, herramienta o recurso inventariable. |
+| Ubicación física | Espacio interno opcional dentro de un almacén, como zona, pasillo, rack, nivel o posición. |
+| Artículo | Producto, materia prima, herramienta o recurso inventariable autorizado para movimientos. |
 | Existencia | Cantidad disponible o registrada. |
 | Movimiento | Entrada, salida, transferencia o ajuste. |
 | Reserva | Inventario apartado para venta o producción. |
@@ -58,7 +59,50 @@ Su propósito es conectar la operación física con producción, compras, ventas
 
 ---
 
-## 5. Movimientos de inventario
+## 5. Catalogo de articulos
+
+Antes de registrar movimientos, Almacenes debera contar con un catalogo maestro de articulos inventariables. Esto reduce errores de captura, evita nombres duplicados y prepara el sistema para que solo usuarios autorizados puedan crear o modificar articulos.
+
+En MVP, el submodulo Articulos debera permitir:
+
+- crear articulo;
+- consultar articulos existentes;
+- buscar por codigo, nombre, tipo, categoria o almacen;
+- editar datos principales;
+- usar articulos registrados dentro de Movimientos mediante busqueda rapida por codigo, nombre, tipo o categoria;
+- mantener estatus activo, inactivo o bloqueado.
+
+Campos base sugeridos:
+
+| Campo | Uso |
+|---|---|
+| Codigo | SKU o clave interna estable. |
+| Nombre | Nombre operativo del articulo. |
+| Tipo | Materia prima, consumible, herramienta, producto terminado, refaccion o suministro. |
+| Categoria | Agrupacion para reportes o filtros. |
+| Unidad | Unidad principal de movimiento. |
+| Minimo y maximo | Referencia para reabastecimiento futuro. |
+| Politica de inventario | Estandar, lote, serie o restringido. |
+| Almacen sugerido | Almacen usual para recepcion o consumo. |
+| Estatus | Activo, inactivo o bloqueado. |
+| Descripcion | Uso, restricciones, equivalencias o notas. |
+
+Cuando se implemente usuarios y permisos, la creacion y edicion de articulos debera protegerse con permisos como:
+
+```text
+warehouses.items.read
+warehouses.items.create
+warehouses.items.update
+warehouses.items.block
+```
+
+---
+
+## 6. Movimientos de inventario
+
+En MVP, Almacenes debera permitir registrar movimientos manuales para cubrir operaciones que no vengan aun de otros modulos. Esto es elemental para operacion real, ajustes iniciales, correcciones autorizadas, entradas extraordinarias y salidas no automatizadas.
+
+Los movimientos deberan usar articulos dados de alta en el catalogo maestro cuando existan. Para evitar listas desplegables pesadas con cientos de registros, la seleccion debera hacerse mediante busqueda rapida por codigo, nombre, tipo o categoria. El campo manual solo debera funcionar como apoyo temporal mientras se configura el MVP o para casos excepcionales controlados.
 
 | Movimiento | Descripción |
 |---|---|
@@ -71,12 +115,38 @@ Su propósito es conectar la operación física con producción, compras, ventas
 | Merma | Registra desperdicio o pérdida. |
 | Devolución de cliente | Regresa producto vendido. |
 | Devolución a proveedor | Reduce inventario recibido. |
-| Reserva | Aparta inventario para una operación futura. |
-| Liberación de reserva | Regresa inventario apartado a disponible. |
+| Reserva | Aparta inventario para una operación futura. Fuera del MVP funcional inicial. |
+| Liberación de reserva | Regresa inventario apartado a disponible. Fuera del MVP funcional inicial. |
+
+### Reservas en MVP
+
+El submodulo Reservas queda documentado como flujo futuro, pero deshabilitado en el MVP. No debera crear, editar ni apartar inventario todavia.
+
+Motivo:
+
+- evitar apartados de inventario sin recalculo real de existencias;
+- evitar prometer disponibilidad cuando aun no existe consumo contra movimientos reales;
+- mantener el MVP enfocado en alta de almacenes, catalogo de articulos y movimientos manuales.
+
+Cuando se active en fases posteriores, Reservas debera conectarse con existencias, movimientos, kardex, ventas y produccion.
+
+### Kardex en MVP
+
+Kardex queda habilitado como consulta, no como captura. No debera tener formulario propio porque su informacion se genera desde los movimientos registrados.
+
+En el MVP, Kardex debera permitir:
+
+- consultar movimientos historicos;
+- filtrar por articulo;
+- filtrar por almacen;
+- buscar por documento, articulo, almacen, movimiento o motivo;
+- ver entradas, salidas y saldo calculado por articulo y unidad.
+
+Kardex no debera crear, editar ni eliminar movimientos. Cualquier correccion debera hacerse desde Movimientos mediante un ajuste autorizado.
 
 ---
 
-## 6. Estados de inventario
+## 7. Estados de inventario
 
 | Estado | Descripción |
 |---|---|
@@ -89,10 +159,13 @@ Su propósito es conectar la operación física con producción, compras, ventas
 
 ---
 
-## 7. Reglas de negocio
+## 8. Reglas de negocio
 
+- Los articulos deberan darse de alta antes de usarse en movimientos cuando el catalogo ya exista.
+- La creacion y edicion de articulos debera estar restringida a roles autorizados.
 - Todo movimiento deberá tener usuario, fecha, motivo y referencia.
 - Todo movimiento deberá conservar `documento_origen`.
+- Los movimientos manuales deberan capturar tipo, articulo, cantidad, unidad, almacen, fecha y motivo.
 - Los movimientos no deberán borrarse; deberán cancelarse o reversarse.
 - El inventario disponible deberá descontar reservas.
 - Una orden de producción podrá reservar insumos antes del consumo real.
@@ -105,7 +178,7 @@ Su propósito es conectar la operación física con producción, compras, ventas
 
 ---
 
-## 8. Servicios funcionales que debe exponer
+## 9. Servicios funcionales que debe exponer
 
 El módulo de Almacenes deberá estar preparado para responder a otros módulos.
 
@@ -163,7 +236,7 @@ Cuando Producción solicite validar una receta u orden, Almacenes deberá respon
 
 ---
 
-## 9. Integraciones
+## 10. Integraciones
 
 | Módulo | Relación |
 |---|---|
@@ -177,7 +250,7 @@ Cuando Producción solicite validar una receta u orden, Almacenes deberá respon
 
 ---
 
-## 10. Métricas
+## 11. Métricas
 
 - inventario disponible;
 - inventario reservado;
@@ -193,10 +266,11 @@ Cuando Producción solicite validar una receta u orden, Almacenes deberá respon
 
 ---
 
-## 11. Pendientes
+## 12. Pendientes
 
 - Definir si se manejarán lotes desde MVP o fase posterior.
 - Definir método de costeo inicial.
-- Definir reglas de ubicaciones internas.
+- Definir si ubicaciones fisicas creceran a catalogo independiente en fases posteriores.
+- Definir permisos finales para alta, edicion y bloqueo de articulos.
 - Definir proceso de conteo físico.
 - Definir permisos para ajustes y cancelaciones.

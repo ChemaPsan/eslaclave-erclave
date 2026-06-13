@@ -35,6 +35,16 @@ Cada módulo deberá documentarse con una estructura similar:
 10. Integraciones con otros módulos.
 11. Pendientes.
 
+## Estado MVP funcional
+
+| Modulo | Estado actual |
+|---|---|
+| Produccion | Modulo de referencia funcional para catalogo de productos/servicios, recetas, ordenes, validacion de recursos, areas/puestos y maquinaria. |
+| Almacenes | Alta, busqueda y edicion de almacenes; catalogo de articulos; movimientos manuales; Kardex como consulta; Reservas queda deshabilitado para una fase posterior. |
+| Ventas | Alta, busqueda y edicion de clientes con perfil comercial y fiscal; cotizaciones multipartida ligadas a clientes y productos/servicios dados de alta; PDF generico imprimible. |
+| Administracion | Documentacion de catalogos base, permisos, roles y configuracion transversal; implementacion UI pendiente. |
+| Resto de modulos | Mantienen MVP generico para especializarse progresivamente. |
+
 ## Principio rector
 
 ERClave deberá aprender de los ERP grandes, pero avanzar con una implementación simple, modular y progresiva.

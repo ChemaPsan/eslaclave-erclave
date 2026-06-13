@@ -111,5 +111,27 @@ export const mockDb = {
   },
   findOrder(orderId) {
     return this.loadOrders().find((item) => item.id === orderId);
+  },
+  loadModuleRecords(moduleId, submoduleId = "") {
+    const raw = localStorage.getItem(`erclave-module-records-${moduleId}`);
+    const records = raw ? JSON.parse(raw) : [];
+    return submoduleId ? records.filter((item) => item.submoduleId === submoduleId) : records;
+  },
+  saveModuleRecords(moduleId, records) {
+    localStorage.setItem(`erclave-module-records-${moduleId}`, JSON.stringify(records));
+  },
+  addModuleRecord(moduleId, record) {
+    const records = this.loadModuleRecords(moduleId);
+    records.unshift(record);
+    this.saveModuleRecords(moduleId, records);
+    return records;
+  },
+  updateModuleRecord(moduleId, record) {
+    const records = this.loadModuleRecords(moduleId).map((item) => (item.id === record.id ? record : item));
+    this.saveModuleRecords(moduleId, records);
+    return records;
+  },
+  findModuleRecord(moduleId, recordId) {
+    return this.loadModuleRecords(moduleId).find((item) => item.id === recordId);
   }
 };

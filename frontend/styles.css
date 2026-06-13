@@ -821,6 +821,17 @@ h3 {
   background: var(--field);
 }
 
+.preview-field textarea {
+  width: 100%;
+  min-height: 84px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  color: var(--text);
+  background: var(--field);
+  resize: vertical;
+}
+
 .preview-field input[readonly],
 .preview-field input:disabled,
 .preview-field select:disabled,
@@ -1029,6 +1040,21 @@ h3 {
   width: min(420px, 100%);
 }
 
+.kardex-toolbar {
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.compact-filter {
+  min-width: 190px;
+  margin: 0;
+}
+
+.kardex-table .table-row {
+  min-width: 980px;
+  grid-template-columns: 0.72fr 0.9fr 0.95fr 1.3fr 1.25fr 0.72fr 0.72fr 0.72fr;
+}
+
 .catalog-card,
 .deliverable-card {
   min-height: 120px;
@@ -1053,6 +1079,26 @@ h3 {
   min-width: 0;
   display: grid;
   gap: 6px;
+}
+
+.coming-soon-card {
+  display: grid;
+  gap: 16px;
+}
+
+.coming-soon-content {
+  display: grid;
+  gap: 10px;
+}
+
+.coming-soon-content > strong {
+  font-size: clamp(1.1rem, 2vw, 1.45rem);
+}
+
+.disabled-action,
+.disabled-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .status-control {
@@ -1602,6 +1648,21 @@ h3 {
 
 .area-assignment-row {
   grid-template-columns: minmax(0, 1fr) minmax(180px, 0.7fr);
+}
+
+.quote-line-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) minmax(90px, 0.55fr) minmax(90px, 0.55fr) minmax(110px, 0.65fr) minmax(100px, 0.55fr) 42px;
+  align-items: end;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.quote-line-product {
+  min-width: 0;
 }
 
 .remove-resource {

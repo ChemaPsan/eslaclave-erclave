@@ -167,6 +167,12 @@ function renderPanel() {
     renderGenericSubmodulePanel(module);
     return;
   }
+  if (module.id !== "produccion") {
+    const savedRows = getSavedModuleTableRows(module);
+    const savedRecords = getSavedModuleRecordRows(module);
+    module.table = { ...module.table, rows: [...savedRows, ...(module.table.rows || [])] };
+    module.records = [...savedRecords, ...(module.records || [])];
+  }
   const label = state.lang === "en" ? module.titleEn : module.title;
 
   modulePanel.innerHTML = `
@@ -319,11 +325,40 @@ function renderPanel() {
 
 function renderGenericSubmodulePanel(module) {
   const submodule = getGenericSubmodule(module, state.activeSubmodule);
+  if (isWarehouseMasterSubmodule(module, submodule)) {
+    renderWarehouseCatalogPanel(module, submodule);
+    return;
+  }
+  if (isWarehouseItemsSubmodule(module, submodule)) {
+    renderInventoryItemsPanel(module, submodule);
+    return;
+  }
+  if (isWarehouseMovementSubmodule(module, submodule)) {
+    renderWarehouseMovementsPanel(module, submodule);
+    return;
+  }
+  if (isWarehouseReservationsSubmodule(module, submodule)) {
+    renderWarehouseComingSoonPanel(module, submodule);
+    return;
+  }
+  if (isWarehouseKardexSubmodule(module, submodule)) {
+    renderWarehouseKardexPanel(module, submodule);
+    return;
+  }
+  if (isSalesCustomersSubmodule(module, submodule)) {
+    renderSalesCustomersPanel(module, submodule);
+    return;
+  }
+  if (isSalesQuotesSubmodule(module, submodule)) {
+    renderSalesQuotesPanel(module, submodule);
+    return;
+  }
   const sampleRows = buildGenericSubmoduleRows(module, submodule);
   const columns = getGenericSubmoduleColumns(module);
   const formFields = getGenericSubmoduleForm(module, submodule);
   const integrations = getGenericSubmoduleIntegrations(module);
   const label = state.lang === "en" ? module.titleEn : module.title;
+  const flowGuide = getGenericFlowGuide(module, submodule);
 
   modulePanel.innerHTML = `
     <div class="panel-head">
@@ -347,6 +382,7 @@ function renderGenericSubmodulePanel(module) {
       </div>
 
       <div class="submodule-layout">
+        ${flowGuide}
         <section class="section-card">
           <div class="section-title">
             <span class="section-icon">▦</span>
@@ -454,11 +490,787 @@ function renderGenericSubmodulePanel(module) {
   bindProductionPanelActions();
 }
 
+function renderWarehouseCatalogPanel(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const search = localStorage.getItem("erclave-warehouse-search") || "";
+  const normalizedSearch = search.trim().toLowerCase();
+  const warehouses = mockDb.loadModuleRecords(module.id, submodule.id).filter((record) => record.recordType === "warehouse");
+  const filteredWarehouses = normalizedSearch
+    ? warehouses.filter((record) =>
+        [
+          record.code,
+          record.title,
+          record.status,
+          record.owner,
+          translateWarehouseType(record.fields?.type),
+          record.fields?.businessCenter,
+          record.fields?.location,
+          record.fields?.capacity,
+          record.fields?.zone,
+          record.fields?.aisle,
+          record.fields?.rack,
+          record.fields?.level,
+          record.fields?.position,
+          record.fields?.description
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch)
+      )
+    : warehouses;
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        <button class="primary-action" type="button" data-action="module-primary">
+          <span>＋</span>
+          <span>${t("newWarehouse")}</span>
+        </button>
+      </div>
+
+      <section class="section-card catalog-workspace">
+        ${renderFlowGuide(getWarehouseFlowTitle(submodule), getWarehouseFlowSteps(submodule))}
+        <div class="catalog-toolbar">
+          <label class="search-field catalog-search">
+            <span>S</span>
+            <input id="warehouseSearch" type="search" value="${search}" placeholder="${t("searchWarehouses")}" />
+          </label>
+        </div>
+        <p class="helper-copy">${t("warehouseCatalogHelper")}</p>
+        <div class="catalog-grid">
+          ${filteredWarehouses.length ? filteredWarehouses.map(renderWarehouseCard).join("") : renderWarehouseEmptyState(Boolean(search))}
+        </div>
+      </section>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
+    navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
+  });
+  const warehouseSearch = modulePanel.querySelector("#warehouseSearch");
+  if (warehouseSearch) {
+    warehouseSearch.addEventListener("input", (event) => {
+      localStorage.setItem("erclave-warehouse-search", event.target.value);
+      render();
+      const nextSearch = modulePanel.querySelector("#warehouseSearch");
+      if (nextSearch) {
+        nextSearch.focus();
+        nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
+      }
+    });
+  }
+  bindProductionPanelActions();
+}
+
+function renderWarehouseCard(record) {
+  return `
+    <article class="catalog-card">
+      <div class="catalog-card-main">
+        <span class="muted-label">${record.code} - ${translateWarehouseType(record.fields?.type)}</span>
+        <strong>${record.title}</strong>
+        <p>${record.fields?.businessCenter || ""} - ${record.fields?.location || ""}</p>
+        <span class="muted-label">${t("warehouseOwner")}: ${record.owner || t("noRecords")}</span>
+        <span class="muted-label">${t("capacity")}: ${record.fields?.capacity || t("notDefined")}</span>
+        <span class="muted-label">${t("physicalLocation")}: ${getPhysicalLocationCode(record.fields) || t("notDefined")}</span>
+        <span class="muted-label">${t("inventoryPolicy")}: ${translateInventoryPolicy(record.fields?.policy)} · ${t("allowsReservations")}: ${translateYesNo(record.fields?.allowsReservations)}</span>
+        ${record.fields?.description ? `<p>${record.fields.description}</p>` : ""}
+      </div>
+      <div class="catalog-card-actions">
+        <span class="chip ${record.status === "Activo" ? "active" : record.status === "Bloqueado" ? "warning" : ""}">${translateStatus(record.status)}</span>
+        <button class="secondary-action small-action" type="button" data-action="edit-warehouse" data-record-id="${record.id}">${t("edit")}</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderWarehouseEmptyState(hasSearch = false) {
+  return `
+    <article class="catalog-card compact-card">
+      <div>
+        <span class="muted-label">${t("noRecords")}</span>
+        <strong>${hasSearch ? t("warehouseNoMatchesTitle") : t("warehouseEmptyTitle")}</strong>
+        <p>${hasSearch ? t("warehouseNoMatchesDetail") : t("warehouseEmptyDetail")}</p>
+      </div>
+    </article>
+  `;
+}
+
+function renderInventoryItemsPanel(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const search = localStorage.getItem("erclave-inventory-item-search") || "";
+  const normalizedSearch = search.trim().toLowerCase();
+  const items = mockDb.loadModuleRecords(module.id, submodule.id).filter((record) => record.recordType === "inventoryItem");
+  const filteredItems = normalizedSearch
+    ? items.filter((record) =>
+        [
+          record.code,
+          record.title,
+          record.status,
+          record.owner,
+          translateInventoryItemType(record.fields?.type),
+          record.fields?.category,
+          record.fields?.unit,
+          record.fields?.minStock,
+          record.fields?.maxStock,
+          record.fields?.defaultWarehouseName,
+          record.fields?.description
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch)
+      )
+    : items;
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        <button class="primary-action" type="button" data-action="module-primary">
+          <span>＋</span>
+          <span>${t("newInventoryItem")}</span>
+        </button>
+      </div>
+
+      <section class="section-card catalog-workspace">
+        ${renderFlowGuide(getWarehouseFlowTitle(submodule), getWarehouseFlowSteps(submodule))}
+        <div class="catalog-toolbar">
+          <label class="search-field catalog-search">
+            <span>S</span>
+            <input id="inventoryItemSearch" type="search" value="${search}" placeholder="${t("searchInventoryItems")}" />
+          </label>
+        </div>
+        <p class="helper-copy">${t("inventoryItemCatalogHelper")}</p>
+        <div class="catalog-grid">
+          ${filteredItems.length ? filteredItems.map(renderInventoryItemCard).join("") : renderInventoryItemEmptyState(Boolean(search))}
+        </div>
+      </section>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
+    navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
+  });
+  const itemSearch = modulePanel.querySelector("#inventoryItemSearch");
+  if (itemSearch) {
+    itemSearch.addEventListener("input", (event) => {
+      localStorage.setItem("erclave-inventory-item-search", event.target.value);
+      render();
+      const nextSearch = modulePanel.querySelector("#inventoryItemSearch");
+      if (nextSearch) {
+        nextSearch.focus();
+        nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
+      }
+    });
+  }
+  bindProductionPanelActions();
+}
+
+function renderInventoryItemCard(record) {
+  return `
+    <article class="catalog-card">
+      <div class="catalog-card-main">
+        <span class="muted-label">${record.code} - ${translateInventoryItemType(record.fields?.type)}</span>
+        <strong>${record.title}</strong>
+        <p>${record.fields?.category || t("notDefined")} - ${record.fields?.unit || t("notDefined")}</p>
+        <span class="muted-label">${t("defaultWarehouse")}: ${record.fields?.defaultWarehouseName || t("notDefined")}</span>
+        <span class="muted-label">${t("stockRange")}: ${record.fields?.minStock || "0"} / ${record.fields?.maxStock || t("notDefined")}</span>
+        <span class="muted-label">${t("inventoryPolicy")}: ${translateInventoryPolicy(record.fields?.policy)}</span>
+        ${record.fields?.description ? `<p>${record.fields.description}</p>` : ""}
+      </div>
+      <div class="catalog-card-actions">
+        <span class="chip ${record.status === "Activo" ? "active" : record.status === "Bloqueado" ? "warning" : ""}">${translateStatus(record.status)}</span>
+        <button class="secondary-action small-action" type="button" data-action="edit-inventory-item" data-record-id="${record.id}">${t("edit")}</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderInventoryItemEmptyState(hasSearch = false) {
+  return `
+    <article class="catalog-card compact-card">
+      <div>
+        <span class="muted-label">${t("noRecords")}</span>
+        <strong>${hasSearch ? t("inventoryItemNoMatchesTitle") : t("inventoryItemEmptyTitle")}</strong>
+        <p>${hasSearch ? t("inventoryItemNoMatchesDetail") : t("inventoryItemEmptyDetail")}</p>
+      </div>
+    </article>
+  `;
+}
+
+function renderWarehouseMovementsPanel(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const movements = mockDb.loadModuleRecords(module.id, submodule.id).filter((record) => record.recordType === "inventoryMovement");
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        <button class="primary-action" type="button" data-action="module-primary">
+          <span>＋</span>
+          <span>${t("newMovement")}</span>
+        </button>
+      </div>
+
+      <section class="section-card catalog-workspace">
+        ${renderFlowGuide(getWarehouseFlowTitle(submodule), getWarehouseFlowSteps(submodule))}
+        <p class="helper-copy">${t("movementManualHelper")}</p>
+        <div class="data-table" role="table">
+          <div class="table-row table-head" role="row">
+            <span role="columnheader">${t("document")}</span>
+            <span role="columnheader">${t("movementType")}</span>
+            <span role="columnheader">${t("item")}</span>
+            <span role="columnheader">${t("quantity")}</span>
+          </div>
+          ${movements.length ? movements.map(renderMovementRow).join("") : `
+            <div class="table-row" role="row">
+              <span role="cell">${t("noRecords")}</span>
+              <span role="cell">${t("newMovement")}</span>
+              <span role="cell">${t("movementEmptyDetail")}</span>
+              <span role="cell">-</span>
+            </div>
+          `}
+        </div>
+        <div class="records module-records">
+          ${movements.length ? movements.map(renderMovementRecord).join("") : ""}
+        </div>
+      </section>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
+    navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
+  });
+  bindProductionPanelActions();
+}
+
+function renderWarehouseComingSoonPanel(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        <button class="primary-action disabled-action" type="button" disabled aria-disabled="true">
+          <span>＋</span>
+          <span>${t("comingSoon")}</span>
+        </button>
+      </div>
+
+      <section class="section-card coming-soon-card">
+        ${renderFlowGuide(getWarehouseFlowTitle(submodule), getWarehouseFlowSteps(submodule))}
+        <div class="coming-soon-content">
+          <span class="muted-label">${t("mvpUnavailableLabel")}</span>
+          <strong>${t("reservationsComingSoonTitle")}</strong>
+          <p>${t("reservationsComingSoonDetail")}</p>
+          <div class="compat-list">
+            <article>
+              <strong>${t("currentMvp")}</strong>
+              <p>${t("reservationsCurrentMvp")}</p>
+            </article>
+            <article>
+              <strong>${t("futureScope")}</strong>
+              <p>${t("reservationsFutureScope")}</p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
+    navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
+  });
+}
+
+function renderWarehouseKardexPanel(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const itemFilter = localStorage.getItem("erclave-kardex-item") || "all";
+  const warehouseFilter = localStorage.getItem("erclave-kardex-warehouse") || "all";
+  const search = localStorage.getItem("erclave-kardex-search") || "";
+  const items = mockDb.loadModuleRecords(module.id, "articulos").filter((record) => record.recordType === "inventoryItem");
+  const warehouses = mockDb.loadModuleRecords(module.id, "almacenes").filter((record) => record.recordType === "warehouse");
+  const movements = mockDb.loadModuleRecords(module.id, "movimientos").filter((record) => record.recordType === "inventoryMovement");
+  const entries = buildKardexEntries(movements);
+  const filteredEntries = filterKardexEntries(entries, itemFilter, warehouseFilter, search);
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        <button class="primary-action disabled-action" type="button" disabled aria-disabled="true">
+          <span>☷</span>
+          <span>${t("readOnly")}</span>
+        </button>
+      </div>
+
+      <section class="section-card catalog-workspace">
+        ${renderFlowGuide(getWarehouseFlowTitle(submodule), getWarehouseFlowSteps(submodule))}
+        <p class="helper-copy">${t("kardexHelper")}</p>
+        <div class="catalog-toolbar kardex-toolbar">
+          <label class="search-field catalog-search">
+            <span>S</span>
+            <input id="kardexSearch" type="search" value="${search}" placeholder="${t("searchKardex")}" />
+          </label>
+          <label class="preview-field compact-filter">
+            <span>${t("item")}</span>
+            <select id="kardexItemFilter">
+              <option value="all">${t("allItems")}</option>
+              ${items.map((item) => `<option value="${item.id}" ${selectedOption(itemFilter, item.id)}>${item.code} - ${item.title}</option>`).join("")}
+            </select>
+          </label>
+          <label class="preview-field compact-filter">
+            <span>${t("warehouse")}</span>
+            <select id="kardexWarehouseFilter">
+              <option value="all">${t("allWarehouses")}</option>
+              ${warehouses.map((warehouse) => `<option value="${warehouse.id}" ${selectedOption(warehouseFilter, warehouse.id)}>${warehouse.code} - ${warehouse.title}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <div class="data-table kardex-table" role="table">
+          <div class="table-row table-head" role="row">
+            <span role="columnheader">${t("movementDate")}</span>
+            <span role="columnheader">${t("document")}</span>
+            <span role="columnheader">${t("movementType")}</span>
+            <span role="columnheader">${t("item")}</span>
+            <span role="columnheader">${t("warehouse")}</span>
+            <span role="columnheader">${t("entries")}</span>
+            <span role="columnheader">${t("issues")}</span>
+            <span role="columnheader">${t("balance")}</span>
+          </div>
+          ${filteredEntries.length ? filteredEntries.map(renderKardexRow).join("") : renderKardexEmptyRow(Boolean(movements.length))}
+        </div>
+      </section>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
+    navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
+  });
+  modulePanel.querySelector("#kardexItemFilter").addEventListener("change", (event) => {
+    localStorage.setItem("erclave-kardex-item", event.target.value);
+    render();
+  });
+  modulePanel.querySelector("#kardexWarehouseFilter").addEventListener("change", (event) => {
+    localStorage.setItem("erclave-kardex-warehouse", event.target.value);
+    render();
+  });
+  const kardexSearch = modulePanel.querySelector("#kardexSearch");
+  kardexSearch.addEventListener("input", (event) => {
+    localStorage.setItem("erclave-kardex-search", event.target.value);
+    render();
+    const nextSearch = modulePanel.querySelector("#kardexSearch");
+    if (nextSearch) {
+      nextSearch.focus();
+      nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
+    }
+  });
+}
+
+function buildKardexEntries(movements) {
+  const balances = new Map();
+  return movements
+    .slice()
+    .sort((a, b) => getMovementTimestamp(a) - getMovementTimestamp(b))
+    .map((record) => {
+      const quantity = Number(record.fields?.quantity || 0);
+      const unit = record.fields?.unit || "";
+      const itemKey = record.fields?.itemId || record.fields?.item || record.title;
+      const balanceKey = `${itemKey}-${unit}`;
+      const previousBalance = balances.get(balanceKey) || 0;
+      const signedQuantity = getMovementSignedQuantity(record.fields?.movementType, quantity);
+      const nextBalance = previousBalance + signedQuantity;
+      balances.set(balanceKey, nextBalance);
+      return {
+        record,
+        entryQuantity: signedQuantity > 0 ? quantity : 0,
+        issueQuantity: signedQuantity < 0 ? quantity : 0,
+        balance: nextBalance,
+        unit
+      };
+    })
+    .reverse();
+}
+
+function filterKardexEntries(entries, itemFilter, warehouseFilter, search) {
+  const normalizedSearch = search.trim().toLowerCase();
+  return entries.filter(({ record }) => {
+    const matchesItem = itemFilter === "all" || record.fields?.itemId === itemFilter;
+    const matchesWarehouse = warehouseFilter === "all" || record.fields?.warehouseId === warehouseFilter;
+    const matchesSearch = !normalizedSearch || [
+      record.code,
+      record.title,
+      record.fields?.sourceDocument,
+      record.fields?.item,
+      record.fields?.warehouseName,
+      translateMovementType(record.fields?.movementType),
+      record.fields?.reason
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedSearch);
+    return matchesItem && matchesWarehouse && matchesSearch;
+  });
+}
+
+function renderKardexRow(entry) {
+  const { record, entryQuantity, issueQuantity, balance, unit } = entry;
+  return `
+    <div class="table-row" role="row">
+      <span role="cell">${formatKardexDate(record.fields?.movementDate || record.createdAt)}</span>
+      <span role="cell">${record.fields?.sourceDocument || record.code}</span>
+      <span role="cell">${translateMovementType(record.fields?.movementType)}</span>
+      <span role="cell">${record.title}</span>
+      <span role="cell">${record.fields?.warehouseName || t("notDefined")}</span>
+      <span role="cell">${entryQuantity ? `${formatNumber(entryQuantity)} ${unit}` : "-"}</span>
+      <span role="cell">${issueQuantity ? `${formatNumber(issueQuantity)} ${unit}` : "-"}</span>
+      <span role="cell">${formatNumber(balance)} ${unit}</span>
+    </div>
+  `;
+}
+
+function renderKardexEmptyRow(hasMovements) {
+  return `
+    <div class="table-row" role="row">
+      <span role="cell">${t("noRecords")}</span>
+      <span role="cell">${hasMovements ? t("kardexNoMatches") : t("kardexEmptyTitle")}</span>
+      <span role="cell">-</span>
+      <span role="cell">${hasMovements ? t("kardexNoMatchesDetail") : t("kardexEmptyDetail")}</span>
+      <span role="cell">-</span>
+      <span role="cell">-</span>
+      <span role="cell">-</span>
+      <span role="cell">-</span>
+    </div>
+  `;
+}
+
+function getMovementTimestamp(record) {
+  return new Date(record.fields?.movementDate || record.createdAt || 0).getTime();
+}
+
+function getMovementSignedQuantity(type, quantity) {
+  if (type === "entry" || type === "positiveAdjustment") return quantity;
+  if (type === "exit" || type === "negativeAdjustment") return -quantity;
+  return 0;
+}
+
+function formatKardexDate(value) {
+  if (!value) return t("notDefined");
+  return new Date(value).toLocaleDateString(state.lang === "en" ? "en-US" : "es-MX");
+}
+
+function renderSalesCustomersPanel(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const search = localStorage.getItem("erclave-sales-customer-search") || "";
+  const normalizedSearch = search.trim().toLowerCase();
+  const customers = mockDb.loadModuleRecords(module.id, submodule.id).filter((record) => record.recordType === "customer");
+  const filteredCustomers = normalizedSearch
+    ? customers.filter((record) =>
+        [
+          record.code,
+          record.title,
+          record.status,
+          record.owner,
+          translateCustomerType(record.fields?.customerType),
+          record.fields?.commercialName,
+          record.fields?.contactName,
+          record.fields?.contactEmail,
+          record.fields?.contactPhone,
+          record.fields?.salesOwner,
+          record.fields?.billingLegalName,
+          record.fields?.taxId,
+          record.fields?.billingEmail,
+          record.fields?.billingZipCode,
+          record.fields?.billingCity,
+          record.fields?.billingState
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch)
+      )
+    : customers;
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        <button class="primary-action" type="button" data-action="module-primary">
+          <span>＋</span>
+          <span>${t("newCustomer")}</span>
+        </button>
+      </div>
+
+      <section class="section-card catalog-workspace">
+        ${renderFlowGuide(getSalesFlowTitle(submodule), getSalesFlowSteps(submodule))}
+        <div class="catalog-toolbar">
+          <label class="search-field catalog-search">
+            <span>S</span>
+            <input id="salesCustomerSearch" type="search" value="${search}" placeholder="${t("searchCustomers")}" />
+          </label>
+        </div>
+        <p class="helper-copy">${t("customerCatalogHelper")}</p>
+        <div class="catalog-grid">
+          ${filteredCustomers.length ? filteredCustomers.map(renderSalesCustomerCard).join("") : renderSalesCustomerEmptyState(Boolean(search))}
+        </div>
+      </section>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
+    navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
+  });
+  const customerSearch = modulePanel.querySelector("#salesCustomerSearch");
+  customerSearch.addEventListener("input", (event) => {
+    localStorage.setItem("erclave-sales-customer-search", event.target.value);
+    render();
+    const nextSearch = modulePanel.querySelector("#salesCustomerSearch");
+    if (nextSearch) {
+      nextSearch.focus();
+      nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
+    }
+  });
+  bindProductionPanelActions();
+}
+
+function renderSalesCustomerCard(record) {
+  return `
+    <article class="catalog-card">
+      <div class="catalog-card-main">
+        <span class="muted-label">${record.code} - ${translateCustomerType(record.fields?.customerType)}</span>
+        <strong>${record.title}</strong>
+        <p>${t("billingProfile")}: ${record.fields?.billingLegalName || t("notDefined")} - ${record.fields?.taxId || t("notDefined")}</p>
+        <span class="muted-label">${t("contact")}: ${record.fields?.contactName || t("notDefined")} · ${record.fields?.contactPhone || t("notDefined")}</span>
+        <span class="muted-label">${t("commercialEmail")}: ${record.fields?.contactEmail || t("notDefined")}</span>
+        <span class="muted-label">${t("paymentTerms")}: ${record.fields?.paymentTerms || t("notDefined")} · ${t("creditLimit")}: ${record.fields?.creditLimit || t("notDefined")}</span>
+        <span class="muted-label">${t("billingEmail")}: ${record.fields?.billingEmail || t("notDefined")}</span>
+      </div>
+      <div class="catalog-card-actions">
+        <span class="chip ${record.status === "Activo" ? "active" : record.status === "Bloqueado" ? "warning" : ""}">${translateStatus(record.status)}</span>
+        <button class="secondary-action small-action" type="button" data-action="edit-sales-customer" data-record-id="${record.id}">${t("edit")}</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderSalesCustomerEmptyState(hasSearch = false) {
+  return `
+    <article class="catalog-card compact-card">
+      <div>
+        <span class="muted-label">${t("noRecords")}</span>
+        <strong>${hasSearch ? t("customerNoMatchesTitle") : t("customerEmptyTitle")}</strong>
+        <p>${hasSearch ? t("customerNoMatchesDetail") : t("customerEmptyDetail")}</p>
+      </div>
+    </article>
+  `;
+}
+
+function renderSalesQuotesPanel(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const search = localStorage.getItem("erclave-sales-quote-search") || "";
+  const normalizedSearch = search.trim().toLowerCase();
+  const quotes = mockDb.loadModuleRecords(module.id, submodule.id).filter((record) => record.recordType === "quote");
+  const filteredQuotes = normalizedSearch
+    ? quotes.filter((record) =>
+        [
+          record.code,
+          record.title,
+          record.status,
+          record.owner,
+          record.fields?.customerName,
+          record.fields?.productServiceName,
+          getQuoteLines(record).map((line) => line.productServiceName).join(" "),
+          record.fields?.validUntil,
+          record.fields?.paymentTerms,
+          record.fields?.deliveryPromise,
+          record.fields?.notes
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch)
+      )
+    : quotes;
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        <button class="primary-action" type="button" data-action="module-primary">
+          <span>＋</span>
+          <span>${t("newQuote")}</span>
+        </button>
+      </div>
+
+      <section class="section-card catalog-workspace">
+        ${renderFlowGuide(getSalesFlowTitle(submodule), getSalesFlowSteps(submodule))}
+        <div class="catalog-toolbar">
+          <label class="search-field catalog-search">
+            <span>S</span>
+            <input id="salesQuoteSearch" type="search" value="${search}" placeholder="${t("searchQuotes")}" />
+          </label>
+        </div>
+        <p class="helper-copy">${t("quoteCatalogHelper")}</p>
+        <div class="catalog-grid">
+          ${filteredQuotes.length ? filteredQuotes.map(renderSalesQuoteCard).join("") : renderSalesQuoteEmptyState(Boolean(search))}
+        </div>
+      </section>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
+    navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
+  });
+  const quoteSearch = modulePanel.querySelector("#salesQuoteSearch");
+  quoteSearch.addEventListener("input", (event) => {
+    localStorage.setItem("erclave-sales-quote-search", event.target.value);
+    render();
+    const nextSearch = modulePanel.querySelector("#salesQuoteSearch");
+    if (nextSearch) {
+      nextSearch.focus();
+      nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
+    }
+  });
+  bindProductionPanelActions();
+}
+
+function renderSalesQuoteCard(record) {
+  return `
+    <article class="catalog-card">
+      <div class="catalog-card-main">
+        <span class="muted-label">${record.code} - ${record.fields?.validUntil || t("notDefined")} - ${getQuoteLines(record).length} ${t("quoteLines")}</span>
+        <strong>${record.title}</strong>
+        <p>${getQuoteLines(record).map((line) => line.productServiceName).filter(Boolean).slice(0, 2).join(" / ") || t("notDefined")}</p>
+        <span class="muted-label">${t("customer")}: ${record.fields?.customerName || t("notDefined")}</span>
+        <span class="muted-label">${t("quoteSubtotal")}: ${formatCurrency(Number(record.fields?.subtotal || 0))}</span>
+        <span class="muted-label">${t("quoteTotal")}: ${formatCurrency(Number(record.fields?.total || 0))}</span>
+        <span class="muted-label">${t("paymentTerms")}: ${record.fields?.paymentTerms || t("notDefined")}</span>
+      </div>
+      <div class="catalog-card-actions">
+        <span class="chip ${record.status === "Aprobado" ? "active" : record.status === "Vencida" ? "warning" : ""}">${translateStatus(record.status)}</span>
+        <button class="secondary-action small-action" type="button" data-action="print-sales-quote" data-record-id="${record.id}">${t("quotePdf")}</button>
+        <button class="secondary-action small-action" type="button" data-action="edit-sales-quote" data-record-id="${record.id}">${t("edit")}</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderSalesQuoteEmptyState(hasSearch = false) {
+  return `
+    <article class="catalog-card compact-card">
+      <div>
+        <span class="muted-label">${t("noRecords")}</span>
+        <strong>${hasSearch ? t("quoteNoMatchesTitle") : t("quoteEmptyTitle")}</strong>
+        <p>${hasSearch ? t("quoteNoMatchesDetail") : t("quoteEmptyDetail")}</p>
+      </div>
+    </article>
+  `;
+}
+
+function renderMovementRow(record) {
+  return `
+    <div class="table-row" role="row">
+      <span role="cell">${record.code}</span>
+      <span role="cell">${translateMovementType(record.fields?.movementType)}</span>
+      <span role="cell">${record.title}</span>
+      <span role="cell">${record.fields?.quantity || "0"} ${record.fields?.unit || ""}</span>
+    </div>
+  `;
+}
+
+function renderMovementRecord(record) {
+  return `
+    <article class="record-row">
+      <div class="record-main">
+        <strong>${record.code}</strong>
+        <span>${translateMovementType(record.fields?.movementType)} - ${record.title} - ${record.fields?.warehouseName || t("notDefined")}</span>
+      </div>
+      <span class="chip ${getMovementTone(record.fields?.movementType)}">${translateStatus(record.status)}</span>
+    </article>
+  `;
+}
+
 function getGenericSubmodule(module, id) {
   return normalizeSubmodules(module).find((item) => item.id === id) || normalizeSubmodules(module)[0];
 }
 
 function buildGenericSubmoduleRows(module, submodule) {
+  const savedRows = getSavedModuleTableRows(module, submodule.id);
+  if (savedRows.length) return savedRows;
   if (state.lang === "en") {
     return (submodule.focus.length ? submodule.focus : [submodule.name]).slice(0, 3).map((item, index) => [
       item,
@@ -474,6 +1286,9 @@ function buildGenericSubmoduleRows(module, submodule) {
 }
 
 function getGenericSubmoduleColumns(module) {
+  if (module.id === "almacenes" && state.activeSubmodule === "almacenes") {
+    return state.lang === "en" ? ["Warehouse", "Type", "Location", "Status"] : ["Almacen", "Tipo", "Ubicacion", "Estado"];
+  }
   if (state.lang === "en") return ["Item", "Detail", "Status", "Area"];
   return module.table.columns;
 }
@@ -490,6 +1305,12 @@ function getGenericSubmoduleForm(module, submodule) {
   return module.form;
 }
 
+function getGenericFlowGuide(module, submodule) {
+  if (module.id === "almacenes") return renderFlowGuide(getWarehouseFlowTitle(submodule), getWarehouseFlowSteps(submodule));
+  if (module.id === "ventas") return renderFlowGuide(getSalesFlowTitle(submodule), getSalesFlowSteps(submodule));
+  return "";
+}
+
 function getGenericSubmoduleIntegrations(module) {
   if (state.lang === "en") {
     return module.validations.map(([name]) => [
@@ -501,6 +1322,8 @@ function getGenericSubmoduleIntegrations(module) {
 }
 
 function getGenericSubmoduleRecords(module, submodule) {
+  const savedRecords = getSavedModuleRecordRows(module, submodule.id);
+  if (savedRecords.length) return savedRecords;
   if (state.lang === "en") {
     return [
       [submodule.id.toUpperCase(), submodule.detail, t("recommendedRecords")],
@@ -509,6 +1332,285 @@ function getGenericSubmoduleRecords(module, submodule) {
     ];
   }
   return module.records.length ? module.records : [[submodule.id.toUpperCase(), submodule.detail, t("recommendedRecords")]];
+}
+
+function getSavedModuleTableRows(module, submoduleId = "") {
+  return mockDb.loadModuleRecords(module.id, submoduleId).map((record) => {
+    const submodule = getGenericSubmodule(module, record.submoduleId);
+    if (record.recordType === "warehouse") {
+      return [
+        record.code,
+        translateWarehouseType(record.fields?.type) || record.title,
+        record.fields?.location || submodule.name,
+        translateStatus(record.status)
+      ];
+    }
+    return [
+      record.code,
+      record.title,
+      translateStatus(record.status),
+      submodule.name
+    ];
+  });
+}
+
+function getSavedModuleRecordRows(module, submoduleId = "") {
+  return mockDb.loadModuleRecords(module.id, submoduleId).map((record) => [
+    record.code,
+    record.recordType === "warehouse" ? `${record.title} - ${record.fields?.location || record.detail}` : record.detail,
+    translateStatus(record.status)
+  ]);
+}
+
+function isWarehouseMasterSubmodule(module, submodule) {
+  return module?.id === "almacenes" && submodule?.id === "almacenes";
+}
+
+function isWarehouseItemsSubmodule(module, submodule) {
+  return module?.id === "almacenes" && submodule?.id === "articulos";
+}
+
+function isWarehouseMovementSubmodule(module, submodule) {
+  return module?.id === "almacenes" && submodule?.id === "movimientos";
+}
+
+function isWarehouseReservationsSubmodule(module, submodule) {
+  return module?.id === "almacenes" && submodule?.id === "reservas";
+}
+
+function isWarehouseKardexSubmodule(module, submodule) {
+  return module?.id === "almacenes" && submodule?.id === "kardex";
+}
+
+function isSalesCustomersSubmodule(module, submodule) {
+  return module?.id === "ventas" && submodule?.id === "clientes";
+}
+
+function isSalesQuotesSubmodule(module, submodule) {
+  return module?.id === "ventas" && submodule?.id === "cotizaciones";
+}
+
+function translateWarehouseType(type) {
+  const typeMap = {
+    rawMaterials: t("rawMaterials"),
+    tools: t("toolsWarehouse"),
+    workInProcess: t("workInProcess"),
+    finishedGoods: t("finishedGoods"),
+    scrap: t("scrapWarehouse"),
+    spareParts: t("spareParts")
+  };
+  return typeMap[type] || type;
+}
+
+function translateInventoryPolicy(policy) {
+  const policyMap = {
+    standard: t("standardPolicy"),
+    batch: t("batchPolicy"),
+    serial: t("serialPolicy"),
+    restricted: t("restrictedPolicy")
+  };
+  return policyMap[policy] || policy || t("notDefined");
+}
+
+function translateInventoryItemType(type) {
+  const typeMap = {
+    rawMaterial: t("rawMaterialItem"),
+    consumable: t("consumableItem"),
+    tool: t("toolItem"),
+    finishedGood: t("finishedGoodItem"),
+    sparePart: t("sparePartItem"),
+    serviceSupply: t("serviceSupplyItem")
+  };
+  return typeMap[type] || type || t("notDefined");
+}
+
+function translateMovementType(type) {
+  const typeMap = {
+    entry: t("entryMovement"),
+    exit: t("exitMovement"),
+    transfer: t("transferMovement"),
+    positiveAdjustment: t("positiveAdjustment"),
+    negativeAdjustment: t("negativeAdjustment")
+  };
+  return typeMap[type] || type || t("notDefined");
+}
+
+function translateCustomerType(type) {
+  const typeMap = {
+    company: t("companyCustomer"),
+    individual: t("individualCustomer"),
+    government: t("governmentCustomer"),
+    internal: t("internalCustomer")
+  };
+  return typeMap[type] || type || t("notDefined");
+}
+
+function getMovementTone(type) {
+  if (type === "exit" || type === "negativeAdjustment") return "warning";
+  if (type === "entry" || type === "positiveAdjustment") return "active";
+  return "";
+}
+
+function translateYesNo(value) {
+  if (value === "yes") return t("yes");
+  if (value === "no") return t("no");
+  return t("notDefined");
+}
+
+function getPhysicalLocationCode(fields = {}) {
+  return [fields.zone, fields.aisle, fields.rack, fields.level, fields.position].filter(Boolean).join("-");
+}
+
+function getWarehouseFlowTitle(submodule) {
+  if (state.lang === "en") return `${submodule.name} flow`;
+  return `Flujo de ${submodule.name}`;
+}
+
+function getSalesFlowTitle(submodule) {
+  if (state.lang === "en") return `${submodule.name} flow`;
+  return `Flujo de ${submodule.name}`;
+}
+
+function getWarehouseFlowSteps(submodule) {
+  const steps = {
+    es: {
+      almacenes: [
+        ["Alta", "Registrar codigo, tipo, responsable y politica."],
+        ["Espacio fisico", "Configurar zona, pasillo, rack, nivel o posicion si aplica."],
+        ["Activacion", "Dejar disponible para existencias, reservas y movimientos."],
+        ["Operacion", "Usarlo como origen o destino en inventario."]
+      ],
+      articulos: [
+        ["Alta", "Registrar SKU, nombre, tipo, unidad y almacen sugerido."],
+        ["Control", "Definir minimos, maximos, politica y estatus."],
+        ["Permisos", "Restringir creacion y edicion a roles autorizados."],
+        ["Operacion", "Usarlo como articulo valido en movimientos y reservas."]
+      ],
+      movimientos: [
+        ["Documento", "Capturar tipo y referencia origen."],
+        ["Articulo", "Indicar cantidad, almacen y ubicacion."],
+        ["Validacion", "Revisar existencia o recepcion."],
+        ["Kardex", "Registrar movimiento auditable."]
+      ],
+      reservas: [
+        ["Solicitud", "Relacionar orden, pedido o transferencia."],
+        ["Disponibilidad", "Confirmar cantidad disponible."],
+        ["Reserva", "Apartar inventario."],
+        ["Liberacion", "Consumir, entregar o cancelar reserva."]
+      ],
+      kardex: [
+        ["Articulo", "Seleccionar articulo, lote o serie."],
+        ["Periodo", "Filtrar fechas y almacen."],
+        ["Historial", "Consultar entradas, salidas y ajustes."],
+        ["Auditoria", "Revisar documento origen y responsable."]
+      ]
+    },
+    en: {
+      almacenes: [
+        ["Create", "Register code, type, owner, and policy."],
+        ["Physical space", "Configure zone, aisle, rack, level, or position if needed."],
+        ["Activate", "Make it available for stock, reservations, and movements."],
+        ["Operate", "Use it as inventory origin or destination."]
+      ],
+      articulos: [
+        ["Create", "Register SKU, name, type, unit, and suggested warehouse."],
+        ["Control", "Define min, max, policy, and status."],
+        ["Permissions", "Restrict create and edit actions to authorized roles."],
+        ["Operate", "Use it as a valid item for movements and reservations."]
+      ],
+      movimientos: [
+        ["Document", "Capture type and source reference."],
+        ["Item", "Enter quantity, warehouse, and location."],
+        ["Validation", "Check stock or receipt."],
+        ["Kardex", "Register an auditable movement."]
+      ],
+      reservas: [
+        ["Request", "Link order, sales order, or transfer."],
+        ["Availability", "Confirm available quantity."],
+        ["Reserve", "Hold inventory."],
+        ["Release", "Consume, deliver, or cancel reservation."]
+      ],
+      kardex: [
+        ["Item", "Select item, lot, or serial."],
+        ["Period", "Filter dates and warehouse."],
+        ["History", "Review receipts, issues, and adjustments."],
+        ["Audit", "Check source document and owner."]
+      ]
+    }
+  };
+  const localeSteps = steps[state.lang]?.[submodule.id] || steps.es[submodule.id] || steps.es.almacenes;
+  return localeSteps.map(([title, detail]) => ({ title, detail }));
+}
+
+function getSalesFlowSteps(submodule) {
+  const steps = {
+    es: {
+      clientes: [
+        ["Alta", "Registrar perfil comercial y datos de contacto."],
+        ["Facturacion", "Capturar razon social, RFC y direccion fiscal."],
+        ["Validacion", "Revisar condiciones, credito y estatus."],
+        ["Operacion", "Usarlo en cotizaciones, pedidos y facturacion."]
+      ],
+      cotizaciones: [
+        ["Cliente", "Seleccionar cliente dado de alta."],
+        ["Producto o servicio", "Seleccionar catalogo existente de Produccion."],
+        ["Importe", "Capturar cantidad, precio, descuento y vigencia."],
+        ["Seguimiento", "Guardar como borrador, cotizada, aprobada o vencida."]
+      ],
+      pedidos: [
+        ["Aprobacion", "Convertir cotizacion aceptada o registrar pedido."],
+        ["Disponibilidad", "Validar inventario o necesidad de produccion."],
+        ["Compromiso", "Preparar entrega, reserva futura o solicitud productiva."],
+        ["Cierre", "Actualizar estado comercial y margen."]
+      ],
+      entregas: [
+        ["Pedido", "Seleccionar pedido aprobado."],
+        ["Salida", "Preparar entrega parcial o total."],
+        ["Evidencia", "Capturar comprobante o referencia logistica."],
+        ["Impacto", "Actualizar inventario, cliente y margen."]
+      ],
+      margen: [
+        ["Venta", "Seleccionar cliente, producto o pedido."],
+        ["Costo", "Comparar costo estimado contra real."],
+        ["Variacion", "Identificar descuento, flete, merma o reproceso."],
+        ["Decision", "Revisar rentabilidad por cliente o producto."]
+      ]
+    },
+    en: {
+      clientes: [
+        ["Create", "Register commercial profile and contact data."],
+        ["Billing", "Capture legal name, tax ID, and fiscal address."],
+        ["Validate", "Review terms, credit, and status."],
+        ["Operate", "Use it in quotes, orders, and billing."]
+      ],
+      cotizaciones: [
+        ["Customer", "Select a registered customer."],
+        ["Product or service", "Select an existing Production catalog item."],
+        ["Amount", "Enter quantity, price, discount, and validity."],
+        ["Follow-up", "Save as draft, quoted, approved, or expired."]
+      ],
+      pedidos: [
+        ["Approval", "Convert accepted quote or register order."],
+        ["Availability", "Validate stock or production need."],
+        ["Commitment", "Prepare delivery, future reservation, or production request."],
+        ["Close", "Update commercial status and margin."]
+      ],
+      entregas: [
+        ["Order", "Select approved order."],
+        ["Issue", "Prepare partial or full delivery."],
+        ["Evidence", "Capture proof or logistics reference."],
+        ["Impact", "Update inventory, customer, and margin."]
+      ],
+      margen: [
+        ["Sale", "Select customer, product, or order."],
+        ["Cost", "Compare estimated and actual cost."],
+        ["Variance", "Identify discount, freight, scrap, or rework."],
+        ["Decision", "Review profitability by customer or product."]
+      ]
+    }
+  };
+  const localeSteps = steps[state.lang]?.[submodule.id] || steps.es[submodule.id] || steps.es.clientes;
+  return localeSteps.map(([title, detail]) => ({ title, detail }));
 }
 
 function translateModuleName(name) {
@@ -1054,6 +2156,40 @@ function bindProductionPanelActions() {
   modulePanel.querySelectorAll("[data-action='open-order']").forEach((button) => {
     button.addEventListener("click", openOrderModal);
   });
+  modulePanel.querySelectorAll("[data-action='module-primary']").forEach((button) => {
+    button.addEventListener("click", () => openGenericRecordModal(state.active, state.activeSubmodule));
+  });
+  modulePanel.querySelectorAll("[data-action='edit-warehouse']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const module = modules.find((item) => item.id === "almacenes");
+      const submodule = getGenericSubmodule(module, "almacenes");
+      openWarehouseModal(module, submodule, button.dataset.recordId);
+    });
+  });
+  modulePanel.querySelectorAll("[data-action='edit-inventory-item']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const module = modules.find((item) => item.id === "almacenes");
+      const submodule = getGenericSubmodule(module, "articulos");
+      openInventoryItemModal(module, submodule, button.dataset.recordId);
+    });
+  });
+  modulePanel.querySelectorAll("[data-action='edit-sales-customer']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const module = modules.find((item) => item.id === "ventas");
+      const submodule = getGenericSubmodule(module, "clientes");
+      openSalesCustomerModal(module, submodule, button.dataset.recordId);
+    });
+  });
+  modulePanel.querySelectorAll("[data-action='edit-sales-quote']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const module = modules.find((item) => item.id === "ventas");
+      const submodule = getGenericSubmodule(module, "cotizaciones");
+      openSalesQuoteModal(module, submodule, button.dataset.recordId);
+    });
+  });
+  modulePanel.querySelectorAll("[data-action='print-sales-quote']").forEach((button) => {
+    button.addEventListener("click", () => openSalesQuotePrintModal(button.dataset.recordId));
+  });
   const validationQuantity = modulePanel.querySelector("#validationQuantity");
   if (validationQuantity) {
     validationQuantity.addEventListener("input", (event) => {
@@ -1476,6 +2612,8 @@ function renderNotificationSummary({ overdue, dueSoon, missingResources }) {
 function translateStatus(status) {
   const statusMap = {
     Activo: { es: "Activo", en: "Active" },
+    Inactivo: { es: "Inactivo", en: "Inactive" },
+    Bloqueado: { es: "Bloqueado", en: "Blocked" },
     Activa: { es: "Activa", en: "Active" },
     Configurable: { es: "Configurable", en: "Configurable" },
     Liberada: { es: "Liberada", en: "Released" },
@@ -1486,7 +2624,14 @@ function translateStatus(status) {
     Terminada: { es: "Terminada", en: "Finished" },
     Cancelada: { es: "Cancelada", en: "Canceled" },
     Pendiente: { es: "Pendiente", en: "Pending" },
-    "En proceso": { es: "En proceso", en: "In progress" }
+    "En proceso": { es: "En proceso", en: "In progress" },
+    Borrador: { es: "Borrador", en: "Draft" },
+    "En revision": { es: "En revision", en: "In review" },
+    Aprobado: { es: "Aprobado", en: "Approved" },
+    Registrado: { es: "Registrado", en: "Registered" },
+    Prospecto: { es: "Prospecto", en: "Prospect" },
+    Cotizada: { es: "Cotizada", en: "Quoted" },
+    Vencida: { es: "Vencida", en: "Expired" }
   };
   return statusMap[status]?.[state.lang] || status;
 }
@@ -1511,6 +2656,1308 @@ function showToast(message) {
 function closeModal() {
   modalBackdrop.hidden = true;
   modalContent.innerHTML = "";
+}
+
+function getGenericRecordStatusOptions() {
+  return [
+    ["Borrador", t("draftStatus")],
+    ["En revision", t("reviewStatus")],
+    ["Aprobado", t("approvedStatus")],
+    ["Pendiente", t("pendingStatus")]
+  ];
+}
+
+function openGenericRecordModal(moduleId = state.active, submoduleId = state.activeSubmodule) {
+  const module = modules.find((item) => item.id === moduleId);
+  if (!module || module.id === "produccion") return;
+
+  const submodule = submoduleId ? getGenericSubmodule(module, submoduleId) : null;
+  if (isWarehouseMasterSubmodule(module, submodule)) {
+    openWarehouseModal(module, submodule);
+    return;
+  }
+  if (isWarehouseItemsSubmodule(module, submodule)) {
+    openInventoryItemModal(module, submodule);
+    return;
+  }
+  if (isWarehouseMovementSubmodule(module, submodule)) {
+    openInventoryMovementModal(module, submodule);
+    return;
+  }
+  if (isWarehouseReservationsSubmodule(module, submodule)) {
+    showToast(t("reservationsDisabledToast"));
+    return;
+  }
+  if (isWarehouseKardexSubmodule(module, submodule)) {
+    showToast(t("kardexReadOnlyToast"));
+    return;
+  }
+  if (isSalesCustomersSubmodule(module, submodule)) {
+    openSalesCustomerModal(module, submodule);
+    return;
+  }
+  if (isSalesQuotesSubmodule(module, submodule)) {
+    openSalesQuoteModal(module, submodule);
+    return;
+  }
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const fields = submodule ? getGenericSubmoduleForm(module, submodule) : (state.lang === "en" ? getGenericSubmoduleForm(module, normalizeSubmodules(module)[0]) : module.form);
+  const fieldRows = fields.slice(0, 6);
+
+  modalContent.innerHTML = `
+    <form class="recipe-form" id="genericRecordForm">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">${label}</p>
+          <h2 id="modalTitle">${t("newModuleRecord")}</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
+      </div>
+
+      <div class="form-grid">
+        ${fieldRows
+          .map(([fieldLabel, value], index) => `
+            <label class="preview-field ${index === fieldRows.length - 1 ? "wide-field" : ""}">
+              <span>${fieldLabel}</span>
+              <input name="field-${index}" type="text" value="${value || ""}" ${index < 2 ? "required" : ""} />
+            </label>
+          `)
+          .join("")}
+        <label class="preview-field">
+          <span>${t("status")}</span>
+          <select name="status">
+            ${getGenericRecordStatusOptions().map(([value, text]) => `<option value="${value}">${text}</option>`).join("")}
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("owner")}</span>
+          <input name="owner" type="text" value="${label}" />
+        </label>
+      </div>
+
+      <div class="form-errors" id="formErrors" hidden></div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-action="close-generic-record">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${t("saveRecord")}</button>
+      </div>
+    </form>
+  `;
+
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-generic-record']").addEventListener("click", closeModal);
+  modalContent.querySelector("#genericRecordForm").addEventListener("submit", (event) => saveGenericRecordForm(event, module, submodule));
+}
+
+function saveGenericRecordForm(event, module, submodule) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = [...form.querySelectorAll("input[name^='field-']")].map((input) => input.value.trim());
+  const errors = [];
+
+  if (!values[0]) errors.push(t("firstFieldRequired"));
+  if (!values[1]) errors.push(t("secondFieldRequired"));
+
+  if (errors.length) {
+    renderFormErrors(errors);
+    return;
+  }
+
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const submoduleId = submodule?.id || "";
+  const code = `${module.icon}-${String(Date.now()).slice(-5)}`;
+  const status = new FormData(form).get("status") || "Borrador";
+  const record = {
+    id: `${module.id}-${Date.now()}`,
+    code,
+    moduleId: module.id,
+    submoduleId,
+    title: values[0],
+    detail: values.filter(Boolean).slice(1).join(" - ") || label,
+    status,
+    owner: new FormData(form).get("owner") || label,
+    fields: values,
+    createdAt: new Date().toISOString()
+  };
+
+  mockDb.addModuleRecord(module.id, record);
+  closeModal();
+  render();
+  showToast(t("recordSaved", { code }));
+}
+
+function selectedOption(value, expected) {
+  return value === expected ? "selected" : "";
+}
+
+function openWarehouseModal(module, submodule, recordId = null) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const existingRecord = recordId ? mockDb.findModuleRecord(module.id, recordId) : null;
+  const fields = existingRecord?.fields || {};
+  const isEditing = Boolean(existingRecord);
+
+  modalContent.innerHTML = `
+    <form class="recipe-form" id="warehouseForm">
+      <input type="hidden" name="recordId" value="${existingRecord?.id || ""}" />
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">${label}</p>
+          <h2 id="modalTitle">${isEditing ? t("editWarehouse") : t("newWarehouse")}</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
+      </div>
+
+      <div class="form-grid">
+        <label class="preview-field">
+          <span>${t("warehouseCode")}</span>
+          <input name="code" type="text" value="${existingRecord?.code || ""}" placeholder="ALM-MP-01" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("warehouseName")}</span>
+          <input name="name" type="text" value="${existingRecord?.title || ""}" placeholder="${t("warehouseNamePlaceholder")}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("warehouseType")}</span>
+          <select name="type" required>
+            <option value="rawMaterials" ${selectedOption(fields.type, "rawMaterials")}>${t("rawMaterials")}</option>
+            <option value="tools" ${selectedOption(fields.type, "tools")}>${t("toolsWarehouse")}</option>
+            <option value="workInProcess" ${selectedOption(fields.type, "workInProcess")}>${t("workInProcess")}</option>
+            <option value="finishedGoods" ${selectedOption(fields.type, "finishedGoods")}>${t("finishedGoods")}</option>
+            <option value="scrap" ${selectedOption(fields.type, "scrap")}>${t("scrapWarehouse")}</option>
+            <option value="spareParts" ${selectedOption(fields.type, "spareParts")}>${t("spareParts")}</option>
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("warehouseStatus")}</span>
+          <select name="status">
+            <option value="Activo" ${selectedOption(existingRecord?.status || "Activo", "Activo")}>${t("activeStatus")}</option>
+            <option value="Inactivo" ${selectedOption(existingRecord?.status, "Inactivo")}>${t("inactiveStatus")}</option>
+            <option value="Bloqueado" ${selectedOption(existingRecord?.status, "Bloqueado")}>${t("blockedStatus")}</option>
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("businessCenter")}</span>
+          <input name="businessCenter" type="text" value="${fields.businessCenter || ""}" placeholder="${t("businessCenterPlaceholder")}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("warehouseLocation")}</span>
+          <input name="location" type="text" value="${fields.location || ""}" placeholder="${t("warehouseLocationPlaceholder")}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("warehouseOwner")}</span>
+          <input name="owner" type="text" value="${existingRecord?.owner || ""}" placeholder="${t("warehouseOwnerPlaceholder")}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("capacity")}</span>
+          <input name="capacity" type="text" value="${fields.capacity || ""}" placeholder="${t("capacityPlaceholder")}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("inventoryPolicy")}</span>
+          <select name="policy">
+            <option value="standard" ${selectedOption(fields.policy || "standard", "standard")}>${t("standardPolicy")}</option>
+            <option value="batch" ${selectedOption(fields.policy, "batch")}>${t("batchPolicy")}</option>
+            <option value="serial" ${selectedOption(fields.policy, "serial")}>${t("serialPolicy")}</option>
+            <option value="restricted" ${selectedOption(fields.policy, "restricted")}>${t("restrictedPolicy")}</option>
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("allowsReservations")}</span>
+          <select name="allowsReservations">
+            <option value="yes" ${selectedOption(fields.allowsReservations || "yes", "yes")}>${t("yes")}</option>
+            <option value="no" ${selectedOption(fields.allowsReservations, "no")}>${t("no")}</option>
+          </select>
+        </label>
+        <div class="section-title form-section-title wide-field">
+          <span class="section-icon">▦</span>
+          <strong>${t("optionalPhysicalLocation")}</strong>
+        </div>
+        <p class="helper-copy wide-field">${t("optionalPhysicalLocationHelp")}</p>
+        <label class="preview-field">
+          <span>${t("zone")}</span>
+          <input name="zone" type="text" value="${fields.zone || ""}" placeholder="A" />
+        </label>
+        <label class="preview-field">
+          <span>${t("aisle")}</span>
+          <input name="aisle" type="text" value="${fields.aisle || ""}" placeholder="01" />
+        </label>
+        <label class="preview-field">
+          <span>${t("rack")}</span>
+          <input name="rack" type="text" value="${fields.rack || ""}" placeholder="R02" />
+        </label>
+        <label class="preview-field">
+          <span>${t("level")}</span>
+          <input name="level" type="text" value="${fields.level || ""}" placeholder="N03" />
+        </label>
+        <label class="preview-field">
+          <span>${t("position")}</span>
+          <input name="position" type="text" value="${fields.position || ""}" placeholder="P04" />
+        </label>
+        <label class="preview-field wide-field">
+          <span>${t("description")}</span>
+          <textarea name="description" rows="3" placeholder="${t("warehouseDescriptionPlaceholder")}">${fields.description || ""}</textarea>
+        </label>
+      </div>
+
+      <div class="form-errors" id="formErrors" hidden></div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-action="close-warehouse">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${isEditing ? t("updateWarehouse") : t("saveWarehouse")}</button>
+      </div>
+    </form>
+  `;
+
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-warehouse']").addEventListener("click", closeModal);
+  modalContent.querySelector("#warehouseForm").addEventListener("submit", (event) => saveWarehouseForm(event, module, submodule));
+}
+
+function saveWarehouseForm(event, module, submodule) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const errors = [];
+
+  if (!data.code?.trim()) errors.push(t("warehouseCodeRequired"));
+  if (!data.name?.trim()) errors.push(t("warehouseNameRequired"));
+  if (!data.businessCenter?.trim()) errors.push(t("businessCenterRequired"));
+  if (!data.location?.trim()) errors.push(t("warehouseLocationRequired"));
+  if (!data.owner?.trim()) errors.push(t("warehouseOwnerRequired"));
+
+  if (errors.length) {
+    renderFormErrors(errors);
+    return;
+  }
+
+  const code = data.code.trim().toUpperCase();
+  const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
+  const record = {
+    id: existingRecord?.id || `${module.id}-${Date.now()}`,
+    code,
+    moduleId: module.id,
+    submoduleId: submodule.id,
+    recordType: "warehouse",
+    title: data.name.trim(),
+    detail: `${translateWarehouseType(data.type)} - ${data.businessCenter} - ${data.location}`,
+    status: data.status || "Activo",
+    owner: data.owner.trim(),
+    fields: {
+      type: data.type,
+      businessCenter: data.businessCenter.trim(),
+      location: data.location.trim(),
+      capacity: data.capacity?.trim() || "",
+      policy: data.policy,
+      allowsReservations: data.allowsReservations,
+      zone: data.zone?.trim() || "",
+      aisle: data.aisle?.trim() || "",
+      rack: data.rack?.trim() || "",
+      level: data.level?.trim() || "",
+      position: data.position?.trim() || "",
+      description: data.description?.trim() || ""
+    },
+    createdAt: new Date().toISOString()
+  };
+
+  if (existingRecord) {
+    mockDb.updateModuleRecord(module.id, {
+      ...record,
+      createdAt: existingRecord.createdAt,
+      updatedAt: new Date().toISOString()
+    });
+  } else {
+    mockDb.addModuleRecord(module.id, record);
+  }
+  closeModal();
+  render();
+  showToast(t(existingRecord ? "warehouseUpdated" : "warehouseSaved", { code }));
+}
+
+function openInventoryItemModal(module, submodule, recordId = null) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const existingRecord = recordId ? mockDb.findModuleRecord(module.id, recordId) : null;
+  const fields = existingRecord?.fields || {};
+  const warehouses = mockDb.loadModuleRecords(module.id, "almacenes").filter((record) => record.recordType === "warehouse");
+  const isEditing = Boolean(existingRecord);
+
+  modalContent.innerHTML = `
+    <form class="recipe-form" id="inventoryItemForm">
+      <input type="hidden" name="recordId" value="${existingRecord?.id || ""}" />
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">${label}</p>
+          <h2 id="modalTitle">${isEditing ? t("editInventoryItem") : t("newInventoryItem")}</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
+      </div>
+
+      <div class="form-grid">
+        <label class="preview-field">
+          <span>${t("itemCode")}</span>
+          <input name="code" type="text" value="${existingRecord?.code || ""}" placeholder="MAT-001" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("itemName")}</span>
+          <input name="name" type="text" value="${existingRecord?.title || ""}" placeholder="${t("itemPlaceholder")}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("itemType")}</span>
+          <select name="type" required>
+            <option value="rawMaterial" ${selectedOption(fields.type || "rawMaterial", "rawMaterial")}>${t("rawMaterialItem")}</option>
+            <option value="consumable" ${selectedOption(fields.type, "consumable")}>${t("consumableItem")}</option>
+            <option value="tool" ${selectedOption(fields.type, "tool")}>${t("toolItem")}</option>
+            <option value="finishedGood" ${selectedOption(fields.type, "finishedGood")}>${t("finishedGoodItem")}</option>
+            <option value="sparePart" ${selectedOption(fields.type, "sparePart")}>${t("sparePartItem")}</option>
+            <option value="serviceSupply" ${selectedOption(fields.type, "serviceSupply")}>${t("serviceSupplyItem")}</option>
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("status")}</span>
+          <select name="status">
+            <option value="Activo" ${selectedOption(existingRecord?.status || "Activo", "Activo")}>${t("activeStatus")}</option>
+            <option value="Inactivo" ${selectedOption(existingRecord?.status, "Inactivo")}>${t("inactiveStatus")}</option>
+            <option value="Bloqueado" ${selectedOption(existingRecord?.status, "Bloqueado")}>${t("blockedStatus")}</option>
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("itemCategory")}</span>
+          <input name="category" type="text" value="${fields.category || ""}" placeholder="${t("itemCategoryPlaceholder")}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("unit")}</span>
+          <input name="unit" type="text" value="${fields.unit || ""}" placeholder="pz" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("minStock")}</span>
+          <input name="minStock" type="number" min="0" step="0.01" value="${fields.minStock || ""}" placeholder="0" />
+        </label>
+        <label class="preview-field">
+          <span>${t("maxStock")}</span>
+          <input name="maxStock" type="number" min="0" step="0.01" value="${fields.maxStock || ""}" placeholder="100" />
+        </label>
+        <label class="preview-field">
+          <span>${t("inventoryPolicy")}</span>
+          <select name="policy">
+            <option value="standard" ${selectedOption(fields.policy || "standard", "standard")}>${t("standardPolicy")}</option>
+            <option value="batch" ${selectedOption(fields.policy, "batch")}>${t("batchPolicy")}</option>
+            <option value="serial" ${selectedOption(fields.policy, "serial")}>${t("serialPolicy")}</option>
+            <option value="restricted" ${selectedOption(fields.policy, "restricted")}>${t("restrictedPolicy")}</option>
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("defaultWarehouse")}</span>
+          ${warehouses.length ? `
+            <select name="defaultWarehouseId">
+              <option value="">${t("notDefined")}</option>
+              ${warehouses.map((warehouse) => `<option value="${warehouse.id}" ${selectedOption(fields.defaultWarehouseId, warehouse.id)}>${warehouse.code} - ${warehouse.title}</option>`).join("")}
+            </select>
+          ` : `<input name="defaultWarehouseName" type="text" value="${fields.defaultWarehouseName || ""}" placeholder="${t("warehouseNamePlaceholder")}" />`}
+        </label>
+        <label class="preview-field wide-field">
+          <span>${t("description")}</span>
+          <textarea name="description" rows="3" placeholder="${t("inventoryItemDescriptionPlaceholder")}">${fields.description || ""}</textarea>
+        </label>
+      </div>
+
+      <div class="form-errors" id="formErrors" hidden></div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-action="close-inventory-item">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${isEditing ? t("updateInventoryItem") : t("saveInventoryItem")}</button>
+      </div>
+    </form>
+  `;
+
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-inventory-item']").addEventListener("click", closeModal);
+  modalContent.querySelector("#inventoryItemForm").addEventListener("submit", (event) => saveInventoryItemForm(event, module, submodule));
+}
+
+function saveInventoryItemForm(event, module, submodule) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const errors = [];
+
+  if (!data.code?.trim()) errors.push(t("itemCodeRequired"));
+  if (!data.name?.trim()) errors.push(t("itemNameRequired"));
+  if (!data.unit?.trim()) errors.push(t("unitRequired"));
+
+  if (errors.length) {
+    renderFormErrors(errors);
+    return;
+  }
+
+  const warehouse = data.defaultWarehouseId ? mockDb.findModuleRecord(module.id, data.defaultWarehouseId) : null;
+  const code = data.code.trim().toUpperCase();
+  const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
+  const defaultWarehouseName = warehouse ? `${warehouse.code} - ${warehouse.title}` : data.defaultWarehouseName?.trim() || "";
+  const record = {
+    id: existingRecord?.id || `${module.id}-item-${Date.now()}`,
+    code,
+    moduleId: module.id,
+    submoduleId: submodule.id,
+    recordType: "inventoryItem",
+    title: data.name.trim(),
+    detail: `${translateInventoryItemType(data.type)} - ${data.unit.trim()} - ${defaultWarehouseName || t("notDefined")}`,
+    status: data.status || "Activo",
+    owner: defaultWarehouseName || t("notDefined"),
+    fields: {
+      type: data.type,
+      category: data.category?.trim() || "",
+      unit: data.unit.trim(),
+      minStock: data.minStock || "",
+      maxStock: data.maxStock || "",
+      policy: data.policy,
+      defaultWarehouseId: data.defaultWarehouseId || "",
+      defaultWarehouseName,
+      description: data.description?.trim() || ""
+    },
+    createdAt: new Date().toISOString()
+  };
+
+  if (existingRecord) {
+    mockDb.updateModuleRecord(module.id, {
+      ...record,
+      createdAt: existingRecord.createdAt,
+      updatedAt: new Date().toISOString()
+    });
+  } else {
+    mockDb.addModuleRecord(module.id, record);
+  }
+  closeModal();
+  render();
+  showToast(t(existingRecord ? "inventoryItemUpdated" : "inventoryItemSaved", { code }));
+}
+
+function openInventoryMovementModal(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const warehouses = mockDb.loadModuleRecords(module.id, "almacenes").filter((record) => record.recordType === "warehouse");
+  const items = mockDb.loadModuleRecords(module.id, "articulos").filter((record) => record.recordType === "inventoryItem");
+
+  modalContent.innerHTML = `
+    <form class="recipe-form" id="movementForm">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">${label}</p>
+          <h2 id="modalTitle">${t("newMovement")}</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
+      </div>
+
+      <div class="form-grid">
+        <label class="preview-field">
+          <span>${t("movementType")}</span>
+          <select name="movementType" required>
+            <option value="entry">${t("entryMovement")}</option>
+            <option value="exit">${t("exitMovement")}</option>
+            <option value="transfer">${t("transferMovement")}</option>
+            <option value="positiveAdjustment">${t("positiveAdjustment")}</option>
+            <option value="negativeAdjustment">${t("negativeAdjustment")}</option>
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("sourceDocument")}</span>
+          <input name="sourceDocument" type="text" placeholder="MAN-001" required />
+        </label>
+        <label class="preview-field product-lookup-field">
+          <span>${t("item")}</span>
+          ${items.length ? `
+            <input id="movementItemSearch" type="text" value="" placeholder="${t("itemLookupPlaceholder")}" autocomplete="off" required />
+            <input name="itemId" type="hidden" value="" />
+            <div class="lookup-results" id="movementItemResults" hidden></div>
+          ` : `<input name="item" type="text" placeholder="${t("itemPlaceholder")}" required />`}
+        </label>
+        <label class="preview-field">
+          <span>${t("quantity")}</span>
+          <input name="quantity" type="number" min="0.01" step="0.01" placeholder="1" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("unit")}</span>
+          <input name="unit" type="text" placeholder="pz" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("warehouse")}</span>
+          ${warehouses.length ? `
+            <select name="warehouseId" required>
+              ${warehouses.map((warehouse) => `<option value="${warehouse.id}">${warehouse.code} - ${warehouse.title}</option>`).join("")}
+            </select>
+          ` : `<input name="warehouseName" type="text" placeholder="${t("warehouseNamePlaceholder")}" required />`}
+        </label>
+        <label class="preview-field">
+          <span>${t("physicalLocation")}</span>
+          <input name="physicalLocation" type="text" placeholder="A-01-R02" />
+        </label>
+        <label class="preview-field">
+          <span>${t("movementDate")}</span>
+          <input name="movementDate" type="date" value="${new Date().toISOString().slice(0, 10)}" required />
+        </label>
+        <label class="preview-field wide-field">
+          <span>${t("reason")}</span>
+          <textarea name="reason" rows="3" placeholder="${t("movementReasonPlaceholder")}"></textarea>
+        </label>
+      </div>
+
+      <div class="form-errors" id="formErrors" hidden></div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-action="close-movement">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${t("saveMovement")}</button>
+      </div>
+    </form>
+  `;
+
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-movement']").addEventListener("click", closeModal);
+  const movementItemSearch = modalContent.querySelector("#movementItemSearch");
+  const movementItemResults = modalContent.querySelector("#movementItemResults");
+  if (movementItemSearch && movementItemResults) {
+    movementItemSearch.addEventListener("focus", renderMovementItemLookup);
+    movementItemSearch.addEventListener("input", syncMovementItemFields);
+    movementItemResults.addEventListener("click", selectMovementItemFromLookup);
+  }
+  modalContent.querySelector("#movementForm").addEventListener("submit", (event) => saveInventoryMovementForm(event, module, submodule));
+}
+
+function formatInventoryItemOption(item) {
+  return `${item.code} - ${item.title} - ${translateInventoryItemType(item.fields?.type)}`;
+}
+
+function findInventoryItemByOption(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return mockDb.loadModuleRecords("almacenes", "articulos").find((item) =>
+    item.recordType === "inventoryItem" &&
+    (formatInventoryItemOption(item).toLowerCase() === normalized || item.code.toLowerCase() === normalized)
+  );
+}
+
+function getInventoryItemMatches(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  const items = mockDb.loadModuleRecords("almacenes", "articulos").filter((record) => record.recordType === "inventoryItem");
+  if (!normalized) return items;
+  return items.filter((item) =>
+    [
+      item.code,
+      item.title,
+      translateInventoryItemType(item.fields?.type),
+      item.fields?.category,
+      item.fields?.unit,
+      item.fields?.defaultWarehouseName
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalized)
+  );
+}
+
+function renderMovementItemLookup(event) {
+  const input = event.target;
+  const results = modalContent.querySelector("#movementItemResults");
+  const matches = getInventoryItemMatches(input.value);
+  results.hidden = false;
+  results.innerHTML = matches.length
+    ? matches
+        .map((item) => `
+          <button class="lookup-option" type="button" data-inventory-item-id="${item.id}">
+            <strong>${item.title}</strong>
+            <span>${item.code} - ${translateInventoryItemType(item.fields?.type)} - ${item.fields?.unit || t("notDefined")}</span>
+          </button>
+        `)
+        .join("")
+    : `<div class="lookup-empty">${t("itemLookupEmpty")}</div>`;
+}
+
+function selectMovementItemFromLookup(event) {
+  const button = event.target.closest("[data-inventory-item-id]");
+  if (!button) return;
+  const item = mockDb.findModuleRecord("almacenes", button.dataset.inventoryItemId);
+  if (!item) return;
+  const form = button.closest("form");
+  form.querySelector("#movementItemSearch").value = formatInventoryItemOption(item);
+  form.querySelector("[name='itemId']").value = item.id;
+  form.querySelector("[name='unit']").value = item.fields?.unit || "";
+  modalContent.querySelector("#movementItemResults").hidden = true;
+}
+
+function syncMovementItemFields(event) {
+  const form = event.target.closest("form");
+  const item = findInventoryItemByOption(event.target.value);
+  form.querySelector("[name='itemId']").value = item?.id || "";
+  renderMovementItemLookup(event);
+  if (!item) return;
+  form.querySelector("[name='unit']").value = item.fields?.unit || "";
+}
+
+function saveInventoryMovementForm(event, module, submodule) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const errors = [];
+
+  if (!data.sourceDocument?.trim()) errors.push(t("sourceDocumentRequired"));
+  if (!data.itemId && !data.item?.trim()) errors.push(t("itemRequired"));
+  if (!Number(data.quantity || 0)) errors.push(t("quantityRequired"));
+  if (!data.unit?.trim()) errors.push(t("unitRequired"));
+  if (!data.warehouseId && !data.warehouseName?.trim()) errors.push(t("warehouseRequired"));
+
+  if (errors.length) {
+    renderFormErrors(errors);
+    return;
+  }
+
+  const warehouse = data.warehouseId ? mockDb.findModuleRecord(module.id, data.warehouseId) : null;
+  const item = data.itemId ? mockDb.findModuleRecord(module.id, data.itemId) : null;
+  const code = `MOV-${String(Date.now()).slice(-5)}`;
+  const warehouseName = warehouse ? `${warehouse.code} - ${warehouse.title}` : data.warehouseName.trim();
+  const itemName = item ? `${item.code} - ${item.title}` : data.item.trim();
+  const record = {
+    id: `${module.id}-movement-${Date.now()}`,
+    code,
+    moduleId: module.id,
+    submoduleId: submodule.id,
+    recordType: "inventoryMovement",
+    title: itemName,
+    detail: `${translateMovementType(data.movementType)} - ${data.quantity} ${data.unit} - ${warehouseName}`,
+    status: "Registrado",
+    owner: warehouseName,
+    fields: {
+      movementType: data.movementType,
+      sourceDocument: data.sourceDocument.trim(),
+      itemId: data.itemId || "",
+      item: itemName,
+      quantity: data.quantity,
+      unit: data.unit.trim(),
+      warehouseId: data.warehouseId || "",
+      warehouseName,
+      physicalLocation: data.physicalLocation?.trim() || "",
+      movementDate: data.movementDate,
+      reason: data.reason?.trim() || ""
+    },
+    createdAt: new Date().toISOString()
+  };
+
+  mockDb.addModuleRecord(module.id, record);
+  closeModal();
+  render();
+  showToast(t("movementSaved", { code }));
+}
+
+function openSalesCustomerModal(module, submodule, recordId = null) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const existingRecord = recordId ? mockDb.findModuleRecord(module.id, recordId) : null;
+  const fields = existingRecord?.fields || {};
+  const isEditing = Boolean(existingRecord);
+
+  modalContent.innerHTML = `
+    <form class="recipe-form" id="salesCustomerForm">
+      <input type="hidden" name="recordId" value="${existingRecord?.id || ""}" />
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">${label}</p>
+          <h2 id="modalTitle">${isEditing ? t("editCustomer") : t("newCustomer")}</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
+      </div>
+
+      <div class="section-title form-section-title wide-field">
+        <span class="section-icon">▦</span>
+        <strong>${t("commercialProfile")}</strong>
+      </div>
+
+      <div class="form-grid">
+        <label class="preview-field">
+          <span>${t("customerCode")}</span>
+          <input name="code" type="text" value="${existingRecord?.code || ""}" placeholder="CLI-001" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("commercialName")}</span>
+          <input name="commercialName" type="text" value="${fields.commercialName || existingRecord?.title || ""}" placeholder="${t("commercialNamePlaceholder")}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("customerType")}</span>
+          <select name="customerType" required>
+            <option value="company" ${selectedOption(fields.customerType || "company", "company")}>${t("companyCustomer")}</option>
+            <option value="individual" ${selectedOption(fields.customerType, "individual")}>${t("individualCustomer")}</option>
+            <option value="government" ${selectedOption(fields.customerType, "government")}>${t("governmentCustomer")}</option>
+            <option value="internal" ${selectedOption(fields.customerType, "internal")}>${t("internalCustomer")}</option>
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("status")}</span>
+          <select name="status">
+            <option value="Prospecto" ${selectedOption(existingRecord?.status || "Prospecto", "Prospecto")}>${t("prospectStatus")}</option>
+            <option value="Activo" ${selectedOption(existingRecord?.status, "Activo")}>${t("activeStatus")}</option>
+            <option value="Inactivo" ${selectedOption(existingRecord?.status, "Inactivo")}>${t("inactiveStatus")}</option>
+            <option value="Bloqueado" ${selectedOption(existingRecord?.status, "Bloqueado")}>${t("blockedStatus")}</option>
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("contact")}</span>
+          <input name="contactName" type="text" value="${fields.contactName || ""}" placeholder="${t("contactPlaceholder")}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("commercialEmail")}</span>
+          <input name="contactEmail" type="email" value="${fields.contactEmail || ""}" placeholder="compras@cliente.com" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("phone")}</span>
+          <input name="contactPhone" type="tel" value="${fields.contactPhone || ""}" placeholder="+52 55 0000 0000" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("salesOwner")}</span>
+          <input name="salesOwner" type="text" value="${fields.salesOwner || ""}" placeholder="${t("salesOwnerPlaceholder")}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("paymentTerms")}</span>
+          <input name="paymentTerms" type="text" value="${fields.paymentTerms || ""}" placeholder="${t("paymentTermsPlaceholder")}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("creditLimit")}</span>
+          <input name="creditLimit" type="text" value="${fields.creditLimit || ""}" placeholder="$50,000 MXN" />
+        </label>
+        <label class="preview-field wide-field">
+          <span>${t("commercialNotes")}</span>
+          <textarea name="commercialNotes" rows="2" placeholder="${t("commercialNotesPlaceholder")}">${fields.commercialNotes || ""}</textarea>
+        </label>
+
+        <div class="section-title form-section-title wide-field">
+          <span class="section-icon">☷</span>
+          <strong>${t("billingProfile")}</strong>
+        </div>
+
+        <label class="preview-field">
+          <span>${t("billingLegalName")}</span>
+          <input name="billingLegalName" type="text" value="${fields.billingLegalName || ""}" placeholder="${t("billingLegalNamePlaceholder")}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("taxId")}</span>
+          <input name="taxId" type="text" value="${fields.taxId || ""}" placeholder="XAXX010101000" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("taxRegime")}</span>
+          <input name="taxRegime" type="text" value="${fields.taxRegime || ""}" placeholder="${t("taxRegimePlaceholder")}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("cfdiUse")}</span>
+          <input name="cfdiUse" type="text" value="${fields.cfdiUse || ""}" placeholder="G03" />
+        </label>
+        <label class="preview-field">
+          <span>${t("billingEmail")}</span>
+          <input name="billingEmail" type="email" value="${fields.billingEmail || ""}" placeholder="facturas@cliente.com" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("billingPhone")}</span>
+          <input name="billingPhone" type="tel" value="${fields.billingPhone || ""}" placeholder="+52 55 0000 0000" />
+        </label>
+        <label class="preview-field">
+          <span>${t("billingStreet")}</span>
+          <input name="billingStreet" type="text" value="${fields.billingStreet || ""}" placeholder="${t("billingStreetPlaceholder")}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("billingExterior")}</span>
+          <input name="billingExterior" type="text" value="${fields.billingExterior || ""}" placeholder="123" />
+        </label>
+        <label class="preview-field">
+          <span>${t("billingInterior")}</span>
+          <input name="billingInterior" type="text" value="${fields.billingInterior || ""}" placeholder="4B" />
+        </label>
+        <label class="preview-field">
+          <span>${t("billingNeighborhood")}</span>
+          <input name="billingNeighborhood" type="text" value="${fields.billingNeighborhood || ""}" placeholder="${t("billingNeighborhoodPlaceholder")}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("billingCity")}</span>
+          <input name="billingCity" type="text" value="${fields.billingCity || ""}" placeholder="${t("billingCityPlaceholder")}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("billingState")}</span>
+          <input name="billingState" type="text" value="${fields.billingState || ""}" placeholder="${t("billingStatePlaceholder")}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("billingZipCode")}</span>
+          <input name="billingZipCode" type="text" value="${fields.billingZipCode || ""}" placeholder="00000" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("billingCountry")}</span>
+          <input name="billingCountry" type="text" value="${fields.billingCountry || "Mexico"}" required />
+        </label>
+      </div>
+
+      <div class="form-errors" id="formErrors" hidden></div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-action="close-sales-customer">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${isEditing ? t("updateCustomer") : t("saveCustomer")}</button>
+      </div>
+    </form>
+  `;
+
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-sales-customer']").addEventListener("click", closeModal);
+  modalContent.querySelector("#salesCustomerForm").addEventListener("submit", (event) => saveSalesCustomerForm(event, module, submodule));
+}
+
+function saveSalesCustomerForm(event, module, submodule) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const errors = [];
+
+  if (!data.code?.trim()) errors.push(t("customerCodeRequired"));
+  if (!data.commercialName?.trim()) errors.push(t("commercialNameRequired"));
+  if (!data.contactName?.trim()) errors.push(t("contactRequired"));
+  if (!data.contactEmail?.trim()) errors.push(t("commercialEmailRequired"));
+  if (!data.contactPhone?.trim()) errors.push(t("phoneRequired"));
+  if (!data.billingLegalName?.trim()) errors.push(t("billingLegalNameRequired"));
+  if (!data.taxId?.trim()) errors.push(t("taxIdRequired"));
+  if (!data.billingEmail?.trim()) errors.push(t("billingEmailRequired"));
+  if (!data.billingStreet?.trim()) errors.push(t("billingStreetRequired"));
+  if (!data.billingCity?.trim()) errors.push(t("billingCityRequired"));
+  if (!data.billingState?.trim()) errors.push(t("billingStateRequired"));
+  if (!data.billingZipCode?.trim()) errors.push(t("billingZipCodeRequired"));
+
+  if (errors.length) {
+    renderFormErrors(errors);
+    return;
+  }
+
+  const code = data.code.trim().toUpperCase();
+  const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
+  const fields = {
+    customerType: data.customerType,
+    commercialName: data.commercialName.trim(),
+    contactName: data.contactName.trim(),
+    contactEmail: data.contactEmail.trim(),
+    contactPhone: data.contactPhone.trim(),
+    salesOwner: data.salesOwner?.trim() || "",
+    paymentTerms: data.paymentTerms?.trim() || "",
+    creditLimit: data.creditLimit?.trim() || "",
+    commercialNotes: data.commercialNotes?.trim() || "",
+    billingLegalName: data.billingLegalName.trim(),
+    taxId: data.taxId.trim().toUpperCase(),
+    taxRegime: data.taxRegime?.trim() || "",
+    cfdiUse: data.cfdiUse?.trim() || "",
+    billingEmail: data.billingEmail.trim(),
+    billingPhone: data.billingPhone?.trim() || "",
+    billingStreet: data.billingStreet.trim(),
+    billingExterior: data.billingExterior?.trim() || "",
+    billingInterior: data.billingInterior?.trim() || "",
+    billingNeighborhood: data.billingNeighborhood?.trim() || "",
+    billingCity: data.billingCity.trim(),
+    billingState: data.billingState.trim(),
+    billingZipCode: data.billingZipCode.trim(),
+    billingCountry: data.billingCountry?.trim() || "Mexico"
+  };
+  const record = {
+    id: existingRecord?.id || `${module.id}-customer-${Date.now()}`,
+    code,
+    moduleId: module.id,
+    submoduleId: submodule.id,
+    recordType: "customer",
+    title: fields.commercialName,
+    detail: `${fields.billingLegalName} - ${fields.taxId} - ${fields.contactName}`,
+    status: data.status || "Prospecto",
+    owner: fields.salesOwner || fields.contactName,
+    fields,
+    createdAt: new Date().toISOString()
+  };
+
+  if (existingRecord) {
+    mockDb.updateModuleRecord(module.id, {
+      ...record,
+      createdAt: existingRecord.createdAt,
+      updatedAt: new Date().toISOString()
+    });
+  } else {
+    mockDb.addModuleRecord(module.id, record);
+  }
+  closeModal();
+  render();
+  showToast(t(existingRecord ? "customerUpdated" : "customerSaved", { code }));
+}
+
+function openSalesQuoteModal(module, submodule, recordId = null) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const existingRecord = recordId ? mockDb.findModuleRecord(module.id, recordId) : null;
+  const fields = existingRecord?.fields || {};
+  const customers = mockDb.loadModuleRecords(module.id, "clientes").filter((record) => record.recordType === "customer");
+  const productsServices = mockDb.loadProductsServices();
+  const selectedCustomer = fields.customerId ? mockDb.findModuleRecord(module.id, fields.customerId) : null;
+  const quoteLines = normalizeQuoteLines(fields);
+  const isEditing = Boolean(existingRecord);
+
+  if (!customers.length || !productsServices.length) {
+    showToast(!customers.length ? t("quoteRequiresCustomers") : t("quoteRequiresProducts"));
+    return;
+  }
+
+  modalContent.innerHTML = `
+    <form class="recipe-form" id="salesQuoteForm">
+      <input type="hidden" name="recordId" value="${existingRecord?.id || ""}" />
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">${label}</p>
+          <h2 id="modalTitle">${isEditing ? t("editQuote") : t("newQuote")}</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
+      </div>
+
+      <div class="form-grid">
+        <label class="preview-field">
+          <span>${t("quoteCode")}</span>
+          <input name="code" type="text" value="${existingRecord?.code || ""}" placeholder="COT-001" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("status")}</span>
+          <select name="status">
+            <option value="Borrador" ${selectedOption(existingRecord?.status || "Borrador", "Borrador")}>${t("draftStatus")}</option>
+            <option value="Cotizada" ${selectedOption(existingRecord?.status, "Cotizada")}>${t("quotedStatus")}</option>
+            <option value="Aprobado" ${selectedOption(existingRecord?.status, "Aprobado")}>${t("approvedStatus")}</option>
+            <option value="Vencida" ${selectedOption(existingRecord?.status, "Vencida")}>${t("expiredStatus")}</option>
+          </select>
+        </label>
+        <label class="preview-field product-lookup-field wide-field">
+          <span>${t("customer")}</span>
+          <input id="quoteCustomerSearch" type="text" value="${selectedCustomer ? formatSalesCustomerOption(selectedCustomer) : ""}" placeholder="${t("customerLookupPlaceholder")}" autocomplete="off" required />
+          <input name="customerId" type="hidden" value="${selectedCustomer?.id || ""}" />
+          <div class="lookup-results" id="quoteCustomerResults" hidden></div>
+        </label>
+        <div class="section-title form-section-title wide-field">
+          <span class="section-icon">☷</span>
+          <strong>${t("quoteLines")}</strong>
+        </div>
+        <p class="helper-copy wide-field">${t("quoteLinesHelper")}</p>
+        <div class="selected-resource-list wide-field" id="quoteLineList">
+          ${quoteLines.map((line, index) => renderQuoteLineRow(line, index)).join("")}
+        </div>
+        <button class="secondary-action wide-field" type="button" data-action="add-quote-line">${t("addQuoteLine")}</button>
+        <label class="preview-field">
+          <span>${t("validUntil")}</span>
+          <input name="validUntil" type="date" value="${fields.validUntil || ""}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("deliveryPromise")}</span>
+          <input name="deliveryPromise" type="date" value="${fields.deliveryPromise || ""}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("paymentTerms")}</span>
+          <input name="paymentTerms" type="text" value="${fields.paymentTerms || selectedCustomer?.fields?.paymentTerms || ""}" placeholder="${t("paymentTermsPlaceholder")}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("currency")}</span>
+          <input name="currency" type="text" value="${fields.currency || "MXN"}" required />
+        </label>
+        <label class="preview-field wide-field">
+          <span>${t("notes")}</span>
+          <textarea name="notes" rows="3" placeholder="${t("quoteNotesPlaceholder")}">${fields.notes || ""}</textarea>
+        </label>
+      </div>
+
+      <div class="form-errors" id="formErrors" hidden></div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-action="close-sales-quote">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${isEditing ? t("updateQuote") : t("saveQuote")}</button>
+      </div>
+    </form>
+  `;
+
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-sales-quote']").addEventListener("click", closeModal);
+  modalContent.querySelector("#quoteCustomerSearch").addEventListener("focus", renderQuoteCustomerLookup);
+  modalContent.querySelector("#quoteCustomerSearch").addEventListener("input", syncQuoteCustomerFields);
+  modalContent.querySelector("#quoteCustomerResults").addEventListener("click", selectQuoteCustomerFromLookup);
+  modalContent.querySelector("[data-action='add-quote-line']").addEventListener("click", addQuoteLineRow);
+  modalContent.querySelector("#salesQuoteForm").addEventListener("submit", (event) => saveSalesQuoteForm(event, module, submodule));
+  bindQuoteLineActions();
+}
+
+function formatSalesCustomerOption(customer) {
+  return `${customer.code} - ${customer.title} - ${customer.fields?.taxId || t("notDefined")}`;
+}
+
+function findSalesCustomerByOption(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return mockDb.loadModuleRecords("ventas", "clientes").find((customer) =>
+    customer.recordType === "customer" &&
+    (formatSalesCustomerOption(customer).toLowerCase() === normalized || customer.code.toLowerCase() === normalized)
+  );
+}
+
+function getSalesCustomerMatches(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  const customers = mockDb.loadModuleRecords("ventas", "clientes").filter((record) => record.recordType === "customer");
+  if (!normalized) return customers;
+  return customers.filter((customer) =>
+    [
+      customer.code,
+      customer.title,
+      customer.fields?.commercialName,
+      customer.fields?.billingLegalName,
+      customer.fields?.taxId,
+      customer.fields?.contactName,
+      customer.fields?.contactEmail
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalized)
+  );
+}
+
+function renderQuoteCustomerLookup(event) {
+  const input = event.target;
+  const results = modalContent.querySelector("#quoteCustomerResults");
+  const matches = getSalesCustomerMatches(input.value);
+  results.hidden = false;
+  results.innerHTML = matches.length
+    ? matches
+        .map((customer) => `
+          <button class="lookup-option" type="button" data-sales-customer-id="${customer.id}">
+            <strong>${customer.title}</strong>
+            <span>${customer.code} - ${customer.fields?.billingLegalName || t("notDefined")} - ${customer.fields?.taxId || t("notDefined")}</span>
+          </button>
+        `)
+        .join("")
+    : `<div class="lookup-empty">${t("customerLookupEmpty")}</div>`;
+}
+
+function selectQuoteCustomerFromLookup(event) {
+  const button = event.target.closest("[data-sales-customer-id]");
+  if (!button) return;
+  const customer = mockDb.findModuleRecord("ventas", button.dataset.salesCustomerId);
+  if (!customer) return;
+  const form = button.closest("form");
+  form.querySelector("#quoteCustomerSearch").value = formatSalesCustomerOption(customer);
+  form.querySelector("[name='customerId']").value = customer.id;
+  form.querySelector("[name='paymentTerms']").value = customer.fields?.paymentTerms || "";
+  modalContent.querySelector("#quoteCustomerResults").hidden = true;
+}
+
+function syncQuoteCustomerFields(event) {
+  const form = event.target.closest("form");
+  const customer = findSalesCustomerByOption(event.target.value);
+  form.querySelector("[name='customerId']").value = customer?.id || "";
+  renderQuoteCustomerLookup(event);
+  if (!customer) return;
+  form.querySelector("[name='paymentTerms']").value = customer.fields?.paymentTerms || "";
+}
+
+function normalizeQuoteLines(fields = {}) {
+  if (Array.isArray(fields.lines) && fields.lines.length) return fields.lines;
+  if (fields.productServiceId) {
+    return [{
+      productServiceId: fields.productServiceId,
+      productServiceName: fields.productServiceName || "",
+      quantity: fields.quantity || 1,
+      unit: fields.unit || "",
+      unitPrice: fields.unitPrice || 0,
+      discount: fields.discount || 0,
+      subtotal: fields.subtotal || 0,
+      total: fields.total || 0
+    }];
+  }
+  return [{ productServiceId: "", productServiceName: "", quantity: 1, unit: "", unitPrice: 0, discount: 0 }];
+}
+
+function getQuoteLines(record) {
+  return normalizeQuoteLines(record?.fields || {});
+}
+
+function renderQuoteLineRow(line = {}, index = 0) {
+  const productService = line.productServiceId ? mockDb.findProductService(line.productServiceId) : null;
+  return `
+    <div class="quote-line-row" data-quote-line>
+      <label class="preview-field product-lookup-field quote-line-product">
+        <span>${t("productOrService")}</span>
+        <input class="quote-product-search" type="text" value="${productService ? formatProductServiceOption(productService) : line.productServiceName || ""}" placeholder="${t("productLookupPlaceholder")}" autocomplete="off" required />
+        <input name="lineProductServiceId" type="hidden" value="${line.productServiceId || ""}" />
+        <div class="lookup-results quote-product-results" hidden></div>
+      </label>
+      <label class="preview-field">
+        <span>${t("quantity")}</span>
+        <input name="lineQuantity" type="number" min="0.01" step="0.01" value="${line.quantity || 1}" required />
+      </label>
+      <label class="preview-field">
+        <span>${t("unit")}</span>
+        <input name="lineUnit" type="text" value="${line.unit || productService?.unit || ""}" required />
+      </label>
+      <label class="preview-field">
+        <span>${t("unitPrice")}</span>
+        <input name="lineUnitPrice" type="number" min="0" step="0.01" value="${line.unitPrice || productService?.targetPrice || 0}" required />
+      </label>
+      <label class="preview-field">
+        <span>${t("discount")}</span>
+        <input name="lineDiscount" type="number" min="0" max="100" step="0.01" value="${line.discount || 0}" />
+      </label>
+      <button class="icon-button remove-resource" type="button" data-action="remove-quote-line" aria-label="${t("removeQuoteLine")}">x</button>
+    </div>
+  `;
+}
+
+function addQuoteLineRow() {
+  const list = modalContent.querySelector("#quoteLineList");
+  list.insertAdjacentHTML("beforeend", renderQuoteLineRow({}, list.querySelectorAll("[data-quote-line]").length));
+  bindQuoteLineActions();
+}
+
+function bindQuoteLineActions() {
+  modalContent.querySelectorAll(".quote-product-search").forEach((input) => {
+    input.removeEventListener("focus", renderQuoteProductLookup);
+    input.removeEventListener("input", syncQuoteProductFields);
+    input.addEventListener("focus", renderQuoteProductLookup);
+    input.addEventListener("input", syncQuoteProductFields);
+  });
+  modalContent.querySelectorAll(".quote-product-results").forEach((results) => {
+    results.removeEventListener("click", selectQuoteProductFromLookup);
+    results.addEventListener("click", selectQuoteProductFromLookup);
+  });
+  modalContent.querySelectorAll("[data-action='remove-quote-line']").forEach((button) => {
+    button.onclick = () => {
+      const rows = modalContent.querySelectorAll("[data-quote-line]");
+      if (rows.length <= 1) {
+        showToast(t("quoteNeedsOneLine"));
+        return;
+      }
+      button.closest("[data-quote-line]").remove();
+    };
+  });
+}
+
+function renderQuoteProductLookup(event) {
+  const input = event.target;
+  const row = input.closest("[data-quote-line]");
+  const results = row.querySelector(".quote-product-results");
+  const matches = getProductServiceMatches(input.value);
+  results.hidden = false;
+  results.innerHTML = matches.length
+    ? matches
+        .map((item) => `
+          <button class="lookup-option" type="button" data-product-id="${item.id}">
+            <strong>${item.name}</strong>
+            <span>${item.id} - ${item.kind} - ${item.unit}</span>
+          </button>
+        `)
+        .join("")
+    : `<div class="lookup-empty">${t("productLookupEmpty")}</div>`;
+}
+
+function selectQuoteProductFromLookup(event) {
+  const button = event.target.closest("[data-product-id]");
+  if (!button) return;
+  const item = mockDb.findProductService(button.dataset.productId);
+  if (!item) return;
+  const row = button.closest("[data-quote-line]");
+  row.querySelector(".quote-product-search").value = formatProductServiceOption(item);
+  row.querySelector("[name='lineProductServiceId']").value = item.id;
+  row.querySelector("[name='lineUnit']").value = item.unit || "";
+  row.querySelector("[name='lineUnitPrice']").value = item.targetPrice || 0;
+  row.querySelector(".quote-product-results").hidden = true;
+}
+
+function syncQuoteProductFields(event) {
+  const row = event.target.closest("[data-quote-line]");
+  const item = findProductServiceByOption(event.target.value);
+  row.querySelector("[name='lineProductServiceId']").value = item?.id || "";
+  renderQuoteProductLookup(event);
+  if (!item) return;
+  row.querySelector("[name='lineUnit']").value = item.unit || "";
+  row.querySelector("[name='lineUnitPrice']").value = item.targetPrice || 0;
+}
+
+function saveSalesQuoteForm(event, module, submodule) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const errors = [];
+
+  if (!data.code?.trim()) errors.push(t("quoteCodeRequired"));
+  if (!data.customerId) errors.push(t("quoteCustomerRequired"));
+  if (!data.validUntil) errors.push(t("validUntilRequired"));
+
+  const customer = mockDb.findModuleRecord(module.id, data.customerId);
+  if (!customer) errors.push(t("quoteCustomerRequired"));
+  const lines = buildQuoteLinesFromForm(form, errors);
+  if (errors.length) {
+    renderFormErrors(errors);
+    return;
+  }
+
+  const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0);
+  const total = lines.reduce((sum, line) => sum + line.total, 0);
+  const code = data.code.trim().toUpperCase();
+  const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
+  const fields = {
+    customerId: customer.id,
+    customerName: `${customer.code} - ${customer.title}`,
+    lines,
+    productServiceId: lines[0]?.productServiceId || "",
+    productServiceName: lines[0]?.productServiceName || "",
+    quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+    unit: lines[0]?.unit || "",
+    unitPrice: lines[0]?.unitPrice || 0,
+    discount: lines[0]?.discount || 0,
+    subtotal,
+    total,
+    validUntil: data.validUntil,
+    deliveryPromise: data.deliveryPromise || "",
+    paymentTerms: data.paymentTerms?.trim() || "",
+    currency: data.currency?.trim() || "MXN",
+    notes: data.notes?.trim() || ""
+  };
+  const record = {
+    id: existingRecord?.id || `${module.id}-quote-${Date.now()}`,
+    code,
+    moduleId: module.id,
+    submoduleId: submodule.id,
+    recordType: "quote",
+    title: `${customer.title} - ${lines.length} ${t("quoteLines")}`,
+    detail: `${formatCurrency(total)} - ${fields.validUntil}`,
+    status: data.status || "Borrador",
+    owner: customer.title,
+    fields,
+    createdAt: new Date().toISOString()
+  };
+
+  if (existingRecord) {
+    mockDb.updateModuleRecord(module.id, {
+      ...record,
+      createdAt: existingRecord.createdAt,
+      updatedAt: new Date().toISOString()
+    });
+  } else {
+    mockDb.addModuleRecord(module.id, record);
+  }
+  closeModal();
+  render();
+  showToast(t(existingRecord ? "quoteUpdated" : "quoteSaved", { code }));
+}
+
+function buildQuoteLinesFromForm(form, errors) {
+  const rows = [...form.querySelectorAll("[data-quote-line]")];
+  if (!rows.length) errors.push(t("quoteLineRequired"));
+  return rows.map((row) => {
+    const productServiceId = row.querySelector("[name='lineProductServiceId']").value;
+    const productService = productServiceId ? mockDb.findProductService(productServiceId) : null;
+    const quantity = Number(row.querySelector("[name='lineQuantity']").value || 0);
+    const unit = row.querySelector("[name='lineUnit']").value.trim();
+    const unitPrice = Number(row.querySelector("[name='lineUnitPrice']").value || 0);
+    const discount = Number(row.querySelector("[name='lineDiscount']").value || 0);
+    if (!productService) errors.push(t("quoteProductRequired"));
+    if (!quantity) errors.push(t("quantityRequired"));
+    if (!unit) errors.push(t("unitRequired"));
+    if (unitPrice < 0) errors.push(t("unitPriceRequired"));
+    const subtotal = quantity * unitPrice;
+    const total = subtotal * (1 - Math.min(Math.max(discount, 0), 100) / 100);
+    return {
+      productServiceId,
+      productServiceName: productService ? `${productService.id} - ${productService.name}` : "",
+      quantity,
+      unit,
+      unitPrice,
+      discount,
+      subtotal,
+      total
+    };
+  });
 }
 
 function openProductServiceModal(productServiceId = null) {
@@ -2521,6 +4968,81 @@ function openOrderPrintModal(orderId) {
   });
 }
 
+function openSalesQuotePrintModal(quoteId) {
+  const quote = mockDb.findModuleRecord("ventas", quoteId);
+  if (!quote) return;
+  const customer = quote.fields?.customerId ? mockDb.findModuleRecord("ventas", quote.fields.customerId) : null;
+  const lines = getQuoteLines(quote);
+  modalContent.innerHTML = `
+    <div class="recipe-form print-modal">
+      <div class="modal-head no-print">
+        <div>
+          <p class="eyebrow">${t("newQuote")}</p>
+          <h2>${quote.code}</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
+      </div>
+
+      <section class="print-area" id="printArea">
+        <div class="print-header">
+          <div>
+            <strong>ERClave Ventas</strong>
+            <span>${t("quoteDocument")}</span>
+          </div>
+          <h1>${quote.code}</h1>
+        </div>
+        <div class="print-grid">
+          <p><strong>${t("customer")}:</strong> ${quote.fields?.customerName || t("notDefined")}</p>
+          <p><strong>${t("status")}:</strong> ${translateStatus(quote.status)}</p>
+          <p><strong>${t("validUntil")}:</strong> ${quote.fields?.validUntil || t("notDefined")}</p>
+          <p><strong>${t("deliveryPromise")}:</strong> ${quote.fields?.deliveryPromise || t("notDefined")}</p>
+          <p><strong>${t("paymentTerms")}:</strong> ${quote.fields?.paymentTerms || t("notDefined")}</p>
+          <p><strong>${t("currency")}:</strong> ${quote.fields?.currency || "MXN"}</p>
+          <p><strong>${t("billingLegalName")}:</strong> ${customer?.fields?.billingLegalName || t("notDefined")}</p>
+          <p><strong>${t("taxId")}:</strong> ${customer?.fields?.taxId || t("notDefined")}</p>
+        </div>
+        <h3>${t("quoteLines")}</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>${t("productOrService")}</th>
+              <th>${t("quantity")}</th>
+              <th>${t("unitPrice")}</th>
+              <th>${t("discount")}</th>
+              <th>${t("quoteTotal")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lines.map((line) => `
+              <tr>
+                <td>${line.productServiceName}</td>
+                <td>${formatNumber(line.quantity)} ${line.unit}</td>
+                <td>${formatCurrency(Number(line.unitPrice || 0))}</td>
+                <td>${formatNumber(Number(line.discount || 0))}%</td>
+                <td>${formatCurrency(Number(line.total || 0))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+        ${quote.fields?.notes ? `<p><strong>${t("notes")}:</strong> ${quote.fields.notes}</p>` : ""}
+        <p class="print-total"><strong>${t("quoteSubtotal")}:</strong> ${formatCurrency(Number(quote.fields?.subtotal || 0))}</p>
+        <p class="print-total"><strong>${t("quoteTotal")}:</strong> ${formatCurrency(Number(quote.fields?.total || 0))}</p>
+      </section>
+
+      <div class="modal-actions no-print">
+        <button class="secondary-action" type="button" data-action="print-quote-now">${t("printSavePdf")}</button>
+        <button class="primary-action" type="button" data-action="close-print">${t("close")}</button>
+      </div>
+    </div>
+  `;
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-print']").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='print-quote-now']").addEventListener("click", () => {
+    window.print();
+  });
+}
+
 function applyI18n() {
   const dict = translations[state.lang];
   document.querySelectorAll("[data-i18n]").forEach((node) => {
@@ -2536,6 +5058,7 @@ function render() {
   shell.dataset.theme = state.theme;
   document.body.dataset.theme = state.theme;
   backButton.disabled = !state.history.length;
+  topbarPrimary.querySelector("[data-i18n]").dataset.i18n = state.active === "produccion" ? "newOrder" : "newModuleRecord";
   renderNav();
   renderPanel();
   renderFlow();
@@ -2569,7 +5092,7 @@ topbarPrimary.addEventListener("click", () => {
     openOrderModal();
     return;
   }
-  showToast("Este mock de captura inicia con recetas de Produccion.");
+  openGenericRecordModal(state.active, state.activeSubmodule);
 });
 
 render();

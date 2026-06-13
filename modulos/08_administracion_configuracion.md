@@ -126,24 +126,20 @@ admin.users.create
 
 ## 8. Catálogos base
 
-- unidades de medida;
-- tipos de recurso;
-- tipos de almacén;
-- estados de orden;
-- prioridades;
-- centros de costos;
-- áreas;
-- monedas;
-- impuestos;
-- tipos de gasto;
-- motivos de ajuste;
-- motivos de cancelación;
-- idiomas.
-- cuentas contables;
-- tipos de documento origen;
-- tipos de operación;
-- estados contables;
-- reglas de mapeo contable.
+Los catalogos base son configuraciones transversales que deberan administrarse desde este modulo para evitar valores duplicados o quemados dentro de cada modulo funcional.
+
+La referencia ampliada se documenta en `docs/catalogos_base.md`.
+
+| Grupo | Catalogos iniciales |
+|---|---|
+| Transversales | centros de negocio, areas, roles, permisos, unidades de medida, monedas, impuestos, prioridades, idiomas. |
+| Produccion | tipos de producto/servicio, tipos de recurso, estados de receta, estados de orden, motivos de pausa, motivos de reproceso. |
+| Almacenes | tipos de almacen, politicas de inventario, tipos de movimiento, motivos de ajuste, estados de inventario, tipos de ubicacion fisica. |
+| Compras | tipos de proveedor, condiciones de pago, metodos de entrega, estados de requisicion, estados de orden de compra, motivos de rechazo. |
+| Ventas | tipos de cliente, listas de precio, condiciones comerciales, estados de cotizacion, estados de pedido, canales de venta. |
+| Gastos | tipos de gasto, categorias de gasto, metodos de pago, estados de gasto, tipos de comprobante, motivos de rechazo. |
+| Costos | centros de costo, drivers de prorrateo, metodos de costeo, tipos de variacion, tipos de costo. |
+| Contabilidad | cuentas contables, periodos contables, tipos de poliza, tipos de documento origen, tipos de operacion, estados contables, reglas de mapeo contable. |
 
 ---
 
@@ -190,3 +186,5 @@ Administración deberá permitir configurar dependencias como:
 - Definir catálogo de módulos y submódulos.
 - Definir qué configuraciones serán por tenant.
 - Definir bitácora de cambios administrativos.
+- Construir la pantalla `Administracion > Catalogos base`.
+- Migrar opciones fijas del MVP a catalogos administrables cuando el flujo lo requiera.

@@ -56,7 +56,7 @@ export const modules = [
     title: "Almacenes",
     titleEn: "Warehouses",
     eyebrow: "Inventario vivo",
-    summary: "Existencias, reservas, movimientos, kardex, ubicaciones y merma.",
+    summary: "Existencias, reservas, movimientos, kardex, espacios fisicos y merma.",
     primary: "Reservar inventario",
     status: "7 articulos criticos",
     kpis: [
@@ -66,7 +66,7 @@ export const modules = [
     ],
     submodules: [
       ["Almacenes", "Materia prima, herramientas, producto en proceso y terminado."],
-      ["Ubicaciones", "Pasillos, racks, zonas y ubicaciones por centro de negocio."],
+      ["Articulos", "Catalogo maestro de articulos inventariables autorizados.", "articulos"],
       ["Movimientos", "Entradas, salidas, transferencias, ajustes y devoluciones."],
       ["Reservas", "Apartado para ordenes de produccion o pedidos de venta."],
       ["Kardex", "Historial completo por articulo, lote, serie o ubicacion."]
@@ -493,14 +493,6 @@ export const erpSubmoduleCatalog = {
       focus: {
         es: ["Tipo de almacen", "Responsable", "Centro de negocio", "Politicas de inventario"],
         en: ["Warehouse type", "Owner", "Business center", "Inventory policies"]
-      }
-    },
-    ubicaciones: {
-      enName: "Locations",
-      enDetail: "Aisles, racks, zones, and locations by business center.",
-      focus: {
-        es: ["Zona", "Rack o pasillo", "Capacidad", "Reglas de surtido"],
-        en: ["Zone", "Rack or aisle", "Capacity", "Picking rules"]
       }
     },
     movimientos: {
