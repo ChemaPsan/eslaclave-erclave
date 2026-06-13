@@ -409,6 +409,21 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `node --check frontend/app.js` ejecutado sin errores de sintaxis. |
 | Observaciones | El titulo completo solo se muestra cuando la guia esta abierta. |
 
+### CHG-026
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-13 |
+| Cambio | Actualizacion documental del modulo de Produccion |
+| Autor | Codex |
+| Archivos | `modulos/01_produccion.md`, `TRAZABILIDAD.md` |
+| Secciones | Documentacion funcional de Produccion |
+| Descripcion | Se actualizo el documento del modulo de Produccion para reflejar la maqueta actual: catalogo maestro, recetas aprobables, validacion de liberacion, ordenes, costos, etapas genericas, areas y puestos, maquinaria y reglas de negocio vigentes. |
+| Motivo | Mantener alineada la documentacion funcional con lo implementado en la maqueta. |
+| Impacto | El documento ahora describe el flujo ERP agnostico y separa claramente catalogos, recetas, recursos, ordenes y seguimiento operativo. |
+| Validacion | Revision documental local del archivo `modulos/01_produccion.md`. |
+| Observaciones | Se uso texto ASCII para evitar problemas de codificacion en el repositorio. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
