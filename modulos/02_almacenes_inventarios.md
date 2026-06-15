@@ -15,6 +15,7 @@ Su propósito es conectar la operación física con producción, compras, ventas
 - ubicaciones fisicas internas como configuracion opcional del almacen;
 - catalogo maestro de articulos inventariables;
 - existencias;
+- existencias calculadas desde movimientos;
 - entradas;
 - salidas;
 - transferencias;
@@ -146,6 +147,20 @@ Kardex no debera crear, editar ni eliminar movimientos. Cualquier correccion deb
 
 ---
 
+### Existencias en MVP
+
+Existencias queda habilitado como consulta calculada desde Movimientos. No debera capturar datos directamente ni reemplazar Kardex.
+
+En el MVP, Existencias debera permitir:
+
+- consultar saldo por articulo, almacen y unidad;
+- buscar por articulo, almacen, unidad o estado;
+- filtrar por almacen;
+- identificar saldo disponible, saldo cero o saldo negativo;
+- usar movimientos y ajustes como unica forma de corregir saldos.
+
+---
+
 ## 7. Estados de inventario
 
 | Estado | Descripción |
@@ -166,6 +181,7 @@ Kardex no debera crear, editar ni eliminar movimientos. Cualquier correccion deb
 - Todo movimiento deberá tener usuario, fecha, motivo y referencia.
 - Todo movimiento deberá conservar `documento_origen`.
 - Los movimientos manuales deberan capturar tipo, articulo, cantidad, unidad, almacen, fecha y motivo.
+- Las salidas y ajustes negativos no deberan exceder la existencia calculada para el articulo, almacen y unidad.
 - Los movimientos no deberán borrarse; deberán cancelarse o reversarse.
 - El inventario disponible deberá descontar reservas.
 - Una orden de producción podrá reservar insumos antes del consumo real.
@@ -274,3 +290,4 @@ Cuando Producción solicite validar una receta u orden, Almacenes deberá respon
 - Definir permisos finales para alta, edicion y bloqueo de articulos.
 - Definir proceso de conteo físico.
 - Definir permisos para ajustes y cancelaciones.
+- Definir transferencias con origen y destino completos para afectar saldos por almacen.

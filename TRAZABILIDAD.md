@@ -784,6 +784,126 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `npm run validate` ejecutado correctamente. |
 | Observaciones | No modifica comportamiento del frontend. |
 
+### CHG-051
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-14 19:25 |
+| Cambio | Cierre MVP Produccion, Almacenes y Ventas |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/data/modules.js`, `frontend/i18n/translations.js`, `modulos/README.md`, `modulos/01_produccion.md`, `modulos/02_almacenes_inventarios.md`, `modulos/04_ventas_clientes.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion > Ordenes, Almacenes > Existencias y Movimientos, Ventas > Cotizaciones y Pedidos, documentacion de estado MVP |
+| Descripcion | Se agrego snapshot de receta/version al generar ordenes de produccion y se bloqueo eliminar recetas con ordenes relacionadas. En Almacenes se agrego el submodulo Existencias como consulta calculada desde Movimientos, con busqueda, filtro por almacen y bloqueo de salidas o ajustes negativos que excedan saldo. En Ventas se especializo Pedidos para crear pedidos desde cotizaciones aprobadas, evitando duplicados y calculando costo/margen estimado desde las partidas. |
+| Motivo | Cerrar huecos MVP detectados en los tres modulos ya trabajados sin activar todavia reservas, entregas ni microservicios reales. |
+| Impacto | Produccion conserva historia de ordenes aunque cambien recetas; Almacenes gana disponibilidad calculada basica; Ventas pasa de preventa a pedido comercial inicial conectado con cotizaciones. |
+| Validacion | `npm run validate` ejecutado correctamente antes de registrar la entrada; se repite despues del registro. |
+| Observaciones | Entregas, reservas reales, transferencias origen/destino y consumo real de recursos quedan para fases posteriores por requerir contratos con inventario, produccion y ventas. |
+
+### CHG-052
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-14 19:40 |
+| Cambio | Entregas MVP en Ventas |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/i18n/translations.js`, `modulos/README.md`, `modulos/04_ventas_clientes.md`, `TRAZABILIDAD.md` |
+| Secciones | Ventas > Entregas, busqueda de pedidos, registro de entrega, estatus de entrega, documentacion MVP |
+| Descripcion | Se especializo el submodulo Entregas para buscar pedidos, ver estatus del pedido y registrar entregas con estatus Pendiente de entrega, En ruta, Entrega parcial, Entregado, No entregado, Reprogramado o Cancelado. El formulario guarda fecha, receptor, referencia, nueva fecha cuando aplica y notas; las entregas parciales o no entregadas exigen notas, y las reprogramadas exigen nueva fecha. |
+| Motivo | Completar el flujo comercial MVP despues de cotizacion y pedido, permitiendo seguimiento operativo de entrega sin activar todavia inventario/reservas reales. |
+| Impacto | Ventas ahora permite dar seguimiento a pedidos desde Entregas, actualizar el estatus comercial del pedido y conservar historial de intentos o entregas registradas. |
+| Validacion | `npm run validate` ejecutado correctamente antes de registrar la entrada; se repite despues del registro. |
+| Observaciones | La entrega no descuenta inventario ni libera reservas; ese impacto queda para la fase de integracion con Almacenes. Los estatus se simplificaron tomando como referencia patrones de fulfillment/logistica usados por sistemas como Shopify y ERPs operativos. |
+
+### CHG-053
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-14 19:52 |
+| Cambio | Edicion de pedidos con bitacora de ajustes |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/i18n/translations.js`, `modulos/README.md`, `modulos/04_ventas_clientes.md`, `TRAZABILIDAD.md` |
+| Secciones | Ventas > Pedidos, edicion de pedido, historial de ajustes, documentacion MVP |
+| Descripcion | Se agrego accion Editar en tarjetas de pedido. El formulario permite ajustar codigo, estatus, promesa de entrega, modo de surtido, responsable y notas, exigiendo motivo de ajuste. Cada guardado registra una bitacora dentro del pedido con fecha, usuario, motivo y cambios campo por campo con valor anterior y nuevo. |
+| Motivo | Permitir correcciones operativas controladas en pedidos sin perder trazabilidad comercial ni modificar partidas/importes heredados de la cotizacion origen. |
+| Impacto | Los pedidos pueden mantenerse actualizados durante el MVP y cada ajuste queda visible desde la tarjeta y el historial de edicion. |
+| Validacion | `npm run validate` ejecutado correctamente antes de registrar la entrada; se repite despues del registro. |
+| Observaciones | Cliente, partidas, subtotal y total permanecen controlados por la cotizacion origen; cambios comerciales de alcance o precio deberan resolverse en fases posteriores con versionamiento formal de pedido/cotizacion. |
+
+### CHG-054
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-14 19:59 |
+| Cambio | Entregas como vista de gestion |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/i18n/translations.js`, `modulos/04_ventas_clientes.md`, `TRAZABILIDAD.md` |
+| Secciones | Ventas > Entregas, filtros de estatus, consulta de entregas, documentacion MVP |
+| Descripcion | Se ajusto el submodulo Entregas para funcionar unicamente como vista de gestion y consulta. Ahora lista entregas registradas, permite buscar por pedido, cliente, cotizacion, estatus, receptor, referencia o notas, y agrega filtro por estatus. Se removio la accion de alta desde esta seccion y la accion global muestra aviso de vista de gestion. |
+| Motivo | Mantener Entregas como tablero operativo de seguimiento, evitando mezclar captura o cambios de flujo dentro de una vista que debe servir para controlar estatus y revisar historial. |
+| Impacto | El usuario puede ver todas las entregas y sus estatus sin abrir formularios desde Entregas; el registro operativo queda reservado al flujo del pedido o a futuras integraciones. |
+| Validacion | `npm run validate` ejecutado correctamente antes de registrar la entrada; se repite despues del registro. |
+| Observaciones | La funcion de registro de entrega permanece disponible en codigo para integrarse despues desde flujos operativos, pero el apartado Entregas ya no la expone como accion principal. |
+
+### CHG-055
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-14 21:06 |
+| Cambio | Consulta de cotizacion desde entregas |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/i18n/translations.js`, `modulos/04_ventas_clientes.md`, `TRAZABILIDAD.md` |
+| Secciones | Ventas > Entregas, tarjetas de entrega, consulta de cotizacion relacionada |
+| Descripcion | Se agrego accion Ver cotizacion en cada tarjeta de entrega y se habilito click sobre la tarjeta para abrir la vista imprimible de la cotizacion relacionada. La relacion se resuelve por el pedido ligado a la entrega o, como compatibilidad, por codigo de cotizacion guardado en la entrega. |
+| Motivo | Permitir que la gestion de entregas consulte rapidamente el documento comercial origen sin convertir Entregas en una pantalla de captura. |
+| Impacto | El usuario puede revisar la cotizacion asociada desde el tablero de Entregas, conservando el apartado como vista de gestion/consulta. |
+| Validacion | `npm run validate` ejecutado correctamente antes de registrar la entrada; se repite despues del registro. |
+| Observaciones | Si una entrega no tiene pedido/cotizacion resoluble, se muestra aviso de cotizacion no encontrada. |
+
+### CHG-056
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-14 21:09 |
+| Cambio | Modulos fuera del MVP como Proximamente |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `modulos/README.md`, `TRAZABILIDAD.md` |
+| Secciones | Navegacion lateral, modulos activos MVP, estado visual de modulos pendientes |
+| Descripcion | Se limitaron como activos los modulos Produccion, Almacenes y Ventas. Los demas modulos quedan sombreados en la navegacion, no despliegan submodulos ni navegan al hacer click, y al pasar el cursor muestran Proximamente. |
+| Motivo | Concentrar el trabajo en los modulos ya avanzados para cerrar un MVP funcional y escalable sin distraer con apartados genericos pendientes. |
+| Impacto | La experiencia del prototipo comunica con claridad el alcance actual del MVP y evita que usuarios entren a modulos no trabajados. |
+| Validacion | `npm run validate` ejecutado correctamente antes de registrar la entrada; se repite despues del registro. |
+| Observaciones | La documentacion y estructura tecnica de los modulos pendientes se conserva para retomarlos en fases posteriores. |
+
+### CHG-057
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-14 21:11 |
+| Cambio | Orden de navegacion MVP |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `modulos/README.md`, `TRAZABILIDAD.md` |
+| Secciones | Navegacion lateral, orden visual de modulos activos MVP |
+| Descripcion | Se ordeno la navegacion para mostrar primero Produccion, Almacenes y Ventas, dejando Compras y el resto de modulos despues como Proximamente. El arreglo base de modulos se conserva y el orden se resuelve al renderizar el sidebar. |
+| Motivo | Agrupar al inicio los modulos habilitados y enfocar el prototipo en las areas ya trabajadas para el MVP. |
+| Impacto | Ventas aparece antes de Compras en la navegacion, junto con Produccion y Almacenes como modulos activos. |
+| Validacion | `npm run validate` ejecutado correctamente antes de registrar la entrada; se repite despues del registro. |
+| Observaciones | Cambio visual de navegacion; no modifica datos, contratos ni comportamiento interno de modulos. |
+
+### CHG-058
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-14 21:17 |
+| Cambio | Paridad de localizacion para modulos MVP activos |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/data/modules.js`, `tools/validators/validate-active-module-localization.js`, `tools/validators/validate-all.js`, `package.json`, `AGENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion, Almacenes, Ventas, panel principal de modulo, validadores, agente de diseno/localizacion |
+| Descripcion | Se agregaron campos visibles en Ingles para los metadatos principales de Produccion, Almacenes y Ventas, incluyendo resumen, accion primaria, estatus, KPIs, flujo, tabla, validaciones, captura rapida y registros. El render principal ahora consume los campos localizados cuando el idioma activo es Ingles. |
+| Motivo | Evitar que etiquetas y textos visibles de los tres modulos activos queden unicamente en Espanol y se ignoren en futuras revisiones del MVP. |
+| Impacto | El panel principal de los modulos MVP cambia correctamente entre Espanol e Ingles en sus metadatos visibles, y el pipeline bloquea faltantes de paridad en esos campos. |
+| Validacion | `npm run validate` ejecutado correctamente antes de registrar la entrada; se repite despues del registro. |
+| Observaciones | Los datos operativos creados por usuario o cargados desde simulaciones se mantienen como datos de negocio; la nueva validacion se enfoca en copy visible controlado por `frontend/data/modules.js`. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

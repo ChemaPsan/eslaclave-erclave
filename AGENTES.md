@@ -142,9 +142,11 @@ El agente tecnico debe dominar:
 - Temas claro/oscuro: ningun componente nuevo debe depender de colores sueltos si existe token equivalente.
 - Responsive: sidebar, paneles, grids, formularios, tablas, modales y guias de flujo deben conservar legibilidad en pantallas pequenas.
 - Localizacion: todo texto visible nuevo debe considerar `frontend/i18n/translations.js` cuando forme parte de la UI reutilizable.
+- Localizacion de modulos MVP: Produccion, Almacenes y Ventas deben conservar metadatos visibles en Espanol e Ingles (`eyebrowEn`, `summaryEn`, `primaryEn`, `statusEn`, `kpisEn`, `workflowEn`, `tableEn`, `validationsEn`, `formEn` y `recordsEn`) cuando esos campos existan en `frontend/data/modules.js`.
 - Paridad i18n: cada clave agregada en `translations.es` debe existir en `translations.en` y conservar las mismas variables dinamicas.
 - Variables i18n: placeholders como `{id}`, `{name}`, `{days}` o `{status}` deben existir igual en Espanol e Ingles.
 - Estados de UI: hover, active, disabled, loading, empty, error, warning, success y confirmacion.
+- Validadores obligatorios: cualquier cambio visual, de copy o de modulo activo debe pasar `npm run validate`; si el cambio toca metadatos del panel principal de Produccion, Almacenes o Ventas, tambien debe considerarse el resultado de `npm run validate:active-localization`.
 
 Criterios de dominio:
 
@@ -154,6 +156,7 @@ Criterios de dominio:
 - Puede convertir una necesidad funcional en una composicion visual concreta: navegacion, panel, lista, formulario, modal, estado vacio y alertas.
 - Puede distinguir si un cambio visual pertenece al shell, a shared o al microfrontend de un modulo.
 - Puede detectar textos hardcodeados, claves i18n faltantes, traducciones incompletas o variables inconsistentes entre Espanol e Ingles.
+- Puede bloquear cambios en modulos MVP activos cuando el texto visible solo exista en un idioma o cuando falte el espejo `*En` correspondiente en `frontend/data/modules.js`.
 
 ### Produccion
 

@@ -25,6 +25,7 @@ const state = {
 };
 
 const orderStatusCatalog = ["Liberada", "En espera de recursos", "En produccion", "Pausada", "En validacion", "Terminada", "Cancelada"];
+const mvpModuleIds = ["produccion", "almacenes", "ventas"];
 
 const shell = document.querySelector(".app-shell");
 const moduleNav = document.getElementById("moduleNav");
@@ -104,13 +105,24 @@ function getSubmoduleCopy(moduleId, id, fallbackName = "", fallbackDetail = "") 
   };
 }
 
+function getNavigationModules() {
+  return [...modules].sort((a, b) => {
+    const aMvpIndex = mvpModuleIds.indexOf(a.id);
+    const bMvpIndex = mvpModuleIds.indexOf(b.id);
+    const aOrder = aMvpIndex >= 0 ? aMvpIndex : mvpModuleIds.length + modules.findIndex((module) => module.id === a.id);
+    const bOrder = bMvpIndex >= 0 ? bMvpIndex : mvpModuleIds.length + modules.findIndex((module) => module.id === b.id);
+    return aOrder - bOrder;
+  });
+}
+
 function renderNav() {
-  moduleNav.innerHTML = modules
+  moduleNav.innerHTML = getNavigationModules()
     .map((module) => {
       const label = state.lang === "en" ? module.titleEn : module.title;
+      const isMvpModule = mvpModuleIds.includes(module.id);
       return `
-        <div class="nav-group ${module.id === state.active ? "open" : ""}">
-          <button class="nav-button ${module.id === state.active && !state.activeSubmodule ? "active" : ""}" type="button" data-module-root="${module.id}" title="${label}">
+        <div class="nav-group ${module.id === state.active ? "open" : ""} ${isMvpModule ? "" : "coming-soon"}" ${isMvpModule ? "" : `data-tooltip="${t("comingSoon")}"`}>
+          <button class="nav-button ${module.id === state.active && !state.activeSubmodule ? "active" : ""} ${isMvpModule ? "" : "disabled-module"}" type="button" data-module-root="${module.id}" title="${isMvpModule ? label : t("comingSoon")}" aria-disabled="${isMvpModule ? "false" : "true"}">
             <span class="nav-icon">${module.icon}</span>
             <span>${label}</span>
             <small class="nav-count">${module.count}</small>
@@ -123,18 +135,21 @@ function renderNav() {
 
   moduleNav.querySelectorAll("[data-module-root]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (!mvpModuleIds.includes(button.dataset.moduleRoot)) return;
       navigateTo({ active: button.dataset.moduleRoot, activeSubmodule: null, laborArea: "" });
     });
   });
 
   moduleNav.querySelectorAll("[data-submodule-nav]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (!mvpModuleIds.includes(button.dataset.module)) return;
       navigateTo({ active: button.dataset.module, activeSubmodule: button.dataset.submoduleNav, laborArea: "" });
     });
   });
 }
 
 function renderSubnav(module) {
+  if (!mvpModuleIds.includes(module.id)) return "";
   return `
     <div class="submodule-nav" aria-label="Submodulos de ${module.title}">
       ${normalizeSubmodules(module)
@@ -148,16 +163,35 @@ function renderSubnav(module) {
   `;
 }
 
+function getModuleField(module, field) {
+  const localizedField = `${field}En`;
+  return state.lang === "en" && module[localizedField] !== undefined ? module[localizedField] : module[field];
+}
+
+function getModuleTable(module) {
+  return getModuleField(module, "table") || { columns: [], rows: [] };
+}
+
 function renderPanel() {
   const module = { ...(modules.find((item) => item.id === state.active) || modules[0]) };
   if (module.id === "produccion") {
     const production = getProductionModuleData();
     module.table = { ...module.table, rows: production.rows };
+    if (module.tableEn) module.tableEn = { ...module.tableEn, rows: production.rows };
     module.records = production.records;
+    module.recordsEn = production.records;
+    const activeOrderCount = String(mockDb.loadOrders().filter((order) => order.status === "En produccion").length);
+    const shortageCount = String(production.validation.missing.length);
+    const validationQty = Number(localStorage.getItem("erclave-validation-qty") || 100);
     module.kpis = [
-      ["Ordenes activas", String(mockDb.loadOrders().filter((order) => order.status === "En produccion").length), "positive"],
-      ["Faltantes", String(production.validation.missing.length), production.validation.missing.length ? "warning" : "positive"],
-      [`Costo lote ${Number(localStorage.getItem("erclave-validation-qty") || 100)}`, formatCurrency(production.validation.totalCost), "positive"]
+      ["Ordenes activas", activeOrderCount, "positive"],
+      ["Faltantes", shortageCount, production.validation.missing.length ? "warning" : "positive"],
+      [`Costo lote ${validationQty}`, formatCurrency(production.validation.totalCost), "positive"]
+    ];
+    module.kpisEn = [
+      ["Active orders", activeOrderCount, "positive"],
+      ["Shortages", shortageCount, production.validation.missing.length ? "warning" : "positive"],
+      [`Batch cost ${validationQty}`, formatCurrency(production.validation.totalCost), "positive"]
     ];
     if (state.activeSubmodule) {
       renderProductionSubmodulePanel(module);
@@ -171,31 +205,43 @@ function renderPanel() {
     const savedRows = getSavedModuleTableRows(module);
     const savedRecords = getSavedModuleRecordRows(module);
     module.table = { ...module.table, rows: [...savedRows, ...(module.table.rows || [])] };
+    if (module.tableEn) module.tableEn = { ...module.tableEn, rows: [...savedRows, ...(module.tableEn.rows || [])] };
     module.records = [...savedRecords, ...(module.records || [])];
+    if (module.recordsEn) module.recordsEn = [...savedRecords, ...(module.recordsEn || [])];
   }
   const label = state.lang === "en" ? module.titleEn : module.title;
+  const moduleEyebrow = getModuleField(module, "eyebrow");
+  const moduleStatus = getModuleField(module, "status");
+  const moduleSummary = getModuleField(module, "summary");
+  const modulePrimary = getModuleField(module, "primary");
+  const moduleKpis = getModuleField(module, "kpis") || [];
+  const moduleWorkflow = getModuleField(module, "workflow") || [];
+  const moduleValidations = getModuleField(module, "validations") || [];
+  const moduleForm = getModuleField(module, "form") || [];
+  const moduleRecords = getModuleField(module, "records") || [];
+  const moduleTable = getModuleTable(module);
 
   modulePanel.innerHTML = `
     <div class="panel-head">
       <div>
-        <p class="eyebrow">${module.eyebrow}</p>
+        <p class="eyebrow">${moduleEyebrow}</p>
         <h2>${label}</h2>
       </div>
-      <span class="chip active">${module.status}</span>
+      <span class="chip active">${moduleStatus}</span>
     </div>
 
     <div class="module-summary expanded">
       <div class="module-hero">
         <h1>${label}</h1>
-        <p>${module.summary}</p>
+        <p>${moduleSummary}</p>
         <button class="primary-action hero-action" type="button" data-action="${module.id === "produccion" ? "open-order" : "module-primary"}">
           <span>＋</span>
-          <span>${module.primary}</span>
+          <span>${modulePrimary}</span>
         </button>
       </div>
 
       <div class="module-kpis">
-        ${module.kpis
+        ${moduleKpis
           .map(
             ([name, value, tone]) => `
               <article class="mini-kpi ${tone}">
@@ -236,7 +282,7 @@ function renderPanel() {
           <strong>${t("operatingFlow")}</strong>
         </div>
         <ol class="workflow-list">
-          ${module.workflow.map((step) => `<li>${step}</li>`).join("")}
+          ${moduleWorkflow.map((step) => `<li>${step}</li>`).join("")}
         </ol>
       </section>
 
@@ -246,7 +292,7 @@ function renderPanel() {
           <strong>${t("compatibility")}</strong>
         </div>
         <div class="compat-list">
-          ${module.validations
+          ${moduleValidations
             .map(
               ([name, detail]) => `
                 <article>
@@ -266,11 +312,11 @@ function renderPanel() {
           <span class="section-icon">☷</span>
           <strong>${t("workView")}</strong>
         </div>
-        <div class="data-table" role="table">
-          <div class="table-row table-head" role="row">
-            ${module.table.columns.map((column) => `<span role="columnheader">${column}</span>`).join("")}
+          <div class="data-table" role="table">
+            <div class="table-row table-head" role="row">
+            ${moduleTable.columns.map((column) => `<span role="columnheader">${column}</span>`).join("")}
           </div>
-          ${module.table.rows
+          ${moduleTable.rows
             .map(
               (row) => `
                 <div class="table-row" role="row">
@@ -287,7 +333,7 @@ function renderPanel() {
           <span class="section-icon">✎</span>
           <strong>${t("quickCapture")}</strong>
         </div>
-        ${module.form
+        ${moduleForm
           .map(
             ([labelText, value]) => `
               <label class="preview-field">
@@ -304,7 +350,7 @@ function renderPanel() {
     ${module.id === "produccion" ? renderRecipeValidationCard() : ""}
 
     <div class="records module-records">
-      ${module.records
+      ${moduleRecords
         .map(
           ([code, desc, status]) => `
             <article class="record-row">
@@ -337,6 +383,10 @@ function renderGenericSubmodulePanel(module) {
     renderWarehouseMovementsPanel(module, submodule);
     return;
   }
+  if (isWarehouseStockSubmodule(module, submodule)) {
+    renderWarehouseStockPanel(module, submodule);
+    return;
+  }
   if (isWarehouseReservationsSubmodule(module, submodule)) {
     renderWarehouseComingSoonPanel(module, submodule);
     return;
@@ -351,6 +401,14 @@ function renderGenericSubmodulePanel(module) {
   }
   if (isSalesQuotesSubmodule(module, submodule)) {
     renderSalesQuotesPanel(module, submodule);
+    return;
+  }
+  if (isSalesOrdersSubmodule(module, submodule)) {
+    renderSalesOrdersPanel(module, submodule);
+    return;
+  }
+  if (isSalesDeliveriesSubmodule(module, submodule)) {
+    renderSalesDeliveriesPanel(module, submodule);
     return;
   }
   const sampleRows = buildGenericSubmoduleRows(module, submodule);
@@ -409,7 +467,7 @@ function renderGenericSubmodulePanel(module) {
             <strong>${t("operatingFlow")}</strong>
           </div>
           <ol class="workflow-list">
-            ${module.workflow.slice(0, 5).map((step) => `<li>${step}</li>`).join("")}
+            ${(getModuleField(module, "workflow") || []).slice(0, 5).map((step) => `<li>${step}</li>`).join("")}
           </ol>
         </section>
       </div>
@@ -775,6 +833,181 @@ function renderWarehouseMovementsPanel(module, submodule) {
     navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
   });
   bindProductionPanelActions();
+}
+
+function renderWarehouseStockPanel(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const warehouseFilter = localStorage.getItem("erclave-stock-warehouse") || "all";
+  const search = localStorage.getItem("erclave-stock-search") || "";
+  const warehouses = mockDb.loadModuleRecords(module.id, "almacenes").filter((record) => record.recordType === "warehouse");
+  const movements = mockDb.loadModuleRecords(module.id, "movimientos").filter((record) => record.recordType === "inventoryMovement");
+  const stockRows = filterStockBalances(buildStockBalances(movements), warehouseFilter, search);
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        <button class="primary-action disabled-action" type="button" disabled aria-disabled="true">
+          <span>☷</span>
+          <span>${t("calculatedStock")}</span>
+        </button>
+      </div>
+
+      <section class="section-card catalog-workspace">
+        ${renderFlowGuide(getWarehouseFlowTitle(submodule), getWarehouseFlowSteps(submodule))}
+        <p class="helper-copy">${t("stockHelper")}</p>
+        <div class="catalog-toolbar kardex-toolbar">
+          <label class="search-field catalog-search">
+            <span>S</span>
+            <input id="stockSearch" type="search" value="${search}" placeholder="${t("searchStock")}" />
+          </label>
+          <label class="preview-field compact-filter">
+            <span>${t("warehouse")}</span>
+            <select id="stockWarehouseFilter">
+              <option value="all">${t("allWarehouses")}</option>
+              ${warehouses.map((warehouse) => `<option value="${warehouse.id}" ${selectedOption(warehouseFilter, warehouse.id)}>${warehouse.code} - ${warehouse.title}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <div class="data-table kardex-table" role="table">
+          <div class="table-row table-head" role="row">
+            <span role="columnheader">${t("item")}</span>
+            <span role="columnheader">${t("warehouse")}</span>
+            <span role="columnheader">${t("entries")}</span>
+            <span role="columnheader">${t("issues")}</span>
+            <span role="columnheader">${t("balance")}</span>
+            <span role="columnheader">${t("lastMovement")}</span>
+            <span role="columnheader">${t("status")}</span>
+          </div>
+          ${stockRows.length ? stockRows.map(renderStockRow).join("") : renderStockEmptyRow(Boolean(movements.length))}
+        </div>
+      </section>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
+    navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
+  });
+  modulePanel.querySelector("#stockWarehouseFilter").addEventListener("change", (event) => {
+    localStorage.setItem("erclave-stock-warehouse", event.target.value);
+    render();
+  });
+  const stockSearch = modulePanel.querySelector("#stockSearch");
+  stockSearch.addEventListener("input", (event) => {
+    localStorage.setItem("erclave-stock-search", event.target.value);
+    render();
+    const nextSearch = modulePanel.querySelector("#stockSearch");
+    if (nextSearch) {
+      nextSearch.focus();
+      nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
+    }
+  });
+}
+
+function buildStockBalances(movements) {
+  const balances = new Map();
+  movements
+    .slice()
+    .sort((a, b) => getMovementTimestamp(a) - getMovementTimestamp(b))
+    .forEach((record) => {
+      const fields = record.fields || {};
+      const quantity = Number(fields.quantity || 0);
+      const unit = fields.unit || "";
+      const signedQuantity = getMovementSignedQuantity(fields.movementType, quantity);
+      const itemKey = fields.itemId || fields.item || record.title;
+      const warehouseKey = fields.warehouseId || fields.warehouseName || record.owner;
+      const balanceKey = `${itemKey}-${warehouseKey}-${unit}`;
+      const current = balances.get(balanceKey) || {
+        itemId: fields.itemId || "",
+        itemName: fields.item || record.title,
+        warehouseId: fields.warehouseId || "",
+        warehouseName: fields.warehouseName || record.owner || t("notDefined"),
+        unit,
+        entries: 0,
+        issues: 0,
+        balance: 0,
+        lastMovement: ""
+      };
+      current.entries += signedQuantity > 0 ? quantity : 0;
+      current.issues += signedQuantity < 0 ? quantity : 0;
+      current.balance += signedQuantity;
+      current.lastMovement = fields.movementDate || record.createdAt || current.lastMovement;
+      balances.set(balanceKey, current);
+    });
+  return [...balances.values()].sort((a, b) => a.itemName.localeCompare(b.itemName));
+}
+
+function filterStockBalances(rows, warehouseFilter, search) {
+  const normalizedSearch = search.trim().toLowerCase();
+  return rows.filter((row) => {
+    const matchesWarehouse = warehouseFilter === "all" || row.warehouseId === warehouseFilter;
+    const matchesSearch = !normalizedSearch || [
+      row.itemName,
+      row.warehouseName,
+      row.unit,
+      getStockStatus(row.balance)
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedSearch);
+    return matchesWarehouse && matchesSearch;
+  });
+}
+
+function renderStockRow(row) {
+  const status = getStockStatus(row.balance);
+  return `
+    <div class="table-row" role="row">
+      <span role="cell">${row.itemName}</span>
+      <span role="cell">${row.warehouseName}</span>
+      <span role="cell">${formatNumber(row.entries)} ${row.unit}</span>
+      <span role="cell">${formatNumber(row.issues)} ${row.unit}</span>
+      <span role="cell">${formatNumber(row.balance)} ${row.unit}</span>
+      <span role="cell">${formatKardexDate(row.lastMovement)}</span>
+      <span role="cell"><span class="chip ${row.balance > 0 ? "active" : "warning"}">${status}</span></span>
+    </div>
+  `;
+}
+
+function renderStockEmptyRow(hasMovements) {
+  return `
+    <div class="table-row" role="row">
+      <span role="cell">${t("noRecords")}</span>
+      <span role="cell">${hasMovements ? t("stockNoMatches") : t("stockEmptyTitle")}</span>
+      <span role="cell">-</span>
+      <span role="cell">-</span>
+      <span role="cell">-</span>
+      <span role="cell">-</span>
+      <span role="cell">${hasMovements ? t("stockNoMatchesDetail") : t("stockEmptyDetail")}</span>
+    </div>
+  `;
+}
+
+function getStockStatus(balance) {
+  if (Number(balance || 0) > 0) return t("availableStatus");
+  if (Number(balance || 0) < 0) return t("negativeStockStatus");
+  return t("zeroStockStatus");
+}
+
+function getAvailableStock(itemKey, warehouseKey, unit) {
+  const movements = mockDb.loadModuleRecords("almacenes", "movimientos").filter((record) => record.recordType === "inventoryMovement");
+  const row = buildStockBalances(movements).find((stock) => {
+    const matchesItem = stock.itemId === itemKey || stock.itemName === itemKey;
+    const matchesWarehouse = stock.warehouseId === warehouseKey || stock.warehouseName === warehouseKey;
+    return matchesItem && matchesWarehouse && stock.unit === unit;
+  });
+  return Number(row?.balance || 0);
 }
 
 function renderWarehouseComingSoonPanel(module, submodule) {
@@ -1222,6 +1455,7 @@ function renderSalesQuoteCard(record) {
       </div>
       <div class="catalog-card-actions">
         <span class="chip ${record.status === "Aprobado" ? "active" : record.status === "Vencida" ? "warning" : ""}">${translateStatus(record.status)}</span>
+        ${record.status === "Aprobado" ? `<button class="secondary-action small-action" type="button" data-action="create-sales-order" data-record-id="${record.id}">${t("createOrder")}</button>` : ""}
         <button class="secondary-action small-action" type="button" data-action="print-sales-quote" data-record-id="${record.id}">${t("quotePdf")}</button>
         <button class="secondary-action small-action" type="button" data-action="edit-sales-quote" data-record-id="${record.id}">${t("edit")}</button>
       </div>
@@ -1239,6 +1473,286 @@ function renderSalesQuoteEmptyState(hasSearch = false) {
       </div>
     </article>
   `;
+}
+
+function renderSalesOrdersPanel(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const search = localStorage.getItem("erclave-sales-order-search") || "";
+  const normalizedSearch = search.trim().toLowerCase();
+  const orders = mockDb.loadModuleRecords(module.id, submodule.id).filter((record) => record.recordType === "salesOrder");
+  const filteredOrders = normalizedSearch
+    ? orders.filter((record) =>
+        [
+          record.code,
+          record.title,
+          record.status,
+          record.owner,
+          record.fields?.quoteCode,
+          record.fields?.customerName,
+          getQuoteLines(record).map((line) => line.productServiceName).join(" "),
+          record.fields?.deliveryPromise,
+          record.fields?.fulfillmentMode
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch)
+      )
+    : orders;
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        <button class="primary-action" type="button" data-action="module-primary">
+          <span>＋</span>
+          <span>${t("newSalesOrder")}</span>
+        </button>
+      </div>
+
+      <section class="section-card catalog-workspace">
+        ${renderFlowGuide(getSalesFlowTitle(submodule), getSalesFlowSteps(submodule))}
+        <div class="catalog-toolbar">
+          <label class="search-field catalog-search">
+            <span>S</span>
+            <input id="salesOrderSearch" type="search" value="${search}" placeholder="${t("searchSalesOrders")}" />
+          </label>
+        </div>
+        <p class="helper-copy">${t("salesOrderHelper")}</p>
+        <div class="catalog-grid">
+          ${filteredOrders.length ? filteredOrders.map(renderSalesOrderCard).join("") : renderSalesOrderEmptyState(Boolean(search))}
+        </div>
+      </section>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
+    navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
+  });
+  const orderSearch = modulePanel.querySelector("#salesOrderSearch");
+  orderSearch.addEventListener("input", (event) => {
+    localStorage.setItem("erclave-sales-order-search", event.target.value);
+    render();
+    const nextSearch = modulePanel.querySelector("#salesOrderSearch");
+    if (nextSearch) {
+      nextSearch.focus();
+      nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
+    }
+  });
+  bindProductionPanelActions();
+}
+
+function renderSalesOrderCard(record) {
+  const adjustments = record.fields?.adjustments || [];
+  const lastAdjustment = adjustments[0];
+  return `
+    <article class="catalog-card">
+      <div class="catalog-card-main">
+        <span class="muted-label">${record.code} - ${record.fields?.quoteCode || t("notDefined")} - ${getQuoteLines(record).length} ${t("quoteLines")}</span>
+        <strong>${record.title}</strong>
+        <p>${getQuoteLines(record).map((line) => line.productServiceName).filter(Boolean).slice(0, 2).join(" / ") || t("notDefined")}</p>
+        <span class="muted-label">${t("customer")}: ${record.fields?.customerName || t("notDefined")}</span>
+        <span class="muted-label">${t("deliveryPromise")}: ${record.fields?.deliveryPromise || t("notDefined")} · ${t("fulfillmentMode")}: ${record.fields?.fulfillmentMode || t("notDefined")}</span>
+        <span class="muted-label">${t("quoteTotal")}: ${formatCurrency(Number(record.fields?.total || 0))} · ${t("estimatedCost")}: ${formatCurrency(Number(record.fields?.estimatedCost || 0))}</span>
+        <span class="muted-label">${t("estimatedMargin")}: ${formatNumber(Number(record.fields?.estimatedMargin || 0))}%</span>
+        <div class="product-history">
+          <div class="product-history-head">
+            <span class="muted-label">${t("orderAdjustments")}</span>
+            <strong>${adjustments.length}</strong>
+          </div>
+          <p>${lastAdjustment ? `${formatKardexDate(lastAdjustment.changedAt)} - ${lastAdjustment.reason}` : t("noOrderAdjustments")}</p>
+        </div>
+      </div>
+      <div class="catalog-card-actions">
+        <span class="chip ${record.status === "Aprobado" ? "active" : record.status === "Cancelado" ? "warning" : ""}">${translateStatus(record.status)}</span>
+        <button class="secondary-action small-action" type="button" data-action="edit-sales-order" data-record-id="${record.id}">${t("edit")}</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderSalesOrderEmptyState(hasSearch = false) {
+  return `
+    <article class="catalog-card compact-card">
+      <div>
+        <span class="muted-label">${t("noRecords")}</span>
+        <strong>${hasSearch ? t("salesOrderNoMatchesTitle") : t("salesOrderEmptyTitle")}</strong>
+        <p>${hasSearch ? t("salesOrderNoMatchesDetail") : t("salesOrderEmptyDetail")}</p>
+      </div>
+    </article>
+  `;
+}
+
+function renderSalesDeliveriesPanel(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const search = localStorage.getItem("erclave-sales-delivery-search") || "";
+  const statusFilter = localStorage.getItem("erclave-sales-delivery-status") || "all";
+  const normalizedSearch = search.trim().toLowerCase();
+  const orders = mockDb.loadModuleRecords(module.id, "pedidos").filter((record) => record.recordType === "salesOrder");
+  const deliveries = mockDb.loadModuleRecords(module.id, submodule.id).filter((record) => record.recordType === "salesDelivery");
+  const ordersById = new Map(orders.map((order) => [order.id, order]));
+  const filteredDeliveries = deliveries
+    .filter((delivery) => statusFilter === "all" || delivery.fields?.deliveryStatus === statusFilter)
+    .filter((delivery) => {
+      const order = ordersById.get(delivery.fields?.orderId);
+      return !normalizedSearch || [
+        delivery.code,
+        delivery.status,
+        delivery.title,
+        delivery.owner,
+        delivery.fields?.orderCode,
+        delivery.fields?.quoteCode,
+        delivery.fields?.customerName,
+        delivery.fields?.deliveryStatus,
+        delivery.fields?.recipient,
+        delivery.fields?.deliveryReference,
+        delivery.fields?.notes,
+        order?.status,
+        order?.fields?.fulfillmentMode
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch);
+    })
+    .sort((a, b) => new Date(b.fields?.deliveryDate || b.createdAt || 0) - new Date(a.fields?.deliveryDate || a.createdAt || 0));
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+
+    <section class="submodule-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${submodule.detail}</p>
+        </div>
+        <button class="primary-action disabled-action" type="button" disabled aria-disabled="true">
+          <span>☷</span>
+          <span>${t("deliveryManagement")}</span>
+        </button>
+      </div>
+
+      <section class="section-card catalog-workspace">
+        ${renderFlowGuide(getSalesFlowTitle(submodule), getSalesFlowSteps(submodule))}
+        <div class="catalog-toolbar kardex-toolbar">
+          <label class="search-field catalog-search">
+            <span>S</span>
+            <input id="salesDeliverySearch" type="search" value="${search}" placeholder="${t("searchDeliveries")}" />
+          </label>
+          <label class="preview-field compact-filter">
+            <span>${t("deliveryStatus")}</span>
+            <select id="salesDeliveryStatusFilter">
+              <option value="all">${t("allDeliveryStatuses")}</option>
+              ${getDeliveryStatusOptions().map((status) => `<option value="${status}" ${selectedOption(statusFilter, status)}>${translateStatus(status)}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <p class="helper-copy">${t("deliveryHelper")}</p>
+        <div class="catalog-grid">
+          ${filteredDeliveries.length ? filteredDeliveries.map((delivery) => renderSalesDeliveryCard(delivery, ordersById.get(delivery.fields?.orderId))).join("") : renderSalesDeliveryEmptyState(Boolean(search), Boolean(deliveries.length))}
+        </div>
+      </section>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
+    navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
+  });
+  const deliverySearch = modulePanel.querySelector("#salesDeliverySearch");
+  deliverySearch.addEventListener("input", (event) => {
+    localStorage.setItem("erclave-sales-delivery-search", event.target.value);
+    render();
+    const nextSearch = modulePanel.querySelector("#salesDeliverySearch");
+    if (nextSearch) {
+      nextSearch.focus();
+      nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
+    }
+  });
+  modulePanel.querySelector("#salesDeliveryStatusFilter").addEventListener("change", (event) => {
+    localStorage.setItem("erclave-sales-delivery-status", event.target.value);
+    render();
+  });
+  modulePanel.querySelectorAll("[data-action='view-delivery-quote']").forEach((element) => {
+    element.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const quoteId = element.dataset.quoteId;
+      if (!quoteId) {
+        showToast(t("quoteNotFound"));
+        return;
+      }
+      openSalesQuotePrintModal(quoteId);
+    });
+  });
+  bindProductionPanelActions();
+}
+
+function renderSalesDeliveryCard(delivery, order = null) {
+  const deliveryStatus = delivery.fields?.deliveryStatus || delivery.status;
+  const quoteId = order?.fields?.quoteId || findSalesQuoteByCode(delivery.fields?.quoteCode)?.id || "";
+  return `
+    <article class="catalog-card clickable-card" data-action="view-delivery-quote" data-quote-id="${quoteId}">
+      <div class="catalog-card-main">
+        <span class="muted-label">${delivery.code} - ${delivery.fields?.orderCode || t("notDefined")} - ${delivery.fields?.quoteCode || t("notDefined")}</span>
+        <strong>${delivery.title}</strong>
+        <p>${delivery.fields?.customerName || t("notDefined")}</p>
+        <span class="muted-label">${t("deliveryStatus")}: ${translateStatus(deliveryStatus)} · ${t("salesOrderStatus")}: ${translateStatus(order?.status || t("notDefined"))}</span>
+        <span class="muted-label">${t("deliveryDate")}: ${delivery.fields?.deliveryDate || t("notDefined")} · ${t("recipient")}: ${delivery.fields?.recipient || t("notDefined")}</span>
+        <span class="muted-label">${t("deliveryReference")}: ${delivery.fields?.deliveryReference || t("notDefined")} · ${t("nextDeliveryDate")}: ${delivery.fields?.nextDeliveryDate || t("notDefined")}</span>
+        ${delivery.fields?.notes ? `<p>${delivery.fields.notes}</p>` : ""}
+      </div>
+      <div class="catalog-card-actions">
+        <span class="chip ${getDeliveryTone(deliveryStatus)}">${translateStatus(deliveryStatus)}</span>
+        <button class="secondary-action small-action" type="button" data-action="view-delivery-quote" data-quote-id="${quoteId}">${t("viewQuote")}</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderSalesDeliveryEmptyState(hasSearch = false, hasDeliveries = false) {
+  return `
+    <article class="catalog-card compact-card">
+      <div>
+        <span class="muted-label">${t("noRecords")}</span>
+        <strong>${hasSearch || hasDeliveries ? t("deliveryNoMatchesTitle") : t("deliveryEmptyTitle")}</strong>
+        <p>${hasSearch || hasDeliveries ? t("deliveryNoMatchesDetail") : t("deliveryEmptyDetail")}</p>
+      </div>
+    </article>
+  `;
+}
+
+function getDeliveriesForOrder(orderId, deliveries = mockDb.loadModuleRecords("ventas", "entregas").filter((record) => record.recordType === "salesDelivery")) {
+  return deliveries
+    .filter((delivery) => delivery.fields?.orderId === orderId)
+    .sort((a, b) => new Date(b.fields?.deliveryDate || b.createdAt || 0) - new Date(a.fields?.deliveryDate || a.createdAt || 0));
+}
+
+function findSalesQuoteByCode(code) {
+  const normalizedCode = String(code || "").trim().toLowerCase();
+  if (!normalizedCode) return null;
+  return mockDb.loadModuleRecords("ventas", "cotizaciones")
+    .find((record) => record.recordType === "quote" && record.code.toLowerCase() === normalizedCode);
+}
+
+function getDeliveryTone(status) {
+  if (status === "Entregado") return "active";
+  if (status === "Entrega parcial" || status === "En ruta" || status === "Reprogramado") return "warning";
+  if (status === "No entregado" || status === "Cancelado") return "danger";
+  return "";
 }
 
 function renderMovementRow(record) {
@@ -1262,6 +1776,29 @@ function renderMovementRecord(record) {
       <span class="chip ${getMovementTone(record.fields?.movementType)}">${translateStatus(record.status)}</span>
     </article>
   `;
+}
+
+function getOrderRecipe(order) {
+  return order.recipeSnapshot || mockDb.findRecipe(order.recipeId) || defaultRecipes[0];
+}
+
+function createRecipeSnapshot(recipe) {
+  return {
+    id: recipe.id,
+    productServiceId: recipe.productServiceId || "",
+    product: recipe.product,
+    version: recipe.version,
+    quantityBase: recipe.quantityBase,
+    unit: recipe.unit,
+    status: recipe.status,
+    approvalStatus: getRecipeApprovalStatus(recipe),
+    approvedBy: recipe.approvedBy || "",
+    approvedAt: recipe.approvedAt || "",
+    changeReason: recipe.changeReason || "",
+    center: recipe.center,
+    resources: (recipe.resources || []).map((resource) => ({ ...resource })),
+    steps: [...(recipe.steps || [])]
+  };
 }
 
 function getGenericSubmodule(module, id) {
@@ -1374,6 +1911,10 @@ function isWarehouseMovementSubmodule(module, submodule) {
   return module?.id === "almacenes" && submodule?.id === "movimientos";
 }
 
+function isWarehouseStockSubmodule(module, submodule) {
+  return module?.id === "almacenes" && submodule?.id === "existencias";
+}
+
 function isWarehouseReservationsSubmodule(module, submodule) {
   return module?.id === "almacenes" && submodule?.id === "reservas";
 }
@@ -1388,6 +1929,14 @@ function isSalesCustomersSubmodule(module, submodule) {
 
 function isSalesQuotesSubmodule(module, submodule) {
   return module?.id === "ventas" && submodule?.id === "cotizaciones";
+}
+
+function isSalesOrdersSubmodule(module, submodule) {
+  return module?.id === "ventas" && submodule?.id === "pedidos";
+}
+
+function isSalesDeliveriesSubmodule(module, submodule) {
+  return module?.id === "ventas" && submodule?.id === "entregas";
 }
 
 function translateWarehouseType(type) {
@@ -1492,6 +2041,12 @@ function getWarehouseFlowSteps(submodule) {
         ["Validacion", "Revisar existencia o recepcion."],
         ["Kardex", "Registrar movimiento auditable."]
       ],
+      existencias: [
+        ["Movimientos", "Tomar entradas, salidas y ajustes registrados."],
+        ["Saldo", "Calcular disponibilidad por articulo, almacen y unidad."],
+        ["Riesgo", "Detectar saldos cero o negativos."],
+        ["Accion", "Corregir solo con nuevos movimientos o ajustes."]
+      ],
       reservas: [
         ["Solicitud", "Relacionar orden, pedido o transferencia."],
         ["Disponibilidad", "Confirmar cantidad disponible."],
@@ -1523,6 +2078,12 @@ function getWarehouseFlowSteps(submodule) {
         ["Item", "Enter quantity, warehouse, and location."],
         ["Validation", "Check stock or receipt."],
         ["Kardex", "Register an auditable movement."]
+      ],
+      existencias: [
+        ["Movements", "Use registered receipts, issues, and adjustments."],
+        ["Balance", "Calculate availability by item, warehouse, and unit."],
+        ["Risk", "Detect zero or negative balances."],
+        ["Action", "Correct only through new movements or adjustments."]
       ],
       reservas: [
         ["Request", "Link order, sales order, or transfer."],
@@ -2190,6 +2751,27 @@ function bindProductionPanelActions() {
   modulePanel.querySelectorAll("[data-action='print-sales-quote']").forEach((button) => {
     button.addEventListener("click", () => openSalesQuotePrintModal(button.dataset.recordId));
   });
+  modulePanel.querySelectorAll("[data-action='create-sales-order']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const module = modules.find((item) => item.id === "ventas");
+      const submodule = getGenericSubmodule(module, "pedidos");
+      openSalesOrderModal(module, submodule, button.dataset.recordId);
+    });
+  });
+  modulePanel.querySelectorAll("[data-action='edit-sales-order']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const module = modules.find((item) => item.id === "ventas");
+      const submodule = getGenericSubmodule(module, "pedidos");
+      openSalesOrderEditModal(module, submodule, button.dataset.recordId);
+    });
+  });
+  modulePanel.querySelectorAll("[data-action='register-sales-delivery']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const module = modules.find((item) => item.id === "ventas");
+      const submodule = getGenericSubmodule(module, "entregas");
+      openSalesDeliveryModal(module, submodule, button.dataset.recordId);
+    });
+  });
   const validationQuantity = modulePanel.querySelector("#validationQuantity");
   if (validationQuantity) {
     validationQuantity.addEventListener("input", (event) => {
@@ -2368,7 +2950,7 @@ function renderOrderList(orders) {
       <div class="recipe-list">
         ${orders
           .map((order) => {
-            const recipe = mockDb.findRecipe(order.recipeId) || defaultRecipes[0];
+            const recipe = getOrderRecipe(order);
             const cost = getOrderCostSnapshot(order, recipe);
             const progress = getOrderProgress(order);
             return `
@@ -2494,7 +3076,7 @@ function buildNotifications() {
   orders.forEach((order) => {
     const dueDate = order.dueDate ? startOfDay(new Date(`${order.dueDate}T00:00:00`)) : null;
     const isClosed = ["Terminada", "Cancelada"].includes(order.status);
-    const recipe = mockDb.findRecipe(order.recipeId) || defaultRecipes[0];
+    const recipe = getOrderRecipe(order);
     const validation = calculateRecipe(recipe, order.quantity);
 
     if (dueDate && !isClosed) {
@@ -2631,7 +3213,16 @@ function translateStatus(status) {
     Registrado: { es: "Registrado", en: "Registered" },
     Prospecto: { es: "Prospecto", en: "Prospect" },
     Cotizada: { es: "Cotizada", en: "Quoted" },
-    Vencida: { es: "Vencida", en: "Expired" }
+    Vencida: { es: "Vencida", en: "Expired" },
+    "En preparacion": { es: "En preparacion", en: "In preparation" },
+    Cancelado: { es: "Cancelado", en: "Canceled" },
+    "Pendiente de entrega": { es: "Pendiente de entrega", en: "Pending delivery" },
+    "En ruta": { es: "En ruta", en: "Out for delivery" },
+    "Entrega parcial": { es: "Entrega parcial", en: "Partial delivery" },
+    "Parcialmente entregado": { es: "Parcialmente entregado", en: "Partially delivered" },
+    Entregado: { es: "Entregado", en: "Delivered" },
+    "No entregado": { es: "No entregado", en: "Not delivered" },
+    Reprogramado: { es: "Reprogramado", en: "Rescheduled" }
   };
   return statusMap[status]?.[state.lang] || status;
 }
@@ -2684,6 +3275,10 @@ function openGenericRecordModal(moduleId = state.active, submoduleId = state.act
     openInventoryMovementModal(module, submodule);
     return;
   }
+  if (isWarehouseStockSubmodule(module, submodule)) {
+    showToast(t("stockReadOnlyToast"));
+    return;
+  }
   if (isWarehouseReservationsSubmodule(module, submodule)) {
     showToast(t("reservationsDisabledToast"));
     return;
@@ -2698,6 +3293,14 @@ function openGenericRecordModal(moduleId = state.active, submoduleId = state.act
   }
   if (isSalesQuotesSubmodule(module, submodule)) {
     openSalesQuoteModal(module, submodule);
+    return;
+  }
+  if (isSalesOrdersSubmodule(module, submodule)) {
+    openSalesOrderModal(module, submodule);
+    return;
+  }
+  if (isSalesDeliveriesSubmodule(module, submodule)) {
+    showToast(t("deliveryReadOnlyToast"));
     return;
   }
   const label = state.lang === "en" ? module.titleEn : module.title;
@@ -3309,6 +3912,16 @@ function saveInventoryMovementForm(event, module, submodule) {
   const code = `MOV-${String(Date.now()).slice(-5)}`;
   const warehouseName = warehouse ? `${warehouse.code} - ${warehouse.title}` : data.warehouseName.trim();
   const itemName = item ? `${item.code} - ${item.title}` : data.item.trim();
+  const movementQuantity = Number(data.quantity || 0);
+  if (["exit", "negativeAdjustment"].includes(data.movementType)) {
+    const itemKey = data.itemId || itemName;
+    const warehouseKey = data.warehouseId || warehouseName;
+    const available = getAvailableStock(itemKey, warehouseKey, data.unit.trim());
+    if (available < movementQuantity) {
+      renderFormErrors([t("insufficientStock", { available: formatNumber(available), unit: data.unit.trim() })]);
+      return;
+    }
+  }
   const record = {
     id: `${module.id}-movement-${Date.now()}`,
     code,
@@ -3958,6 +4571,511 @@ function buildQuoteLinesFromForm(form, errors) {
       total
     };
   });
+}
+
+function openSalesOrderModal(module, submodule, quoteId = null) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const approvedQuotes = mockDb.loadModuleRecords(module.id, "cotizaciones")
+    .filter((record) => record.recordType === "quote" && record.status === "Aprobado");
+  const selectedQuote = quoteId
+    ? approvedQuotes.find((quote) => quote.id === quoteId)
+    : approvedQuotes[0];
+
+  if (!approvedQuotes.length || !selectedQuote) {
+    showToast(t("salesOrderRequiresApprovedQuote"));
+    return;
+  }
+
+  modalContent.innerHTML = `
+    <form class="recipe-form" id="salesOrderForm">
+      <input type="hidden" name="quoteId" value="${selectedQuote.id}" />
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">${label}</p>
+          <h2 id="modalTitle">${t("newSalesOrder")}</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
+      </div>
+
+      <div class="form-grid">
+        <label class="preview-field">
+          <span>${t("salesOrderCode")}</span>
+          <input name="code" type="text" value="" placeholder="PED-001" required />
+        </label>
+        <label class="preview-field wide-field">
+          <span>${t("quoteDocument")}</span>
+          <select name="selectedQuoteId" required>
+            ${approvedQuotes.map((quote) => `<option value="${quote.id}" ${selectedOption(selectedQuote.id, quote.id)}>${quote.code} - ${quote.fields?.customerName || quote.title} - ${formatCurrency(Number(quote.fields?.total || 0))}</option>`).join("")}
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("status")}</span>
+          <select name="status">
+            <option value="Aprobado">${t("approvedStatus")}</option>
+            <option value="En preparacion">${t("preparingStatus")}</option>
+            <option value="Cancelado">${t("canceledStatus")}</option>
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("deliveryPromise")}</span>
+          <input name="deliveryPromise" type="date" value="${selectedQuote.fields?.deliveryPromise || ""}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("fulfillmentMode")}</span>
+          <select name="fulfillmentMode">
+            <option value="${t("pendingInventoryReview")}">${t("pendingInventoryReview")}</option>
+            <option value="${t("stockFulfillment")}">${t("stockFulfillment")}</option>
+            <option value="${t("productionFulfillment")}">${t("productionFulfillment")}</option>
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("owner")}</span>
+          <input name="owner" type="text" value="${selectedQuote.owner || ""}" />
+        </label>
+        <label class="preview-field wide-field">
+          <span>${t("notes")}</span>
+          <textarea name="notes" rows="3" placeholder="${t("salesOrderNotesPlaceholder")}"></textarea>
+        </label>
+      </div>
+
+      <div class="form-errors" id="formErrors" hidden></div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-action="close-sales-order">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${t("saveSalesOrder")}</button>
+      </div>
+    </form>
+  `;
+
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-sales-order']").addEventListener("click", closeModal);
+  modalContent.querySelector("[name='selectedQuoteId']").addEventListener("change", (event) => {
+    const quote = approvedQuotes.find((item) => item.id === event.target.value);
+    if (!quote) return;
+    modalContent.querySelector("[name='quoteId']").value = quote.id;
+    modalContent.querySelector("[name='deliveryPromise']").value = quote.fields?.deliveryPromise || "";
+    modalContent.querySelector("[name='owner']").value = quote.owner || "";
+  });
+  modalContent.querySelector("#salesOrderForm").addEventListener("submit", (event) => saveSalesOrderForm(event, module, submodule));
+}
+
+function saveSalesOrderForm(event, module, submodule) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const errors = [];
+  const quote = mockDb.findModuleRecord(module.id, data.quoteId);
+  const existingOrder = mockDb.loadModuleRecords(module.id, submodule.id)
+    .find((record) => record.recordType === "salesOrder" && record.fields?.quoteId === data.quoteId);
+
+  if (!data.code?.trim()) errors.push(t("salesOrderCodeRequired"));
+  if (!quote || quote.status !== "Aprobado") errors.push(t("salesOrderRequiresApprovedQuote"));
+  if (existingOrder) errors.push(t("salesOrderQuoteAlreadyUsed"));
+
+  if (errors.length) {
+    renderFormErrors(errors);
+    return;
+  }
+
+  const lines = getQuoteLines(quote);
+  const total = Number(quote.fields?.total || 0);
+  const estimatedCost = calculateSalesEstimatedCost(lines);
+  const estimatedMargin = total ? ((total - estimatedCost) / total) * 100 : 0;
+  const code = data.code.trim().toUpperCase();
+  const record = {
+    id: `${module.id}-order-${Date.now()}`,
+    code,
+    moduleId: module.id,
+    submoduleId: submodule.id,
+    recordType: "salesOrder",
+    title: `${quote.fields?.customerName || quote.owner} - ${lines.length} ${t("quoteLines")}`,
+    detail: `${quote.code} - ${formatCurrency(total)} - ${formatNumber(estimatedMargin)}%`,
+    status: data.status || "Aprobado",
+    owner: data.owner?.trim() || quote.owner,
+    fields: {
+      quoteId: quote.id,
+      quoteCode: quote.code,
+      customerId: quote.fields?.customerId || "",
+      customerName: quote.fields?.customerName || quote.owner,
+      lines,
+      subtotal: Number(quote.fields?.subtotal || total),
+      total,
+      estimatedCost,
+      estimatedMargin,
+      deliveryPromise: data.deliveryPromise || quote.fields?.deliveryPromise || "",
+      fulfillmentMode: data.fulfillmentMode || t("pendingInventoryReview"),
+      notes: data.notes?.trim() || ""
+    },
+    createdAt: new Date().toISOString()
+  };
+
+  mockDb.addModuleRecord(module.id, record);
+  closeModal();
+  navigateTo({ active: "ventas", activeSubmodule: "pedidos", laborArea: "" });
+  showToast(t("salesOrderSaved", { code }));
+}
+
+function openSalesOrderEditModal(module, submodule, orderId) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const order = mockDb.findModuleRecord(module.id, orderId);
+  if (!order || order.recordType !== "salesOrder") return;
+  const fields = order.fields || {};
+
+  modalContent.innerHTML = `
+    <form class="recipe-form" id="salesOrderEditForm">
+      <input type="hidden" name="orderId" value="${order.id}" />
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">${label}</p>
+          <h2 id="modalTitle">${t("editSalesOrder")}</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
+      </div>
+
+      <div class="form-grid">
+        <label class="preview-field">
+          <span>${t("salesOrderCode")}</span>
+          <input name="code" type="text" value="${order.code || ""}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("status")}</span>
+          <select name="status">
+            ${getSalesOrderStatusOptions().map((status) => `<option value="${status}" ${selectedOption(order.status, status)}>${translateStatus(status)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("deliveryPromise")}</span>
+          <input name="deliveryPromise" type="date" value="${fields.deliveryPromise || ""}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("fulfillmentMode")}</span>
+          <select name="fulfillmentMode">
+            ${getFulfillmentModeOptions().map((mode) => `<option value="${mode}" ${selectedOption(fields.fulfillmentMode, mode)}>${mode}</option>`).join("")}
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("owner")}</span>
+          <input name="owner" type="text" value="${order.owner || ""}" />
+        </label>
+        <label class="preview-field wide-field">
+          <span>${t("notes")}</span>
+          <textarea name="notes" rows="3" placeholder="${t("salesOrderNotesPlaceholder")}">${fields.notes || ""}</textarea>
+        </label>
+        <label class="preview-field wide-field">
+          <span>${t("adjustmentReason")}</span>
+          <textarea name="adjustmentReason" rows="3" placeholder="${t("adjustmentReasonPlaceholder")}" required></textarea>
+        </label>
+      </div>
+
+      <section class="section-card wide-field">
+        <div class="section-title">
+          <span class="section-icon">☷</span>
+          <strong>${t("adjustmentHistory")}</strong>
+        </div>
+        <div class="records module-records">
+          ${renderSalesOrderAdjustmentHistory(fields.adjustments || [])}
+        </div>
+      </section>
+
+      <div class="form-errors" id="formErrors" hidden></div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-action="close-sales-order-edit">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${t("updateSalesOrder")}</button>
+      </div>
+    </form>
+  `;
+
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-sales-order-edit']").addEventListener("click", closeModal);
+  modalContent.querySelector("#salesOrderEditForm").addEventListener("submit", (event) => saveSalesOrderEditForm(event, module, submodule));
+}
+
+function getSalesOrderStatusOptions() {
+  return [
+    "Aprobado",
+    "En preparacion",
+    "En ruta",
+    "Parcialmente entregado",
+    "Entregado",
+    "No entregado",
+    "Reprogramado",
+    "Cancelado"
+  ];
+}
+
+function getFulfillmentModeOptions() {
+  return [
+    t("pendingInventoryReview"),
+    t("stockFulfillment"),
+    t("productionFulfillment")
+  ];
+}
+
+function renderSalesOrderAdjustmentHistory(adjustments = []) {
+  if (!adjustments.length) {
+    return `
+      <article class="record-row">
+        <div class="record-main">
+          <strong>${t("noOrderAdjustments")}</strong>
+          <span>${t("adjustmentHistoryEmpty")}</span>
+        </div>
+      </article>
+    `;
+  }
+  return adjustments
+    .map((adjustment) => `
+      <article class="record-row">
+        <div class="record-main">
+          <strong>${formatKardexDate(adjustment.changedAt)} - ${adjustment.reason}</strong>
+          <span>${adjustment.changes.length ? adjustment.changes.map((change) => `${change.label}: ${change.from || t("notDefined")} -> ${change.to || t("notDefined")}`).join(" / ") : t("adjustmentNoteOnly")}</span>
+        </div>
+        <span class="chip">${adjustment.changedBy}</span>
+      </article>
+    `)
+    .join("");
+}
+
+function saveSalesOrderEditForm(event, module, submodule) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const errors = [];
+  const order = mockDb.findModuleRecord(module.id, data.orderId);
+  if (!order || order.recordType !== "salesOrder") errors.push(t("salesOrderRequired"));
+  if (!data.code?.trim()) errors.push(t("salesOrderCodeRequired"));
+  if (!data.adjustmentReason?.trim()) errors.push(t("adjustmentReasonRequired"));
+
+  if (errors.length) {
+    renderFormErrors(errors);
+    return;
+  }
+
+  const nextOrder = buildEditedSalesOrder(order, data);
+  mockDb.updateModuleRecord(module.id, nextOrder);
+  closeModal();
+  render();
+  showToast(t("salesOrderUpdated", { code: nextOrder.code }));
+}
+
+function buildEditedSalesOrder(order, data) {
+  const nextFields = {
+    ...order.fields,
+    deliveryPromise: data.deliveryPromise || "",
+    fulfillmentMode: data.fulfillmentMode || "",
+    notes: data.notes?.trim() || ""
+  };
+  const changes = collectSalesOrderChanges(order, data);
+  const adjustment = {
+    id: `ADJ-${Date.now().toString().slice(-5)}`,
+    changedAt: new Date().toISOString(),
+    changedBy: "Usuario actual",
+    reason: data.adjustmentReason.trim(),
+    changes
+  };
+  const adjustments = [adjustment, ...(order.fields?.adjustments || [])];
+
+  return {
+    ...order,
+    code: data.code.trim().toUpperCase(),
+    status: data.status || order.status,
+    owner: data.owner?.trim() || order.owner,
+    detail: `${order.fields?.quoteCode || order.code} - ${formatCurrency(Number(order.fields?.total || 0))} - ${formatNumber(Number(order.fields?.estimatedMargin || 0))}%`,
+    fields: {
+      ...nextFields,
+      adjustments
+    },
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function collectSalesOrderChanges(order, data) {
+  const checks = [
+    { key: "code", label: t("salesOrderCode"), from: order.code || "", to: data.code.trim().toUpperCase() },
+    { key: "status", label: t("status"), from: order.status || "", to: data.status || "" },
+    { key: "deliveryPromise", label: t("deliveryPromise"), from: order.fields?.deliveryPromise || "", to: data.deliveryPromise || "" },
+    { key: "fulfillmentMode", label: t("fulfillmentMode"), from: order.fields?.fulfillmentMode || "", to: data.fulfillmentMode || "" },
+    { key: "owner", label: t("owner"), from: order.owner || "", to: data.owner?.trim() || "" },
+    { key: "notes", label: t("notes"), from: order.fields?.notes || "", to: data.notes?.trim() || "" }
+  ];
+  return checks
+    .filter((item) => String(item.from || "") !== String(item.to || ""))
+    .map(({ label, from, to }) => ({ label, from, to }));
+}
+
+function calculateSalesEstimatedCost(lines = []) {
+  return lines.reduce((sum, line) => {
+    const product = mockDb.findProductService(line.productServiceId);
+    const standardCost = Number(product?.standardCost || 0);
+    return sum + (standardCost * Number(line.quantity || 0));
+  }, 0);
+}
+
+function openSalesDeliveryModal(module, submodule, orderId = null) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const orders = mockDb.loadModuleRecords(module.id, "pedidos").filter((record) => record.recordType === "salesOrder");
+  const selectedOrder = orderId
+    ? orders.find((order) => order.id === orderId)
+    : orders[0];
+
+  if (!orders.length || !selectedOrder) {
+    showToast(t("deliveryRequiresSalesOrder"));
+    return;
+  }
+
+  modalContent.innerHTML = `
+    <form class="recipe-form" id="salesDeliveryForm">
+      <input type="hidden" name="orderId" value="${selectedOrder.id}" />
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">${label}</p>
+          <h2 id="modalTitle">${t("newDelivery")}</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
+      </div>
+
+      <div class="form-grid">
+        <label class="preview-field wide-field">
+          <span>${t("salesOrder")}</span>
+          <select name="selectedOrderId" required>
+            ${orders.map((order) => `<option value="${order.id}" ${selectedOption(selectedOrder.id, order.id)}>${order.code} - ${order.fields?.customerName || order.owner} - ${translateStatus(order.status)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("deliveryStatus")}</span>
+          <select name="deliveryStatus">
+            ${getDeliveryStatusOptions().map((status) => `<option value="${status}">${translateStatus(status)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="preview-field">
+          <span>${t("deliveryDate")}</span>
+          <input name="deliveryDate" type="date" value="${new Date().toISOString().slice(0, 10)}" required />
+        </label>
+        <label class="preview-field">
+          <span>${t("recipient")}</span>
+          <input name="recipient" type="text" value="${selectedOrder.fields?.customerName || selectedOrder.owner || ""}" placeholder="${t("recipientPlaceholder")}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("deliveryReference")}</span>
+          <input name="deliveryReference" type="text" placeholder="REM-001 / guia / evidencia" />
+        </label>
+        <label class="preview-field">
+          <span>${t("nextDeliveryDate")}</span>
+          <input name="nextDeliveryDate" type="date" />
+        </label>
+        <label class="preview-field wide-field">
+          <span>${t("deliveryNotes")}</span>
+          <textarea name="notes" rows="3" placeholder="${t("deliveryNotesPlaceholder")}"></textarea>
+        </label>
+      </div>
+
+      <div class="form-errors" id="formErrors" hidden></div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-action="close-sales-delivery">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${t("saveDelivery")}</button>
+      </div>
+    </form>
+  `;
+
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-sales-delivery']").addEventListener("click", closeModal);
+  modalContent.querySelector("[name='selectedOrderId']").addEventListener("change", (event) => {
+    const order = orders.find((item) => item.id === event.target.value);
+    if (!order) return;
+    modalContent.querySelector("[name='orderId']").value = order.id;
+    modalContent.querySelector("[name='recipient']").value = order.fields?.customerName || order.owner || "";
+  });
+  modalContent.querySelector("#salesDeliveryForm").addEventListener("submit", (event) => saveSalesDeliveryForm(event, module, submodule));
+}
+
+function getDeliveryStatusOptions() {
+  return [
+    "Pendiente de entrega",
+    "En ruta",
+    "Entrega parcial",
+    "Entregado",
+    "No entregado",
+    "Reprogramado",
+    "Cancelado"
+  ];
+}
+
+function saveSalesDeliveryForm(event, module, submodule) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const errors = [];
+  const order = mockDb.findModuleRecord(module.id, data.orderId);
+
+  if (!order || order.recordType !== "salesOrder") errors.push(t("deliveryRequiresSalesOrder"));
+  if (!data.deliveryDate) errors.push(t("deliveryDateRequired"));
+  if (!getDeliveryStatusOptions().includes(data.deliveryStatus)) errors.push(t("deliveryStatusRequired"));
+  if (data.deliveryStatus === "Entrega parcial" && !data.notes?.trim()) errors.push(t("partialDeliveryNotesRequired"));
+  if (data.deliveryStatus === "No entregado" && !data.notes?.trim()) errors.push(t("failedDeliveryNotesRequired"));
+  if (data.deliveryStatus === "Reprogramado" && !data.nextDeliveryDate) errors.push(t("nextDeliveryDateRequired"));
+
+  if (errors.length) {
+    renderFormErrors(errors);
+    return;
+  }
+
+  const code = `ENT-${String(Date.now()).slice(-5)}`;
+  const deliveryStatus = data.deliveryStatus || "Pendiente de entrega";
+  const deliveryRecord = {
+    id: `${module.id}-delivery-${Date.now()}`,
+    code,
+    moduleId: module.id,
+    submoduleId: submodule.id,
+    recordType: "salesDelivery",
+    title: `${order.code} - ${order.fields?.customerName || order.owner}`,
+    detail: `${translateStatus(deliveryStatus)} - ${data.deliveryDate}`,
+    status: deliveryStatus,
+    owner: data.recipient?.trim() || order.owner,
+    fields: {
+      orderId: order.id,
+      orderCode: order.code,
+      quoteCode: order.fields?.quoteCode || "",
+      customerName: order.fields?.customerName || order.owner,
+      deliveryStatus,
+      deliveryDate: data.deliveryDate,
+      nextDeliveryDate: data.nextDeliveryDate || "",
+      recipient: data.recipient?.trim() || "",
+      deliveryReference: data.deliveryReference?.trim() || "",
+      notes: data.notes?.trim() || ""
+    },
+    createdAt: new Date().toISOString()
+  };
+
+  mockDb.addModuleRecord(module.id, deliveryRecord);
+  mockDb.updateModuleRecord(module.id, {
+    ...order,
+    status: getSalesOrderStatusFromDelivery(deliveryStatus, order.status),
+    fields: {
+      ...order.fields,
+      deliveryStatus,
+      lastDeliveryId: deliveryRecord.id,
+      lastDeliveryDate: data.deliveryDate,
+      nextDeliveryDate: data.nextDeliveryDate || ""
+    },
+    updatedAt: new Date().toISOString()
+  });
+  closeModal();
+  navigateTo({ active: "ventas", activeSubmodule: "entregas", laborArea: "" });
+  showToast(t("deliverySaved", { code }));
+}
+
+function getSalesOrderStatusFromDelivery(deliveryStatus, currentStatus) {
+  const statusMap = {
+    "Pendiente de entrega": "Aprobado",
+    "En ruta": "En ruta",
+    "Entrega parcial": "Parcialmente entregado",
+    Entregado: "Entregado",
+    "No entregado": "No entregado",
+    Reprogramado: "Reprogramado",
+    Cancelado: "Cancelado"
+  };
+  return statusMap[deliveryStatus] || currentStatus;
 }
 
 function openProductServiceModal(productServiceId = null) {
@@ -4644,6 +5762,11 @@ function approveRecipe(recipeId) {
 function deleteRecipe(recipeId) {
   const recipe = mockDb.findRecipe(recipeId);
   if (!recipe) return;
+  const hasOrders = mockDb.loadOrders().some((order) => order.recipeId === recipeId);
+  if (hasOrders) {
+    showToast(`Receta ${recipe.id} tiene ordenes relacionadas; no se puede eliminar.`);
+    return;
+  }
   const confirmed = window.confirm(`Eliminar la receta ${recipe.id} · ${recipe.product}?`);
   if (!confirmed) return;
   const recipes = mockDb.deleteRecipe(recipeId);
@@ -4775,6 +5898,8 @@ function buildOrderFromForm(form) {
   return {
     id: `OP-${Date.now().toString().slice(-5)}`,
     recipeId: recipe.id,
+    recipeVersion: recipe.version,
+    recipeSnapshot: createRecipeSnapshot(recipe),
     recipeName: recipe.product,
     quantity,
     unit: recipe.unit,
@@ -4793,7 +5918,7 @@ function buildOrderFromForm(form) {
 
 function validateOrder(order) {
   const errors = [];
-  const recipe = mockDb.findRecipe(order.recipeId) || defaultRecipes[0];
+  const recipe = getOrderRecipe(order);
   const release = getReleaseReview(recipe, order.quantity || 1);
   if (!order.recipeId) errors.push("Selecciona una receta.");
   if (!order.quantity) errors.push("Captura la cantidad.");
@@ -4810,7 +5935,7 @@ function previewOrderForm() {
   const errors = validateOrder(order);
   renderFormErrors(errors);
   if (errors.length) return;
-  const recipe = mockDb.findRecipe(order.recipeId) || defaultRecipes[0];
+  const recipe = getOrderRecipe(order);
   const release = getReleaseReview(recipe, order.quantity);
   const validation = release.validation;
   modalContent.querySelector("#orderPreview").innerHTML = `
@@ -4900,7 +6025,7 @@ function advanceOrderStage(orderId, stageIndex) {
 function openOrderPrintModal(orderId) {
   const order = mockDb.findOrder(orderId);
   if (!order) return;
-  const recipe = mockDb.findRecipe(order.recipeId) || defaultRecipes[0];
+  const recipe = getOrderRecipe(order);
   const validation = calculateRecipe(recipe, order.quantity);
   const cost = getOrderCostSnapshot(order, recipe);
   modalContent.innerHTML = `

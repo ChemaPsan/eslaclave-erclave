@@ -27,6 +27,7 @@ La maqueta actual contempla:
 - catalogo de areas, puestos/roles y cantidad de recursos disponibles;
 - catalogo de maquinaria con capacidad, costo y estatus;
 - ordenes de produccion con estatus seleccionable desde catalogo;
+- ordenes de produccion con snapshot de receta/version al momento de liberacion;
 - costo planeado, costo real y variacion;
 - seguimiento por etapas operativas genericas;
 - guias visuales de flujo por apartado, colapsables y accesibles desde un riel lateral;
@@ -177,6 +178,7 @@ Funciones actuales:
 
 - generar orden desde receta seleccionada;
 - validar orden antes de crearla;
+- conservar snapshot de receta, version, recursos y etapas usadas al momento de generarla;
 - asignar responsable general;
 - asignar responsables por etapa operativa;
 - elegir prioridad;
@@ -444,11 +446,9 @@ El costo debe considerar:
 - Definir permisos por rol.
 - Definir aprobaciones formales por usuario.
 - Definir versionamiento real de recetas.
-- Congelar receta/version en orden generada.
 - Definir consumo real de recursos.
 - Definir mermas, rechazos y retrabajos.
 - Definir cierre parcial de orden.
 - Definir integracion con almacenes reales.
 - Definir reportes gerenciales.
 - Definir auditoria y bitacora de cambios.
-

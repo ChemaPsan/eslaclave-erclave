@@ -6,13 +6,22 @@ export const modules = [
     title: "Produccion",
     titleEn: "Production",
     eyebrow: "Modulo operativo",
+    eyebrowEn: "Operating module",
     summary: "Recetas, ordenes, recursos, etapas y validacion automatica contra almacenes.",
+    summaryEn: "Recipes, orders, resources, stages, and automatic validation against warehouses.",
     primary: "Generar orden",
+    primaryEn: "Generate order",
     status: "18 ordenes activas",
+    statusEn: "18 active orders",
     kpis: [
       ["Ordenes activas", "18", "positive"],
       ["Faltantes", "3", "warning"],
       ["Merma real", "2.8%", "warning"]
+    ],
+    kpisEn: [
+      ["Active orders", "18", "positive"],
+      ["Shortages", "3", "warning"],
+      ["Actual scrap", "2.8%", "warning"]
     ],
     submodules: [
       ["Productos y servicios", "Catalogo base para fabricar o ejecutar servicios repetibles.", "productos-servicios"],
@@ -31,8 +40,20 @@ export const modules = [
       "Ejecutar etapas",
       "Cerrar produccion y generar producto terminado"
     ],
+    workflowEn: [
+      "Select the active recipe",
+      "Calculate resources by quantity",
+      "Validate inventory and tools",
+      "Reserve inputs",
+      "Run production stages",
+      "Close production and generate finished goods"
+    ],
     table: {
       columns: ["Orden", "Producto", "Estado", "Riesgo"],
+      rows: []
+    },
+    tableEn: {
+      columns: ["Order", "Product", "Status", "Risk"],
       rows: []
     },
     validations: [
@@ -41,13 +62,26 @@ export const modules = [
       ["Costos", "Calcula costo estimado y real por orden."],
       ["Contabilidad", "Prepara mapeos para consumo, merma y producto terminado."]
     ],
+    validationsEn: [
+      ["Warehouses", "Checks stock, reservations, and shortages before scheduling."],
+      ["Purchasing", "Receives automatic requisitions when inputs are missing."],
+      ["Costs", "Calculates estimated and actual cost per order."],
+      ["Accounting", "Prepares mappings for consumption, scrap, and finished goods."]
+    ],
     form: [
       ["Producto", "Playera basica morada"],
       ["Cantidad", "100 piezas"],
       ["Almacen origen", "Materia prima · Planta 1"],
       ["Centro de costos", "Produccion / Costura"]
     ],
-    records: []
+    formEn: [
+      ["Product", "Basic purple shirt"],
+      ["Quantity", "100 pieces"],
+      ["Source warehouse", "Raw material · Plant 1"],
+      ["Cost center", "Production / Sewing"]
+    ],
+    records: [],
+    recordsEn: []
   },
   {
     id: "almacenes",
@@ -56,18 +90,28 @@ export const modules = [
     title: "Almacenes",
     titleEn: "Warehouses",
     eyebrow: "Inventario vivo",
+    eyebrowEn: "Live inventory",
     summary: "Existencias, reservas, movimientos, kardex, espacios fisicos y merma.",
+    summaryEn: "Stock, reservations, movements, kardex, physical spaces, and scrap.",
     primary: "Reservar inventario",
+    primaryEn: "Reserve inventory",
     status: "7 articulos criticos",
+    statusEn: "7 critical items",
     kpis: [
       ["Disponible", "$428k", "positive"],
       ["Reservado", "$96k", "warning"],
       ["Mermas mes", "2.1%", "danger"]
     ],
+    kpisEn: [
+      ["Available", "$428k", "positive"],
+      ["Reserved", "$96k", "warning"],
+      ["Monthly scrap", "2.1%", "danger"]
+    ],
     submodules: [
       ["Almacenes", "Materia prima, herramientas, producto en proceso y terminado."],
       ["Articulos", "Catalogo maestro de articulos inventariables autorizados.", "articulos"],
       ["Movimientos", "Entradas, salidas, transferencias, ajustes y devoluciones."],
+      ["Existencias", "Saldo calculado desde movimientos por articulo y almacen.", "existencias"],
       ["Reservas", "Apartado para ordenes de produccion o pedidos de venta."],
       ["Kardex", "Historial completo por articulo, lote, serie o ubicacion."]
     ],
@@ -79,6 +123,14 @@ export const modules = [
       "Actualizar kardex",
       "Notificar costos, ventas o produccion"
     ],
+    workflowEn: [
+      "Receive or register movement",
+      "Validate source document",
+      "Update stock",
+      "Update reservation or availability",
+      "Update kardex",
+      "Notify costs, sales, or production"
+    ],
     table: {
       columns: ["Articulo", "Disponible", "Reservado", "Estado"],
       rows: [
@@ -87,11 +139,25 @@ export const modules = [
         ["Playera basica", "86 pz", "40 pz", "Disponible"]
       ]
     },
+    tableEn: {
+      columns: ["Item", "Available", "Reserved", "Status"],
+      rows: [
+        ["Cotton fabric", "220 m", "200 m", "Enough"],
+        ["Purple thread", "12 sp", "18 sp", "Shortage"],
+        ["Basic shirt", "86 pcs", "40 pcs", "Available"]
+      ]
+    },
     validations: [
       ["Produccion", "Responde disponibilidad por receta y genera reservas."],
       ["Ventas", "Reserva producto terminado y registra entregas."],
       ["Compras", "Recibe materiales y actualiza costos de adquisicion."],
       ["Contabilidad", "Genera documentos origen por ajustes, merma y entradas."]
+    ],
+    validationsEn: [
+      ["Production", "Responds with recipe availability and creates reservations."],
+      ["Sales", "Reserves finished goods and records deliveries."],
+      ["Purchasing", "Receives materials and updates acquisition costs."],
+      ["Accounting", "Generates source documents for adjustments, scrap, and receipts."]
     ],
     form: [
       ["Tipo movimiento", "Reserva por produccion"],
@@ -99,10 +165,21 @@ export const modules = [
       ["Cantidad", "18 carretes"],
       ["Origen", "Almacen MP / Planta 1"]
     ],
+    formEn: [
+      ["Movement type", "Production reservation"],
+      ["Item", "Purple thread"],
+      ["Quantity", "18 spools"],
+      ["Origin", "RM warehouse / Plant 1"]
+    ],
     records: [
       ["MAT-004", "Tela algodon · 220 m disponibles", "Disponible"],
       ["HER-011", "Tijeras industriales · 3 asignables", "Asignable"],
       ["PT-118", "Playera basica · 40 pz reservadas", "Reservado"]
+    ],
+    recordsEn: [
+      ["MAT-004", "Cotton fabric · 220 m available", "Available"],
+      ["HER-011", "Industrial scissors · 3 assignable", "Assignable"],
+      ["PT-118", "Basic shirt · 40 pcs reserved", "Reserved"]
     ]
   },
   {
@@ -168,13 +245,22 @@ export const modules = [
     title: "Ventas",
     titleEn: "Sales",
     eyebrow: "Demanda conectada",
+    eyebrowEn: "Connected demand",
     summary: "Clientes, cotizaciones, pedidos, reservas, entregas y margen.",
+    summaryEn: "Customers, quotes, orders, reservations, deliveries, and margin.",
     primary: "Crear cotizacion",
+    primaryEn: "Create quote",
     status: "12 pedidos abiertos",
+    statusEn: "12 open orders",
     kpis: [
       ["Pedidos", "12", "positive"],
       ["Margen", "32.4%", "positive"],
       ["Entregas riesgo", "2", "warning"]
+    ],
+    kpisEn: [
+      ["Orders", "12", "positive"],
+      ["Margin", "32.4%", "positive"],
+      ["At-risk deliveries", "2", "warning"]
     ],
     submodules: [
       ["Clientes", "Datos comerciales, contactos, direcciones y condiciones."],
@@ -191,6 +277,14 @@ export const modules = [
       "Entregar parcial o total",
       "Calcular margen y asiento"
     ],
+    workflowEn: [
+      "Create quote",
+      "Approve order",
+      "Validate available inventory",
+      "Reserve or request production",
+      "Deliver partially or fully",
+      "Calculate margin and entry"
+    ],
     table: {
       columns: ["Pedido", "Cliente", "Estado", "Margen"],
       rows: [
@@ -199,11 +293,25 @@ export const modules = [
         ["PED-228", "Textil Bravo", "Produccion", "29%"]
       ]
     },
+    tableEn: {
+      columns: ["Order", "Customer", "Status", "Margin"],
+      rows: [
+        ["ORD-220", "Delta Uniforms", "Preparing", "34%"],
+        ["QTE-144", "Vega Services", "Quoted", "38%"],
+        ["ORD-228", "Textil Bravo", "Production", "29%"]
+      ]
+    },
     validations: [
       ["Almacenes", "Reserva producto terminado y descuenta en entrega."],
       ["Produccion", "Genera orden si no hay stock suficiente."],
       ["Costos", "Calcula margen estimado y real."],
       ["Contabilidad", "Mapea ingresos, cuentas por cobrar, impuestos y costo de venta."]
+    ],
+    validationsEn: [
+      ["Warehouses", "Reserves finished goods and deducts them on delivery."],
+      ["Production", "Generates an order when stock is not enough."],
+      ["Costs", "Calculates estimated and actual margin."],
+      ["Accounting", "Maps revenue, accounts receivable, taxes, and cost of sales."]
     ],
     form: [
       ["Cliente", "Uniformes Delta"],
@@ -211,10 +319,21 @@ export const modules = [
       ["Cantidad", "140 piezas"],
       ["Fecha prometida", "Viernes 25"]
     ],
+    formEn: [
+      ["Customer", "Delta Uniforms"],
+      ["Product", "Basic purple shirt"],
+      ["Quantity", "140 pieces"],
+      ["Promised date", "Friday 25"]
+    ],
     records: [
       ["PED-220", "Uniformes Delta · entrega viernes", "En preparacion"],
       ["COT-144", "Servicio de ensamble · margen 38%", "Cotizado"],
       ["DEV-009", "Devolucion parcial · revision", "Calidad"]
+    ],
+    recordsEn: [
+      ["ORD-220", "Delta Uniforms · Friday delivery", "Preparing"],
+      ["QTE-144", "Assembly service · 38% margin", "Quoted"],
+      ["RET-009", "Partial return · review", "Quality"]
     ]
   },
   {
@@ -501,6 +620,14 @@ export const erpSubmoduleCatalog = {
       focus: {
         es: ["Entrada/salida", "Documento origen", "Lote o serie", "Costo de movimiento"],
         en: ["Receipt/issue", "Source document", "Lot or serial", "Movement cost"]
+      }
+    },
+    existencias: {
+      enName: "Stock",
+      enDetail: "Balance calculated from movements by item and warehouse.",
+      focus: {
+        es: ["Saldo disponible", "Articulo", "Almacen", "Ultimo movimiento"],
+        en: ["Available balance", "Item", "Warehouse", "Last movement"]
       }
     },
     reservas: {

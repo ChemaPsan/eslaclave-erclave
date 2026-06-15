@@ -2,6 +2,7 @@
   "scripts": {
     "validate": "node tools/validators/validate-all.js",
     "validate:i18n": "node tools/validators/validate-i18n.js",
+    "validate:active-localization": "node tools/validators/validate-active-module-localization.js",
     "validate:architecture": "node tools/validators/validate-architecture.js",
     "validate:traceability": "node tools/validators/validate-traceability.js",
     "validate:syntax": "node tools/validators/validate-syntax.js"

@@ -132,7 +132,79 @@ Reglas iniciales:
 
 ---
 
-## 7. Estados sugeridos
+## 7. Pedidos en MVP
+
+En MVP, el submodulo Pedidos debera permitir convertir cotizaciones aprobadas en pedidos comerciales basicos.
+
+El pedido debera conservar:
+
+- codigo de pedido;
+- cotizacion origen;
+- cliente origen;
+- partidas de la cotizacion;
+- subtotal y total;
+- promesa de entrega;
+- modo de surtido inicial;
+- costo estimado desde costo estandar de producto/servicio;
+- margen estimado;
+- estatus comercial.
+- historial de ajustes.
+
+Reglas iniciales:
+
+- Solo una cotizacion en estado Aprobado podra convertirse en pedido.
+- Una cotizacion aprobada no debera generar pedidos duplicados en el MVP.
+- El pedido no debera reservar inventario todavia; su modo de surtido puede quedar como pendiente de validar inventario.
+- El margen estimado se calculara con el total de venta contra costos estandar disponibles.
+- El pedido podra editar codigo, estatus, promesa de entrega, modo de surtido, responsable y notas.
+- Cada edicion debera exigir motivo de ajuste y registrar valores anteriores y nuevos cuando cambien campos.
+- Cliente, partidas, subtotal y total deberan conservarse desde la cotizacion origen durante el MVP.
+
+---
+
+## 8. Entregas en MVP
+
+En MVP, el submodulo Entregas debera funcionar como vista de gestion y consulta. Su objetivo es ver todas las entregas registradas, filtrar por estatus, buscar por pedido o cliente y revisar notas operativas.
+
+Cada entrega visible debera mostrar:
+
+- pedido origen;
+- cotizacion origen;
+- cliente;
+- estatus de entrega;
+- fecha de entrega;
+- receptor o contacto;
+- referencia de entrega, guia, remision o evidencia simple;
+- nueva fecha cuando se reprograme;
+- notas operativas.
+
+Catalogo de estatus funcional para MVP:
+
+| Estatus | Uso |
+|---|---|
+| Pendiente de entrega | Pedido aun sin intento de entrega registrado. |
+| En ruta | Pedido preparado o enviado hacia el cliente. |
+| Entrega parcial | Solo una parte del pedido fue entregada; debe capturar notas. |
+| Entregado | Pedido entregado al cliente. |
+| No entregado | Intento fallido; debe capturar motivo en notas. |
+| Reprogramado | Entrega movida a nueva fecha; debe capturar nueva fecha. |
+| Cancelado | Entrega cancelada sin continuar flujo. |
+
+Estos estatus se simplifican desde patrones comunes de fulfillment/logistica, donde suelen existir hitos como confirmado, en transito, en reparto, entregado, intento de entrega, no entregado y cancelado.
+
+Reglas iniciales:
+
+- Entregas debera ser una vista de consulta y gestion, no un formulario principal de captura.
+- La vista debera mostrar todas las entregas registradas.
+- La vista debera permitir buscar por pedido, cliente, cotizacion, estatus, receptor o notas.
+- La vista debera permitir filtrar por estatus de entrega.
+- Al seleccionar una entrega, el usuario debera poder consultar la cotizacion relacionada.
+- El registro o cambio operativo de entrega debera ocurrir desde el flujo del pedido o desde una integracion futura con Almacenes/Logistica.
+- La entrega no descuenta inventario ni libera reservas todavia; ese impacto queda para la fase de integracion con Almacenes.
+
+---
+
+## 9. Estados sugeridos
 
 | Estado | Descripción |
 |---|---|
@@ -143,12 +215,14 @@ Reglas iniciales:
 | En preparación | Se está surtiendo o produciendo. |
 | Parcialmente entregado | Entrega incompleta. |
 | Entregado | Entrega completa. |
+| No entregado | Intento de entrega fallido. |
+| Reprogramado | Entrega reagendada con nueva fecha. |
 | Facturado | Documento fiscal o comercial emitido. |
 | Cancelado | Operación cancelada. |
 
 ---
 
-## 8. Reglas de negocio
+## 10. Reglas de negocio
 
 - Un cliente podra tener nombre comercial distinto a la razon social o nombre fiscal.
 - La informacion de facturacion debera validarse antes de emitir documentos fiscales.
@@ -168,7 +242,7 @@ Reglas iniciales:
 
 ---
 
-## 9. Compatibilidad con producción, inventarios y contabilidad
+## 11. Compatibilidad con producción, inventarios y contabilidad
 
 ### Al aprobar pedido
 
@@ -204,7 +278,7 @@ El sistema deberá:
 
 ---
 
-## 10. Integraciones
+## 12. Integraciones
 
 | Módulo | Relación |
 |---|---|
@@ -217,7 +291,7 @@ El sistema deberá:
 
 ---
 
-## 11. Métricas
+## 13. Métricas
 
 - ventas por periodo;
 - ventas por cliente;
@@ -233,7 +307,7 @@ El sistema deberá:
 
 ---
 
-## 12. Pendientes
+## 14. Pendientes
 
 - Definir si facturación fiscal será propia o integración externa.
 - Definir políticas de descuento.

@@ -114,6 +114,7 @@ button {
 .nav-group {
   display: grid;
   gap: 4px;
+  position: relative;
 }
 
 .nav-button {
@@ -136,6 +137,48 @@ button {
   color: #fff;
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.18);
+}
+
+.nav-group.coming-soon .nav-button {
+  color: rgba(255, 255, 255, 0.38);
+  background: rgba(8, 10, 22, 0.2);
+  filter: grayscale(1);
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.nav-group.coming-soon .nav-button:hover {
+  color: rgba(255, 255, 255, 0.42);
+  background: rgba(8, 10, 22, 0.28);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.nav-group.coming-soon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 20;
+  transform: translate(-50%, -50%) scale(0.96);
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(25, 15, 52, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.nav-group.coming-soon:hover::after,
+.nav-group.coming-soon:focus-within::after {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .nav-button .nav-icon {
