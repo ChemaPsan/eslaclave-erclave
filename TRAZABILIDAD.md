@@ -904,6 +904,81 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `npm run validate` ejecutado correctamente antes de registrar la entrada; se repite despues del registro. |
 | Observaciones | Los datos operativos creados por usuario o cargados desde simulaciones se mantienen como datos de negocio; la nueva validacion se enfoca en copy visible controlado por `frontend/data/modules.js`. |
 
+### CHG-059
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-15 |
+| Cambio | Compatibilidad Windows en validador de arquitectura |
+| Autor | Codex |
+| Archivos | `tools/validators/validate-architecture.js`, `README.md`, `TRAZABILIDAD.md` |
+| Secciones | Validadores, arquitectura de microfrontends |
+| Descripcion | Se normalizo la ruta de `registry.js` dentro del validador de arquitectura para que se excluya correctamente tambien en Windows, donde las rutas llegan con separadores `\\`. Tambien se aclaro en README como ejecutar validaciones desde la raiz del repo y que usar en PowerShell. |
+| Motivo | Permitir ejecutar `npm.cmd run validate` localmente en PowerShell sin falsos positivos de imports cruzados del propio registro de microfrontends. |
+| Impacto | La validacion de arquitectura sigue bloqueando imports cruzados entre microfrontends, pero ya no falla por el archivo `frontend/microfrontends/registry.js` en Windows. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente antes de registrar la entrada; se repite despues del registro. |
+| Observaciones | En Linux/macOS se conserva `npm run validate`; en PowerShell se recomienda `npm.cmd run validate` si `npm.ps1` esta bloqueado. |
+
+### CHG-060
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-15 |
+| Cambio | Agente transversal de arquitectura SaaS |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Agentes, arquitectura, multi-tenant, QA/Prod |
+| Descripcion | Se agrego el Arquitecto senior de plataforma SaaS como agente transversal prioritario, separado de la matriz por modulo, para gobernar decisiones de arquitectura, ambientes, tecnologia, multi-tenancy, seguridad, contratos, CI/CD y migracion desde maqueta a plataforma real. |
+| Motivo | Facilitar su consulta frecuente durante la etapa de llevar los modulos MVP a ambientes reales de QA y Produccion. |
+| Impacto | Las decisiones tecnicas transversales ahora tienen un agente de referencia visible antes de la matriz modular, con responsabilidades, criterios de rechazo y entregables esperados. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | El agente no reemplaza a los agentes tecnicos por modulo; los gobierna cuando una decision afecta plataforma, ambientes, contratos o escalabilidad. |
+
+### CHG-061
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-15 |
+| Cambio | Documentacion y diagrama QA/Prod |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/qa_prod.md`, `docs/arquitectura/diagramas/arquitectura_qa_prod.drawio`, `TRAZABILIDAD.md` |
+| Secciones | Arquitectura, QA, Produccion, multi-tenant, CI/CD |
+| Descripcion | Se agrego el documento inicial de arquitectura QA/Prod con diagramas Mermaid, principios, ambientes, stack recomendado, estrategia multi-tenant, CI/CD, modulos MVP, contratos, criterios minimos y riesgos. Tambien se agrego un diagrama editable `.drawio` para diagrams.net. |
+| Motivo | Dar al arquitecto SaaS una base visual y documental para planear la salida de la maqueta hacia ambientes reales de QA y Produccion. |
+| Impacto | El repo ahora contiene documentacion viva en Markdown y un diagrama editable para comunicar la arquitectura inicial de despliegue y operacion. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | Los diagramas Mermaid viven en Markdown y el archivo `.drawio` puede abrirse desde https://app.diagrams.net/. |
+
+### CHG-062
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-15 |
+| Cambio | Documentacion de onboarding comercial SaaS |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/onboarding_comercial_saas.md`, `docs/arquitectura/diagramas/onboarding_comercial_saas.drawio`, `docs/arquitectura/qa_prod.md`, `TRAZABILIDAD.md` |
+| Secciones | Arquitectura, onboarding comercial, billing, provisioning, tenants, APIs |
+| Descripcion | Se documento el flujo de contratacion desde la web de EsLaClave: seleccion de plan, pago en linea, webhook, provisioning idempotente, creacion de tenant, invitacion segura del administrador, wizard inicial, portal de desarrollador, credenciales API, scopes, cuotas y metering. Se agrego diagrama editable `.drawio` y se actualizo `qa_prod.md` para incluir billing/provisioning. |
+| Motivo | Formalizar el flujo requerido para comprar ERClave en linea y activar tenants reales sin depender de procesos manuales ni enviar contrasenas por correo. |
+| Impacto | La arquitectura QA/Prod ahora contempla servicios comerciales transversales y el repo tiene una base para discutir planes, API comercial, monetizacion y alta automatica de clientes. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | El diseno propone iniciar con bajo costo y evolucionar a Apigee/monetizacion avanzada cuando el volumen de integraciones lo justifique. |
+
+### CHG-063
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-15 |
+| Cambio | Decision de dominio, DNS y costo operativo inicial |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/onboarding_comercial_saas.md`, `TRAZABILIDAD.md` |
+| Secciones | Dominio, DNS y entrada publica; Decisiones pendientes |
+| Descripcion | Se documento la recomendacion de comprar dominio fuera de Google, usar Cloudflare Registrar y Cloudflare DNS para el arranque, mantener la plataforma en Google Cloud, definir subdominios base, acceso por tenant, cobro hibrido y rango mensual estimado para un lanzamiento publico limitado. |
+| Motivo | Aterrizar la estrategia comercial y tecnica para publicar ERClave con costos controlados, sin depender de Google Domains/Cloud Domains como ruta principal de registro. |
+| Impacto | El roadmap SaaS ahora incluye decisiones iniciales de dominio, DNS, entrada publica, activacion manual o por pago en linea, y presupuesto operativo esperado para hasta 20 tenants iniciales. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | Los precios reales dependeran del registrador, extension de dominio, proveedor de pagos, trafico, logs, almacenamiento y uso de correo transaccional. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

@@ -37,6 +37,9 @@ Para ejecutar todas las validaciones:
 npm run validate
 ```
 
+> Ejecutar desde la raiz del repositorio `eslaclave-erclave`, donde esta `package.json`.
+> En Windows PowerShell, si `npm.ps1` esta bloqueado por politicas de ejecucion, usar `npm.cmd run validate`.
+
 Validaciones disponibles:
 
 ```bash

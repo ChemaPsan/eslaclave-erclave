@@ -49,7 +49,8 @@ for (const id of expectedMicrofrontends) {
 
 const microfrontendFiles = listFiles("frontend/microfrontends", (file) => file.endsWith(".js"));
 for (const relativePath of microfrontendFiles) {
-  if (relativePath === "frontend/microfrontends/registry.js") continue;
+  const normalizedRelativePath = relativePath.replace(/\\/g, "/");
+  if (normalizedRelativePath === "frontend/microfrontends/registry.js") continue;
 
   const parts = relativePath.split(path.sep);
   const owner = parts[2];
