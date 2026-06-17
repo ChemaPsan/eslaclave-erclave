@@ -2,9 +2,12 @@
 Thumbs.db
 *.log
 node_modules/
+__pycache__/
+*.py[cod]
 dist/
 build/
 .env
 .env.*
 !.env.example
 .git.broken-empty/
+**/.$*.drawio.bkp

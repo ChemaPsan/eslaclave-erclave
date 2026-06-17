@@ -175,6 +175,10 @@ Para el MVP se recomienda usar `varchar` para estatus y catalogos controlados de
 
 ## 5. Schema `admin`
 
+Implementacion fisica inicial: ver `docs/arquitectura/admin_service_modelo_fisico.md`.
+
+Nota de evolucion: el modelo fisico inicial de `admin-service` usa `admin.users` como identidad global y `admin.memberships` como relacion usuario-tenant. Esto mejora el soporte SaaS multi-tenant cuando una misma persona participa en mas de un tenant. Las tablas documentadas abajo quedan como modelo conceptual y se iran alineando con la implementacion fisica conforme avance el backend.
+
 ### 5.1 `admin.tenants`
 
 Cliente/empresa que usa ERClave.
@@ -1527,3 +1531,4 @@ Cuando esto quede aceptado, el siguiente documento debe ser:
 docs/arquitectura/apis_mvp.md
 ```
 
+Estado: definido en `docs/arquitectura/apis_mvp.md`.

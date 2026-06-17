@@ -238,6 +238,16 @@ Y el tercero:
 docs/arquitectura/apis_mvp.md
 ```
 
+Estado: definido en `docs/arquitectura/apis_mvp.md`.
+
+Plan de implementacion:
+
+```text
+docs/arquitectura/plan_implementacion_backend_mvp.md
+```
+
+Estado: definido en `docs/arquitectura/plan_implementacion_backend_mvp.md`.
+
 ---
 
 ## 7. Criterio de avance

@@ -1,0 +1,1186 @@
+openapi: 3.1.0
+info:
+  title: ERClave Production Service API
+  version: 0.1.0
+  summary: Product, recipe, production order, labor and machine APIs.
+servers:
+  - url: https://api.eslaclave.com
+security:
+  - bearerAuth: []
+tags:
+  - name: ProductServices
+  - name: Recipes
+  - name: Orders
+  - name: Labor
+  - name: Machines
+paths:
+  /v1/production/product-services:
+    get:
+      tags: [ProductServices]
+      operationId: listProductServices
+      summary: Search product and service catalog.
+      x-required-module: production
+      x-permissions: [production.product_service.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Status'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [product, service]
+      responses:
+        '200':
+          description: Product services.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductServiceListResponse'
+    post:
+      tags: [ProductServices]
+      operationId: createProductService
+      summary: Create product or service.
+      x-required-module: production
+      x-permissions: [production.product_service.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductServiceCreateRequest'
+      responses:
+        '201':
+          description: Product service created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductServiceResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/production/product-services/{id}:
+    get:
+      tags: [ProductServices]
+      operationId: getProductService
+      summary: Get product or service detail.
+      x-required-module: production
+      x-permissions: [production.product_service.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Product service detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductServiceResponse'
+    patch:
+      tags: [ProductServices]
+      operationId: updateProductService
+      summary: Update product or service.
+      x-required-module: production
+      x-permissions: [production.product_service.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductServiceUpdateRequest'
+      responses:
+        '200':
+          description: Product service updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductServiceResponse'
+  /v1/production/product-services/{id}/status:
+    patch:
+      tags: [ProductServices]
+      operationId: updateProductServiceStatus
+      summary: Change product or service status.
+      x-required-module: production
+      x-permissions: [production.product_service.status.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusChangeRequest'
+      responses:
+        '200':
+          description: Status updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductServiceResponse'
+  /v1/production/product-services/{id}/cost-summary:
+    get:
+      tags: [ProductServices]
+      operationId: getProductServiceCostSummary
+      summary: Get standard cost summary from approved recipe.
+      x-required-module: production
+      x-permissions: [production.product_service.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Cost summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostSummaryResponse'
+  /v1/production/recipes:
+    get:
+      tags: [Recipes]
+      operationId: listRecipes
+      summary: Search recipes.
+      x-required-module: production
+      x-permissions: [production.recipe.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Status'
+      responses:
+        '200':
+          description: Recipes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeListResponse'
+    post:
+      tags: [Recipes]
+      operationId: createRecipe
+      summary: Create recipe for existing product or service.
+      x-required-module: production
+      x-permissions: [production.recipe.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecipeCreateRequest'
+      responses:
+        '201':
+          description: Recipe created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeResponse'
+  /v1/production/recipes/{id}:
+    get:
+      tags: [Recipes]
+      operationId: getRecipe
+      summary: Get recipe with versions.
+      x-required-module: production
+      x-permissions: [production.recipe.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Recipe detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeResponse'
+  /v1/production/recipes/{id}/versions:
+    post:
+      tags: [Recipes]
+      operationId: createRecipeVersion
+      summary: Create new recipe version.
+      x-required-module: production
+      x-permissions: [production.recipe.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecipeVersionCreateRequest'
+      responses:
+        '201':
+          description: Recipe version created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeVersionResponse'
+  /v1/production/recipe-versions/{version_id}:
+    patch:
+      tags: [Recipes]
+      operationId: updateRecipeVersion
+      summary: Update draft recipe version.
+      x-required-module: production
+      x-permissions: [production.recipe.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: version_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecipeVersionUpdateRequest'
+      responses:
+        '200':
+          description: Version updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeVersionResponse'
+  /v1/production/recipe-versions/{version_id}/submit:
+    post:
+      tags: [Recipes]
+      operationId: submitRecipeVersion
+      summary: Submit recipe version for approval.
+      x-required-module: production
+      x-permissions: [production.recipe.submit]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: version_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Version submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeVersionResponse'
+  /v1/production/recipe-versions/{version_id}/approve:
+    post:
+      tags: [Recipes]
+      operationId: approveRecipeVersion
+      summary: Approve recipe version as usable for new orders.
+      x-required-module: production
+      x-permissions: [production.recipe.approve]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: version_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalRequest'
+      responses:
+        '200':
+          description: Version approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeVersionResponse'
+  /v1/production/recipe-versions/{version_id}/obsolete:
+    post:
+      tags: [Recipes]
+      operationId: obsoleteRecipeVersion
+      summary: Mark recipe version obsolete.
+      x-required-module: production
+      x-permissions: [production.recipe.obsolete]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: version_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Version obsoleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeVersionResponse'
+  /v1/production/resource-validations:
+    post:
+      tags: [Orders]
+      operationId: validateProductionResources
+      summary: Validate resources before creating or releasing an order.
+      x-required-module: production
+      x-permissions: [production.order.validate]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceValidationRequest'
+      responses:
+        '200':
+          description: Resource validation result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceValidationResponse'
+  /v1/production/orders:
+    get:
+      tags: [Orders]
+      operationId: listProductionOrders
+      summary: Search production orders.
+      x-required-module: production
+      x-permissions: [production.order.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Status'
+      responses:
+        '200':
+          description: Production orders.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrderListResponse'
+    post:
+      tags: [Orders]
+      operationId: createProductionOrder
+      summary: Create manual production order from approved recipe.
+      x-required-module: production
+      x-permissions: [production.order.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionOrderCreateRequest'
+      responses:
+        '201':
+          description: Production order created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrderResponse'
+  /v1/production/order-requests:
+    post:
+      tags: [Orders]
+      operationId: createProductionOrderFromRequest
+      summary: Create order requested by sales or integration.
+      x-required-module: production
+      x-permissions: [sales.order.fulfill]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionOrderRequest'
+      responses:
+        '201':
+          description: Production order created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrderResponse'
+  /v1/production/orders/{id}:
+    get:
+      tags: [Orders]
+      operationId: getProductionOrder
+      summary: Get production order detail.
+      x-required-module: production
+      x-permissions: [production.order.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Production order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrderResponse'
+  /v1/production/orders/{id}/status:
+    patch:
+      tags: [Orders]
+      operationId: updateProductionOrderStatus
+      summary: Change production order status.
+      x-required-module: production
+      x-permissions: [production.order.status.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusChangeRequest'
+      responses:
+        '200':
+          description: Status changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrderResponse'
+  /v1/production/order-stages/{stage_id}:
+    patch:
+      tags: [Orders]
+      operationId: updateProductionOrderStage
+      summary: Update order stage.
+      x-required-module: production
+      x-permissions: [production.order_stage.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: stage_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderStageUpdateRequest'
+      responses:
+        '200':
+          description: Stage updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderStageResponse'
+  /v1/production/labor-areas:
+    get:
+      tags: [Labor]
+      operationId: listLaborAreas
+      summary: List labor areas and roles.
+      x-required-module: production
+      x-permissions: [production.labor.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Labor areas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborAreaListResponse'
+    post:
+      tags: [Labor]
+      operationId: createLaborArea
+      summary: Create labor area.
+      x-required-module: production
+      x-permissions: [production.labor.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LaborAreaCreateRequest'
+      responses:
+        '201':
+          description: Labor area created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborAreaResponse'
+  /v1/production/labor-areas/{area_id}/roles:
+    post:
+      tags: [Labor]
+      operationId: createLaborRole
+      summary: Create role/resource within labor area.
+      x-required-module: production
+      x-permissions: [production.labor.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: area_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LaborRoleCreateRequest'
+      responses:
+        '201':
+          description: Labor role created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRoleResponse'
+  /v1/production/labor-roles/{role_id}:
+    patch:
+      tags: [Labor]
+      operationId: updateLaborRole
+      summary: Update labor role/resource.
+      x-required-module: production
+      x-permissions: [production.labor.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: role_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LaborRoleUpdateRequest'
+      responses:
+        '200':
+          description: Labor role updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRoleResponse'
+  /v1/production/machines:
+    get:
+      tags: [Machines]
+      operationId: listMachines
+      summary: List machines.
+      x-required-module: production
+      x-permissions: [production.machine.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Status'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Machines.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineListResponse'
+    post:
+      tags: [Machines]
+      operationId: createMachine
+      summary: Create machine.
+      x-required-module: production
+      x-permissions: [production.machine.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MachineCreateRequest'
+      responses:
+        '201':
+          description: Machine created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineResponse'
+  /v1/production/machines/{machine_id}:
+    patch:
+      tags: [Machines]
+      operationId: updateMachine
+      summary: Update machine.
+      x-required-module: production
+      x-permissions: [production.machine.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: machine_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MachineUpdateRequest'
+      responses:
+        '200':
+          description: Machine updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantHeader:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 50
+        maximum: 200
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    Search:
+      name: q
+      in: query
+      schema:
+        type: string
+    Status:
+      name: status
+      in: query
+      schema:
+        type: string
+  responses:
+    Conflict:
+      description: Conflict.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            correlation_id:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+    Page:
+      type: object
+      properties:
+        limit:
+          type: integer
+        next_cursor:
+          type: [string, 'null']
+        has_more:
+          type: boolean
+    ProductService:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [product, service]
+        category:
+          type: string
+        base_unit:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, pending_approval]
+        target_price:
+          type: number
+        standard_cost:
+          type: number
+    ProductServiceResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ProductService'
+    ProductServiceListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductService'
+        page:
+          $ref: '#/components/schemas/Page'
+    ProductServiceCreateRequest:
+      type: object
+      required: [code, name, type, base_unit]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [product, service]
+        category:
+          type: string
+        base_unit:
+          type: string
+        target_price:
+          type: number
+        responsible_area:
+          type: string
+    ProductServiceUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        base_unit:
+          type: string
+        target_price:
+          type: number
+        responsible_area:
+          type: string
+    StatusChangeRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+        reason:
+          type: string
+    CostSummaryResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            product_service_id:
+              type: string
+            recipe_version_id:
+              type: string
+            standard_cost:
+              type: number
+            base_unit:
+              type: string
+    Recipe:
+      type: object
+      properties:
+        id:
+          type: string
+        product_service_id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+    RecipeResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Recipe'
+    RecipeListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Recipe'
+        page:
+          $ref: '#/components/schemas/Page'
+    RecipeCreateRequest:
+      type: object
+      required: [product_service_id, code, name]
+      properties:
+        product_service_id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+    RecipeVersion:
+      type: object
+      properties:
+        id:
+          type: string
+        recipe_id:
+          type: string
+        version_number:
+          type: integer
+        status:
+          type: string
+          enum: [draft, pending_approval, approved, obsolete]
+        base_quantity:
+          type: number
+        base_unit:
+          type: string
+        standard_cost:
+          type: number
+    RecipeVersionResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/RecipeVersion'
+    RecipeVersionCreateRequest:
+      type: object
+      required: [base_quantity, base_unit, change_reason]
+      properties:
+        base_quantity:
+          type: number
+        base_unit:
+          type: string
+        change_reason:
+          type: string
+        resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeResourceInput'
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeStageInput'
+    RecipeVersionUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/RecipeVersionCreateRequest'
+    RecipeResourceInput:
+      type: object
+      required: [resource_type, resource_ref_id, quantity, unit]
+      properties:
+        resource_type:
+          type: string
+          enum: [material, labor, machine, other]
+        resource_ref_id:
+          type: string
+        resource_code:
+          type: string
+        resource_name:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        unit_cost:
+          type: number
+    RecipeStageInput:
+      type: object
+      required: [name, sort_order]
+      properties:
+        name:
+          type: string
+        expected_minutes:
+          type: number
+        sort_order:
+          type: integer
+    ApprovalRequest:
+      type: object
+      properties:
+        approval_notes:
+          type: string
+        effective_from:
+          type: string
+          format: date
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+    ResourceValidationRequest:
+      type: object
+      required: [recipe_version_id, quantity, unit]
+      properties:
+        recipe_version_id:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+    ResourceValidationResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            can_release:
+              type: boolean
+            blockers:
+              type: array
+              items:
+                type: string
+    ProductionOrder:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        product_service_id:
+          type: string
+        recipe_version_id:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        status:
+          type: string
+          enum: [released, waiting_resources, in_progress, paused, in_validation, completed, cancelled]
+        source_type:
+          type: string
+        source_id:
+          type: string
+    ProductionOrderResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ProductionOrder'
+    ProductionOrderListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductionOrder'
+        page:
+          $ref: '#/components/schemas/Page'
+    ProductionOrderCreateRequest:
+      type: object
+      required: [recipe_version_id, quantity, unit]
+      properties:
+        recipe_version_id:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        planned_start_at:
+          type: string
+          format: date-time
+    ProductionOrderRequest:
+      type: object
+      required: [sales_order_id, sales_order_line_id, product_service_id, quantity, unit]
+      properties:
+        sales_order_id:
+          type: string
+        sales_order_line_id:
+          type: string
+        product_service_id:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        requested_due_date:
+          type: string
+          format: date
+    OrderStageUpdateRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, in_progress, completed, skipped, blocked]
+        actual_minutes:
+          type: number
+        notes:
+          type: string
+    OrderStageResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+    LaborAreaCreateRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+    LaborAreaResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+    LaborAreaListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    LaborRoleCreateRequest:
+      type: object
+      required: [code, name, resource_count, cost_per_minute]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        recipe_display_name:
+          type: string
+        resource_count:
+          type: integer
+        cost_per_minute:
+          type: number
+        standard_minutes:
+          type: number
+    LaborRoleUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        recipe_display_name:
+          type: string
+        resource_count:
+          type: integer
+        cost_per_minute:
+          type: number
+        standard_minutes:
+          type: number
+        status:
+          type: string
+    LaborRoleResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+    MachineCreateRequest:
+      type: object
+      required: [code, name, cost_per_hour]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        area_name:
+          type: string
+        capacity_per_hour:
+          type: number
+        cost_per_hour:
+          type: number
+    MachineUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        area_name:
+          type: string
+        capacity_per_hour:
+          type: number
+        cost_per_hour:
+          type: number
+        status:
+          type: string
+          enum: [active, inactive, maintenance]
+    MachineResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+    MachineListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: true

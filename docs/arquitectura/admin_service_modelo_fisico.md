@@ -1,0 +1,83 @@
+# Modelo fisico inicial de `admin-service`
+
+Estado: definido para implementacion MVP.
+
+Este documento aterriza el primer modelo fisico real de `admin-service` en PostgreSQL/Cloud SQL. El objetivo es crear la fuente de verdad para tenants, usuarios, roles, permisos, modulos contratados, membresias y auditoria.
+
+## Principios
+
+- `admin-service` es duenio de tenants, usuarios, roles, permisos y modulos activos.
+- Ningun servicio operativo debe escribir estas tablas directamente.
+- Todo dato operable por tenant debe tener separacion clara por `tenant_id`.
+- El usuario se modela como identidad global y la relacion con cada tenant vive en `memberships`.
+- Las acciones criticas deben registrar `audit_events`.
+- Los catalogos de estatus se mantienen como `varchar` con `CHECK` para permitir evolucion controlada sin bloquear el MVP.
+- Los campos flexibles usan `jsonb` solo para metadatos, limites o snapshots; no deben esconder reglas criticas.
+
+## Tablas iniciales
+
+| Tabla | Proposito | Tenant scoped |
+|---|---|---|
+| `admin.tenants` | Cliente/empresa dentro del SaaS. | No; es la raiz del tenant. |
+| `admin.users` | Identidad global del usuario. | No; se relaciona por membresias. |
+| `admin.memberships` | Relacion usuario-tenant y estatus dentro del tenant. | Si. |
+| `admin.roles` | Roles configurables por tenant. | Si. |
+| `admin.permissions` | Catalogo global de permisos del sistema. | No. |
+| `admin.role_permissions` | Permisos asignados a cada rol. | Si. |
+| `admin.membership_roles` | Roles asignados a una membresia. | Si. |
+| `admin.tenant_modules` | Modulos activos, suspendidos o inactivos por tenant. | Si. |
+| `admin.audit_events` | Bitacora de acciones criticas y cambios administrativos. | Puede ser global o por tenant. |
+
+## Decision sobre usuarios y membresias
+
+Se evita que `users` dependa directamente de `tenant_id`. La razon es que una misma persona puede administrar o participar en mas de una empresa. La identidad vive una sola vez en `admin.users`; su acceso a cada tenant vive en `admin.memberships`.
+
+Ejemplo:
+
+- `admin.users`: `ana@empresa.com`.
+- `admin.memberships`: Ana pertenece al tenant A como activa.
+- `admin.memberships`: Ana pertenece al tenant B como invitada.
+
+Los permisos efectivos no se leen desde `users`; se resuelven desde:
+
+```text
+tenant -> membership -> membership_roles -> roles -> role_permissions -> permissions
+```
+
+## Separacion por tenant
+
+Tablas con `tenant_id` obligatorio:
+
+- `roles`;
+- `tenant_modules`;
+- `memberships`;
+- `role_permissions`;
+- `membership_roles`.
+
+`audit_events.tenant_id` es nullable porque puede registrar eventos previos a la existencia del tenant, por ejemplo errores de provisioning o acciones internas globales.
+
+## Idempotencia y auditoria
+
+El modelo prepara `audit_events.idempotency_key` y `audit_events.correlation_id` para rastrear comandos criticos.
+
+La idempotencia final se debera complementar con una tabla dedicada de comandos procesados cuando implementemos endpoints mutables como:
+
+- `POST /v1/tenants`;
+- `PUT /v1/tenants/{tenant_id}/entitlements/{module_code}`;
+- `POST /v1/users/invitations`;
+- `POST /v1/roles`;
+- `PUT /v1/roles/{role_id}/permissions`.
+
+## Archivos fuente
+
+- ORM: `backend/services/admin-service/app/models.py`
+- Migracion: `backend/alembic/versions/20260617_0001_admin_service_initial.py`
+- Alembic metadata: `backend/alembic/env.py`
+
+## Pendientes inmediatos
+
+1. Crear seeds iniciales de permisos y modulos MVP.
+2. Implementar repositorios o unidad de trabajo para `admin-service`.
+3. Implementar endpoints de tenants y tenant modules.
+4. Agregar tabla de idempotencia para comandos reales.
+5. Agregar pruebas de migracion contra PostgreSQL en QA.

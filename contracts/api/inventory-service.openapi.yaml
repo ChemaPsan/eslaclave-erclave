@@ -1,0 +1,787 @@
+openapi: 3.1.0
+info:
+  title: ERClave Inventory Service API
+  version: 0.1.0
+  summary: Warehouse, item, movement, balance, kardex and reservation APIs.
+servers:
+  - url: https://api.eslaclave.com
+security:
+  - bearerAuth: []
+tags:
+  - name: Warehouses
+  - name: Items
+  - name: Movements
+  - name: Balances
+  - name: Reservations
+paths:
+  /v1/inventory/warehouses:
+    get:
+      tags: [Warehouses]
+      operationId: listWarehouses
+      summary: List warehouses.
+      x-required-module: inventory
+      x-permissions: [inventory.warehouse.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Status'
+      responses:
+        '200':
+          description: Warehouses.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseListResponse'
+    post:
+      tags: [Warehouses]
+      operationId: createWarehouse
+      summary: Create warehouse.
+      x-required-module: inventory
+      x-permissions: [inventory.warehouse.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarehouseCreateRequest'
+      responses:
+        '201':
+          description: Warehouse created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseResponse'
+  /v1/inventory/warehouses/{id}:
+    patch:
+      tags: [Warehouses]
+      operationId: updateWarehouse
+      summary: Update warehouse.
+      x-required-module: inventory
+      x-permissions: [inventory.warehouse.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarehouseUpdateRequest'
+      responses:
+        '200':
+          description: Warehouse updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseResponse'
+  /v1/inventory/warehouses/{id}/locations:
+    post:
+      tags: [Warehouses]
+      operationId: createWarehouseLocation
+      summary: Create warehouse location.
+      x-required-module: inventory
+      x-permissions: [inventory.location.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationCreateRequest'
+      responses:
+        '201':
+          description: Location created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponse'
+  /v1/inventory/items:
+    get:
+      tags: [Items]
+      operationId: listInventoryItems
+      summary: Search inventory items.
+      x-required-module: inventory
+      x-permissions: [inventory.item.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Status'
+        - name: type
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Items.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemListResponse'
+    post:
+      tags: [Items]
+      operationId: createInventoryItem
+      summary: Create inventory item.
+      x-required-module: inventory
+      x-permissions: [inventory.item.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemCreateRequest'
+      responses:
+        '201':
+          description: Item created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+  /v1/inventory/items/{id}:
+    get:
+      tags: [Items]
+      operationId: getInventoryItem
+      summary: Get inventory item.
+      x-required-module: inventory
+      x-permissions: [inventory.item.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Item detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+    patch:
+      tags: [Items]
+      operationId: updateInventoryItem
+      summary: Update inventory item.
+      x-required-module: inventory
+      x-permissions: [inventory.item.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemUpdateRequest'
+      responses:
+        '200':
+          description: Item updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+  /v1/inventory/balances:
+    get:
+      tags: [Balances]
+      operationId: listInventoryBalances
+      summary: List calculated inventory balances.
+      x-required-module: inventory
+      x-permissions: [inventory.balance.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: inventory_item_id
+          in: query
+          schema:
+            type: string
+        - name: warehouse_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Balances.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceListResponse'
+  /v1/inventory/kardex:
+    get:
+      tags: [Balances]
+      operationId: listKardex
+      summary: List kardex entries calculated from movements.
+      x-required-module: inventory
+      x-permissions: [inventory.kardex.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: inventory_item_id
+          in: query
+          schema:
+            type: string
+        - name: warehouse_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Kardex.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementListResponse'
+  /v1/inventory/movements:
+    get:
+      tags: [Movements]
+      operationId: listInventoryMovements
+      summary: Search inventory movements.
+      x-required-module: inventory
+      x-permissions: [inventory.movement.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Status'
+        - name: source_type
+          in: query
+          schema:
+            type: string
+        - name: source_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Movements.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementListResponse'
+    post:
+      tags: [Movements]
+      operationId: createInventoryMovement
+      summary: Register manual inventory movement.
+      x-required-module: inventory
+      x-permissions: [inventory.movement.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MovementCreateRequest'
+      responses:
+        '201':
+          description: Movement recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementResponse'
+  /v1/inventory/movements/{id}/reverse:
+    post:
+      tags: [Movements]
+      operationId: reverseInventoryMovement
+      summary: Reverse a recorded movement.
+      x-required-module: inventory
+      x-permissions: [inventory.movement.reverse]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Movement reversed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementResponse'
+  /v1/inventory/availability-checks:
+    post:
+      tags: [Balances]
+      operationId: createAvailabilityCheck
+      summary: Check item availability for production or sales.
+      x-required-module: inventory
+      x-permissions: [inventory.availability.check]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvailabilityCheckRequest'
+      responses:
+        '200':
+          description: Availability result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailabilityCheckResponse'
+  /v1/inventory/consumption-requests:
+    post:
+      tags: [Movements]
+      operationId: createConsumptionRequest
+      summary: Register production consumption requested by production-service.
+      x-required-module: inventory
+      x-permissions: [internal.production.inventory.consume]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalMovementRequest'
+      responses:
+        '201':
+          description: Consumption movement recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementResponse'
+  /v1/inventory/finished-goods-receipts:
+    post:
+      tags: [Movements]
+      operationId: createFinishedGoodsReceipt
+      summary: Register finished goods receipt requested by production-service.
+      x-required-module: inventory
+      x-permissions: [internal.production.inventory.receive]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalMovementRequest'
+      responses:
+        '201':
+          description: Receipt movement recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementResponse'
+  /v1/inventory/reservation-requests:
+    post:
+      tags: [Reservations]
+      operationId: createReservationRequest
+      summary: Create inventory reservation.
+      x-required-module: inventory
+      x-permissions: [inventory.reservation.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationCreateRequest'
+      responses:
+        '201':
+          description: Reservation created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+  /v1/inventory/reservations/{id}/release:
+    post:
+      tags: [Reservations]
+      operationId: releaseReservation
+      summary: Release inventory reservation.
+      x-required-module: inventory
+      x-permissions: [inventory.reservation.release]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Reservation released.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantHeader:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 50
+        maximum: 200
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    Search:
+      name: q
+      in: query
+      schema:
+        type: string
+    Status:
+      name: status
+      in: query
+      schema:
+        type: string
+  schemas:
+    Page:
+      type: object
+      properties:
+        limit:
+          type: integer
+        next_cursor:
+          type: [string, 'null']
+        has_more:
+          type: boolean
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            correlation_id:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+    Warehouse:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+    WarehouseResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Warehouse'
+    WarehouseListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warehouse'
+    WarehouseCreateRequest:
+      type: object
+      required: [code, name, type]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+    WarehouseUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+    LocationCreateRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+    LocationResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        base_unit:
+          type: string
+        status:
+          type: string
+    ItemResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Item'
+    ItemListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        page:
+          $ref: '#/components/schemas/Page'
+    ItemCreateRequest:
+      type: object
+      required: [code, name, type, base_unit, inventory_policy]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        category:
+          type: string
+        base_unit:
+          type: string
+        inventory_policy:
+          type: string
+          enum: [standard, lot, serial, restricted]
+        suggested_warehouse_id:
+          type: string
+    ItemUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        suggested_warehouse_id:
+          type: string
+        status:
+          type: string
+    Movement:
+      type: object
+      properties:
+        id:
+          type: string
+        movement_code:
+          type: string
+        movement_type:
+          type: string
+        inventory_item_id:
+          type: string
+        warehouse_id:
+          type: string
+        direction:
+          type: string
+          enum: [in, out, neutral]
+        quantity:
+          type: number
+        unit:
+          type: string
+        status:
+          type: string
+          enum: [recorded, reversed, cancelled]
+    MovementResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Movement'
+    MovementListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Movement'
+        page:
+          $ref: '#/components/schemas/Page'
+    MovementCreateRequest:
+      type: object
+      required: [movement_type, inventory_item_id, warehouse_id, quantity, unit, reason, source]
+      properties:
+        movement_type:
+          type: string
+        inventory_item_id:
+          type: string
+        warehouse_id:
+          type: string
+        warehouse_location_id:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        unit_cost:
+          type: number
+        reason:
+          type: string
+        source:
+          $ref: '#/components/schemas/SourceRef'
+    ExternalMovementRequest:
+      allOf:
+        - $ref: '#/components/schemas/MovementCreateRequest'
+    SourceRef:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+        line_id:
+          type: string
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+    BalanceListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              inventory_item_id:
+                type: string
+              warehouse_id:
+                type: string
+              on_hand_quantity:
+                type: number
+              reserved_quantity:
+                type: number
+              available_quantity:
+                type: number
+              unit:
+                type: string
+        page:
+          $ref: '#/components/schemas/Page'
+    AvailabilityCheckRequest:
+      type: object
+      required: [source, items]
+      properties:
+        source:
+          $ref: '#/components/schemas/SourceRef'
+        items:
+          type: array
+          items:
+            type: object
+            required: [inventory_item_id, quantity, unit]
+            properties:
+              inventory_item_id:
+                type: string
+              quantity:
+                type: number
+              unit:
+                type: string
+    AvailabilityCheckResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            available:
+              type: boolean
+            items:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+    ReservationCreateRequest:
+      type: object
+      required: [inventory_item_id, quantity, unit, source]
+      properties:
+        inventory_item_id:
+          type: string
+        warehouse_id:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        source:
+          $ref: '#/components/schemas/SourceRef'
+    ReservationResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true

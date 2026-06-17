@@ -1,0 +1,186 @@
+openapi: 3.1.0
+info:
+  title: ERClave Provisioning Service API
+  version: 0.1.0
+  summary: Tenant provisioning orchestration APIs.
+servers:
+  - url: https://api.eslaclave.com
+security:
+  - bearerAuth: []
+tags:
+  - name: TenantRequests
+paths:
+  /v1/provisioning/tenant-requests:
+    post:
+      tags: [TenantRequests]
+      operationId: createTenantProvisioningRequest
+      summary: Request tenant provisioning from billing or manual activation.
+      x-required-module: provisioning
+      x-permissions: [internal.billing.provisioning.create]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantProvisioningRequestCreate'
+      responses:
+        '202':
+          description: Provisioning accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantProvisioningRequestResponse'
+  /v1/provisioning/tenant-requests/{id}:
+    get:
+      tags: [TenantRequests]
+      operationId: getTenantProvisioningRequest
+      summary: Get provisioning request state.
+      x-required-module: provisioning
+      x-permissions: [internal.provisioning.read]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Provisioning request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantProvisioningRequestResponse'
+  /v1/provisioning/tenant-requests/{id}/retry:
+    post:
+      tags: [TenantRequests]
+      operationId: retryTenantProvisioningRequest
+      summary: Retry failed provisioning request without duplicating tenant.
+      x-required-module: provisioning
+      x-permissions: [internal.provisioning.retry]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '202':
+          description: Retry accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantProvisioningRequestResponse'
+  /v1/provisioning/tenant-requests/{id}/steps:
+    get:
+      tags: [TenantRequests]
+      operationId: listTenantProvisioningSteps
+      summary: List provisioning steps.
+      x-required-module: provisioning
+      x-permissions: [internal.provisioning.read]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Provisioning steps.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvisioningStepListResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    TenantProvisioningRequestCreate:
+      type: object
+      required: [request_source, source_id, tenant, admin_user, modules]
+      properties:
+        request_source:
+          type: string
+          enum: [subscription, manual_activation]
+        source_id:
+          type: string
+        tenant:
+          type: object
+          required: [slug, commercial_name]
+          properties:
+            slug:
+              type: string
+            commercial_name:
+              type: string
+            timezone:
+              type: string
+            locale:
+              type: string
+        admin_user:
+          type: object
+          required: [email, display_name]
+          properties:
+            email:
+              type: string
+            display_name:
+              type: string
+        modules:
+          type: array
+          items:
+            type: string
+        limits:
+          type: object
+          additionalProperties: true
+    TenantProvisioningRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        request_source:
+          type: string
+        source_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled]
+        tenant_id:
+          type: string
+        admin_email:
+          type: string
+    TenantProvisioningRequestResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/TenantProvisioningRequest'
+    ProvisioningStepListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              step_code:
+                type: string
+              status:
+                type: string
+              attempt_count:
+                type: integer
+              error_message:
+                type: string

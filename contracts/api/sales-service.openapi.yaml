@@ -1,0 +1,792 @@
+openapi: 3.1.0
+info:
+  title: ERClave Sales Service API
+  version: 0.1.0
+  summary: Customer, quote, order, delivery and return APIs.
+servers:
+  - url: https://api.eslaclave.com
+security:
+  - bearerAuth: []
+tags:
+  - name: Customers
+  - name: Quotes
+  - name: Orders
+  - name: Deliveries
+  - name: Returns
+paths:
+  /v1/sales/customers:
+    get:
+      tags: [Customers]
+      operationId: listCustomers
+      summary: Search customers.
+      x-required-module: sales
+      x-permissions: [sales.customer.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Status'
+      responses:
+        '200':
+          description: Customers.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerListResponse'
+    post:
+      tags: [Customers]
+      operationId: createCustomer
+      summary: Create customer.
+      x-required-module: sales
+      x-permissions: [sales.customer.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreateRequest'
+      responses:
+        '201':
+          description: Customer created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+  /v1/sales/customers/{id}:
+    get:
+      tags: [Customers]
+      operationId: getCustomer
+      summary: Get customer.
+      x-required-module: sales
+      x-permissions: [sales.customer.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Customer detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+    patch:
+      tags: [Customers]
+      operationId: updateCustomer
+      summary: Update customer.
+      x-required-module: sales
+      x-permissions: [sales.customer.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerUpdateRequest'
+      responses:
+        '200':
+          description: Customer updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+  /v1/sales/customers/{id}/contacts:
+    post:
+      tags: [Customers]
+      operationId: createCustomerContact
+      summary: Add customer contact.
+      x-required-module: sales
+      x-permissions: [sales.customer.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerContactCreateRequest'
+      responses:
+        '201':
+          description: Contact created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerContactResponse'
+  /v1/sales/quotes:
+    get:
+      tags: [Quotes]
+      operationId: listQuotes
+      summary: Search quotes.
+      x-required-module: sales
+      x-permissions: [sales.quote.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Status'
+      responses:
+        '200':
+          description: Quotes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteListResponse'
+    post:
+      tags: [Quotes]
+      operationId: createQuote
+      summary: Create quote using existing customer and product/service catalog.
+      x-required-module: sales
+      x-permissions: [sales.quote.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteCreateRequest'
+      responses:
+        '201':
+          description: Quote created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+  /v1/sales/quotes/{id}:
+    get:
+      tags: [Quotes]
+      operationId: getQuote
+      summary: Get quote detail.
+      x-required-module: sales
+      x-permissions: [sales.quote.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Quote detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+    patch:
+      tags: [Quotes]
+      operationId: updateQuote
+      summary: Update draft quote.
+      x-required-module: sales
+      x-permissions: [sales.quote.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteUpdateRequest'
+      responses:
+        '200':
+          description: Quote updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+  /v1/sales/quotes/{id}/submit:
+    post:
+      tags: [Quotes]
+      operationId: submitQuote
+      summary: Mark quote as sent/quoted.
+      x-required-module: sales
+      x-permissions: [sales.quote.submit]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Quote submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+  /v1/sales/quotes/{id}/approve:
+    post:
+      tags: [Quotes]
+      operationId: approveQuote
+      summary: Approve quote.
+      x-required-module: sales
+      x-permissions: [sales.quote.approve]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Quote approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+  /v1/sales/quotes/{id}/expire:
+    post:
+      tags: [Quotes]
+      operationId: expireQuote
+      summary: Expire quote.
+      x-required-module: sales
+      x-permissions: [sales.quote.expire]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Quote expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+  /v1/sales/quotes/{id}/convert-to-order:
+    post:
+      tags: [Quotes, Orders]
+      operationId: convertQuoteToOrder
+      summary: Convert approved quote to sales order.
+      x-required-module: sales
+      x-permissions: [sales.order.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '201':
+          description: Sales order created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+  /v1/sales/orders:
+    get:
+      tags: [Orders]
+      operationId: listSalesOrders
+      summary: Search sales orders.
+      x-required-module: sales
+      x-permissions: [sales.order.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Status'
+      responses:
+        '200':
+          description: Sales orders.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderListResponse'
+  /v1/sales/orders/{id}:
+    get:
+      tags: [Orders]
+      operationId: getSalesOrder
+      summary: Get sales order detail.
+      x-required-module: sales
+      x-permissions: [sales.order.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Sales order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+    patch:
+      tags: [Orders]
+      operationId: updateSalesOrder
+      summary: Update editable sales order fields.
+      x-required-module: sales
+      x-permissions: [sales.order.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalesOrderUpdateRequest'
+      responses:
+        '200':
+          description: Sales order updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+  /v1/sales/orders/{id}/request-fulfillment:
+    post:
+      tags: [Orders]
+      operationId: requestSalesOrderFulfillment
+      summary: Request inventory or production fulfillment.
+      x-required-module: sales
+      x-permissions: [sales.order.fulfill]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FulfillmentRequest'
+      responses:
+        '202':
+          description: Fulfillment requested.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+  /v1/sales/deliveries:
+    get:
+      tags: [Deliveries]
+      operationId: listDeliveries
+      summary: Search delivery records.
+      x-required-module: sales
+      x-permissions: [sales.delivery.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Status'
+      responses:
+        '200':
+          description: Deliveries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryListResponse'
+    post:
+      tags: [Deliveries]
+      operationId: createDelivery
+      summary: Create delivery tracking record for MVP.
+      x-required-module: sales
+      x-permissions: [sales.delivery.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryCreateRequest'
+      responses:
+        '201':
+          description: Delivery created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryResponse'
+  /v1/sales/deliveries/{id}/status:
+    patch:
+      tags: [Deliveries]
+      operationId: updateDeliveryStatus
+      summary: Change delivery status.
+      x-required-module: sales
+      x-permissions: [sales.delivery.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusChangeRequest'
+      responses:
+        '200':
+          description: Delivery updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryResponse'
+  /v1/sales/returns:
+    post:
+      tags: [Returns]
+      operationId: createReturnRequest
+      summary: Create return request.
+      x-required-module: sales
+      x-permissions: [sales.return.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnCreateRequest'
+      responses:
+        '201':
+          description: Return request created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantHeader:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 50
+        maximum: 200
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    Search:
+      name: q
+      in: query
+      schema:
+        type: string
+    Status:
+      name: status
+      in: query
+      schema:
+        type: string
+  schemas:
+    Page:
+      type: object
+      properties:
+        limit:
+          type: integer
+        next_cursor:
+          type: [string, 'null']
+        has_more:
+          type: boolean
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        commercial_name:
+          type: string
+        customer_type:
+          type: string
+        status:
+          type: string
+    CustomerResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Customer'
+    CustomerListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+        page:
+          $ref: '#/components/schemas/Page'
+    CustomerCreateRequest:
+      type: object
+      required: [code, commercial_name, customer_type]
+      properties:
+        code:
+          type: string
+        commercial_name:
+          type: string
+        customer_type:
+          type: string
+        payment_terms:
+          type: string
+        currency:
+          type: string
+        billing_profile:
+          type: object
+          additionalProperties: true
+        commercial_profile:
+          type: object
+          additionalProperties: true
+    CustomerUpdateRequest:
+      type: object
+      properties:
+        commercial_name:
+          type: string
+        status:
+          type: string
+        payment_terms:
+          type: string
+        billing_profile:
+          type: object
+          additionalProperties: true
+        commercial_profile:
+          type: object
+          additionalProperties: true
+    CustomerContactCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+        is_primary:
+          type: boolean
+    CustomerContactResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+    Quote:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        customer_id:
+          type: string
+        status:
+          type: string
+          enum: [draft, quoted, approved, expired, cancelled]
+        currency:
+          type: string
+        total:
+          type: number
+    QuoteResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Quote'
+    QuoteListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Quote'
+        page:
+          $ref: '#/components/schemas/Page'
+    QuoteCreateRequest:
+      type: object
+      required: [customer_id, currency, lines]
+      properties:
+        customer_id:
+          type: string
+        currency:
+          type: string
+        valid_until:
+          type: string
+          format: date
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuoteLineInput'
+    QuoteUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/QuoteCreateRequest'
+    QuoteLineInput:
+      type: object
+      required: [product_service_id, quantity, unit, unit_price]
+      properties:
+        product_service_id:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        unit_price:
+          type: number
+        discount_amount:
+          type: number
+    SalesOrder:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        quote_id:
+          type: string
+        customer_id:
+          type: string
+        status:
+          type: string
+        fulfillment_mode:
+          type: string
+        total:
+          type: number
+    SalesOrderResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/SalesOrder'
+    SalesOrderListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SalesOrder'
+        page:
+          $ref: '#/components/schemas/Page'
+    SalesOrderUpdateRequest:
+      type: object
+      properties:
+        status:
+          type: string
+        fulfillment_mode:
+          type: string
+        promised_delivery_date:
+          type: string
+          format: date
+        notes:
+          type: string
+    FulfillmentRequest:
+      type: object
+      required: [fulfillment_mode, lines]
+      properties:
+        fulfillment_mode:
+          type: string
+          enum: [inventory, production, mixed, service, pending]
+        lines:
+          type: array
+          items:
+            type: object
+            required: [sales_order_line_id, quantity]
+            properties:
+              sales_order_line_id:
+                type: string
+              quantity:
+                type: number
+              requested_due_date:
+                type: string
+                format: date
+    DeliveryCreateRequest:
+      type: object
+      required: [sales_order_id]
+      properties:
+        sales_order_id:
+          type: string
+        recipient_name:
+          type: string
+        notes:
+          type: string
+    DeliveryResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+    DeliveryListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        page:
+          $ref: '#/components/schemas/Page'
+    StatusChangeRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+        notes:
+          type: string
+    ReturnCreateRequest:
+      type: object
+      required: [sales_order_id, reason]
+      properties:
+        sales_order_id:
+          type: string
+        delivery_record_id:
+          type: string
+        reason:
+          type: string
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    ReturnResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true

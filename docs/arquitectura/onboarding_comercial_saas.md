@@ -15,6 +15,7 @@ El objetivo es separar claramente:
 Diagrama editable:
 
 - `docs/arquitectura/diagramas/onboarding_comercial_saas.drawio`
+- `docs/arquitectura/diagramas/flujo_negocio_adquisicion_uso.drawio`
 
 ---
 

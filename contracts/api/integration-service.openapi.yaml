@@ -1,0 +1,403 @@
+openapi: 3.1.0
+info:
+  title: ERClave Integration Service API
+  version: 0.1.0
+  summary: API client, secret, scope and usage APIs.
+servers:
+  - url: https://api.eslaclave.com
+security:
+  - bearerAuth: []
+tags:
+  - name: ApiClients
+  - name: Scopes
+  - name: Usage
+paths:
+  /v1/integrations/api-clients:
+    get:
+      tags: [ApiClients]
+      operationId: listApiClients
+      summary: List tenant API clients.
+      x-required-module: integrations
+      x-permissions: [integrations.api_client.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Status'
+      responses:
+        '200':
+          description: API clients.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientListResponse'
+    post:
+      tags: [ApiClients]
+      operationId: createApiClient
+      summary: Create tenant API client.
+      x-required-module: integrations
+      x-permissions: [integrations.api_client.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiClientCreateRequest'
+      responses:
+        '201':
+          description: API client created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientResponse'
+  /v1/integrations/api-clients/{id}:
+    get:
+      tags: [ApiClients]
+      operationId: getApiClient
+      summary: Get API client.
+      x-required-module: integrations
+      x-permissions: [integrations.api_client.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: API client.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientResponse'
+    patch:
+      tags: [ApiClients]
+      operationId: updateApiClient
+      summary: Update API client.
+      x-required-module: integrations
+      x-permissions: [integrations.api_client.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiClientUpdateRequest'
+      responses:
+        '200':
+          description: API client updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientResponse'
+  /v1/integrations/api-clients/{id}/disable:
+    post:
+      tags: [ApiClients]
+      operationId: disableApiClient
+      summary: Disable API client.
+      x-required-module: integrations
+      x-permissions: [integrations.api_client.disable]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: API client disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientResponse'
+  /v1/integrations/api-clients/{id}/secrets:
+    post:
+      tags: [ApiClients]
+      operationId: rotateApiClientSecret
+      summary: Create or rotate API client secret. Plain secret is returned once.
+      x-required-module: integrations
+      x-permissions: [integrations.api_client.rotate_secret]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '201':
+          description: Secret created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientSecretResponse'
+  /v1/integrations/api-clients/{id}/scopes:
+    put:
+      tags: [ApiClients]
+      operationId: replaceApiClientScopes
+      summary: Replace API client scopes.
+      x-required-module: integrations
+      x-permissions: [integrations.api_client.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiClientScopesReplaceRequest'
+      responses:
+        '200':
+          description: Scopes updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientResponse'
+  /v1/integrations/api-scopes:
+    get:
+      tags: [Scopes]
+      operationId: listApiScopes
+      summary: List available API scopes.
+      x-required-module: integrations
+      x-permissions: [integrations.scope.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: module
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: API scopes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiScopeListResponse'
+  /v1/integrations/api-usage:
+    get:
+      tags: [Usage]
+      operationId: listApiUsage
+      summary: List API usage for tenant or client.
+      x-required-module: integrations
+      x-permissions: [integrations.usage.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: api_client_id
+          in: query
+          schema:
+            type: string
+        - name: occurred_from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: occurred_to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: API usage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiUsageListResponse'
+    post:
+      tags: [Usage]
+      operationId: recordApiUsage
+      summary: Record API usage from gateway or middleware.
+      x-required-module: integrations
+      x-permissions: [internal.gateway.api_usage.record]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiUsageRecordRequest'
+      responses:
+        '201':
+          description: API usage recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiUsageResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantHeader:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Status:
+      name: status
+      in: query
+      schema:
+        type: string
+  schemas:
+    ApiClient:
+      type: object
+      properties:
+        id:
+          type: string
+        client_id:
+          type: string
+        client_name:
+          type: string
+        status:
+          type: string
+          enum: [active, disabled, rotating]
+        scopes:
+          type: array
+          items:
+            type: string
+        rate_limit:
+          type: object
+          additionalProperties: true
+    ApiClientResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ApiClient'
+    ApiClientListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiClient'
+    ApiClientCreateRequest:
+      type: object
+      required: [client_name, scopes]
+      properties:
+        client_name:
+          type: string
+        allowed_origins:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        rate_limit:
+          type: object
+          additionalProperties: true
+    ApiClientUpdateRequest:
+      type: object
+      properties:
+        client_name:
+          type: string
+        allowed_origins:
+          type: array
+          items:
+            type: string
+        rate_limit:
+          type: object
+          additionalProperties: true
+    ApiClientSecretResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            api_client_id:
+              type: string
+            client_secret:
+              type: string
+              description: Returned only once. Never persisted as plain text.
+            expires_at:
+              type: string
+              format: date-time
+    ApiClientScopesReplaceRequest:
+      type: object
+      required: [scopes]
+      properties:
+        scopes:
+          type: array
+          items:
+            type: string
+    ApiScopeListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              module:
+                type: string
+              description:
+                type: string
+    ApiUsageRecordRequest:
+      type: object
+      required: [api_client_id, request_id, method, path, status_code, duration_ms, occurred_at]
+      properties:
+        api_client_id:
+          type: string
+        request_id:
+          type: string
+        method:
+          type: string
+        path:
+          type: string
+        status_code:
+          type: integer
+        duration_ms:
+          type: integer
+        occurred_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+    ApiUsageResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+    ApiUsageListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: true

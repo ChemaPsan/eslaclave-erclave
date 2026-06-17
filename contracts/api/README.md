@@ -15,12 +15,22 @@ Cada endpoint debe declarar:
 
 ## Servicios
 
+- `admin-service`
 - `production-service`
 - `inventory-service`
-- `purchasing-service`
 - `sales-service`
-- `expenses-service`
-- `costing-service`
-- `reporting-service`
-- `admin-service`
-- `accounting-service`
+- `billing-service`
+- `provisioning-service`
+- `integration-service`
+
+## Contratos MVP iniciales
+
+- `admin-service.openapi.yaml`
+- `production-service.openapi.yaml`
+- `inventory-service.openapi.yaml`
+- `sales-service.openapi.yaml`
+- `billing-service.openapi.yaml`
+- `provisioning-service.openapi.yaml`
+- `integration-service.openapi.yaml`
+
+Cada contrato debe incluir `operationId`, `x-required-module`, `x-permissions` e `Idempotency-Key` en operaciones de comando.

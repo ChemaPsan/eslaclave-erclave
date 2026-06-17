@@ -1,0 +1,935 @@
+openapi: 3.1.0
+info:
+  title: ERClave Admin Service API
+  version: 0.1.0
+  summary: Tenant, user, role, permission, entitlement and policy APIs.
+  description: Initial MVP contract for admin-service. Source of truth for tenants, users, roles, permissions, active modules and tenant settings.
+servers:
+  - url: https://api.eslaclave.com
+    description: Production placeholder
+  - url: https://qa-api.eslaclave.com
+    description: QA placeholder
+security:
+  - bearerAuth: []
+tags:
+  - name: Tenants
+  - name: Entitlements
+  - name: Policy
+  - name: Users
+  - name: Roles
+  - name: BusinessUnits
+  - name: Settings
+paths:
+  /v1/tenants/{tenant_id}:
+    get:
+      tags: [Tenants]
+      operationId: getTenant
+      summary: Get tenant details.
+      x-required-module: admin
+      x-permissions: [admin.tenant.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Tenant details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Tenants]
+      operationId: updateTenant
+      summary: Update tenant general data.
+      x-required-module: admin
+      x-permissions: [admin.tenant.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantUpdateRequest'
+      responses:
+        '200':
+          description: Tenant updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/tenants:
+    post:
+      tags: [Tenants]
+      operationId: createTenant
+      summary: Create tenant from provisioning.
+      x-required-module: admin
+      x-permissions: [internal.provisioning.tenant.create]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCreateRequest'
+      responses:
+        '201':
+          description: Tenant created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /v1/tenants/{tenant_id}/suspend:
+    post:
+      tags: [Tenants]
+      operationId: suspendTenant
+      summary: Suspend tenant writes and access according to policy.
+      x-required-module: admin
+      x-permissions: [admin.tenant.suspend]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Tenant suspended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/tenants/{tenant_id}/reactivate:
+    post:
+      tags: [Tenants]
+      operationId: reactivateTenant
+      summary: Reactivate a suspended tenant.
+      x-required-module: admin
+      x-permissions: [admin.tenant.reactivate]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Tenant reactivated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+  /v1/tenants/{tenant_id}/entitlements:
+    get:
+      tags: [Entitlements]
+      operationId: listTenantEntitlements
+      summary: List active and inactive modules for a tenant.
+      x-required-module: admin
+      x-permissions: [internal.entitlement.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Tenant entitlements.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementListResponse'
+  /v1/tenants/{tenant_id}/entitlements/{module_code}:
+    put:
+      tags: [Entitlements]
+      operationId: upsertTenantEntitlement
+      summary: Activate, suspend or update limits for a module.
+      x-required-module: admin
+      x-permissions: [admin.entitlement.manage]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/ModuleCodePath'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntitlementUpsertRequest'
+      responses:
+        '200':
+          description: Entitlement updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementResponse'
+  /v1/policy/evaluate:
+    post:
+      tags: [Policy]
+      operationId: evaluatePolicy
+      summary: Evaluate tenant, module, permission and scope.
+      x-required-module: admin
+      x-permissions: [internal.policy.evaluate]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyEvaluateRequest'
+      responses:
+        '200':
+          description: Policy decision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyEvaluateResponse'
+  /v1/users:
+    get:
+      tags: [Users]
+      operationId: listUsers
+      summary: List tenant users.
+      x-required-module: admin
+      x-permissions: [admin.user.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Status'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Users.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+  /v1/users/invitations:
+    post:
+      tags: [Users]
+      operationId: inviteUser
+      summary: Invite a user without sending password.
+      x-required-module: admin
+      x-permissions: [admin.user.invite]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInvitationRequest'
+      responses:
+        '201':
+          description: Invitation created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+  /v1/users/{user_id}:
+    patch:
+      tags: [Users]
+      operationId: updateUser
+      summary: Update user profile or role assignments.
+      x-required-module: admin
+      x-permissions: [admin.user.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: User updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+  /v1/users/{user_id}/disable:
+    post:
+      tags: [Users]
+      operationId: disableUser
+      summary: Disable a tenant user.
+      x-required-module: admin
+      x-permissions: [admin.user.disable]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: User disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+  /v1/roles:
+    get:
+      tags: [Roles]
+      operationId: listRoles
+      summary: List tenant roles.
+      x-required-module: admin
+      x-permissions: [admin.role.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Roles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleListResponse'
+    post:
+      tags: [Roles]
+      operationId: createRole
+      summary: Create tenant role.
+      x-required-module: admin
+      x-permissions: [admin.role.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreateRequest'
+      responses:
+        '201':
+          description: Role created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+  /v1/roles/{role_id}:
+    patch:
+      tags: [Roles]
+      operationId: updateRole
+      summary: Update role.
+      x-required-module: admin
+      x-permissions: [admin.role.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: role_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleUpdateRequest'
+      responses:
+        '200':
+          description: Role updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+  /v1/roles/{role_id}/permissions:
+    put:
+      tags: [Roles]
+      operationId: replaceRolePermissions
+      summary: Replace permissions for a role.
+      x-required-module: admin
+      x-permissions: [admin.role.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: role_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolePermissionsReplaceRequest'
+      responses:
+        '200':
+          description: Permissions replaced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+  /v1/business-units:
+    get:
+      tags: [BusinessUnits]
+      operationId: listBusinessUnits
+      summary: List business units.
+      x-required-module: admin
+      x-permissions: [admin.business_unit.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Business units.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessUnitListResponse'
+    post:
+      tags: [BusinessUnits]
+      operationId: createBusinessUnit
+      summary: Create business unit.
+      x-required-module: admin
+      x-permissions: [admin.business_unit.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessUnitCreateRequest'
+      responses:
+        '201':
+          description: Business unit created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessUnitResponse'
+  /v1/settings:
+    get:
+      tags: [Settings]
+      operationId: listSettings
+      summary: List tenant settings.
+      x-required-module: admin
+      x-permissions: [admin.setting.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: module_code
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettingListResponse'
+  /v1/settings/{key}:
+    put:
+      tags: [Settings]
+      operationId: upsertSetting
+      summary: Upsert tenant setting.
+      x-required-module: admin
+      x-permissions: [admin.setting.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingUpsertRequest'
+      responses:
+        '200':
+          description: Setting upserted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettingResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantHeader:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Tenant context. Must match authenticated actor.
+    TenantIdPath:
+      name: tenant_id
+      in: path
+      required: true
+      schema:
+        type: string
+    ModuleCodePath:
+      name: module_code
+      in: path
+      required: true
+      schema:
+        type: string
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 50
+        maximum: 200
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+    Status:
+      name: status
+      in: query
+      required: false
+      schema:
+        type: string
+    Search:
+      name: q
+      in: query
+      required: false
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Bad request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Conflict.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: Validation error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, correlation_id]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            correlation_id:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+    Page:
+      type: object
+      properties:
+        limit:
+          type: integer
+        next_cursor:
+          type: [string, 'null']
+        has_more:
+          type: boolean
+    Tenant:
+      type: object
+      required: [id, slug, commercial_name, status]
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        legal_name:
+          type: [string, 'null']
+        commercial_name:
+          type: string
+        status:
+          type: string
+          enum: [provisioning, active, suspended, cancelled]
+        plan_id:
+          type: [string, 'null']
+        timezone:
+          type: string
+        locale:
+          type: string
+    TenantResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Tenant'
+    TenantCreateRequest:
+      type: object
+      required: [slug, commercial_name, source]
+      properties:
+        slug:
+          type: string
+        commercial_name:
+          type: string
+        legal_name:
+          type: string
+        plan_id:
+          type: string
+        timezone:
+          type: string
+          default: America/Mexico_City
+        locale:
+          type: string
+          default: es-MX
+        source:
+          $ref: '#/components/schemas/SourceRef'
+    TenantUpdateRequest:
+      type: object
+      properties:
+        commercial_name:
+          type: string
+        legal_name:
+          type: string
+        timezone:
+          type: string
+        locale:
+          type: string
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+    SourceRef:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+    Entitlement:
+      type: object
+      properties:
+        module_code:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+        limits:
+          type: object
+          additionalProperties: true
+    EntitlementResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Entitlement'
+    EntitlementListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entitlement'
+    EntitlementUpsertRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+        limits:
+          type: object
+          additionalProperties: true
+        source:
+          type: string
+          enum: [subscription, manual, trial]
+    PolicyEvaluateRequest:
+      type: object
+      required: [tenant_id, actor_id, module, resource, action]
+      properties:
+        tenant_id:
+          type: string
+        actor_id:
+          type: string
+        module:
+          type: string
+        resource:
+          type: string
+        action:
+          type: string
+        scope:
+          type: object
+          additionalProperties: true
+    PolicyEvaluateResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          required: [allowed]
+          properties:
+            allowed:
+              type: boolean
+            reason:
+              type: string
+            matched_permissions:
+              type: array
+              items:
+                type: string
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        display_name:
+          type: string
+        status:
+          type: string
+          enum: [invited, active, disabled]
+        roles:
+          type: array
+          items:
+            type: string
+    UserResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/User'
+    UserListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        page:
+          $ref: '#/components/schemas/Page'
+    UserInvitationRequest:
+      type: object
+      required: [email, display_name, role_ids]
+      properties:
+        email:
+          type: string
+        display_name:
+          type: string
+        role_ids:
+          type: array
+          items:
+            type: string
+    UserUpdateRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+        role_ids:
+          type: array
+          items:
+            type: string
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+    RoleResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Role'
+    RoleListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        page:
+          $ref: '#/components/schemas/Page'
+    RoleCreateRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+    RoleUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+    RolePermissionsReplaceRequest:
+      type: object
+      required: [permission_ids]
+      properties:
+        permission_ids:
+          type: array
+          items:
+            type: string
+        scope:
+          type: object
+          additionalProperties: true
+    BusinessUnit:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+    BusinessUnitResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/BusinessUnit'
+    BusinessUnitListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BusinessUnit'
+    BusinessUnitCreateRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+    Setting:
+      type: object
+      properties:
+        key:
+          type: string
+        module_code:
+          type: string
+        value:
+          type: object
+          additionalProperties: true
+    SettingResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Setting'
+    SettingListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Setting'
+    SettingUpsertRequest:
+      type: object
+      required: [value]
+      properties:
+        module_code:
+          type: string
+        value:
+          type: object
+          additionalProperties: true

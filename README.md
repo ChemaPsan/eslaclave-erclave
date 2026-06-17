@@ -45,13 +45,42 @@ Validaciones disponibles:
 ```bash
 npm run validate:i18n
 npm run validate:architecture
+npm run validate:backend-scaffold
+npm run validate:openapi
 npm run validate:traceability
 npm run validate:syntax
 ```
 
-Estas validaciones convierten reglas de `AGENTES.md` en checks concretos: paridad Espanol/Ingles, fronteras de microfrontends, carpetas de microservicios, trazabilidad y sintaxis JavaScript.
+Estas validaciones convierten reglas de `AGENTES.md` en checks concretos: paridad Espanol/Ingles, fronteras de microfrontends, carpetas de microservicios, scaffolding backend, contratos OpenAPI, trazabilidad y sintaxis JavaScript.
 
 En GitHub, el workflow `.github/workflows/validate.yml` ejecuta estas validaciones automaticamente en `push`, `pull_request` y ejecucion manual.
+
+## Backend local
+
+El scaffolding FastAPI inicial vive en `backend/` y arranca con `admin-service`.
+
+```bash
+cd backend
+python -m venv .venv
+python -m pip install -e ".[dev]"
+uvicorn services.admin_service_adapter:app --reload --port 8000
+```
+
+Windows PowerShell:
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+uvicorn services.admin_service_adapter:app --reload --port 8000
+```
+
+El dominio publico todavia no esta comprado. Configurar el valor publico con:
+
+```text
+ERCLAVE_API_PUBLIC_BASE_URL
+```
 
 ## Estructura
 

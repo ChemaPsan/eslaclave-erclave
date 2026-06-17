@@ -530,3 +530,5 @@ Despues, los contratos de esta guia deben convertirse en especificacion inicial 
 ```text
 docs/arquitectura/apis_mvp.md
 ```
+
+Estado: definido en `docs/arquitectura/apis_mvp.md`.

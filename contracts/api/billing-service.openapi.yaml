@@ -1,0 +1,355 @@
+openapi: 3.1.0
+info:
+  title: ERClave Billing Service API
+  version: 0.1.0
+  summary: Plan, checkout, subscription, webhook and manual activation APIs.
+servers:
+  - url: https://api.eslaclave.com
+security:
+  - bearerAuth: []
+tags:
+  - name: Plans
+  - name: Checkout
+  - name: Webhooks
+  - name: Subscriptions
+  - name: ManualActivations
+paths:
+  /v1/billing/plans:
+    get:
+      tags: [Plans]
+      operationId: listBillingPlans
+      summary: List available commercial plans.
+      x-required-module: billing
+      x-permissions: [public.plan.read]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Plans.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanListResponse'
+  /v1/billing/checkout-sessions:
+    post:
+      tags: [Checkout]
+      operationId: createCheckoutSession
+      summary: Create hosted checkout session.
+      x-required-module: billing
+      x-permissions: [public.checkout.create]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutSessionCreateRequest'
+      responses:
+        '201':
+          description: Checkout session created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSessionResponse'
+  /v1/billing/webhooks/payment-provider:
+    post:
+      tags: [Webhooks]
+      operationId: receivePaymentProviderWebhook
+      summary: Receive signed payment provider webhook.
+      x-required-module: billing
+      x-permissions: [external.payment_provider.webhook]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: Payment-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Webhook accepted or already processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookAckResponse'
+  /v1/billing/subscriptions:
+    get:
+      tags: [Subscriptions]
+      operationId: listSubscriptions
+      summary: List subscriptions.
+      x-required-module: billing
+      x-permissions: [billing.subscription.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeaderOptional'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Status'
+      responses:
+        '200':
+          description: Subscriptions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionListResponse'
+  /v1/billing/subscriptions/{id}:
+    get:
+      tags: [Subscriptions]
+      operationId: getSubscription
+      summary: Get subscription.
+      x-required-module: billing
+      x-permissions: [billing.subscription.read]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Subscription.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+  /v1/billing/subscriptions/{id}/cancel:
+    post:
+      tags: [Subscriptions]
+      operationId: cancelSubscription
+      summary: Cancel subscription.
+      x-required-module: billing
+      x-permissions: [billing.subscription.cancel]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Subscription cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+  /v1/billing/manual-activations:
+    post:
+      tags: [ManualActivations]
+      operationId: createManualActivation
+      summary: Create manual activation request.
+      x-required-module: billing
+      x-permissions: [billing.manual_activation.create]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualActivationCreateRequest'
+      responses:
+        '201':
+          description: Manual activation created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManualActivationResponse'
+  /v1/billing/manual-activations/{id}/approve:
+    post:
+      tags: [ManualActivations]
+      operationId: approveManualActivation
+      summary: Approve manual activation and request provisioning.
+      x-required-module: billing
+      x-permissions: [billing.manual_activation.approve]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualActivationApproveRequest'
+      responses:
+        '200':
+          description: Manual activation approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManualActivationResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantHeaderOptional:
+      name: X-Tenant-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Status:
+      name: status
+      in: query
+      schema:
+        type: string
+  schemas:
+    Plan:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+        billing_period:
+          type: string
+        price_amount:
+          type: number
+        currency:
+          type: string
+        included_modules:
+          type: array
+          items:
+            type: string
+        limits:
+          type: object
+          additionalProperties: true
+    PlanListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Plan'
+    CheckoutSessionCreateRequest:
+      type: object
+      required: [plan_id, customer_email, tenant_requested_name, success_url, cancel_url]
+      properties:
+        plan_id:
+          type: string
+        customer_email:
+          type: string
+        tenant_requested_name:
+          type: string
+        success_url:
+          type: string
+        cancel_url:
+          type: string
+    CheckoutSessionResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            checkout_session_id:
+              type: string
+            checkout_url:
+              type: string
+            status:
+              type: string
+    WebhookAckResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            received:
+              type: boolean
+            processed:
+              type: boolean
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+        tenant_id:
+          type: string
+        plan_id:
+          type: string
+        status:
+          type: string
+        source:
+          type: string
+    SubscriptionResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Subscription'
+    SubscriptionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subscription'
+    ManualActivationCreateRequest:
+      type: object
+      required: [plan_id, requested_tenant_name, admin_email, modules, reason]
+      properties:
+        plan_id:
+          type: string
+        requested_tenant_name:
+          type: string
+        admin_email:
+          type: string
+        modules:
+          type: array
+          items:
+            type: string
+        limits:
+          type: object
+          additionalProperties: true
+        reason:
+          type: string
+    ManualActivationApproveRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+    ManualActivationResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string

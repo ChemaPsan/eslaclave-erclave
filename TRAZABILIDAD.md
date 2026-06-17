@@ -1039,6 +1039,126 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
 | Observaciones | El agente queda junto al Arquitecto senior de plataforma SaaS porque sus decisiones afectan a todos los modulos. |
 
+### CHG-068
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-17 |
+| Cambio | Contratos API MVP |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/apis_mvp.md`, `docs/arquitectura/modelo_datos_mvp.md`, `docs/arquitectura/ownership_datos_mvp.md`, `docs/arquitectura/siguiente_paso_backend_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | APIs por servicio, errores, paginacion, filtros, permisos, idempotencia, contratos cruzados, OpenAPI |
+| Descripcion | Se agrego el documento de APIs MVP con contratos iniciales para `admin-service`, `production-service`, `inventory-service`, `sales-service`, `billing-service`, `provisioning-service` e `integration-service`. Incluye headers, paginacion, filtros, errores, permisos, endpoints por servicio, requests ejemplo, reglas backend, eventos, idempotencia y criterios para generar OpenAPI. |
+| Motivo | Convertir el modelo de datos y ownership en contratos API iniciales para construir backend real con FastAPI/OpenAPI sin mezclar responsabilidades entre servicios. |
+| Impacto | El proyecto ya cuenta con una base para crear especificaciones OpenAPI, modelos Pydantic, rutas FastAPI y pruebas de contrato por servicio. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | El documento define contratos MVP de arquitectura; aun no crea archivos OpenAPI YAML ni codigo backend. |
+
+### CHG-069
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-17 |
+| Cambio | Diagrama draw.io de APIs MVP |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/diagramas/apis_mvp_relaciones.drawio`, `docs/arquitectura/apis_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | APIs MVP, relaciones entre servicios, contratos cruzados, eventos y datos |
+| Descripcion | Se agrego un diagrama editable `.drawio` con el flujo de entrada por frontend, apps externas y proveedor de pago, API Gateway, servicios MVP, relaciones entre Ventas, Produccion, Almacenes, Billing, Provisioning, Administracion e Integraciones, ademas de Cloud SQL, outbox, Pub/Sub y auditoria. Se enlazo el diagrama desde `apis_mvp.md`. |
+| Motivo | Facilitar la revision visual de contratos API y relaciones entre servicios antes de generar especificaciones OpenAPI o implementar backend real. |
+| Impacto | El equipo puede abrir el diagrama en diagrams.net para analizar flujos, fronteras de ownership, eventos y dependencias entre servicios. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | El diagrama es de arquitectura MVP; no representa aun infraestructura detallada por ambiente ni despliegue real. |
+
+### CHG-070
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-17 |
+| Cambio | Diagrama draw.io de flujo de negocio de adquisicion y uso |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/diagramas/flujo_negocio_adquisicion_uso.drawio`, `docs/arquitectura/onboarding_comercial_saas.md`, `TRAZABILIDAD.md` |
+| Secciones | Onboarding comercial SaaS, flujo de negocio, adquisicion, activacion y uso |
+| Descripcion | Se agrego un diagrama editable `.drawio` no tecnico que muestra el flujo de negocio desde descubrimiento del cliente, contratacion en linea o asesorada, confirmacion de pago o activacion manual, creacion del espacio de empresa, invitacion segura del administrador, configuracion inicial y operacion continua en Produccion, Almacenes y Ventas. Se enlazo desde el documento de onboarding comercial SaaS. |
+| Motivo | Facilitar la explicacion visual del recorrido del cliente y la usabilidad del producto sin entrar en detalles tecnicos de APIs, infraestructura o servicios. |
+| Impacto | El proyecto cuenta con una vista ejecutiva del flujo comercial y de adopcion para revisiones de negocio, ventas y producto. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | El diagrama complementa los diagramas tecnicos existentes; no reemplaza arquitectura, APIs ni modelo de datos. |
+
+### CHG-071
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-17 |
+| Cambio | Plan de implementacion backend MVP |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/plan_implementacion_backend_mvp.md`, `docs/arquitectura/apis_mvp.md`, `docs/arquitectura/siguiente_paso_backend_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | Fases de backend MVP, admin-service, production-service, inventory-service, sales-service, billing/provisioning, integration-service, criterios QA |
+| Descripcion | Se agrego el plan de implementacion backend MVP con fases recomendadas para scaffolding FastAPI, admin-service, auditoria/idempotencia, production-service, inventory-service, sales-service, integracion frontend, billing/provisioning e integration-service. Tambien se documentaron mocks temporales, validadores recomendados, criterios para QA real, criterios para modulo real, riesgos y primer sprint sugerido. |
+| Motivo | Convertir la arquitectura, ownership, modelo de datos y APIs en una ruta ejecutable para construir el backend real sin sobredimensionar ni mezclar responsabilidades. |
+| Impacto | El proyecto ya tiene un plan de trabajo para pasar de maqueta a QA real iniciando por plataforma minima y `admin-service`, antes de automatizar venta publica y provisioning. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | El plan no crea codigo backend todavia; sirve como guia para el siguiente sprint tecnico. |
+
+### CHG-072
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-17 |
+| Cambio | Agentes transversales de APIs y QA |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Agente transversal prioritario, APIs, contratos backend, QA, validadores, release |
+| Descripcion | Se agregaron dos agentes transversales: Arquitecto senior de APIs y contratos backend, enfocado en OpenAPI, FastAPI, permisos, idempotencia, errores y contratos; e Ingeniero senior de QA, validadores y release, enfocado en automatizar reglas objetivas, pruebas, CI/CD, compatibilidad Windows/Linux y criterios de QA/Produccion. |
+| Motivo | Completar los agentes necesarios antes de pasar de documentacion a contratos OpenAPI, validadores y scaffolding backend real. |
+| Impacto | El proyecto cuenta con criterios explicitos para disenar APIs seguras y para convertir reglas de agentes/documentos en validadores repetibles antes de implementar servicios. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | Estos agentes complementan al Arquitecto SaaS y al Arquitecto de datos; no reemplazan a los agentes tecnicos por modulo. |
+
+### CHG-073
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-17 |
+| Cambio | Contratos OpenAPI MVP iniciales |
+| Autor | Codex |
+| Archivos | `.gitignore`, `contracts/api/README.md`, `contracts/api/admin-service.openapi.yaml`, `contracts/api/production-service.openapi.yaml`, `contracts/api/inventory-service.openapi.yaml`, `contracts/api/sales-service.openapi.yaml`, `contracts/api/billing-service.openapi.yaml`, `contracts/api/provisioning-service.openapi.yaml`, `contracts/api/integration-service.openapi.yaml`, `docs/arquitectura/apis_mvp.md`, `package.json`, `tools/validators/validate-all.js`, `tools/validators/validate-openapi-contracts.js`, `TRAZABILIDAD.md` |
+| Secciones | Contratos API, OpenAPI, validadores, API MVP |
+| Descripcion | Se crearon los contratos OpenAPI iniciales para los siete servicios MVP: Administracion, Produccion, Almacenes, Ventas, Billing, Provisioning e Integraciones. Tambien se agrego un validador `validate-openapi-contracts.js` que verifica existencia de contratos y metadatos minimos como `operationId`, `x-required-module`, `x-permissions` e `Idempotency-Key`; se conecto al comando general `npm run validate` y se actualizo el README de contratos API. |
+| Motivo | Iniciar la implementacion API-first con contratos versionados antes de crear codigo FastAPI, evitando inventar endpoints durante el desarrollo backend. |
+| Impacto | El proyecto ya cuenta con una primera version contractual para generar rutas, modelos Pydantic, pruebas de contrato y scaffolding backend por servicio. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | Los contratos son MVP iniciales y deberan enriquecerse durante la implementacion de cada servicio. |
+
+### CHG-074
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-17 |
+| Cambio | Scaffolding backend base con FastAPI |
+| Autor | Codex |
+| Archivos | `.gitignore`, `README.md`, `backend/README.md`, `backend/.env.example`, `backend/pyproject.toml`, `backend/alembic.ini`, `backend/alembic/env.py`, `backend/alembic/versions/.gitkeep`, `backend/shared/erclave_common/*`, `backend/services/admin-service/README.md`, `backend/services/admin-service/app/*`, `backend/services/admin-service/tests/test_health.py`, `backend/services/admin_service_adapter.py`, `docs/arquitectura/apis_mvp.md`, `docs/arquitectura/plan_implementacion_backend_mvp.md`, `package.json`, `tools/validators/validate-all.js`, `tools/validators/validate-backend-scaffold.js`, `TRAZABILIDAD.md` |
+| Secciones | Backend FastAPI, admin-service, configuracion por ambiente, Alembic, health checks, validadores |
+| Descripcion | Se creo el scaffolding backend base con FastAPI para `admin-service`, incluyendo estructura de proyecto Python, configuracion por ambiente, variable configurable `ERCLAVE_API_PUBLIC_BASE_URL` para no amarrar el dominio aun no comprado, health checks, manejo comun de errores, middleware de `correlation_id`, placeholder de tenant, Alembic inicial, tests de health y validador `validate-backend-scaffold.js` conectado a `npm run validate`. |
+| Motivo | Iniciar la implementacion real del backend siguiendo el plan MVP, sin depender de dominio definitivo y preparando la base tecnica para implementar `admin-service` antes de los modulos operativos. |
+| Impacto | El repo ya puede validar que existe el esqueleto backend minimo y cuenta con comandos documentados para levantar FastAPI localmente cuando se instalen dependencias. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro; `python -m py_compile` ejecutado correctamente sobre los archivos Python del scaffolding. |
+| Observaciones | Aun no se implementan endpoints funcionales de `admin-service`; solo endpoints tecnicos `/health`, `/ready` y `/version`. |
+
+### CHG-075
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-17 |
+| Cambio | Modelo fisico inicial de admin-service |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/models.py`, `backend/alembic/env.py`, `backend/alembic/versions/20260617_0001_admin_service_initial.py`, `backend/README.md`, `backend/services/admin-service/README.md`, `docs/arquitectura/admin_service_modelo_fisico.md`, `docs/arquitectura/modelo_datos_mvp.md`, `docs/arquitectura/plan_implementacion_backend_mvp.md`, `tools/validators/validate-backend-scaffold.js`, `TRAZABILIDAD.md` |
+| Secciones | Admin-service, modelo fisico, SQLAlchemy, Alembic, multi-tenant, auditoria |
+| Descripcion | Se definio el modelo fisico inicial de `admin-service` con SQLAlchemy y migracion Alembic para `admin.tenants`, `admin.users`, `admin.roles`, `admin.permissions`, `admin.role_permissions`, `admin.memberships`, `admin.membership_roles`, `admin.tenant_modules` y `admin.audit_events`. Se documento la decision de usar usuarios globales y membresias por tenant para soportar SaaS multi-tenant sin duplicar identidades. |
+| Motivo | Crear la base de datos real de Administracion antes de implementar endpoints, manteniendo ownership claro de tenants, usuarios, permisos, modulos activos y auditoria. |
+| Impacto | `admin-service` ya cuenta con una fuente tecnica de verdad para el schema `admin` y Alembic puede apuntar al metadata del servicio. |
+| Validacion | `python -m py_compile` ejecutado correctamente sobre los archivos Python nuevos; `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | Se agregaron tablas puente `role_permissions` y `membership_roles` porque son necesarias para resolver permisos efectivos por tenant. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
