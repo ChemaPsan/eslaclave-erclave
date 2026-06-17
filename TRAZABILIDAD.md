@@ -979,6 +979,66 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
 | Observaciones | Los precios reales dependeran del registrador, extension de dominio, proveedor de pagos, trafico, logs, almacenamiento y uso de correo transaccional. |
 
+### CHG-064
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-16 |
+| Cambio | Guia del siguiente paso tecnico para backend MVP |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/siguiente_paso_backend_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | Arquitectura backend MVP, ownership de datos, modelo conceptual, APIs, eventos |
+| Descripcion | Se agrego una guia tecnica que define que el siguiente paso recomendado no es iniciar directo con base de datos ni listado de APIs, sino documentar primero ownership de datos, entidades canonicas, reglas backend, contratos entre modulos y despues derivar modelo de datos y APIs. |
+| Motivo | Evitar acoplamiento prematuro entre Produccion, Almacenes, Ventas, Administracion, Billing y Provisioning al pasar de maqueta a backend real multi-tenant. |
+| Impacto | El proyecto cuenta con una ruta clara para avanzar hacia `ownership_datos_mvp.md`, `modelo_datos_mvp.md` y `apis_mvp.md` sin romper la separacion modular. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | El documento se basa en los modulos actualmente trabajados y en el agente Arquitecto senior de plataforma SaaS. |
+
+### CHG-065
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-16 |
+| Cambio | Ownership de datos y contratos MVP |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/ownership_datos_mvp.md`, `docs/arquitectura/siguiente_paso_backend_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | Ownership de entidades, contratos entre servicios, reglas multi-tenant, eventos MVP |
+| Descripcion | Se agrego el documento de ownership de datos y contratos del MVP, definiendo servicios duenos, entidades por dominio, reglas multi-tenant, contratos HTTP/eventos entre Administracion, Produccion, Almacenes, Ventas, Billing, Provisioning e Integraciones, y reglas anti-acoplamiento. Tambien se marco en la guia del siguiente paso que el documento ya fue definido. |
+| Motivo | Preparar el diseno de modelo de datos y APIs sobre limites claros de responsabilidad, evitando que los modulos escriban datos ajenos o dependan de reglas solo en frontend. |
+| Impacto | El proyecto ya cuenta con la base arquitectonica para derivar `modelo_datos_mvp.md` y `apis_mvp.md` sin romper la separacion modular ni el aislamiento por tenant. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | Los contratos son iniciales y deberan convertirse despues en especificaciones OpenAPI y eventos versionados. |
+
+### CHG-066
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-16 |
+| Cambio | Modelo de datos MVP |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/modelo_datos_mvp.md`, `docs/arquitectura/ownership_datos_mvp.md`, `docs/arquitectura/siguiente_paso_backend_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | Modelo PostgreSQL MVP, schemas por servicio, entidades, indices, auditoria, outbox, referencias cruzadas |
+| Descripcion | Se agrego el modelo de datos MVP para PostgreSQL con estrategia inicial de schemas por servicio, columnas comunes, tablas por dominio, indices multi-tenant, referencias internas y externas, estados iniciales, reglas de integridad backend, auditoria y patron outbox. Tambien se marcaron como definidos los enlaces al modelo desde los documentos de ownership y siguiente paso backend. |
+| Motivo | Convertir el ownership y contratos del MVP en una base tecnica concreta para implementar migraciones, modelos backend y APIs sin acoplar servicios ni romper aislamiento por tenant. |
+| Impacto | El proyecto ya cuenta con una guia de datos para iniciar Alembic/SQLModel y derivar el documento `apis_mvp.md` con claridad sobre tablas, reglas, snapshots, idempotencia e indices. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | El modelo es conceptual-operativo; aun no crea migraciones ni codigo backend. |
+
+### CHG-067
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-17 |
+| Cambio | Agente senior de datos y persistencia |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Agente transversal prioritario, arquitectura de datos, persistencia, migraciones, seguridad |
+| Descripcion | Se agrego el Arquitecto senior de datos y persistencia como agente transversal especializado en modelado de datos, relaciones, PostgreSQL, Cloud SQL, SQLAlchemy/SQLModel, Alembic, multi-tenancy, auditoria, outbox, indices, migraciones seguras, seguridad y evaluacion de tecnologias de datos. |
+| Motivo | Contar con un agente experto que revise la construccion de bases de datos y relaciones con la misma linea etica del proyecto: no inventar, validar fuente de verdad, proteger seguridad, trazabilidad e integridad. |
+| Impacto | Las decisiones de base de datos ahora tienen un responsable transversal con criterios de rechazo, preguntas obligatorias y fuentes de verdad documentales antes de aprobar modelos o migraciones. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | El agente queda junto al Arquitecto senior de plataforma SaaS porque sus decisiones afectan a todos los modulos. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
