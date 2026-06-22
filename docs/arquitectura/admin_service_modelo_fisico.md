@@ -73,11 +73,29 @@ La idempotencia final se debera complementar con una tabla dedicada de comandos 
 - ORM: `backend/services/admin-service/app/models.py`
 - Migracion: `backend/alembic/versions/20260617_0001_admin_service_initial.py`
 - Alembic metadata: `backend/alembic/env.py`
+- Catalogo seed MVP: `backend/services/admin-service/app/seeds/catalog.py`
+
+## Catalogo seed de modulos MVP
+
+El primer seed versionado define estos codigos de modulo:
+
+| Codigo | Servicio duenio | Visible como modulo contratable |
+|---|---|---|
+| `admin` | `admin-service` | No |
+| `production` | `production-service` | Si |
+| `inventory` | `inventory-service` | Si |
+| `sales` | `sales-service` | Si |
+| `billing` | `billing-service` | No |
+| `provisioning` | `provisioning-service` | No |
+| `integrations` | `integration-service` | Si |
+
+Este archivo aun no escribe datos en base. El siguiente paso es crear un script idempotente que use este catalogo para poblar PostgreSQL sin duplicar registros.
 
 ## Pendientes inmediatos
 
-1. Crear seeds iniciales de permisos y modulos MVP.
-2. Implementar repositorios o unidad de trabajo para `admin-service`.
-3. Implementar endpoints de tenants y tenant modules.
-4. Agregar tabla de idempotencia para comandos reales.
-5. Agregar pruebas de migracion contra PostgreSQL en QA.
+1. Crear seeds iniciales de permisos MVP a partir de `contracts/api/*.openapi.yaml`.
+2. Crear script idempotente para aplicar seeds en PostgreSQL.
+3. Implementar repositorios o unidad de trabajo para `admin-service`.
+4. Implementar endpoints de tenants y tenant modules.
+5. Agregar tabla de idempotencia para comandos reales.
+6. Agregar pruebas de migracion contra PostgreSQL en QA.

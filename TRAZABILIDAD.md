@@ -1159,6 +1159,21 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `python -m py_compile` ejecutado correctamente sobre los archivos Python nuevos; `npm.cmd run validate` ejecutado correctamente despues del registro. |
 | Observaciones | Se agregaron tablas puente `role_permissions` y `membership_roles` porque son necesarias para resolver permisos efectivos por tenant. |
 
+### CHG-076
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-17 |
+| Cambio | Catalogo seed inicial de modulos MVP |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/seeds/__init__.py`, `backend/services/admin-service/app/seeds/catalog.py`, `backend/services/admin-service/README.md`, `docs/arquitectura/admin_service_modelo_fisico.md`, `docs/arquitectura/plan_implementacion_backend_mvp.md`, `tools/validators/validate-backend-scaffold.js`, `TRAZABILIDAD.md` |
+| Secciones | Admin-service, seeds, modulos MVP, validadores |
+| Descripcion | Se creo el catalogo seed versionado de modulos MVP con `admin`, `production`, `inventory`, `sales`, `billing`, `provisioning` e `integrations`, incluyendo servicio duenio, estatus, visibilidad comercial y orden sugerido. El validador backend ahora verifica que el catalogo exista y contenga los siete modulos esperados. |
+| Motivo | Definir la fuente inicial de verdad para codigos de modulo antes de crear permisos, entitlements o scripts de carga a base de datos. |
+| Impacto | Los siguientes pasos pueden extraer permisos desde OpenAPI y aplicar seeds idempotentes sin inventar codigos de modulo en cada endpoint. |
+| Validacion | `python -m py_compile` ejecutado correctamente sobre el catalogo seed; `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | Este cambio no inserta datos en PostgreSQL; prepara el catalogo para el siguiente script seed idempotente. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

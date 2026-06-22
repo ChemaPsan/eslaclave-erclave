@@ -212,7 +212,8 @@ Entregables:
   - `admin.membership_roles`;
   - `admin.tenant_modules`;
   - `admin.audit_events`;
-- seeds de modulos y permisos MVP;
+- catalogo seed inicial de modulos MVP en `backend/services/admin-service/app/seeds/catalog.py`;
+- seeds de permisos MVP;
 - endpoints MVP de `admin-service`;
 - `POST /v1/policy/evaluate`;
 - tenant demo QA;

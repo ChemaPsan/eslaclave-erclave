@@ -22,6 +22,26 @@ Tablas iniciales:
 
 Decision clave: `users` representa la identidad global y `memberships` representa la pertenencia del usuario a un tenant. Los roles se asignan a la membresia, no directamente al usuario global.
 
+## Seeds iniciales
+
+El catalogo inicial de modulos MVP vive en:
+
+```text
+app/seeds/catalog.py
+```
+
+Modulos incluidos:
+
+- `admin`;
+- `production`;
+- `inventory`;
+- `sales`;
+- `billing`;
+- `provisioning`;
+- `integrations`.
+
+Este archivo aun no inserta datos en base; funciona como fuente versionada para el siguiente paso: script idempotente de seed.
+
 ## Ejecutar local
 
 Desde `backend`:

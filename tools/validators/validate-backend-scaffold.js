@@ -16,6 +16,8 @@ const requiredPaths = [
   "backend/shared/erclave_common/middleware.py",
   "backend/services/admin-service/app/main.py",
   "backend/services/admin-service/app/models.py",
+  "backend/services/admin-service/app/seeds/__init__.py",
+  "backend/services/admin-service/app/seeds/catalog.py",
   "backend/services/admin-service/tests/test_health.py",
   "backend/services/admin_service_adapter.py"
 ];
@@ -35,6 +37,14 @@ const requiredFragments = [
   ["backend/services/admin-service/app/models.py", "class Tenant"],
   ["backend/services/admin-service/app/models.py", "class Membership"],
   ["backend/services/admin-service/app/models.py", "class AuditEvent"],
+  ["backend/services/admin-service/app/seeds/catalog.py", "MVP_MODULE_SEEDS"],
+  ["backend/services/admin-service/app/seeds/catalog.py", "code=\"admin\""],
+  ["backend/services/admin-service/app/seeds/catalog.py", "code=\"production\""],
+  ["backend/services/admin-service/app/seeds/catalog.py", "code=\"inventory\""],
+  ["backend/services/admin-service/app/seeds/catalog.py", "code=\"sales\""],
+  ["backend/services/admin-service/app/seeds/catalog.py", "code=\"billing\""],
+  ["backend/services/admin-service/app/seeds/catalog.py", "code=\"provisioning\""],
+  ["backend/services/admin-service/app/seeds/catalog.py", "code=\"integrations\""],
   ["backend/README.md", "ERCLAVE_API_PUBLIC_BASE_URL"]
 ];
 
