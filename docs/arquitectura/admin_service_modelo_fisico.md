@@ -89,13 +89,30 @@ El primer seed versionado define estos codigos de modulo:
 | `provisioning` | `provisioning-service` | No |
 | `integrations` | `integration-service` | Si |
 
-Este archivo aun no escribe datos en base. El siguiente paso es crear un script idempotente que use este catalogo para poblar PostgreSQL sin duplicar registros.
+Este archivo no escribe datos en base porque el modelo fisico inicial aun no incluye una tabla global `admin.modules`. Los codigos de modulo se usan como catalogo versionado para validar permisos y entitlements por `module_code`.
+
+## Seeds de permisos MVP
+
+Los permisos MVP se extraen de `contracts/api/*.openapi.yaml`, usando la extension `x-permissions` de cada operacion.
+
+Archivos:
+
+- Extractor: `backend/services/admin-service/app/seeds/permissions.py`.
+- Runner idempotente: `backend/scripts/seed_admin_mvp.py`.
+
+El runner aplica seeds sobre `admin.permissions` con `ON CONFLICT (code)`, por lo que puede ejecutarse varias veces sin duplicar datos.
+
+Comandos desde `backend`:
+
+```bash
+python scripts/seed_admin_mvp.py --dry-run
+python scripts/seed_admin_mvp.py
+```
 
 ## Pendientes inmediatos
 
-1. Crear seeds iniciales de permisos MVP a partir de `contracts/api/*.openapi.yaml`.
-2. Crear script idempotente para aplicar seeds en PostgreSQL.
-3. Implementar repositorios o unidad de trabajo para `admin-service`.
-4. Implementar endpoints de tenants y tenant modules.
-5. Agregar tabla de idempotencia para comandos reales.
-6. Agregar pruebas de migracion contra PostgreSQL en QA.
+1. Definir si agregaremos tabla global `admin.modules` o mantenemos modulos como catalogo en codigo durante el MVP.
+2. Implementar repositorios o unidad de trabajo para `admin-service`.
+3. Implementar endpoints de tenants y tenant modules.
+4. Agregar tabla de idempotencia para comandos reales.
+5. Agregar pruebas de migracion contra PostgreSQL en QA.

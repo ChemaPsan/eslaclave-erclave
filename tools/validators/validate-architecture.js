@@ -71,6 +71,20 @@ for (const relativePath of microfrontendFiles) {
   }
 }
 
+const frontendJsFiles = listFiles("frontend", (file) => file.endsWith(".js"));
+for (const relativePath of frontendJsFiles) {
+  const normalizedRelativePath = relativePath.replace(/\\/g, "/");
+  const source = readText(relativePath);
+  if (source.includes("fetch(") && !normalizedRelativePath.startsWith("frontend/api/")) {
+    errors.push(`${relativePath} calls fetch outside frontend/api/. Use the API client boundary.`);
+  }
+}
+
+const appSource = readText("frontend/app.js");
+if (!appSource.includes("getAdminDashboard")) {
+  errors.push("frontend/app.js must consume admin-service through frontend/api/admin.js.");
+}
+
 if (errors.length) {
   fail("architecture validation failed", errors);
 } else {

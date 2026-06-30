@@ -47,6 +47,15 @@ https://qa-api.example.com
 https://api.eslaclave.com
 ```
 
+Para desarrollo local, `admin-service` permite CORS desde:
+
+```text
+http://127.0.0.1:4173
+http://localhost:4173
+```
+
+Esto permite conectar la maqueta frontend local al backend local sin abrir la API a origenes externos.
+
 ## Instalacion local
 
 Desde la raiz del repo:
@@ -93,6 +102,36 @@ GET /ready
 GET /version
 ```
 
+## Endpoints MVP de admin-service
+
+Primer corte real de lectura y evaluacion de politica:
+
+```text
+GET /v1/tenants/{tenant_id}
+GET /v1/tenants/{tenant_id}/entitlements
+POST /v1/policy/evaluate
+GET /v1/users
+GET /v1/roles
+```
+
+`GET /v1/users` y `GET /v1/roles` requieren header:
+
+```text
+X-Tenant-Id=<tenant_id>
+```
+
+Ejemplo de policy evaluation:
+
+```json
+{
+  "tenant_id": "ten_...",
+  "actor_id": "usr_...",
+  "module": "admin",
+  "resource": "tenant",
+  "action": "read"
+}
+```
+
 ## Migraciones
 
 Configurar primero:
@@ -106,3 +145,40 @@ Luego ejecutar desde `backend`:
 ```bash
 alembic upgrade head
 ```
+
+## Seeds MVP de administracion
+
+Los permisos MVP se extraen desde los contratos OpenAPI versionados en
+`contracts/api/*.openapi.yaml` y se aplican de forma idempotente sobre
+`admin.permissions`.
+
+Con `ERCLAVE_DATABASE_URL` configurado:
+
+```bash
+python scripts/seed_admin_mvp.py --dry-run
+python scripts/seed_admin_mvp.py
+```
+
+El script puede ejecutarse varias veces. Si un permiso ya existe, actualiza sus
+metadatos; si no existe, lo inserta.
+
+## Seed QA demo
+
+Despues de aplicar permisos MVP, se puede crear un tenant demo de QA:
+
+```bash
+python scripts/seed_admin_qa_demo.py --dry-run
+python scripts/seed_admin_qa_demo.py
+```
+
+Este seed crea o actualiza:
+
+- tenant `demo-qa`;
+- usuario `admin.qa@erclave.local`;
+- rol `owner`;
+- membresia activa;
+- modulos activos `admin`, `production`, `inventory`, `sales` e `integrations`;
+- asignacion del rol owner a todos los permisos activos.
+
+No crea contrasenas ni credenciales de login. El usuario es una identidad de QA para
+probar ownership, membresias, roles, permisos y modulos activos.

@@ -9,6 +9,7 @@ ERClave es una propuesta SaaS modular bajo la marca EsLaClave para gestionar pro
 - Documentación funcional por módulos.
 - Lista de agentes especializados por modulo en `AGENTES.md`.
 - Arquitectura objetivo de microservicios y microfrontends en `docs/arquitectura/microservicios_microfrontends.md`.
+- Guias operativas paso a paso en `docs/operaciones/`.
 - Mapa de catalogos base para Administracion y Configuracion en `docs/catalogos_base.md`.
 - Manual de identidad visual.
 - Trazabilidad detallada de cambios en `TRAZABILIDAD.md`.
@@ -43,15 +44,19 @@ npm run validate
 Validaciones disponibles:
 
 ```bash
+npm run validate:agents
 npm run validate:i18n
+npm run validate:active-localization
 npm run validate:architecture
 npm run validate:backend-scaffold
+npm run validate:cross-platform
+npm run validate:db-guardrails
 npm run validate:openapi
 npm run validate:traceability
 npm run validate:syntax
 ```
 
-Estas validaciones convierten reglas de `AGENTES.md` en checks concretos: paridad Espanol/Ingles, fronteras de microfrontends, carpetas de microservicios, scaffolding backend, contratos OpenAPI, trazabilidad y sintaxis JavaScript.
+Estas validaciones convierten reglas de `AGENTES.md` en checks concretos: agentes transversales y por modulo, paridad Espanol/Ingles, fronteras de microfrontends, carpetas de microservicios, scaffolding backend, compatibilidad Linux/Windows/macOS, guardrails de base de datos y migraciones, contratos OpenAPI, trazabilidad y sintaxis JavaScript.
 
 En GitHub, el workflow `.github/workflows/validate.yml` ejecuta estas validaciones automaticamente en `push`, `pull_request` y ejecucion manual.
 
@@ -82,6 +87,22 @@ El dominio publico todavia no esta comprado. Configurar el valor publico con:
 ERCLAVE_API_PUBLIC_BASE_URL
 ```
 
+## Frontend con API local
+
+La maqueta conserva modo mock por defecto. El modulo `Administracion` puede alternar a API local y leer `admin-service` en:
+
+```text
+http://127.0.0.1:8000
+```
+
+Requisitos:
+
+- Cloud SQL Auth Proxy abierto.
+- `admin-service` levantado con `ERCLAVE_DATABASE_URL`.
+- Seeds `seed_admin_mvp.py` y `seed_admin_qa_demo.py` aplicados.
+
+El consumo HTTP del frontend debe vivir en `frontend/api/`; las pantallas no deben llamar `fetch` directamente.
+
 ## Estructura
 
 ```text
@@ -89,6 +110,7 @@ frontend/
 backend/
 contracts/
 docs/
+  operaciones/
 modulos/
 tools/
 AGENTES.md

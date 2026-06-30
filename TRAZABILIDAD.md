@@ -1174,6 +1174,141 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `python -m py_compile` ejecutado correctamente sobre el catalogo seed; `npm.cmd run validate` ejecutado correctamente despues del registro. |
 | Observaciones | Este cambio no inserta datos en PostgreSQL; prepara el catalogo para el siguiente script seed idempotente. |
 
+### CHG-077
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-22 |
+| Cambio | Guias operativas para Cloud SQL PostgreSQL QA |
+| Autor | Codex |
+| Archivos | `docs/operaciones/README.md`, `docs/operaciones/cloud_sql_postgres_qa.md`, `README.md`, `TRAZABILIDAD.md` |
+| Secciones | Documentacion operativa, base PostgreSQL QA, Cloud SQL Auth Proxy, migraciones Alembic |
+| Descripcion | Se creo una carpeta de documentacion operativa con una guia paso a paso para crear una base PostgreSQL QA en Google Cloud SQL, conectarse desde Windows, Linux o macOS con Cloud SQL Auth Proxy, configurar `ERCLAVE_DATABASE_URL`, ejecutar Alembic y levantar `admin-service`. |
+| Motivo | Facilitar que el ambiente de base de datos en nube pueda configurarse de forma repetible y entendible sin depender de conocimiento previo avanzado de operaciones cloud. |
+| Impacto | El proyecto cuenta con una ruta documentada para crear la base QA compartida antes de ejecutar migraciones reales y preparar seeds idempotentes. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | La guia no crea recursos automaticamente ni guarda secretos; usa placeholders para contrasenas, proyecto GCP y connection name. |
+
+### CHG-078
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-29 |
+| Cambio | Seed idempotente de permisos MVP |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/seeds/permissions.py`, `backend/scripts/seed_admin_mvp.py`, `backend/services/admin-service/tests/test_permission_seeds.py`, `backend/README.md`, `backend/services/admin-service/README.md`, `docs/arquitectura/admin_service_modelo_fisico.md`, `docs/operaciones/cloud_sql_postgres_qa.md`, `tools/validators/validate-backend-scaffold.js`, `TRAZABILIDAD.md` |
+| Secciones | Admin-service, seeds, permisos MVP, OpenAPI, PostgreSQL QA |
+| Descripcion | Se creo un extractor de permisos MVP desde `contracts/api/*.openapi.yaml` usando `x-permissions`, junto con un runner idempotente que aplica los permisos sobre `admin.permissions` mediante `INSERT ... ON CONFLICT (code) DO UPDATE`. Tambien se agrego una prueba del extractor y documentacion de ejecucion. |
+| Motivo | Poblar la base QA con el catalogo inicial de permisos reales despues de ejecutar la migracion Alembic, sin duplicar registros al reintentar el proceso. |
+| Impacto | `admin-service` ya cuenta con un camino repetible para cargar permisos globales MVP en PostgreSQL y preparar roles, policy evaluation y entitlements reales. |
+| Validacion | `python -m py_compile` sobre el runner y extractor; `pytest services/admin-service/tests/test_permission_seeds.py`; `python scripts/seed_admin_mvp.py --dry-run`; `npm.cmd run validate`. |
+| Observaciones | El seed aplica `admin.permissions`; no crea tenants, roles, membresias ni entitlements. El catalogo de modulos sigue versionado en codigo porque el modelo fisico inicial aun no tiene tabla global `admin.modules`. |
+
+### CHG-079
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-29 |
+| Cambio | Agente custodio de la base de datos ERClave |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Agentes transversales, base de datos ERClave, migraciones, validadores, impacto entre schemas |
+| Descripcion | Se agrego un agente transversal especializado en la base de datos real de ERClave. Su rol es conocer y proteger schemas, migraciones Alembic, seeds, dependencias entre servicios, drift entre docs/modelos/base, impacto entre schemas y reglas automatizables para evitar que el proyecto crezca rompiendo datos o ownership. |
+| Motivo | Cubrir una necesidad mas especifica que el diseno general de datos: vigilancia continua de la base ERClave concreta y automatizacion de alertas cuando un cambio pueda afectar otros schemas, servicios, reportes, permisos o ambientes. |
+| Impacto | Los cambios futuros que toquen modelos, migraciones, seeds, contratos persistentes o base QA/Prod deberan considerar a este agente junto con el Arquitecto de datos y el Ingeniero QA. |
+| Validacion | `npm.cmd run validate` ejecutado correctamente despues del registro. |
+| Observaciones | Este cambio define el rol; los validadores concretos del custodio se implementaran progresivamente conforme existan mas schemas y migraciones. |
+
+### CHG-080
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-29 |
+| Cambio | Validadores de agentes y guardrails de base de datos |
+| Autor | Codex |
+| Archivos | `.gitignore`, `tools/validators/validate-agents.js`, `tools/validators/validate-db-guardrails.js`, `tools/validators/validate-all.js`, `package.json`, `README.md`, `TRAZABILIDAD.md` |
+| Secciones | Agentes, validadores, custodio de base de datos, migraciones Alembic, seeds idempotentes |
+| Descripcion | Se agregaron validadores automaticos para confirmar que los agentes transversales y por modulo siguen presentes y para revisar guardrails estaticos de base de datos: migraciones Alembic con revision unica, ausencia de operaciones destructivas en `upgrade`, `tenant_id` en tablas administrativas tenant-scoped, ausencia de FK cruzadas, extractor de permisos y seed idempotente con `ON CONFLICT`. |
+| Motivo | Convertir al nuevo custodio de base de datos ERClave y las reglas de agentes en checks ejecutables antes de seguir creciendo el backend. |
+| Impacto | `npm run validate` ahora falla si se pierde cobertura de agentes o si una migracion/seed rompe reglas basicas de seguridad estructural de la base. |
+| Validacion | `npm.cmd run validate:agents`, `npm.cmd run validate:db-guardrails` y `npm.cmd run validate` ejecutados correctamente. |
+| Observaciones | Los guardrails actuales son estaticos y no requieren conexion a Cloud SQL. Mas adelante pueden ampliarse con comparacion contra schema real de QA/Prod cuando exista un flujo seguro con credenciales. |
+
+### CHG-081
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-29 |
+| Cambio | Validador de compatibilidad multiplataforma |
+| Autor | Codex |
+| Archivos | `tools/validators/validate-cross-platform.js`, `tools/validators/validate-all.js`, `package.json`, `README.md`, `TRAZABILIDAD.md` |
+| Secciones | Validadores, compatibilidad Windows/Linux/macOS, automatizacion, operaciones Cloud SQL |
+| Descripcion | Se agrego un validador estatico para proteger la portabilidad del proyecto: revisa que scripts npm, validadores Node y scripts backend no dependan de comandos Windows-only, que la guia Cloud SQL mantenga instrucciones para Windows, Linux y macOS, y que el workflow de GitHub Actions ejecute `npm run validate` sobre Ubuntu. |
+| Motivo | Confirmar que lo construido para seeds, validadores y operacion QA pueda mantenerse usable desde Linux, Windows y macOS conforme crezca el equipo o se mueva a CI. |
+| Impacto | `npm run validate` ahora alerta si se introduce una dependencia operativa de sistema operativo en scripts compartidos o si se pierde documentacion multiplataforma esencial. |
+| Validacion | `npm.cmd run validate:cross-platform` y `npm.cmd run validate` ejecutados correctamente. |
+| Observaciones | Los comandos de usuario para activar `.venv`, descargar Cloud SQL Proxy o usar PowerShell siguen documentados por sistema operativo; el validador se enfoca en automatizacion compartida y documentacion minima. |
+
+### CHG-082
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-29 |
+| Cambio | Seed idempotente de tenant demo QA |
+| Autor | Codex |
+| Archivos | `backend/scripts/seed_admin_qa_demo.py`, `backend/services/admin-service/tests/test_qa_demo_seed.py`, `backend/README.md`, `backend/services/admin-service/README.md`, `docs/operaciones/cloud_sql_postgres_qa.md`, `tools/validators/validate-backend-scaffold.js`, `tools/validators/validate-db-guardrails.js`, `TRAZABILIDAD.md` |
+| Secciones | Admin-service, QA demo, tenants, usuarios, roles, permisos, modulos activos |
+| Descripcion | Se creo un script idempotente para poblar QA con el tenant `demo-qa`, usuario `admin.qa@erclave.local`, rol `owner`, membresia activa, modulos activos de QA y asignacion del rol owner a todos los permisos activos. Tambien se agregaron pruebas y guardrails para confirmar que el seed use `ON CONFLICT` en las tablas afectadas. |
+| Motivo | Tener un primer tenant real de QA para validar permisos, membresias, roles y modulos activos antes de implementar endpoints funcionales de `admin-service`. |
+| Impacto | La base QA puede pasar de estructura y catalogo de permisos a un contexto SaaS minimo operable para pruebas de policy evaluation y futuros endpoints. |
+| Validacion | `python -m py_compile` sobre el script; `pytest services/admin-service/tests`; `python scripts/seed_admin_qa_demo.py --dry-run`; `npm.cmd run validate`. |
+| Observaciones | El seed demo no crea contrasenas ni credenciales de autenticacion; solo crea identidad, membresia y autorizaciones internas para QA. |
+
+### CHG-083
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-29 |
+| Cambio | Endpoints MVP de lectura de admin-service |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/app/main.py`, `backend/services/admin_service_adapter.py`, `backend/services/admin-service/tests/test_admin_api.py`, `backend/README.md`, `backend/services/admin-service/README.md`, `tools/validators/validate-backend-scaffold.js`, `TRAZABILIDAD.md` |
+| Secciones | Admin-service, FastAPI, PostgreSQL, tenants, entitlements, policy evaluation, usuarios, roles |
+| Descripcion | Se implemento el primer corte funcional de endpoints reales de `admin-service`: `GET /v1/tenants/{tenant_id}`, `GET /v1/tenants/{tenant_id}/entitlements`, `POST /v1/policy/evaluate`, `GET /v1/users` y `GET /v1/roles`. Se agrego repositorio SQL para leer PostgreSQL, schemas Pydantic y pruebas con repositorio falso para validar el contrato sin depender de Cloud SQL en CI. |
+| Motivo | Crear la primera API real que el frontend podra consumir antes de migrar pantallas operativas fuera de `mockDb` y `localStorage`. |
+| Impacto | `admin-service` deja de ser solo health checks y puede leer tenants, modulos activos, usuarios, roles y evaluar permisos sobre los datos seed de QA. |
+| Validacion | `python -m py_compile` sobre los nuevos modulos y adapter; `pytest services/admin-service/tests`; `uvicorn services.admin_service_adapter:app --port 8001` carga correctamente; `npm.cmd run validate`. |
+| Observaciones | Los endpoints mutables siguen pendientes. La autenticacion real aun no esta implementada; `X-Tenant-Id` es header operativo temporal para lecturas de usuarios y roles. |
+
+### CHG-084
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-29 |
+| Cambio | Capa frontend API para admin-service |
+| Autor | Codex |
+| Archivos | `frontend/api/config.js`, `frontend/api/client.js`, `frontend/api/admin.js`, `frontend/app.js`, `frontend/data/modules.js`, `backend/services/admin-service/app/main.py`, `README.md`, `backend/README.md`, `tools/validators/validate-active-module-localization.js`, `tools/validators/validate-architecture.js`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, admin-service, API client, CORS local, Administracion, validadores de arquitectura |
+| Descripcion | Se agrego una capa `frontend/api/` para centralizar consumo HTTP, con cliente base, configuracion local y funciones de `admin-service`. Se habilito el modulo visual `Administracion` en la navegacion MVP con un panel hibrido mock/API para tenant, modulos activos, usuarios, roles y policy evaluation. Tambien se habilito CORS local en `admin-service` para permitir llamadas desde el frontend local. |
+| Motivo | Conectar el primer bloque real de APIs sin romper la maqueta ni permitir `fetch` dispersos en pantallas. |
+| Impacto | El frontend puede empezar a leer datos reales de Cloud SQL QA mediante `admin-service`, conservando fallback mock. La arquitectura ahora exige que nuevas llamadas HTTP pasen por `frontend/api/`. |
+| Validacion | `python -m py_compile services/admin-service/app/main.py`; `npm.cmd run validate:syntax`; `npm.cmd run validate:architecture`; `npm.cmd run validate:active-localization`; `npm.cmd run validate`. |
+| Observaciones | La conexion API usa el tenant demo QA por defecto. Autenticacion real, manejo de token y despliegue de frontend QA quedan pendientes para siguientes cambios. |
+
+### CHG-085
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-06-29 |
+| Cambio | Acceso a Administracion desde engrane |
+| Autor | Codex |
+| Archivos | `frontend/index.html`, `frontend/app.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, navegacion, Administracion, shell |
+| Descripcion | Se movio el acceso visual de `Administracion` fuera de la lista principal de modulos y se conecto al boton de engrane del footer lateral. El engrane navega al panel de Administracion y queda marcado como activo cuando esa vista esta seleccionada. |
+| Motivo | Mantener la barra principal enfocada en modulos operativos y dejar Administracion como configuracion/plataforma accesible desde el icono esperado. |
+| Impacto | El panel hibrido mock/API de Administracion sigue disponible, pero ya no aparece como modulo operativo principal. |
+| Validacion | `npm.cmd run validate:syntax`; `npm.cmd run validate:architecture`; `npm.cmd run validate:active-localization`; `npm.cmd run validate`. |
+| Observaciones | Administracion sigue incluida en validaciones de localizacion activa porque es una vista real conectada al admin-service. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

@@ -257,6 +257,12 @@ button {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.icon-button:hover,
+.icon-button.active {
+  background: rgba(245, 87, 211, 0.24);
+  border-color: rgba(245, 87, 211, 0.36);
+}
+
 .workspace {
   min-width: 0;
   padding: 22px;

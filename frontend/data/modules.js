@@ -505,6 +505,91 @@ export const modules = [
     ]
   },
   {
+    id: "administracion",
+    icon: "AD",
+    count: 5,
+    title: "Administracion",
+    titleEn: "Administration",
+    eyebrow: "Base SaaS",
+    eyebrowEn: "SaaS foundation",
+    summary: "Tenants, usuarios, roles, permisos y modulos activos conectados al admin-service.",
+    summaryEn: "Tenants, users, roles, permissions, and active modules connected to admin-service.",
+    primary: "Sincronizar API",
+    primaryEn: "Sync API",
+    status: "API QA disponible",
+    statusEn: "QA API available",
+    kpis: [
+      ["Tenant QA", "1", "positive"],
+      ["Permisos", "92", "positive"],
+      ["Modulos activos", "5", "positive"]
+    ],
+    kpisEn: [
+      ["QA tenant", "1", "positive"],
+      ["Permissions", "92", "positive"],
+      ["Active modules", "5", "positive"]
+    ],
+    submodules: [
+      ["Tenants", "Empresas, estado, plan y configuracion base.", "tenants"],
+      ["Usuarios", "Identidades, membresias y roles por tenant.", "usuarios"],
+      ["Roles", "Roles, permisos y alcances operativos.", "roles"],
+      ["Modulos activos", "Entitlements por tenant y estatus.", "modulos-activos"]
+    ],
+    workflow: [
+      "Leer tenant QA",
+      "Consultar modulos activos",
+      "Listar usuarios y roles",
+      "Evaluar permisos",
+      "Conectar pantallas gradualmente"
+    ],
+    workflowEn: [
+      "Read QA tenant",
+      "Check active modules",
+      "List users and roles",
+      "Evaluate permissions",
+      "Connect screens gradually"
+    ],
+    table: {
+      columns: ["Entidad", "Fuente", "Estado", "Uso"],
+      rows: [
+        ["Tenant", "Cloud SQL QA", "Activo", "Contexto SaaS"],
+        ["Permisos", "OpenAPI seed", "Activo", "Policy"],
+        ["Roles", "QA demo seed", "Activo", "Owner"]
+      ]
+    },
+    tableEn: {
+      columns: ["Entity", "Source", "Status", "Use"],
+      rows: [
+        ["Tenant", "Cloud SQL QA", "Active", "SaaS context"],
+        ["Permissions", "OpenAPI seed", "Active", "Policy"],
+        ["Roles", "QA demo seed", "Active", "Owner"]
+      ]
+    },
+    validations: [
+      ["Admin-service", "Debe responder desde PostgreSQL QA."],
+      ["Permisos", "Policy evaluation debe usar permisos sembrados."],
+      ["Tenancy", "Usuarios y roles se leen por tenant."]
+    ],
+    validationsEn: [
+      ["Admin-service", "Must respond from PostgreSQL QA."],
+      ["Permissions", "Policy evaluation must use seeded permissions."],
+      ["Tenancy", "Users and roles are read by tenant."]
+    ],
+    form: [
+      ["Tenant", "demo-qa"],
+      ["Usuario", "admin.qa@erclave.local"],
+      ["Rol", "owner"],
+      ["Modo", "mock/api"]
+    ],
+    formEn: [
+      ["Tenant", "demo-qa"],
+      ["User", "admin.qa@erclave.local"],
+      ["Role", "owner"],
+      ["Mode", "mock/api"]
+    ],
+    records: [],
+    recordsEn: []
+  },
+  {
     id: "reportes",
     icon: "RP",
     count: 14,

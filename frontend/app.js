@@ -2,6 +2,8 @@ import { modules, erpSubmoduleCatalog } from "./data/modules.js";
 import { defaultRecipes } from "./data/resources.js";
 import { mockDb } from "./data/mockDb.js";
 import { translations } from "./i18n/translations.js";
+import { getAdminDashboard } from "./api/admin.js";
+import { getApiBaseUrl, getApiMode, setApiMode } from "./api/config.js";
 import {
   calculateRecipe,
   getOrderCostSnapshot,
@@ -21,7 +23,12 @@ const state = {
   activeSubmodule: null,
   history: [],
   theme: localStorage.getItem("erclave-theme") || "light",
-  lang: localStorage.getItem("erclave-lang") || "es"
+  lang: localStorage.getItem("erclave-lang") || "es",
+  adminApi: {
+    status: "idle",
+    data: null,
+    error: ""
+  }
 };
 
 const orderStatusCatalog = ["Liberada", "En espera de recursos", "En produccion", "Pausada", "En validacion", "Terminada", "Cancelada"];
@@ -35,6 +42,7 @@ const notificationSummary = document.getElementById("notificationSummary");
 const backButton = document.getElementById("backButton");
 const themeToggle = document.getElementById("themeToggle");
 const langToggle = document.getElementById("langToggle");
+const adminShortcut = document.getElementById("adminShortcut");
 const topbarPrimary = document.querySelector(".topbar .primary-action");
 const modalBackdrop = document.getElementById("modalBackdrop");
 const modalContent = document.getElementById("modalContent");
@@ -106,7 +114,7 @@ function getSubmoduleCopy(moduleId, id, fallbackName = "", fallbackDetail = "") 
 }
 
 function getNavigationModules() {
-  return [...modules].sort((a, b) => {
+  return modules.filter((module) => module.id !== "administracion").sort((a, b) => {
     const aMvpIndex = mvpModuleIds.indexOf(a.id);
     const bMvpIndex = mvpModuleIds.indexOf(b.id);
     const aOrder = aMvpIndex >= 0 ? aMvpIndex : mvpModuleIds.length + modules.findIndex((module) => module.id === a.id);
@@ -197,6 +205,9 @@ function renderPanel() {
       renderProductionSubmodulePanel(module);
       return;
     }
+  } else if (module.id === "administracion") {
+    renderAdminApiPanel(module);
+    return;
   } else if (state.activeSubmodule) {
     renderGenericSubmodulePanel(module);
     return;
@@ -367,6 +378,149 @@ function renderPanel() {
   `;
 
   bindProductionPanelActions();
+}
+
+function getMockAdminDashboard() {
+  return {
+    tenant: {
+      commercial_name: "Cliente piloto",
+      slug: "demo-local",
+      status: "mock",
+      locale: "es-MX",
+      timezone: "America/Mexico_City"
+    },
+    entitlements: [
+      { module_code: "production", status: "active" },
+      { module_code: "inventory", status: "active" },
+      { module_code: "sales", status: "active" }
+    ],
+    users: [
+      { email: "admin.local@erclave.local", display_name: "Admin local", status: "active", roles: ["owner"] }
+    ],
+    roles: [{ code: "owner", name: "Owner", status: "active" }],
+    policy: { allowed: false, reason: "mock_mode", matched_permissions: [] }
+  };
+}
+
+function getAdminPanelData() {
+  return getApiMode() === "api" && state.adminApi.data ? state.adminApi.data : getMockAdminDashboard();
+}
+
+function loadAdminApiDashboard() {
+  if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
+  state.adminApi = { status: "loading", data: state.adminApi.data, error: "" };
+  render();
+  getAdminDashboard()
+    .then((data) => {
+      state.adminApi = { status: "ready", data, error: "" };
+      render();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: null, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
+function renderAdminApiPanel(module) {
+  const data = getAdminPanelData();
+  const apiMode = getApiMode();
+  const apiStatus = apiMode === "api" ? state.adminApi.status : "mock";
+  const tenant = data.tenant;
+  const policy = data.policy;
+  const label = state.lang === "en" ? module.titleEn : module.title;
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${module.eyebrow}</p>
+        <h2>${label}</h2>
+      </div>
+      <span class="chip ${apiMode === "api" && apiStatus !== "error" ? "active" : "warning"}">${apiMode === "api" ? "API QA" : "Mock"}</span>
+    </div>
+
+    <div class="module-summary expanded">
+      <div class="module-hero">
+        <h1>${tenant.commercial_name}</h1>
+        <p>${module.summary}</p>
+        <div class="hero-actions">
+          <button class="primary-action hero-action" type="button" data-action="admin-toggle-api">
+            <span>${apiMode === "api" ? "Mock" : "API"}</span>
+          </button>
+          <button class="secondary-action" type="button" data-action="admin-refresh-api">
+            <span>Actualizar</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="module-kpis">
+        <article class="mini-kpi positive">
+          <span>Tenant</span>
+          <strong>${tenant.status}</strong>
+        </article>
+        <article class="mini-kpi positive">
+          <span>Modulos</span>
+          <strong>${data.entitlements.length}</strong>
+        </article>
+        <article class="mini-kpi ${policy.allowed ? "positive" : "warning"}">
+          <span>Policy</span>
+          <strong>${policy.allowed ? "allowed" : policy.reason}</strong>
+        </article>
+      </div>
+    </div>
+
+    ${state.adminApi.error ? `<div class="validation-card danger"><strong>API QA</strong><p>${state.adminApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
+
+    <div class="module-sections">
+      <section>
+        <div class="panel-head compact">
+          <h3>Modulos activos</h3>
+          <span class="chip active">${data.entitlements.filter((item) => item.status === "active").length}</span>
+        </div>
+        <div class="record-list">
+          ${data.entitlements.map((item) => `<article class="record-card"><strong>${item.module_code}</strong><span class="muted-label">${item.status}</span></article>`).join("")}
+        </div>
+      </section>
+
+      <section>
+        <div class="panel-head compact">
+          <h3>Usuarios</h3>
+          <span class="chip active">${data.users.length}</span>
+        </div>
+        <div class="record-list">
+          ${data.users.map((user) => `<article class="record-card"><strong>${user.display_name}</strong><span class="muted-label">${user.email} - ${user.roles.join(", ") || "sin rol"}</span></article>`).join("")}
+        </div>
+      </section>
+
+      <section>
+        <div class="panel-head compact">
+          <h3>Roles</h3>
+          <span class="chip active">${data.roles.length}</span>
+        </div>
+        <div class="record-list">
+          ${data.roles.map((role) => `<article class="record-card"><strong>${role.name}</strong><span class="muted-label">${role.code} - ${role.status}</span></article>`).join("")}
+        </div>
+      </section>
+    </div>
+  `;
+
+  modulePanel.querySelector("[data-action='admin-toggle-api']").addEventListener("click", () => {
+    setApiMode(apiMode === "api" ? "mock" : "api");
+    state.adminApi = { status: "idle", data: null, error: "" };
+    if (getApiMode() === "api") {
+      loadAdminApiDashboard();
+    } else {
+      render();
+    }
+  });
+
+  modulePanel.querySelector("[data-action='admin-refresh-api']").addEventListener("click", () => {
+    if (getApiMode() !== "api") setApiMode("api");
+    loadAdminApiDashboard();
+  });
+
+  if (apiMode === "api" && apiStatus === "idle") {
+    loadAdminApiDashboard();
+  }
 }
 
 function renderGenericSubmodulePanel(module) {
@@ -6183,6 +6337,7 @@ function render() {
   shell.dataset.theme = state.theme;
   document.body.dataset.theme = state.theme;
   backButton.disabled = !state.history.length;
+  adminShortcut.classList.toggle("active", state.active === "administracion");
   topbarPrimary.querySelector("[data-i18n]").dataset.i18n = state.active === "produccion" ? "newOrder" : "newModuleRecord";
   renderNav();
   renderPanel();
@@ -6202,6 +6357,10 @@ langToggle.addEventListener("click", () => {
   state.lang = state.lang === "es" ? "en" : "es";
   localStorage.setItem("erclave-lang", state.lang);
   render();
+});
+
+adminShortcut.addEventListener("click", () => {
+  navigateTo({ active: "administracion", activeSubmodule: null, laborArea: "" });
 });
 
 modalBackdrop.addEventListener("click", (event) => {

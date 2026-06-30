@@ -16,9 +16,18 @@ const requiredPaths = [
   "backend/shared/erclave_common/middleware.py",
   "backend/services/admin-service/app/main.py",
   "backend/services/admin-service/app/models.py",
+  "backend/services/admin-service/app/api.py",
+  "backend/services/admin-service/app/repositories.py",
+  "backend/services/admin-service/app/schemas.py",
   "backend/services/admin-service/app/seeds/__init__.py",
   "backend/services/admin-service/app/seeds/catalog.py",
+  "backend/services/admin-service/app/seeds/permissions.py",
+  "backend/scripts/seed_admin_mvp.py",
+  "backend/scripts/seed_admin_qa_demo.py",
   "backend/services/admin-service/tests/test_health.py",
+  "backend/services/admin-service/tests/test_permission_seeds.py",
+  "backend/services/admin-service/tests/test_qa_demo_seed.py",
+  "backend/services/admin-service/tests/test_admin_api.py",
   "backend/services/admin_service_adapter.py"
 ];
 
@@ -34,6 +43,12 @@ const requiredFragments = [
   ["backend/shared/erclave_common/health.py", "@router.get(\"/health\")"],
   ["backend/services/admin-service/app/main.py", "FastAPI"],
   ["backend/services/admin-service/app/main.py", "include_router(health_router)"],
+  ["backend/services/admin-service/app/main.py", "include_router(admin_router)"],
+  ["backend/services/admin-service/app/api.py", "@router.get(\"/tenants/{tenant_id}\""],
+  ["backend/services/admin-service/app/api.py", "@router.get(\"/tenants/{tenant_id}/entitlements\""],
+  ["backend/services/admin-service/app/api.py", "@router.post(\"/policy/evaluate\""],
+  ["backend/services/admin-service/app/repositories.py", "class AdminRepository"],
+  ["backend/services/admin-service/app/repositories.py", "def evaluate_policy"],
   ["backend/services/admin-service/app/models.py", "class Tenant"],
   ["backend/services/admin-service/app/models.py", "class Membership"],
   ["backend/services/admin-service/app/models.py", "class AuditEvent"],
@@ -45,6 +60,10 @@ const requiredFragments = [
   ["backend/services/admin-service/app/seeds/catalog.py", "code=\"billing\""],
   ["backend/services/admin-service/app/seeds/catalog.py", "code=\"provisioning\""],
   ["backend/services/admin-service/app/seeds/catalog.py", "code=\"integrations\""],
+  ["backend/services/admin-service/app/seeds/permissions.py", "extract_permission_seeds"],
+  ["backend/scripts/seed_admin_mvp.py", "on conflict (code) do update"],
+  ["backend/scripts/seed_admin_qa_demo.py", "ACTIVE_DEMO_MODULES"],
+  ["backend/scripts/seed_admin_qa_demo.py", "on conflict (tenant_id, role_id, permission_id) do nothing"],
   ["backend/README.md", "ERCLAVE_API_PUBLIC_BASE_URL"]
 ];
 

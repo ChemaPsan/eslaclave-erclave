@@ -40,7 +40,43 @@ Modulos incluidos:
 - `provisioning`;
 - `integrations`.
 
-Este archivo aun no inserta datos en base; funciona como fuente versionada para el siguiente paso: script idempotente de seed.
+Los permisos MVP se extraen desde:
+
+```text
+../../../contracts/api/*.openapi.yaml
+```
+
+El extractor vive en:
+
+```text
+app/seeds/permissions.py
+```
+
+El script idempotente para aplicar seeds vive en:
+
+```text
+../../scripts/seed_admin_mvp.py
+```
+
+Desde `backend`, con `ERCLAVE_DATABASE_URL` configurado:
+
+```bash
+python scripts/seed_admin_mvp.py --dry-run
+python scripts/seed_admin_mvp.py
+```
+
+El script inserta o actualiza `admin.permissions` usando `ON CONFLICT (code)`, por lo que puede ejecutarse varias veces sin duplicar permisos.
+
+## Seed QA demo
+
+Desde `backend`, con `ERCLAVE_DATABASE_URL` configurado:
+
+```bash
+python scripts/seed_admin_qa_demo.py --dry-run
+python scripts/seed_admin_qa_demo.py
+```
+
+El seed demo crea el tenant `demo-qa`, el usuario `admin.qa@erclave.local`, el rol `owner`, la membresia activa, los modulos activos de QA y las asignaciones de permisos del rol owner. Es idempotente y no crea contrasenas.
 
 ## Ejecutar local
 
@@ -63,3 +99,15 @@ GET /health
 GET /ready
 GET /version
 ```
+
+## Endpoints MVP reales
+
+```text
+GET /v1/tenants/{tenant_id}
+GET /v1/tenants/{tenant_id}/entitlements
+POST /v1/policy/evaluate
+GET /v1/users
+GET /v1/roles
+```
+
+Estos endpoints leen PostgreSQL por medio de `AdminRepository`. Los endpoints mutables de tenants, usuarios, roles y entitlements siguen pendientes para una fase posterior.
