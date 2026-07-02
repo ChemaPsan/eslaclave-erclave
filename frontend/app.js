@@ -2,8 +2,16 @@ import { modules, erpSubmoduleCatalog } from "./data/modules.js";
 import { defaultRecipes } from "./data/resources.js";
 import { mockDb } from "./data/mockDb.js";
 import { translations } from "./i18n/translations.js";
-import { getAdminDashboard } from "./api/admin.js";
-import { getApiBaseUrl, getApiMode, setApiMode } from "./api/config.js";
+import {
+  createTenantRole,
+  disableTenantUser,
+  getAdminDashboard,
+  inviteTenantUser,
+  replaceTenantRolePermissions,
+  updateTenantEntitlement,
+  updateTenantRole
+} from "./api/admin.js";
+import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId } from "./api/config.js";
 import {
   calculateRecipe,
   getOrderCostSnapshot,
@@ -397,7 +405,10 @@ function getMockAdminDashboard() {
     users: [
       { email: "admin.local@erclave.local", display_name: "Admin local", status: "active", roles: ["owner"] }
     ],
-    roles: [{ code: "owner", name: "Owner", status: "active" }],
+    roles: [{ id: "rol_local_owner", code: "owner", name: "Owner", status: "active", permissions: ["admin.tenant.read"] }],
+    permissions: [
+      { id: "per_local_tenant_read", code: "admin.tenant.read", module_code: "admin", resource: "tenant", action: "read", status: "active" }
+    ],
     policy: { allowed: false, reason: "mock_mode", matched_permissions: [] }
   };
 }
@@ -421,6 +432,264 @@ function loadAdminApiDashboard() {
     });
 }
 
+function getNextEntitlementStatus(status) {
+  if (status === "active") return "inactive";
+  if (status === "inactive") return "active";
+  return "active";
+}
+
+function getEntitlementActionLabel(status) {
+  if (status === "active") return "Inactivar";
+  if (status === "inactive") return "Activar";
+  return "Reactivar";
+}
+
+function renderAdminEntitlementCard(item, apiMode, apiStatus) {
+  const nextStatus = getNextEntitlementStatus(item.status);
+  const isApiReady = apiMode === "api" && apiStatus === "ready";
+  return `
+    <article class="admin-record compact-admin-record">
+      <div class="admin-record-main">
+        <strong>${item.module_code}</strong>
+        <span class="admin-status ${item.status}">${item.status}</span>
+      </div>
+      <div class="admin-actions">
+        <button class="secondary-action small-action" type="button" data-action="admin-update-entitlement" data-module-code="${item.module_code}" data-next-status="${nextStatus}" ${isApiReady ? "" : "disabled"}>
+          ${getEntitlementActionLabel(item.status)}
+        </button>
+        <button class="secondary-action small-action" type="button" data-action="admin-suspend-entitlement" data-module-code="${item.module_code}" ${isApiReady && item.status !== "suspended" ? "" : "disabled"}>
+          Suspender
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function updateAdminEntitlement(moduleCode, status) {
+  if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
+  const current = getAdminPanelData().entitlements.find((item) => item.module_code === moduleCode);
+  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+  render();
+  updateTenantEntitlement(moduleCode, {
+    status,
+    limits: current?.limits || { updated_from: "frontend-admin-panel" },
+    source: "manual"
+  })
+    .then(() => {
+      showToast(`Modulo ${moduleCode} actualizado a ${status}.`);
+      state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      loadAdminApiDashboard();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
+function getDefaultRoleId(roles) {
+  return roles.find((role) => role.code === "owner")?.id || roles[0]?.id || "";
+}
+
+function renderAdminUserCard(user, apiMode, apiStatus) {
+  const actorId = getDemoActorId();
+  const canDisable = apiMode === "api" && apiStatus === "ready" && user.status !== "disabled" && user.id !== actorId;
+  return `
+    <article class="admin-record">
+      <div class="admin-record-main">
+        <strong>${user.display_name}</strong>
+        <span>${user.email}</span>
+      </div>
+      <div class="admin-meta-line">
+        <span class="admin-status ${user.status}">${user.status}</span>
+        <span>${user.roles.join(", ") || "sin rol"}</span>
+      </div>
+      <div class="admin-actions">
+        <button class="secondary-action small-action" type="button" data-action="admin-disable-user" data-user-id="${user.id}" ${canDisable ? "" : "disabled"}>
+          Desactivar
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function renderAdminInviteForm(data, apiMode, apiStatus) {
+  const isApiReady = apiMode === "api" && apiStatus === "ready";
+  const defaultRoleId = getDefaultRoleId(data.roles);
+  return `
+    <form class="admin-form admin-user-form" data-form="admin-invite-user">
+      <label>
+        <span>Nombre</span>
+        <input name="display_name" type="text" placeholder="Nueva persona QA" ${isApiReady ? "" : "disabled"} required />
+      </label>
+      <label>
+        <span>Email</span>
+        <input name="email" type="email" placeholder="usuario.qa@erclave.local" ${isApiReady ? "" : "disabled"} required />
+      </label>
+      <label>
+        <span>Rol</span>
+        <select name="role_id" ${isApiReady ? "" : "disabled"}>
+          ${data.roles.map((role) => `<option value="${role.id}" ${selectedOption(role.id, defaultRoleId)}>${role.name}</option>`).join("")}
+        </select>
+      </label>
+      <button class="primary-action small-action" type="submit" ${isApiReady ? "" : "disabled"}>Invitar</button>
+    </form>
+  `;
+}
+
+function inviteAdminUser(form) {
+  if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
+  const formData = new FormData(form);
+  const roleId = String(formData.get("role_id") || "");
+  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+  render();
+  inviteTenantUser({
+    display_name: String(formData.get("display_name") || "").trim(),
+    email: String(formData.get("email") || "").trim(),
+    role_ids: roleId ? [roleId] : []
+  })
+    .then((user) => {
+      showToast(`Usuario ${user.email} invitado.`);
+      state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      loadAdminApiDashboard();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
+function disableAdminUser(userId) {
+  if (getApiMode() !== "api" || state.adminApi.status === "loading" || userId === getDemoActorId()) return;
+  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+  render();
+  disableTenantUser(userId)
+    .then((user) => {
+      showToast(`Usuario ${user.email} desactivado.`);
+      state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      loadAdminApiDashboard();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
+function renderAdminRoleForm(apiMode, apiStatus) {
+  const isApiReady = apiMode === "api" && apiStatus === "ready";
+  return `
+    <form class="admin-form admin-role-form" data-form="admin-create-role">
+      <label>
+        <span>Codigo</span>
+        <input name="code" type="text" placeholder="supervisor" ${isApiReady ? "" : "disabled"} required />
+      </label>
+      <label>
+        <span>Nombre</span>
+        <input name="name" type="text" placeholder="Supervisor" ${isApiReady ? "" : "disabled"} required />
+      </label>
+      <label>
+        <span>Descripcion</span>
+        <input name="description" type="text" placeholder="Operaciones QA" ${isApiReady ? "" : "disabled"} />
+      </label>
+      <button class="primary-action small-action" type="submit" ${isApiReady ? "" : "disabled"}>Crear</button>
+    </form>
+  `;
+}
+
+function renderAdminRoleCard(role, data, apiMode, apiStatus) {
+  const isApiReady = apiMode === "api" && apiStatus === "ready";
+  const assigned = new Set(role.permissions || []);
+  const nextStatus = role.status === "active" ? "inactive" : "active";
+  const availablePermissions = data.permissions.filter((permission) => !assigned.has(permission.code));
+  return `
+    <article class="admin-record admin-role-record">
+      <div class="admin-record-main">
+        <strong>${role.name}</strong>
+        <span>${role.code}</span>
+      </div>
+      <div class="admin-meta-line">
+        <span class="admin-status ${role.status}">${role.status}</span>
+        <span>${(role.permissions || []).length} permisos</span>
+      </div>
+      <div class="admin-actions">
+        <button class="secondary-action small-action" type="button" data-action="admin-toggle-role" data-role-id="${role.id}" data-next-status="${nextStatus}" ${isApiReady ? "" : "disabled"}>
+          ${role.status === "active" ? "Inactivar" : "Activar"}
+        </button>
+      </div>
+      <form class="admin-permission-form" data-form="admin-role-permission" data-role-id="${role.id}">
+        <label>
+          <span>Permiso</span>
+          <select name="permission_id" ${isApiReady && availablePermissions.length ? "" : "disabled"}>
+            ${availablePermissions.map((permission) => `<option value="${permission.id}">${permission.code}</option>`).join("")}
+          </select>
+        </label>
+        <button class="secondary-action small-action" type="submit" ${isApiReady && availablePermissions.length ? "" : "disabled"}>Asignar</button>
+      </form>
+    </article>
+  `;
+}
+
+function createAdminRole(form) {
+  if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
+  const formData = new FormData(form);
+  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+  render();
+  createTenantRole({
+    code: String(formData.get("code") || "").trim(),
+    name: String(formData.get("name") || "").trim(),
+    description: String(formData.get("description") || "").trim() || null
+  })
+    .then((role) => {
+      showToast(`Rol ${role.code} creado.`);
+      state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      loadAdminApiDashboard();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
+function toggleAdminRole(roleId, status) {
+  if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
+  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+  render();
+  updateTenantRole(roleId, { status })
+    .then((role) => {
+      showToast(`Rol ${role.code} actualizado.`);
+      state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      loadAdminApiDashboard();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
+function assignAdminRolePermission(form) {
+  if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
+  const roleId = form.dataset.roleId;
+  const role = getAdminPanelData().roles.find((item) => item.id === roleId);
+  if (!role) return;
+  const formData = new FormData(form);
+  const permissionId = String(formData.get("permission_id") || "");
+  const currentPermissionIds = getAdminPanelData()
+    .permissions.filter((permission) => (role.permissions || []).includes(permission.code))
+    .map((permission) => permission.id);
+  const nextPermissionIds = [...new Set([...currentPermissionIds, permissionId].filter(Boolean))];
+  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+  render();
+  replaceTenantRolePermissions(roleId, nextPermissionIds)
+    .then((updatedRole) => {
+      showToast(`Permisos de ${updatedRole.code} actualizados.`);
+      state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      loadAdminApiDashboard();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
 function renderAdminApiPanel(module) {
   const data = getAdminPanelData();
   const apiMode = getApiMode();
@@ -438,30 +707,29 @@ function renderAdminApiPanel(module) {
       <span class="chip ${apiMode === "api" && apiStatus !== "error" ? "active" : "warning"}">${apiMode === "api" ? "API QA" : "Mock"}</span>
     </div>
 
-    <div class="module-summary expanded">
-      <div class="module-hero">
+    <div class="admin-overview">
+      <div class="admin-overview-main">
         <h1>${tenant.commercial_name}</h1>
         <p>${module.summary}</p>
-        <div class="hero-actions">
+      </div>
+      <div class="admin-overview-actions">
           <button class="primary-action hero-action" type="button" data-action="admin-toggle-api">
             <span>${apiMode === "api" ? "Mock" : "API"}</span>
           </button>
           <button class="secondary-action" type="button" data-action="admin-refresh-api">
             <span>Actualizar</span>
           </button>
-        </div>
       </div>
-
-      <div class="module-kpis">
-        <article class="mini-kpi positive">
+      <div class="admin-overview-kpis">
+        <article class="admin-kpi positive">
           <span>Tenant</span>
           <strong>${tenant.status}</strong>
         </article>
-        <article class="mini-kpi positive">
+        <article class="admin-kpi positive">
           <span>Modulos</span>
           <strong>${data.entitlements.length}</strong>
         </article>
-        <article class="mini-kpi ${policy.allowed ? "positive" : "warning"}">
+        <article class="admin-kpi ${policy.allowed ? "positive" : "warning"}">
           <span>Policy</span>
           <strong>${policy.allowed ? "allowed" : policy.reason}</strong>
         </article>
@@ -470,34 +738,36 @@ function renderAdminApiPanel(module) {
 
     ${state.adminApi.error ? `<div class="validation-card danger"><strong>API QA</strong><p>${state.adminApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
 
-    <div class="module-sections">
-      <section>
-        <div class="panel-head compact">
+    <div class="admin-workspace">
+      <section class="admin-section admin-section-modules">
+        <div class="admin-section-head">
           <h3>Modulos activos</h3>
           <span class="chip active">${data.entitlements.filter((item) => item.status === "active").length}</span>
         </div>
-        <div class="record-list">
-          ${data.entitlements.map((item) => `<article class="record-card"><strong>${item.module_code}</strong><span class="muted-label">${item.status}</span></article>`).join("")}
+        <div class="admin-list admin-module-list">
+          ${data.entitlements.map((item) => renderAdminEntitlementCard(item, apiMode, apiStatus)).join("")}
         </div>
       </section>
 
-      <section>
-        <div class="panel-head compact">
+      <section class="admin-section admin-section-users">
+        <div class="admin-section-head">
           <h3>Usuarios</h3>
           <span class="chip active">${data.users.length}</span>
         </div>
-        <div class="record-list">
-          ${data.users.map((user) => `<article class="record-card"><strong>${user.display_name}</strong><span class="muted-label">${user.email} - ${user.roles.join(", ") || "sin rol"}</span></article>`).join("")}
+        ${renderAdminInviteForm(data, apiMode, apiStatus)}
+        <div class="admin-list">
+          ${data.users.map((user) => renderAdminUserCard(user, apiMode, apiStatus)).join("")}
         </div>
       </section>
 
-      <section>
-        <div class="panel-head compact">
+      <section class="admin-section admin-section-roles">
+        <div class="admin-section-head">
           <h3>Roles</h3>
           <span class="chip active">${data.roles.length}</span>
         </div>
-        <div class="record-list">
-          ${data.roles.map((role) => `<article class="record-card"><strong>${role.name}</strong><span class="muted-label">${role.code} - ${role.status}</span></article>`).join("")}
+        ${renderAdminRoleForm(apiMode, apiStatus)}
+        <div class="admin-list">
+          ${data.roles.map((role) => renderAdminRoleCard(role, data, apiMode, apiStatus)).join("")}
         </div>
       </section>
     </div>
@@ -516,6 +786,47 @@ function renderAdminApiPanel(module) {
   modulePanel.querySelector("[data-action='admin-refresh-api']").addEventListener("click", () => {
     if (getApiMode() !== "api") setApiMode("api");
     loadAdminApiDashboard();
+  });
+
+  modulePanel.querySelectorAll("[data-action='admin-update-entitlement']").forEach((button) => {
+    button.addEventListener("click", () => {
+      updateAdminEntitlement(button.dataset.moduleCode, button.dataset.nextStatus);
+    });
+  });
+
+  modulePanel.querySelectorAll("[data-action='admin-suspend-entitlement']").forEach((button) => {
+    button.addEventListener("click", () => {
+      updateAdminEntitlement(button.dataset.moduleCode, "suspended");
+    });
+  });
+
+  modulePanel.querySelector("[data-form='admin-invite-user']").addEventListener("submit", (event) => {
+    event.preventDefault();
+    inviteAdminUser(event.currentTarget);
+  });
+
+  modulePanel.querySelectorAll("[data-action='admin-disable-user']").forEach((button) => {
+    button.addEventListener("click", () => {
+      disableAdminUser(button.dataset.userId);
+    });
+  });
+
+  modulePanel.querySelector("[data-form='admin-create-role']").addEventListener("submit", (event) => {
+    event.preventDefault();
+    createAdminRole(event.currentTarget);
+  });
+
+  modulePanel.querySelectorAll("[data-action='admin-toggle-role']").forEach((button) => {
+    button.addEventListener("click", () => {
+      toggleAdminRole(button.dataset.roleId, button.dataset.nextStatus);
+    });
+  });
+
+  modulePanel.querySelectorAll("[data-form='admin-role-permission']").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      assignAdminRolePermission(event.currentTarget);
+    });
   });
 
   if (apiMode === "api" && apiStatus === "idle") {

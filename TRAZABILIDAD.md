@@ -1309,6 +1309,141 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `npm.cmd run validate:syntax`; `npm.cmd run validate:architecture`; `npm.cmd run validate:active-localization`; `npm.cmd run validate`. |
 | Observaciones | Administracion sigue incluida en validaciones de localizacion activa porque es una vista real conectada al admin-service. |
 
+### CHG-086
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-01 |
+| Cambio | Entitlements operables en admin-service y frontend |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `backend/README.md`, `backend/services/admin-service/README.md`, `frontend/api/admin.js`, `frontend/app.js`, `TRAZABILIDAD.md` |
+| Secciones | Admin-service, entitlements, Administracion, API QA, frontend |
+| Descripcion | Se implemento `PUT /v1/tenants/{tenant_id}/entitlements/{module_code}` para activar, inactivar o suspender modulos de un tenant usando PostgreSQL. El panel de Administracion ahora muestra acciones por modulo en modo API QA y refresca los datos reales tras cada cambio. |
+| Motivo | Pasar el primer bloque de Administracion de lectura real a operacion real, empezando por modulos activos del tenant porque impactan directamente la disponibilidad SaaS y la evaluacion de politicas. |
+| Impacto | El tenant demo QA puede administrar entitlements desde el backend y desde la maqueta local sin tocar manualmente Cloud SQL. El frontend conserva modo mock y solo habilita acciones cuando la API QA esta lista. |
+| Validacion | `pytest`; `npm.cmd run validate:syntax`; `npm.cmd run validate:architecture`; prueba real contra Cloud SQL QA cambiando `integrations` a `inactive` y restaurandolo a `active`; `/ready` respondio `ready`. |
+| Observaciones | Al cierre de este cambio quedaban pendientes los endpoints mutables de tenants, usuarios y roles. No se agrego migracion porque `admin.tenant_modules` ya incluia `status`, `source` y `limits`. |
+
+### CHG-087
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-01 |
+| Cambio | Usuarios operables en admin-service y panel de Administracion |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `backend/README.md`, `backend/services/admin-service/README.md`, `frontend/api/admin.js`, `frontend/app.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Admin-service, usuarios, membresias, roles de membresia, Administracion, API QA |
+| Descripcion | Se implementaron `POST /v1/users/invitations`, `PATCH /v1/users/{user_id}` y `POST /v1/users/{user_id}/disable`. La invitacion crea o actualiza identidad global, crea o reactiva la membresia del tenant y asigna roles de membresia. El panel de Administracion agrega formulario de invitacion y accion de desactivar usuario en modo API QA. |
+| Motivo | Continuar la secuencia arquitectonica despues de entitlements: administrar usuarios y membresias antes de avanzar a roles/permisos finos o autenticacion real. |
+| Impacto | QA ya puede operar usuarios del tenant demo desde API y frontend local sin introducir contrasenas ni proveedor de identidad. El actor demo queda protegido en UI para evitar desactivar el usuario usado en pruebas de policy evaluation. |
+| Validacion | `pytest services/admin-service/tests/test_admin_api.py`; `pytest`; `npm.cmd run validate:syntax`; prueba real contra Cloud SQL QA invitando, editando y desactivando un usuario temporal; `/ready` respondio `ready`. |
+| Observaciones | La desactivacion afecta la membresia del tenant, no elimina la identidad global. Quedan pendientes auditoria/idempotencia formal y endpoints mutables de roles. |
+
+### CHG-088
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-01 |
+| Cambio | Auditoria e idempotencia base para mutaciones de admin-service |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/tests/test_admin_api.py`, `contracts/api/admin-service.openapi.yaml`, `backend/README.md`, `backend/services/admin-service/README.md`, `frontend/api/admin.js`, `TRAZABILIDAD.md` |
+| Secciones | Admin-service, auditoria, idempotencia, contratos OpenAPI, Administracion |
+| Descripcion | Se agrego validacion obligatoria de `Idempotency-Key` en las mutaciones actuales de entitlements y usuarios. Cada comando registra un evento en `admin.audit_events` dentro de la misma transaccion, con accion, recurso, estado anterior, estado posterior, `correlation_id` e `idempotency_key`. El cliente frontend genera headers por comando y el contrato OpenAPI quedo alineado para `PATCH /v1/users/{user_id}`. |
+| Motivo | Cerrar la recomendacion arquitectonica previa antes de avanzar a roles/permisos mutables o migrar modulos operativos, asegurando trazabilidad minima de acciones criticas. |
+| Impacto | Las operaciones reales de Administracion quedan auditadas y los reintentos empiezan a portar una clave idempotente verificable. Todavia no existe tabla dedicada de comandos procesados ni respuesta cacheada por idempotency key. |
+| Validacion | `python -m py_compile services/admin-service/app/api.py services/admin-service/app/repositories.py services/admin-service/app/schemas.py services/admin_service_adapter.py`; `npm.cmd run validate:syntax`; `npm.cmd run validate:architecture`; `npm.cmd run validate`. `python -m pytest services/admin-service/tests/test_admin_api.py` no se pudo ejecutar porque el ambiente local no tiene instalado `pytest`. |
+| Observaciones | La auditoria usa `actor_type='system'` de forma temporal hasta integrar autenticacion real y actor autenticado. |
+
+### CHG-089
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-01 |
+| Cambio | Roles y permisos operables en admin-service |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `contracts/api/admin-service.openapi.yaml`, `backend/README.md`, `backend/services/admin-service/README.md`, `frontend/api/admin.js`, `frontend/app.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Admin-service, roles, permisos, policy, auditoria, Administracion |
+| Descripcion | Se implementaron `POST /v1/roles`, `PATCH /v1/roles/{role_id}`, `PUT /v1/roles/{role_id}/permissions` y `GET /v1/permissions`. Las mutaciones de roles exigen `Idempotency-Key`, aceptan `X-Correlation-Id` y registran auditoria en `admin.audit_events`. El panel de Administracion permite crear roles, activar/inactivar roles y asignar permisos disponibles desde API QA. |
+| Motivo | Completar el nucleo SaaS minimo de Administracion antes de iniciar la migracion de modulos operativos reales. |
+| Impacto | QA puede operar roles y permisos sin tocar manualmente Cloud SQL. `POST /v1/policy/evaluate` puede reflejar cambios de permisos hechos desde el propio `admin-service`. |
+| Validacion | `python -m py_compile services/admin-service/app/api.py services/admin-service/app/repositories.py services/admin-service/app/schemas.py services/admin_service_adapter.py`; `python -m pytest services/admin-service/tests/test_admin_api.py` con 20 tests correctos; `python -m pytest` con 25 tests correctos; `npm.cmd run validate:syntax`; `npm.cmd run validate`. |
+| Observaciones | La UI permite agregar permisos al rol; la remocion fina de permisos queda para un refinamiento posterior junto con actor autenticado real. |
+
+### CHG-090
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-01 |
+| Cambio | Rediseño del panel operativo de Administracion |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, Administracion, panel API QA, UX |
+| Descripcion | Se rediseñaron las secciones de modulos activos, usuarios y roles del panel de Administracion para usar un tablero compacto con secciones delimitadas, registros escaneables, badges de estado, formularios integrados y layout responsive. |
+| Motivo | Mejorar la legibilidad y operabilidad del panel conectado a `admin-service`, evitando listas extendidas y formularios demasiado dispersos. |
+| Impacto | La Administracion en modo API QA conserva las mismas acciones pero se presenta con una interfaz mas clara para probar entitlements, usuarios, roles y permisos. |
+| Validacion | `npm.cmd run validate:syntax`; `npm.cmd run validate:architecture`. |
+| Observaciones | No cambia contratos ni comportamiento backend. |
+
+### CHG-091
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-01 |
+| Cambio | Reacomodo espacial del panel de Administracion |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, Administracion, distribucion, UX |
+| Descripcion | Se reemplazo el hero alto por un encabezado operativo mas compacto con KPIs integrados. El cuerpo de Administracion se reacomodo en una grilla de 12 columnas: modulos activos como franja superior, usuarios y roles como paneles balanceados, con listas contenidas y formularios mas compactos. |
+| Motivo | Mejorar la distribucion, reducir espacios vacios y aprovechar mejor el ancho disponible durante pruebas de API QA. |
+| Impacto | El panel conserva las mismas acciones, pero ahora prioriza lectura rapida y operacion repetida sin crecer verticalmente de forma innecesaria. |
+| Validacion | `npm.cmd run validate:syntax`; `npm.cmd run validate:architecture`. |
+| Observaciones | Cambio visual sin impacto en contratos ni backend. |
+
+### CHG-092
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-01 |
+| Cambio | Correccion responsive del panel de Administracion |
+| Autor | Codex |
+| Archivos | `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, Administracion, responsive, UX |
+| Descripcion | Se reemplazaron las grillas fijas del panel de Administracion por un flujo fluido de una columna con subgrids `auto-fit`, se redujeron anchos minimos rigidos, se ajustaron KPIs, formularios, registros y acciones para evitar desbordes al cambiar el tamaño de pantalla. |
+| Motivo | Evitar que el modulo de Administracion se desordene en ventanas medianas, tablets o pantallas moviles. |
+| Impacto | El panel conserva el diseño operativo, pero ahora se mantiene ordenado por defecto: header en una columna, modulos arriba, usuarios y roles apilados, subgrids fluidos y controles a ancho completo en movil. |
+| Validacion | `npm.cmd run validate:syntax`; `npm.cmd run validate:architecture`; `npm.cmd run validate`. |
+| Observaciones | Cambio visual sin impacto en contratos ni backend. |
+
+### CHG-093
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-01 |
+| Cambio | Prueba API QA real de Administracion |
+| Autor | Codex |
+| Archivos | `TRAZABILIDAD.md` |
+| Secciones | Admin-service, QA real, entitlements, usuarios, roles, permisos, auditoria |
+| Descripcion | Se ejecuto un flujo real contra `admin-service` en `http://127.0.0.1:8000` conectado a Cloud SQL QA mediante proxy local. Se valido lectura de tenant, lectura de entitlements, inactivacion/restauracion de `inventory`, lectura de usuarios, invitacion y desactivacion de usuario temporal, lectura de roles, creacion/inactivacion/activacion/inactivacion final de rol temporal, lectura de permisos, asignacion de permiso a rol temporal y `POST /v1/policy/evaluate`. |
+| Motivo | Confirmar que el nucleo MVP de Administracion opera contra QA real y no solo mediante tests unitarios o maqueta local. |
+| Impacto | Se confirmo persistencia real en Cloud SQL QA, restauracion del modulo `inventory` a `active`, usuario temporal desactivado y rol temporal `codex_qa_1782963345` inactivo. |
+| Validacion | Flujo API completo exitoso; `policy.evaluate` respondio `allowed=True`; consulta directa a `admin.audit_events` encontro 9 eventos con `Idempotency-Key` de la corrida `1782963345`. |
+| Observaciones | Quedaron datos temporales auditables en QA: usuario `codex.qa.1782963345@erclave.local` desactivado y rol `codex_qa_1782963345` inactivo. |
+
+### CHG-094
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-01 |
+| Cambio | Primer corte backend real de production-service |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260701_0002_production_service_initial.py`, `backend/services/production-service/app/*`, `backend/services/production-service/tests/test_production_api.py`, `backend/services/production_service_adapter.py`, `backend/pyproject.toml`, `backend/README.md`, `backend/services/production-service/README.md`, `tools/validators/validate-backend-scaffold.js`, `TRAZABILIDAD.md` |
+| Secciones | Production-service, FastAPI, PostgreSQL, productos/servicios, backend MVP |
+| Descripcion | Se creo el primer scaffold funcional de `production-service` con FastAPI, health checks compartidos, repositorio SQL, schemas Pydantic, adapter para Uvicorn, pruebas con repositorio falso y migracion inicial para `production.product_services`. El primer corte implementa `GET/POST /v1/production/product-services`, `GET/PATCH /v1/production/product-services/{product_service_id}` y `PATCH /v1/production/product-services/{product_service_id}/status`. |
+| Motivo | Iniciar el primer modulo operativo real despues de validar `admin-service` en QA, empezando por el catalogo de productos/servicios como base para recetas y ordenes. |
+| Impacto | El backend ya tiene una frontera real para Produccion sin escribir inventario, costos ni contabilidad. La suite de backend ahora cubre admin-service y production-service. |
+| Validacion | `python -m py_compile` sobre los nuevos modulos y migracion; `python -m pytest services/production-service/tests/test_production_api.py` con 8 tests correctos; `python -m pytest` con 33 tests correctos; `npm.cmd run validate`; `alembic upgrade head` aplicado en Cloud SQL QA; prueba API real en `production-service` local puerto `8002` creando, leyendo, actualizando, inactivando, restaurando y buscando `codex_prod_1782964372`. |
+| Observaciones | Quedo dato temporal QA `codex_prod_1782964372` activo para validar persistencia. Recetas, versiones, ordenes, areas laborales y maquinaria quedan para cortes posteriores. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

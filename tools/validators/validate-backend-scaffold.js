@@ -28,7 +28,14 @@ const requiredPaths = [
   "backend/services/admin-service/tests/test_permission_seeds.py",
   "backend/services/admin-service/tests/test_qa_demo_seed.py",
   "backend/services/admin-service/tests/test_admin_api.py",
-  "backend/services/admin_service_adapter.py"
+  "backend/services/admin_service_adapter.py",
+  "backend/alembic/versions/20260701_0002_production_service_initial.py",
+  "backend/services/production-service/app/main.py",
+  "backend/services/production-service/app/api.py",
+  "backend/services/production-service/app/repositories.py",
+  "backend/services/production-service/app/schemas.py",
+  "backend/services/production-service/tests/test_production_api.py",
+  "backend/services/production_service_adapter.py"
 ];
 
 const requiredFragments = [
@@ -64,7 +71,15 @@ const requiredFragments = [
   ["backend/scripts/seed_admin_mvp.py", "on conflict (code) do update"],
   ["backend/scripts/seed_admin_qa_demo.py", "ACTIVE_DEMO_MODULES"],
   ["backend/scripts/seed_admin_qa_demo.py", "on conflict (tenant_id, role_id, permission_id) do nothing"],
-  ["backend/README.md", "ERCLAVE_API_PUBLIC_BASE_URL"]
+  ["backend/README.md", "ERCLAVE_API_PUBLIC_BASE_URL"],
+  ["backend/alembic/versions/20260701_0002_production_service_initial.py", "CREATE SCHEMA IF NOT EXISTS production"],
+  ["backend/alembic/versions/20260701_0002_production_service_initial.py", "\"product_services\""],
+  ["backend/services/production-service/app/main.py", "include_router(production_router)"],
+  ["backend/services/production-service/app/api.py", "@router.get(\"/product-services\""],
+  ["backend/services/production-service/app/api.py", "@router.post(\"/product-services\""],
+  ["backend/services/production-service/app/repositories.py", "class ProductionRepository"],
+  ["backend/services/production-service/app/repositories.py", "def create_product_service"],
+  ["backend/services/production_service_adapter.py", "production-service"]
 ];
 
 const errors = [];

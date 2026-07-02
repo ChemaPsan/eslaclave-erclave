@@ -272,6 +272,7 @@ paths:
           schema:
             type: string
         - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -407,6 +408,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RoleResponse'
+  /v1/permissions:
+    get:
+      tags: [Roles]
+      operationId: listPermissions
+      summary: List active permission catalog.
+      x-required-module: admin
+      x-permissions: [admin.role.read]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Permissions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionListResponse'
   /v1/business-units:
     get:
       tags: [BusinessUnits]
@@ -827,6 +845,10 @@ components:
           type: string
         status:
           type: string
+        permissions:
+          type: array
+          items:
+            type: string
     RoleResponse:
       type: object
       properties:
@@ -871,6 +893,30 @@ components:
         scope:
           type: object
           additionalProperties: true
+    Permission:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        module_code:
+          type: string
+        resource:
+          type: string
+        action:
+          type: string
+        status:
+          type: string
+    PermissionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        page:
+          $ref: '#/components/schemas/Page'
     BusinessUnit:
       type: object
       properties:

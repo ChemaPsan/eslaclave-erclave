@@ -29,9 +29,10 @@ include = ["erclave_common*"]
 [tool.pytest.ini_options]
 pythonpath = [
   "shared",
-  "services/admin-service"
+  "services/admin-service",
+  "services/production-service"
 ]
 testpaths = [
-  "services/admin-service/tests"
+  "services/admin-service/tests",
+  "services/production-service/tests"
 ]
-

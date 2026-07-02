@@ -29,6 +29,10 @@ Modelo fisico inicial de `admin-service`:
 - `admin.tenant_modules`;
 - `admin.audit_events`.
 
+Modelo fisico inicial de `production-service`:
+
+- `production.product_services`.
+
 ## Dominio configurable
 
 El dominio publico aun no esta comprado. Por eso ningun servicio debe asumir `api.eslaclave.com` como valor fijo.
@@ -94,6 +98,24 @@ cd services/admin-service
 uvicorn app.main:app --reload --port 8000
 ```
 
+## Ejecutar production-service
+
+Desde `backend`:
+
+```bash
+uvicorn services.production_service_adapter:app --reload --port 8002
+```
+
+Primer corte real de Produccion:
+
+```text
+GET /v1/production/product-services
+POST /v1/production/product-services
+GET /v1/production/product-services/{product_service_id}
+PATCH /v1/production/product-services/{product_service_id}
+PATCH /v1/production/product-services/{product_service_id}/status
+```
+
 ## Endpoints tecnicos iniciales
 
 ```text
@@ -104,14 +126,22 @@ GET /version
 
 ## Endpoints MVP de admin-service
 
-Primer corte real de lectura y evaluacion de politica:
+Primer corte real de lectura, administracion de entitlements y evaluacion de politica:
 
 ```text
 GET /v1/tenants/{tenant_id}
 GET /v1/tenants/{tenant_id}/entitlements
+PUT /v1/tenants/{tenant_id}/entitlements/{module_code}
 POST /v1/policy/evaluate
 GET /v1/users
+POST /v1/users/invitations
+PATCH /v1/users/{user_id}
+POST /v1/users/{user_id}/disable
 GET /v1/roles
+POST /v1/roles
+PATCH /v1/roles/{role_id}
+PUT /v1/roles/{role_id}/permissions
+GET /v1/permissions
 ```
 
 `GET /v1/users` y `GET /v1/roles` requieren header:
@@ -119,6 +149,15 @@ GET /v1/roles
 ```text
 X-Tenant-Id=<tenant_id>
 ```
+
+Los endpoints mutables de `admin-service` requieren:
+
+```text
+Idempotency-Key=<clave_unica_del_comando>
+X-Correlation-Id=<id_opcional_para_traza>
+```
+
+Las mutaciones actuales de entitlements y usuarios registran auditoria en `admin.audit_events`.
 
 Ejemplo de policy evaluation:
 
