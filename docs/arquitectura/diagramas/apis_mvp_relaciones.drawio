@@ -10,13 +10,13 @@
         <mxCell id="entryBox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7FF;strokeColor=#9B0FC9;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="Entrada y seguridad" vertex="1">
           <mxGeometry height="300" width="310" x="-287" y="149" as="geometry" />
         </mxCell>
-        <mxCell id="servicesBox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8E8FF;strokeColor=#6106A0;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="Servicios Cloud Run / FastAPI" vertex="1">
+        <mxCell id="servicesBox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8E8FF;strokeColor=#6106A0;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="Servicios MVP / FastAPI&#xa;estado real + objetivo" vertex="1">
           <mxGeometry height="826" width="1216" x="410" y="90" as="geometry" />
         </mxCell>
         <mxCell id="dataBox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="Datos, eventos y observabilidad" vertex="1">
           <mxGeometry height="520" width="330" x="1907" y="64" as="geometry" />
         </mxCell>
-        <mxCell id="legendBox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontColor=#1F1233;align=left;spacing=10;" value="Reglas clave&#xa;- Cada servicio escribe solo sus datos&#xa;- Cruces por API o evento&#xa;- tenant_id validado en backend&#xa;- Idempotency-Key en comandos criticos&#xa;- Auditoria + outbox para eventos" vertex="1">
+        <mxCell id="legendBox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontColor=#1F1233;align=left;spacing=10;" value="Reglas clave&#xa;- Cada servicio escribe solo sus datos&#xa;- Cruces por API o evento&#xa;- tenant_id validado en backend&#xa;- Idempotency-Key en comandos criticos&#xa;- Auditoria en acciones sensibles&#xa;- Outbox/PubSub sigue como objetivo transversal" vertex="1">
           <mxGeometry height="190" width="470" x="34" y="1016" as="geometry" />
         </mxCell>
         <mxCell id="frontend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B0FC9;fontColor=#1F1233;" value="Frontend ERClave&#xa;Shell + microfrontends" vertex="1">
@@ -31,37 +31,37 @@
         <mxCell id="gateway" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF2FF;strokeColor=#9B0FC9;fontColor=#1F1233;fontStyle=1;" value="API Gateway / Edge&#xa;Auth, tenant, rate limit" vertex="1">
           <mxGeometry height="80" width="220" x="486" y="129" as="geometry" />
         </mxCell>
-        <mxCell id="admin" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="admin-service&#xa;Tenants, usuarios, roles, permisos, modulos activos" vertex="1">
+        <mxCell id="admin" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;" value="admin-service&#xa;REAL QA: tenants, entitlements, usuarios, roles, permisos, policy, audit_events" vertex="1">
           <mxGeometry height="85" width="220" x="486" y="269" as="geometry" />
         </mxCell>
-        <mxCell id="production" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="production-service&#xa;Productos, recetas, ordenes, recursos" vertex="1">
+        <mxCell id="production" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;" value="production-service&#xa;REAL parcial: product_services&#xa;OBJETIVO: recetas, ordenes, recursos" vertex="1">
           <mxGeometry height="85" width="220" x="872" y="519" as="geometry" />
         </mxCell>
-        <mxCell id="inventory" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="inventory-service&#xa;Almacenes, articulos, movimientos, existencias" vertex="1">
+        <mxCell id="inventory" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="inventory-service&#xa;OBJETIVO: almacenes, articulos, movimientos, existencias" vertex="1">
           <mxGeometry height="85" width="220" x="872" y="659" as="geometry" />
         </mxCell>
-        <mxCell id="sales" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="sales-service&#xa;Clientes, cotizaciones, pedidos, entregas" vertex="1">
+        <mxCell id="sales" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="sales-service&#xa;OBJETIVO: clientes, cotizaciones, pedidos, entregas" vertex="1">
           <mxGeometry height="85" width="220" x="872" y="799" as="geometry" />
         </mxCell>
-        <mxCell id="billing" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="billing-service&#xa;Planes, checkout, suscripciones, activacion manual" vertex="1">
+        <mxCell id="billing" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="billing-service&#xa;OBJETIVO: planes, checkout, suscripciones, activacion manual" vertex="1">
           <mxGeometry height="85" width="220" x="486" y="409" as="geometry" />
         </mxCell>
-        <mxCell id="provisioning" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="provisioning-service&#xa;Alta idempotente de tenant" vertex="1">
+        <mxCell id="provisioning" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="provisioning-service&#xa;OBJETIVO: alta idempotente de tenant" vertex="1">
           <mxGeometry height="65" width="220" x="486" y="519" as="geometry" />
         </mxCell>
-        <mxCell id="integrations" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="integration-service&#xa;API clients, scopes, cuotas, uso" vertex="1">
+        <mxCell id="integrations" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="integration-service&#xa;OBJETIVO: API clients, scopes, cuotas, uso" vertex="1">
           <mxGeometry height="365" width="140" x="1366" y="535" as="geometry" />
         </mxCell>
-        <mxCell id="cloudSql" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="Cloud SQL PostgreSQL&#xa;schemas por servicio&#xa;admin / production / inventory / sales / billing / provisioning / integrations" vertex="1">
+        <mxCell id="cloudSql" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="Cloud SQL PostgreSQL&#xa;REAL QA: schema admin + production.product_services&#xa;OBJETIVO: inventory / sales / billing / provisioning / integrations" vertex="1">
           <mxGeometry height="120" width="250" x="1947" y="119" as="geometry" />
         </mxCell>
-        <mxCell id="outbox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="audit.outbox_events&#xa;eventos pendientes/publicados" vertex="1">
+        <mxCell id="outbox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="audit.outbox_events&#xa;OBJETIVO: eventos pendientes/publicados" vertex="1">
           <mxGeometry height="75" width="250" x="1947" y="274" as="geometry" />
         </mxCell>
-        <mxCell id="pubsub" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;" value="Pub/Sub&#xa;eventos versionados" vertex="1">
+        <mxCell id="pubsub" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;" value="Pub/Sub&#xa;OBJETIVO: eventos versionados" vertex="1">
           <mxGeometry height="75" width="250" x="1947" y="384" as="geometry" />
         </mxCell>
-        <mxCell id="audit" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="audit.audit_log&#xa;actor, recurso, before/after, correlation_id" vertex="1">
+        <mxCell id="audit" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;" value="admin.audit_events REAL&#xa;actor, recurso, before/after, correlation_id, idempotency_key&#xa;audit.audit_log queda objetivo transversal" vertex="1">
           <mxGeometry height="75" width="250" x="1947" y="494" as="geometry" />
         </mxCell>
         <mxCell id="eFrontendGateway" edge="1" parent="1" source="frontend" style="endArrow=block;html=1;rounded=0;strokeColor=#9B0FC9;fontColor=#300C57;" target="gateway" value="requests usuario">
@@ -73,10 +73,10 @@
         <mxCell id="ePaymentBilling" edge="1" parent="1" source="paymentProvider" style="endArrow=block;html=1;rounded=0;strokeColor=#D97706;fontColor=#92400E;" target="billing" value="webhook pago">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eGatewayAdmin" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;fontColor=#300C57;" target="admin" value="policy / tenants">
+        <mxCell id="eGatewayAdmin" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;fontStyle=1;" target="admin" value="REAL QA: policy / entitlements / usuarios / roles">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eGatewayProduction" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;fontColor=#300C57;" target="production" value="productos / recetas / ordenes">
+        <mxCell id="eGatewayProduction" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;fontStyle=1;" target="production" value="REAL parcial: product-services">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="eGatewayInventory" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;fontColor=#300C57;" target="inventory" value="almacenes / movimientos">
@@ -103,7 +103,7 @@
         <mxCell id="eSalesInventory" edge="1" parent="1" source="sales" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;fontColor=#1D4ED8;" target="inventory" value="availability / reservations">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eProductionInventory" edge="1" parent="1" source="production" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;fontColor=#1D4ED8;" target="inventory" value="availability / consumption / receipts">
+        <mxCell id="eProductionInventory" edge="1" parent="1" source="production" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;fontColor=#1D4ED8;dashed=1;" target="inventory" value="OBJETIVO: availability / consumption / receipts">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="eAdminDb" edge="1" parent="1" source="admin" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;dashed=1;fontColor=#065F46;" target="cloudSql" value="schema admin">
@@ -127,7 +127,7 @@
         <mxCell id="eIntegrationsDb" edge="1" parent="1" source="integrations" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;dashed=1;fontColor=#065F46;" target="cloudSql" value="schema integrations">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eServicesOutbox" edge="1" parent="1" source="cloudSql" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;" target="outbox" value="eventos dentro de transaccion">
+        <mxCell id="eServicesOutbox" edge="1" parent="1" source="cloudSql" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;dashed=1;" target="outbox" value="OBJETIVO: eventos dentro de transaccion">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="eOutboxPubsub" edge="1" parent="1" source="outbox" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;" target="pubsub" value="publisher worker">
@@ -136,10 +136,10 @@
         <mxCell id="ePubsubServices" edge="1" parent="1" source="pubsub" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;dashed=1;fontColor=#065F46;" target="servicesBox" value="consumidores idempotentes">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eCloudAudit" edge="1" parent="1" source="cloudSql" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;" target="audit" value="acciones criticas">
+        <mxCell id="eCloudAudit" edge="1" parent="1" source="cloudSql" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;" target="audit" value="REAL admin: acciones criticas">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="flow1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2563EB;fontColor=#1E3A8A;align=left;spacing=10;" value="Flujo venta bajo pedido: sales-service solicita orden a production-service; production-service valida receta y consulta/solicita recursos a inventory-service." vertex="1">
+        <mxCell id="flow1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2563EB;fontColor=#1E3A8A;align=left;spacing=10;" value="OBJETIVO: venta bajo pedido. sales-service solicita orden a production-service; production-service valida receta y consulta/solicita recursos a inventory-service." vertex="1">
           <mxGeometry height="90" width="430" x="544" y="1016" as="geometry" />
         </mxCell>
         <mxCell id="flow2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#D97706;fontColor=#92400E;align=left;spacing=10;" value="Flujo alta SaaS: billing-service procesa pago o activacion manual; provisioning-service crea tenant, admin y modulos mediante admin-service." vertex="1">
@@ -147,6 +147,9 @@
         </mxCell>
         <mxCell id="flow3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#059669;fontColor=#065F46;align=left;spacing=10;" value="Flujo integraciones: API Gateway valida cliente API, integration-service valida scopes/cuotas y registra uso para auditoria o cobro futuro." vertex="1">
           <mxGeometry height="90" width="450" x="1014" y="1016" as="geometry" />
+        </mxCell>
+        <mxCell id="statusCurrent" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#065F46;align=left;spacing=10;fontStyle=1;" value="ESTADO REAL 2026-07-02&#xa;admin-service opera en QA: entitlements, usuarios, roles, permisos, policy y auditoria.&#xa;production-service tiene primer corte real: product_services en Cloud SQL QA." vertex="1">
+          <mxGeometry height="110" width="450" x="1014" y="1131" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

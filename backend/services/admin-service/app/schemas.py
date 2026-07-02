@@ -135,3 +135,15 @@ class PermissionRead(BaseModel):
 class PermissionListResponse(BaseModel):
     data: list[PermissionRead]
     page: Page = Field(default_factory=Page)
+
+
+class SessionContextRead(BaseModel):
+    tenant: TenantRead
+    user: UserRead
+    entitlements: list[EntitlementRead] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
+    active_modules: list[str] = Field(default_factory=list)
+
+
+class SessionContextResponse(BaseModel):
+    data: SessionContextRead

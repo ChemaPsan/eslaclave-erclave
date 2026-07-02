@@ -19,7 +19,8 @@ export async function getAdminDashboard() {
   const tenantId = getDemoTenantId();
   const actorId = getDemoActorId();
 
-  const [tenant, entitlements, users, roles, permissions, policy] = await Promise.all([
+  const [session, tenant, entitlements, users, roles, permissions, policy] = await Promise.all([
+    getSessionContext(),
     apiRequest(`/v1/tenants/${tenantId}`),
     apiRequest(`/v1/tenants/${tenantId}/entitlements`),
     apiRequest("/v1/users", { headers: { "X-Tenant-Id": tenantId } }),
@@ -40,12 +41,27 @@ export async function getAdminDashboard() {
 
   return {
     tenant: tenant.data,
+    session,
     entitlements: entitlements.data,
     users: users.data,
     roles: roles.data,
     permissions: permissions.data,
     policy: policy.data
   };
+}
+
+
+export async function getSessionContext() {
+  const tenantId = getDemoTenantId();
+  const actorId = getDemoActorId();
+  const response = await apiRequest("/v1/session/context", {
+    headers: {
+      "X-Tenant-Id": tenantId,
+      "X-Actor-Id": actorId
+    }
+  });
+
+  return response.data;
 }
 
 

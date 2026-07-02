@@ -13,3 +13,4 @@ build/
 !.env.example
 .git.broken-empty/
 **/.$*.drawio.bkp
+.firebase/

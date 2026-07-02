@@ -6,7 +6,7 @@ from sqlalchemy.engine import Engine
 
 from erclave_common.db import create_database_engine
 
-from .schemas import EntitlementRead, PermissionRead, PolicyDecision, RoleRead, TenantRead, UserRead
+from .schemas import EntitlementRead, PermissionRead, PolicyDecision, RoleRead, SessionContextRead, TenantRead, UserRead
 
 
 class AdminRepository:
@@ -43,6 +43,73 @@ class AdminRepository:
             ).mappings().all()
 
         return [EntitlementRead.model_validate(dict(row)) for row in rows]
+
+    def get_session_context(self, tenant_id: str, actor_id: str) -> SessionContextRead | None:
+        with self.engine.connect() as connection:
+            tenant = connection.execute(
+                text(
+                    """
+                    select id, slug, legal_name, commercial_name, status, plan_id, timezone, locale
+                    from admin.tenants
+                    where id = :tenant_id
+                    """
+                ),
+                {"tenant_id": tenant_id},
+            ).mappings().first()
+            if tenant is None:
+                return None
+
+            user = self._get_user_for_tenant(connection, tenant_id, actor_id)
+            if user is None:
+                return None
+
+            entitlements = connection.execute(
+                text(
+                    """
+                    select module_code, status, limits as limits
+                    from admin.tenant_modules
+                    where tenant_id = :tenant_id
+                    order by module_code
+                    """
+                ),
+                {"tenant_id": tenant_id},
+            ).mappings().all()
+
+            permissions = connection.execute(
+                text(
+                    """
+                    select distinct permissions.code
+                    from admin.memberships memberships
+                    join admin.membership_roles membership_roles
+                        on membership_roles.tenant_id = memberships.tenant_id
+                        and membership_roles.membership_id = memberships.id
+                    join admin.roles roles
+                        on roles.tenant_id = memberships.tenant_id
+                        and roles.id = membership_roles.role_id
+                    join admin.role_permissions role_permissions
+                        on role_permissions.tenant_id = memberships.tenant_id
+                        and role_permissions.role_id = roles.id
+                    join admin.permissions permissions
+                        on permissions.id = role_permissions.permission_id
+                    where memberships.tenant_id = :tenant_id
+                        and memberships.user_id = :actor_id
+                        and memberships.status = 'active'
+                        and roles.status = 'active'
+                        and permissions.status = 'active'
+                    order by permissions.code
+                    """
+                ),
+                {"tenant_id": tenant_id, "actor_id": actor_id},
+            ).scalars().all()
+
+        entitlement_reads = [EntitlementRead.model_validate(dict(row)) for row in entitlements]
+        return SessionContextRead(
+            tenant=TenantRead.model_validate(dict(tenant)),
+            user=UserRead.model_validate(dict(user)),
+            entitlements=entitlement_reads,
+            permissions=list(permissions),
+            active_modules=[item.module_code for item in entitlement_reads if item.status == "active"],
+        )
 
     def upsert_entitlement(
         self,

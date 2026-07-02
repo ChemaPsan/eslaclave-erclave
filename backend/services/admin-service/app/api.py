@@ -17,6 +17,7 @@ from .schemas import (
     RolePermissionsReplaceRequest,
     RoleResponse,
     RoleUpdateRequest,
+    SessionContextResponse,
     TenantResponse,
     UserInvitationRequest,
     UserListResponse,
@@ -40,6 +41,27 @@ def require_idempotency_key(idempotency_key: str | None) -> str:
 
 def resolve_correlation_id(correlation_id: str | None) -> str:
     return correlation_id.strip() if correlation_id else f"cor_{uuid4().hex[:26]}"
+
+
+@router.get("/session/context", response_model=SessionContextResponse)
+def get_session_context(
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    x_actor_id: str | None = Header(default=None, alias="X-Actor-Id"),
+    repository: AdminRepository = Depends(get_admin_repository),
+) -> SessionContextResponse:
+    if not x_tenant_id:
+        raise ErclaveError("tenant_required", "X-Tenant-Id header is required.", status_code=400)
+    if not x_actor_id:
+        raise ErclaveError("actor_required", "X-Actor-Id header is required.", status_code=400)
+    context = repository.get_session_context(x_tenant_id, x_actor_id)
+    if context is None:
+        raise ErclaveError(
+            "session_context_not_found",
+            "Session context not found for tenant and actor.",
+            status_code=404,
+            details={"tenant_id": x_tenant_id, "actor_id": x_actor_id},
+        )
+    return SessionContextResponse(data=context)
 
 
 @router.get("/tenants/{tenant_id}", response_model=TenantResponse)

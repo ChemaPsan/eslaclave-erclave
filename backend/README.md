@@ -129,6 +129,7 @@ GET /version
 Primer corte real de lectura, administracion de entitlements y evaluacion de politica:
 
 ```text
+GET /v1/session/context
 GET /v1/tenants/{tenant_id}
 GET /v1/tenants/{tenant_id}/entitlements
 PUT /v1/tenants/{tenant_id}/entitlements/{module_code}
@@ -144,11 +145,19 @@ PUT /v1/roles/{role_id}/permissions
 GET /v1/permissions
 ```
 
-`GET /v1/users` y `GET /v1/roles` requieren header:
+`GET /v1/session/context`, `GET /v1/users` y `GET /v1/roles` requieren header:
 
 ```text
 X-Tenant-Id=<tenant_id>
 ```
+
+`GET /v1/session/context` tambien requiere temporalmente:
+
+```text
+X-Actor-Id=<user_id>
+```
+
+Este endpoint devuelve tenant, usuario, entitlements, permisos efectivos y modulos activos. Es la antesala al login real: cuando exista OIDC/JWT, `X-Actor-Id` se reemplazara por el subject del token.
 
 Los endpoints mutables de `admin-service` requieren:
 

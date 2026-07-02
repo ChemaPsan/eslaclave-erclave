@@ -9,6 +9,9 @@ from erclave_common.middleware import CorrelationIdMiddleware, TenantContextMidd
 from .api import router as admin_router
 
 
+QA_FIREBASE_ORIGIN_REGEX = r"https://erclave(--[a-z0-9-]+)?\.web\.app|https://erclave\.firebaseapp\.com"
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
@@ -25,10 +28,20 @@ def create_app() -> FastAPI:
             "http://localhost:4173",
             "http://127.0.0.1:8000",
             "http://localhost:8000",
+            "https://erclave.web.app",
+            "https://erclave.firebaseapp.com",
         ],
+        allow_origin_regex=QA_FIREBASE_ORIGIN_REGEX,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
-        allow_headers=["Content-Type", "X-Tenant-Id", "X-Correlation-Id", "Idempotency-Key", "Authorization"],
+        allow_headers=[
+            "Content-Type",
+            "X-Tenant-Id",
+            "X-Actor-Id",
+            "X-Correlation-Id",
+            "Idempotency-Key",
+            "Authorization",
+        ],
     )
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(TenantContextMiddleware)

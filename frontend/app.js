@@ -6,6 +6,7 @@ import {
   createTenantRole,
   disableTenantUser,
   getAdminDashboard,
+  getSessionContext,
   inviteTenantUser,
   replaceTenantRolePermissions,
   updateTenantEntitlement,
@@ -36,11 +37,23 @@ const state = {
     status: "idle",
     data: null,
     error: ""
+  },
+  sessionApi: {
+    status: "idle",
+    data: null,
+    error: ""
   }
 };
 
 const orderStatusCatalog = ["Liberada", "En espera de recursos", "En produccion", "Pausada", "En validacion", "Terminada", "Cancelada"];
 const mvpModuleIds = ["produccion", "almacenes", "ventas"];
+const backendModuleByUiModule = {
+  administracion: "admin",
+  produccion: "production",
+  almacenes: "inventory",
+  ventas: "sales"
+};
+const uiModuleByBackendModule = Object.fromEntries(Object.entries(backendModuleByUiModule).map(([ui, backend]) => [backend, ui]));
 
 const shell = document.querySelector(".app-shell");
 const moduleNav = document.getElementById("moduleNav");
@@ -84,6 +97,10 @@ function applyScreenSnapshot(screen) {
 }
 
 function navigateTo(screen) {
+  if (!isModuleAccessible(screen.active)) {
+    showToast("Modulo no disponible para este tenant.");
+    return;
+  }
   const current = getScreenSnapshot();
   if (!sameScreen(current, screen)) {
     state.history.push(current);
@@ -131,14 +148,41 @@ function getNavigationModules() {
   });
 }
 
+function getSessionContextData() {
+  return getApiMode() === "api" ? state.sessionApi.data : null;
+}
+
+function getActiveUiModuleIds() {
+  const session = getSessionContextData();
+  if (!session) return mvpModuleIds;
+  return (session.active_modules || []).map((moduleCode) => uiModuleByBackendModule[moduleCode]).filter(Boolean);
+}
+
+function isModuleAccessible(moduleId) {
+  if (moduleId === "administracion") return true;
+  return getActiveUiModuleIds().includes(moduleId);
+}
+
+function getModuleAccessState(module) {
+  if (!mvpModuleIds.includes(module.id)) return { enabled: false, reason: t("comingSoon") };
+  if (getApiMode() !== "api") return { enabled: true, reason: "" };
+  if (state.sessionApi.status === "loading" || state.sessionApi.status === "idle") {
+    return { enabled: false, reason: "Cargando contexto" };
+  }
+  if (state.sessionApi.status === "error") return { enabled: false, reason: "Contexto no disponible" };
+  return isModuleAccessible(module.id)
+    ? { enabled: true, reason: "" }
+    : { enabled: false, reason: "Modulo inactivo o no contratado" };
+}
+
 function renderNav() {
   moduleNav.innerHTML = getNavigationModules()
     .map((module) => {
       const label = state.lang === "en" ? module.titleEn : module.title;
-      const isMvpModule = mvpModuleIds.includes(module.id);
+      const access = getModuleAccessState(module);
       return `
-        <div class="nav-group ${module.id === state.active ? "open" : ""} ${isMvpModule ? "" : "coming-soon"}" ${isMvpModule ? "" : `data-tooltip="${t("comingSoon")}"`}>
-          <button class="nav-button ${module.id === state.active && !state.activeSubmodule ? "active" : ""} ${isMvpModule ? "" : "disabled-module"}" type="button" data-module-root="${module.id}" title="${isMvpModule ? label : t("comingSoon")}" aria-disabled="${isMvpModule ? "false" : "true"}">
+        <div class="nav-group ${module.id === state.active ? "open" : ""} ${access.enabled ? "" : "coming-soon"}" ${access.enabled ? "" : `data-tooltip="${access.reason}"`}>
+          <button class="nav-button ${module.id === state.active && !state.activeSubmodule ? "active" : ""} ${access.enabled ? "" : "disabled-module"}" type="button" data-module-root="${module.id}" title="${access.enabled ? label : access.reason}" aria-disabled="${access.enabled ? "false" : "true"}">
             <span class="nav-icon">${module.icon}</span>
             <span>${label}</span>
             <small class="nav-count">${module.count}</small>
@@ -151,21 +195,21 @@ function renderNav() {
 
   moduleNav.querySelectorAll("[data-module-root]").forEach((button) => {
     button.addEventListener("click", () => {
-      if (!mvpModuleIds.includes(button.dataset.moduleRoot)) return;
+      if (!isModuleAccessible(button.dataset.moduleRoot)) return;
       navigateTo({ active: button.dataset.moduleRoot, activeSubmodule: null, laborArea: "" });
     });
   });
 
   moduleNav.querySelectorAll("[data-submodule-nav]").forEach((button) => {
     button.addEventListener("click", () => {
-      if (!mvpModuleIds.includes(button.dataset.module)) return;
+      if (!isModuleAccessible(button.dataset.module)) return;
       navigateTo({ active: button.dataset.module, activeSubmodule: button.dataset.submoduleNav, laborArea: "" });
     });
   });
 }
 
 function renderSubnav(module) {
-  if (!mvpModuleIds.includes(module.id)) return "";
+  if (!getModuleAccessState(module).enabled) return "";
   return `
     <div class="submodule-nav" aria-label="Submodulos de ${module.title}">
       ${normalizeSubmodules(module)
@@ -190,6 +234,10 @@ function getModuleTable(module) {
 
 function renderPanel() {
   const module = { ...(modules.find((item) => item.id === state.active) || modules[0]) };
+  if (!isModuleAccessible(module.id)) {
+    renderUnavailableModulePanel(module);
+    return;
+  }
   if (module.id === "produccion") {
     const production = getProductionModuleData();
     module.table = { ...module.table, rows: production.rows };
@@ -388,6 +436,28 @@ function renderPanel() {
   bindProductionPanelActions();
 }
 
+function renderUnavailableModulePanel(module) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Session Context MVP</p>
+        <h2>${label}</h2>
+      </div>
+      <span class="chip warning">Bloqueado</span>
+    </div>
+    <div class="validation-card danger">
+      <strong>Modulo no disponible</strong>
+      <p>Este modulo no esta activo para el tenant actual o el contexto de sesion aun no esta disponible.</p>
+      <small>${state.sessionApi.error || "Admin-service define los modulos activos por tenant."}</small>
+    </div>
+    <button class="secondary-action" type="button" data-action="go-admin">Ir a Administracion</button>
+  `;
+  modulePanel.querySelector("[data-action='go-admin']").addEventListener("click", () => {
+    navigateTo({ active: "administracion", activeSubmodule: null, laborArea: "" });
+  });
+}
+
 function getMockAdminDashboard() {
   return {
     tenant: {
@@ -409,7 +479,8 @@ function getMockAdminDashboard() {
     permissions: [
       { id: "per_local_tenant_read", code: "admin.tenant.read", module_code: "admin", resource: "tenant", action: "read", status: "active" }
     ],
-    policy: { allowed: false, reason: "mock_mode", matched_permissions: [] }
+    policy: { allowed: false, reason: "mock_mode", matched_permissions: [] },
+    session: null
   };
 }
 
@@ -478,6 +549,8 @@ function updateAdminEntitlement(moduleCode, status) {
     .then(() => {
       showToast(`Modulo ${moduleCode} actualizado a ${status}.`);
       state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      state.sessionApi = { status: "idle", data: state.sessionApi.data, error: "" };
+      loadSessionContext();
       loadAdminApiDashboard();
     })
     .catch((error) => {
@@ -697,6 +770,7 @@ function renderAdminApiPanel(module) {
   const tenant = data.tenant;
   const policy = data.policy;
   const label = state.lang === "en" ? module.titleEn : module.title;
+  const session = data.session || getSessionContextData();
 
   modulePanel.innerHTML = `
     <div class="panel-head">
@@ -733,10 +807,15 @@ function renderAdminApiPanel(module) {
           <span>Policy</span>
           <strong>${policy.allowed ? "allowed" : policy.reason}</strong>
         </article>
+        <article class="admin-kpi ${session ? "positive" : "warning"}">
+          <span>Sesion</span>
+          <strong>${session?.user?.display_name || state.sessionApi.status}</strong>
+        </article>
       </div>
     </div>
 
     ${state.adminApi.error ? `<div class="validation-card danger"><strong>API QA</strong><p>${state.adminApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
+    ${state.sessionApi.error ? `<div class="validation-card danger"><strong>Session Context</strong><p>${state.sessionApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
 
     <div class="admin-workspace">
       <section class="admin-section admin-section-modules">
@@ -831,6 +910,30 @@ function renderAdminApiPanel(module) {
 
   if (apiMode === "api" && apiStatus === "idle") {
     loadAdminApiDashboard();
+  }
+}
+
+function loadSessionContext() {
+  if (getApiMode() !== "api" || state.sessionApi.status === "loading") return;
+  state.sessionApi = { status: "loading", data: state.sessionApi.data, error: "" };
+  getSessionContext()
+    .then((data) => {
+      state.sessionApi = { status: "ready", data, error: "" };
+      if (!isModuleAccessible(state.active)) {
+        const firstModule = getActiveUiModuleIds()[0] || "administracion";
+        applyScreenSnapshot({ active: firstModule, activeSubmodule: null, laborArea: "" });
+      }
+      render();
+    })
+    .catch((error) => {
+      state.sessionApi = { status: "error", data: null, error: error.message || "Session context unavailable" };
+      render();
+    });
+}
+
+function ensureSessionContext() {
+  if (getApiMode() === "api" && state.sessionApi.status === "idle") {
+    loadSessionContext();
   }
 }
 
@@ -6654,6 +6757,7 @@ function render() {
   renderPanel();
   renderFlow();
   applyI18n();
+  ensureSessionContext();
 }
 
 backButton.addEventListener("click", goBack);

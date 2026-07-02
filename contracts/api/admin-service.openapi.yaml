@@ -12,6 +12,7 @@ servers:
 security:
   - bearerAuth: []
 tags:
+  - name: Session
   - name: Tenants
   - name: Entitlements
   - name: Policy
@@ -20,6 +21,30 @@ tags:
   - name: BusinessUnits
   - name: Settings
 paths:
+  /v1/session/context:
+    get:
+      tags: [Session]
+      operationId: getSessionContext
+      summary: Get current tenant, actor, active modules and granted permissions.
+      x-required-module: admin
+      x-permissions: [internal.session.context.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Current session context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionContextResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /v1/tenants/{tenant_id}:
     get:
       tags: [Tenants]
@@ -529,6 +554,13 @@ components:
       schema:
         type: string
       description: Tenant context. Must match authenticated actor.
+    ActorHeader:
+      name: X-Actor-Id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Temporary actor context for Session Context MVP. Replaced by token subject in login phase.
     TenantIdPath:
       name: tenant_id
       in: path
@@ -738,6 +770,31 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Entitlement'
+    SessionContext:
+      type: object
+      required: [tenant, user, entitlements, permissions, active_modules]
+      properties:
+        tenant:
+          $ref: '#/components/schemas/Tenant'
+        user:
+          $ref: '#/components/schemas/User'
+        entitlements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entitlement'
+        permissions:
+          type: array
+          items:
+            type: string
+        active_modules:
+          type: array
+          items:
+            type: string
+    SessionContextResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/SessionContext'
     EntitlementUpsertRequest:
       type: object
       required: [status]

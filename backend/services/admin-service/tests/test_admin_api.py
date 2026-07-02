@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.repositories import get_admin_repository
-from app.schemas import EntitlementRead, PermissionRead, PolicyDecision, RoleRead, TenantRead, UserRead
+from app.schemas import EntitlementRead, PermissionRead, PolicyDecision, RoleRead, SessionContextRead, TenantRead, UserRead
 
 
 TENANT_ID = "ten_demo"
@@ -31,6 +31,17 @@ class FakeAdminRepository:
             EntitlementRead(module_code="admin", status="active", limits={}),
             EntitlementRead(module_code="production", status="active", limits={}),
         ]
+
+    def get_session_context(self, tenant_id: str, actor_id: str):
+        if tenant_id != TENANT_ID or actor_id != USER_ID:
+            return None
+        return SessionContextRead(
+            tenant=self.get_tenant(tenant_id),
+            user=self.list_users(tenant_id)[0],
+            entitlements=self.list_entitlements(tenant_id),
+            permissions=["admin.tenant.read", "production.product_service.read"],
+            active_modules=["admin", "production"],
+        )
 
     def upsert_entitlement(
         self,
@@ -193,6 +204,36 @@ def test_get_tenant_returns_404_for_missing_tenant():
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "tenant_not_found"
+
+
+def test_get_session_context_returns_tenant_user_modules_and_permissions():
+    client = client_with_fake_repo()
+
+    response = client.get("/v1/session/context", headers={"X-Tenant-Id": TENANT_ID, "X-Actor-Id": USER_ID})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["tenant"]["id"] == TENANT_ID
+    assert response.json()["data"]["user"]["id"] == USER_ID
+    assert response.json()["data"]["active_modules"] == ["admin", "production"]
+    assert "production.product_service.read" in response.json()["data"]["permissions"]
+
+
+def test_get_session_context_requires_actor_header():
+    client = client_with_fake_repo()
+
+    response = client.get("/v1/session/context", headers={"X-Tenant-Id": TENANT_ID})
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "actor_required"
+
+
+def test_get_session_context_returns_404_for_unknown_actor():
+    client = client_with_fake_repo()
+
+    response = client.get("/v1/session/context", headers={"X-Tenant-Id": TENANT_ID, "X-Actor-Id": "usr_missing"})
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "session_context_not_found"
 
 
 def test_list_tenant_entitlements_returns_modules():

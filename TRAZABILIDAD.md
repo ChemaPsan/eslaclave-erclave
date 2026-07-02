@@ -1444,6 +1444,51 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `python -m py_compile` sobre los nuevos modulos y migracion; `python -m pytest services/production-service/tests/test_production_api.py` con 8 tests correctos; `python -m pytest` con 33 tests correctos; `npm.cmd run validate`; `alembic upgrade head` aplicado en Cloud SQL QA; prueba API real en `production-service` local puerto `8002` creando, leyendo, actualizando, inactivando, restaurando y buscando `codex_prod_1782964372`. |
 | Observaciones | Quedo dato temporal QA `codex_prod_1782964372` activo para validar persistencia. Recetas, versiones, ordenes, areas laborales y maquinaria quedan para cortes posteriores. |
 
+### CHG-095
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-02 |
+| Cambio | Diagramas de estado real backend MVP |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/diagramas/apis_mvp_relaciones.drawio`, `docs/arquitectura/diagramas/estado_actual_backend_mvp.drawio`, `TRAZABILIDAD.md` |
+| Secciones | Arquitectura, diagramas, backend MVP, QA real |
+| Descripcion | Se ajusto el diagrama de APIs MVP y relaciones para distinguir servicios ya operables en QA de servicios objetivo. `admin-service` queda marcado como real para entitlements, usuarios, roles, permisos, policy y auditoria; `production-service` queda marcado como real parcial para `product_services`. Tambien se creo un diagrama nuevo del estado actual backend MVP mostrando frontend local, servicios FastAPI locales, Cloud SQL Auth Proxy, Cloud SQL QA, schemas reales, migraciones, pruebas y validadores. |
+| Motivo | Evitar que los diagramas mezclen roadmap objetivo con estado implementado, despues de validar Administracion y el primer corte de Produccion contra QA real. |
+| Impacto | El arquitecto puede revisar visualmente que ya existe un nucleo QA real y que recetas, ordenes, inventario, ventas, billing, provisioning e integraciones siguen como fases posteriores. |
+| Validacion | `npm.cmd run validate:traceability`; `npm.cmd run validate:architecture`. |
+| Observaciones | No cambia contratos, backend ni frontend; es actualizacion documental editable en diagrams.net. |
+
+### CHG-096
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-02 |
+| Cambio | Session Context MVP previo al login |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `contracts/api/admin-service.openapi.yaml`, `frontend/api/admin.js`, `frontend/app.js`, `backend/README.md`, `backend/services/admin-service/README.md`, `TRAZABILIDAD.md` |
+| Secciones | Admin-service, session context, permisos, entitlements, frontend, navegacion |
+| Descripcion | Se agrego `GET /v1/session/context` para devolver tenant, usuario, entitlements, permisos efectivos y modulos activos usando `X-Tenant-Id` y `X-Actor-Id` como contexto temporal. El frontend en modo API QA carga ese contexto, bloquea modulos inactivos o no contratados y refresca la sesion despues de cambios de entitlements desde Administracion. |
+| Motivo | Dar el paso recomendado antes del login completo: eliminar dependencias de navegacion fija y hacer que la app use el contexto real de tenant, usuario, permisos y modulos activos desde `admin-service`. |
+| Impacto | Si un modulo se desactiva para el tenant QA, la navegacion del frontend deja de permitir entrada a ese modulo en modo API. Este contrato queda listo para reemplazar `X-Actor-Id` por el subject de un token OIDC/JWT en la fase de login real. |
+| Validacion | `python -m pytest services/admin-service/tests/test_admin_api.py`; `npm.cmd run validate:syntax`; `npm.cmd run validate:openapi`. |
+| Observaciones | No implementa login ni proveedor de identidad todavia; establece la frontera de sesion que usara el login posterior. |
+
+### CHG-097
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-02 |
+| Cambio | Publicacion QA en Firebase Hosting y Cloud Run |
+| Autor | Codex |
+| Archivos | `.firebaserc`, `firebase.json`, `backend/Dockerfile`, `backend/services/admin-service/app/main.py`, `backend/services/production-service/app/main.py`, `frontend/env.js`, `frontend/index.html`, `frontend/api/config.js`, `TRAZABILIDAD.md` |
+| Secciones | Deploy QA, Firebase Hosting, Cloud Run, Cloud SQL QA, CORS |
+| Descripcion | Se preparo el repo para despliegue QA: Firebase Hosting sirve la maqueta desde `frontend`, Cloud Run publica `admin-service-qa` y `production-service-qa`, y el frontend online arranca en modo API apuntando a `admin-service-qa`. Se agrego configuracion runtime `frontend/env.js`, Dockerfile comun para servicios FastAPI y CORS para dominios Firebase `erclave.web.app` / `erclave.firebaseapp.com`. |
+| Motivo | Permitir que negocio, arquitectura y comercial revisen la maqueta QA en linea usando el backend QA real sin depender de levantar servicios locales. |
+| Impacto | La maqueta queda disponible en `https://erclave.web.app` y consume `admin-service-qa` en Cloud Run conectado a Cloud SQL QA. `production-service-qa` queda publicado para el primer corte real de productos/servicios. |
+| Validacion | Deploy exitoso de Cloud Run para `admin-service-qa` y `production-service-qa`; deploy exitoso de Firebase Hosting; smoke test `GET /ready`, `GET /v1/session/context`, `GET /v1/production/product-services`, `curl -I https://erclave.web.app`, CORS preflight desde `https://erclave.web.app`. |
+| Observaciones | Los servicios QA estan expuestos sin autenticacion final para facilitar revision temprana. Antes de compartir masivamente conviene agregar control de acceso, login o proteccion temporal. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

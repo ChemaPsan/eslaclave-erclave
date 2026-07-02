@@ -103,6 +103,7 @@ GET /version
 ## Endpoints MVP reales
 
 ```text
+GET /v1/session/context
 GET /v1/tenants/{tenant_id}
 GET /v1/tenants/{tenant_id}/entitlements
 PUT /v1/tenants/{tenant_id}/entitlements/{module_code}
@@ -118,7 +119,7 @@ PUT /v1/roles/{role_id}/permissions
 GET /v1/permissions
 ```
 
-Estos endpoints leen y actualizan PostgreSQL por medio de `AdminRepository`. El `PUT` de entitlements permite activar, inactivar o suspender modulos para el tenant QA. Los endpoints de usuarios permiten invitar identidades QA, actualizar nombre/roles de membresia y desactivar membresias sin crear contrasenas ni login real. Los endpoints de roles permiten crear roles, activar/inactivar roles y reemplazar permisos asignados. Los endpoints mutables de tenants siguen pendientes para una fase posterior.
+Estos endpoints leen y actualizan PostgreSQL por medio de `AdminRepository`. `GET /v1/session/context` devuelve tenant, usuario, entitlements, permisos efectivos y modulos activos usando `X-Tenant-Id` y `X-Actor-Id` mientras llega el login real. El `PUT` de entitlements permite activar, inactivar o suspender modulos para el tenant QA. Los endpoints de usuarios permiten invitar identidades QA, actualizar nombre/roles de membresia y desactivar membresias sin crear contrasenas ni login real. Los endpoints de roles permiten crear roles, activar/inactivar roles y reemplazar permisos asignados. Los endpoints mutables de tenants siguen pendientes para una fase posterior.
 
 Los endpoints mutables requieren:
 
