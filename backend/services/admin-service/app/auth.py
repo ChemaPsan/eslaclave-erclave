@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+import json
+from urllib import request
+from urllib.error import HTTPError, URLError
 from typing import Callable
 
 from fastapi import Depends, Header
@@ -84,6 +87,78 @@ def ensure_firebase_user(email: str, display_name: str, settings: Settings) -> N
     firebase_auth.update_user(user.uid, display_name=display_name, disabled=False)
 
 
+def create_firebase_password_invitation(email: str, settings: Settings) -> dict:
+    if settings.auth_mode != "firebase":
+        return {
+            "provider": "demo",
+            "email": email.lower(),
+            "email_sent": False,
+            "reset_link": None,
+            "delivery": "disabled",
+        }
+
+    normalized_email = email.lower()
+    if settings.firebase_web_api_key:
+        payload = json.dumps(
+            {
+                "requestType": "PASSWORD_RESET",
+                "email": normalized_email,
+                "continueUrl": settings.app_public_base_url,
+            }
+        ).encode("utf-8")
+        firebase_request = request.Request(
+            f"https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={settings.firebase_web_api_key}",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with request.urlopen(firebase_request, timeout=10) as response:
+                if response.status < 200 or response.status >= 300:
+                    raise ErclaveError(
+                        "firebase_invitation_failed",
+                        "Firebase password invitation could not be sent.",
+                        status_code=502,
+                    )
+        except HTTPError as exc:
+            raise ErclaveError(
+                "firebase_invitation_failed",
+                "Firebase password invitation could not be sent.",
+                status_code=502,
+                details={"status": exc.code},
+            ) from exc
+        except URLError as exc:
+            raise ErclaveError(
+                "firebase_invitation_unavailable",
+                "Firebase password invitation service is unavailable.",
+                status_code=502,
+            ) from exc
+
+        return {
+            "provider": "firebase",
+            "email": normalized_email,
+            "email_sent": True,
+            "reset_link": None,
+            "delivery": "firebase_email",
+        }
+
+    _ensure_firebase_app(settings)
+    from firebase_admin import auth as firebase_auth
+
+    action_code_settings = firebase_auth.ActionCodeSettings(
+        url=settings.app_public_base_url,
+        handle_code_in_app=False,
+    )
+    reset_link = firebase_auth.generate_password_reset_link(normalized_email, action_code_settings)
+    return {
+        "provider": "firebase",
+        "email": normalized_email,
+        "email_sent": False,
+        "reset_link": reset_link,
+        "delivery": "generated_link",
+    }
+
+
 def delete_firebase_user_by_email(email: str, settings: Settings) -> None:
     if settings.auth_mode != "firebase":
         return
@@ -104,6 +179,29 @@ def get_authenticated_actor(
     if settings.auth_mode != "firebase":
         return None
     return verify_firebase_bearer_token(authorization, settings)
+
+
+def require_backoffice_admin(
+    settings: Settings = Depends(get_settings),
+    authenticated_actor: AuthenticatedActor | None = Depends(get_authenticated_actor),
+) -> None:
+    if settings.auth_mode != "firebase":
+        return
+    if authenticated_actor is None:
+        raise ErclaveError("auth_required", "Authorization Bearer token is required.", status_code=401)
+
+    allowed_emails = {
+        email.strip().lower()
+        for email in settings.backoffice_admin_emails.split(",")
+        if email.strip()
+    }
+    if not allowed_emails or authenticated_actor.email.lower() not in allowed_emails:
+        raise ErclaveError(
+            "backoffice_admin_required",
+            "Authenticated actor is not allowed to use ERClave Backoffice.",
+            status_code=403,
+            details={"email": authenticated_actor.email},
+        )
 
 
 def require_permission_for_path_tenant(permission: str) -> Callable:

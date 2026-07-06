@@ -40,6 +40,33 @@ class TenantCreateRequest(BaseModel):
     organization_profile: OrganizationProfile | None = None
 
 
+class TenantOnboardingOwnerRequest(BaseModel):
+    email: str
+    display_name: str
+    status: Literal["invited", "active"] = "invited"
+    branch_ids: list[str] = Field(default_factory=lambda: ["*"])
+
+
+class TenantOnboardingModuleRequest(BaseModel):
+    module_code: str
+    status: Literal["active", "inactive", "suspended"] = "active"
+    limits: dict[str, Any] = Field(default_factory=dict)
+    source: Literal["subscription", "manual", "trial", "provisioning"] = "provisioning"
+
+
+class TenantOnboardingRequest(BaseModel):
+    slug: str
+    commercial_name: str
+    legal_name: str | None = None
+    plan_id: str | None = None
+    timezone: str = "America/Mexico_City"
+    locale: str = "es-MX"
+    source: SourceRef
+    owner: TenantOnboardingOwnerRequest
+    organization_profile: OrganizationProfile | None = None
+    modules: list[TenantOnboardingModuleRequest] = Field(default_factory=lambda: [TenantOnboardingModuleRequest(module_code="admin")])
+
+
 class EntitlementRead(BaseModel):
     module_code: str
     status: str
@@ -222,13 +249,34 @@ class PermissionListResponse(BaseModel):
     page: Page = Field(default_factory=Page)
 
 
+class SessionBranchRead(BaseModel):
+    id: str
+    name: str
+    code: str | None = None
+    status: str = "active"
+    legal_entity_id: str | None = None
+
+
+class SessionScopeRead(BaseModel):
+    branch_ids: list[str] = Field(default_factory=list)
+    branches: list[SessionBranchRead] = Field(default_factory=list)
+    all_branches: bool = True
+
+
 class SessionContextRead(BaseModel):
     tenant: TenantRead
     user: UserRead
+    roles: list[RoleRead] = Field(default_factory=list)
     entitlements: list[EntitlementRead] = Field(default_factory=list)
+    entitlement_limits: dict[str, dict[str, Any]] = Field(default_factory=dict)
     permissions: list[str] = Field(default_factory=list)
     active_modules: list[str] = Field(default_factory=list)
+    scope: SessionScopeRead = Field(default_factory=SessionScopeRead)
 
 
 class SessionContextResponse(BaseModel):
     data: SessionContextRead
+
+
+class TenantOnboardingResponse(BaseModel):
+    data: dict[str, Any]

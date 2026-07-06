@@ -7,9 +7,11 @@ from erclave_common.errors import ErclaveError
 
 from .auth import (
     AuthenticatedActor,
+    create_firebase_password_invitation,
     delete_firebase_user_by_email,
     ensure_firebase_user,
     get_authenticated_actor,
+    require_backoffice_admin,
     require_permission_for_header_tenant,
     require_permission_for_path_tenant,
 )
@@ -36,6 +38,8 @@ from .schemas import (
     SettingResponse,
     SettingUpsertRequest,
     TenantCreateRequest,
+    TenantOnboardingRequest,
+    TenantOnboardingResponse,
     TenantResponse,
     UserInvitationRequest,
     UserListResponse,
@@ -127,6 +131,35 @@ def create_tenant(
         correlation_id=resolve_correlation_id(x_correlation_id),
     )
     return TenantResponse(data=tenant)
+
+
+@router.post("/provisioning/tenant-onboarding", response_model=TenantOnboardingResponse, status_code=status.HTTP_201_CREATED)
+def onboard_tenant(
+    payload: TenantOnboardingRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+    _authorization: None = Depends(require_backoffice_admin),
+    settings: Settings = Depends(get_settings),
+    repository: AdminRepository = Depends(get_admin_repository),
+) -> TenantOnboardingResponse:
+    resolved_idempotency_key = require_idempotency_key(idempotency_key)
+    ensure_firebase_user(payload.owner.email, payload.owner.display_name, settings)
+    result = repository.onboard_tenant(
+        slug=payload.slug,
+        commercial_name=payload.commercial_name,
+        legal_name=payload.legal_name,
+        plan_id=payload.plan_id,
+        timezone=payload.timezone,
+        locale=payload.locale,
+        source=payload.source.model_dump(),
+        owner=payload.owner.model_dump(),
+        organization_profile=payload.organization_profile.model_dump() if payload.organization_profile else None,
+        modules=[item.model_dump() for item in payload.modules],
+        idempotency_key=resolved_idempotency_key,
+        correlation_id=resolve_correlation_id(x_correlation_id),
+    )
+    result["invitation"] = create_firebase_password_invitation(payload.owner.email, settings)
+    return TenantOnboardingResponse(data=result)
 
 
 @router.get("/tenants/{tenant_id}/entitlements", response_model=EntitlementListResponse)

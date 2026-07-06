@@ -891,6 +891,16 @@ function getAdminOrganization() {
 }
 
 function getBranchOptions() {
+  const sessionBranches = getSessionContextData()?.scope?.branches;
+  if (Array.isArray(sessionBranches) && sessionBranches.length) {
+    return sessionBranches
+      .filter((branch) => branch?.id && branch?.name)
+      .map((branch) => ({
+        id: branch.id,
+        name: branch.name,
+        code: branch.code || ""
+      }));
+  }
   const data = getAdminPanelData() || getMockAdminDashboard();
   const organization = normalizeAdminOrganization(data);
   const branches = organization.branches
@@ -906,7 +916,11 @@ function getBranchOptions() {
 
 function getSelectedBranch(branches) {
   const savedBranchId = localStorage.getItem("erclave-active-branch-id") || "";
-  return branches.find((branch) => branch.id === savedBranchId) || branches[0];
+  const selected = branches.find((branch) => branch.id === savedBranchId) || branches[0];
+  if (selected?.id && selected.id !== savedBranchId) {
+    localStorage.setItem("erclave-active-branch-id", selected.id);
+  }
+  return selected;
 }
 
 function getContextUserLabel() {

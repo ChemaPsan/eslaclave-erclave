@@ -89,7 +89,8 @@ El `session/context` debe incluir como minimo:
 | `permissions` | Permisos efectivos calculados desde roles activos. |
 | `entitlements` | Modulos contratados o habilitados para el tenant. |
 | `active_modules` | Codigos de modulos disponibles para navegacion. |
-| `limits` | Limites comerciales: usuarios, almacenes, API calls, etc. |
+| `entitlement_limits` | Limites comerciales por modulo: usuarios, almacenes, API calls, etc. |
+| `scope` | Alcance operativo resuelto para la sesion, iniciando por sucursales disponibles. |
 
 ---
 
@@ -349,6 +350,7 @@ El frontend debe tratar `session/context` como su fuente de verdad para:
 - tenant activo;
 - mensajes de suspension o falta de pago;
 - limites visibles;
+- sucursal activa y sucursales disponibles para la sesion;
 - selector de tenant si aplica.
 
 No debe:
@@ -385,8 +387,10 @@ La consola interna no debe compartir permisos con el tenant del cliente. Debe te
 | Roles/permisos en ERClave, no Firebase | Adoptado. |
 | Usuarios globales + membresias por tenant | Adoptado en modelo fisico inicial. |
 | `tenant_id` logico en base compartida para MVP | Adoptado. |
-| `session/context` como contrato de contexto | Adoptado. |
+| `session/context` como contrato de contexto | Adoptado con roles, permisos, limites y alcance de sucursales. |
 | Billing/provisioning separado del core operativo | Recomendado, pendiente de implementacion. |
+| Alta inicial tenant + owner | Adoptado mediante `POST /v1/provisioning/tenant-onboarding`; pendiente autenticacion service-to-service fuerte. |
+| Backoffice interno EsLaClave | Adoptado como frontend separado para alta de tenants, soporte y futura integracion con billing. |
 | Selector multi-tenant para usuarios con varias empresas | Pendiente. |
 | Subdominio por tenant | Futuro, no requerido para QA. |
 | Suspensiones por pago con acceso limitado | Recomendado, pendiente de policy final. |
@@ -395,11 +399,9 @@ La consola interna no debe compartir permisos con el tenant del cliente. Debe te
 
 ## 16. Siguientes pasos recomendados
 
-1. Habilitar Firebase Authentication / Google provider en Firebase Console.
-2. Completar `session/context` con roles explicitos y limites por entitlement.
-3. Agregar dependencia comun de autorizacion para endpoints mutables de `admin-service`.
-4. Agregar validacion de permiso/modulo en `production-service`.
-5. Documentar selector de tenant para usuarios multiempresa.
-6. Disenar endpoints MVP de `billing-service` y `provisioning-service`.
-7. Agregar estados comerciales `past_due`, `suspended` y reglas de acceso.
-8. Crear pruebas de aislamiento: usuario de tenant A no puede leer tenant B.
+1. Agregar autenticacion service-to-service fuerte para `POST /v1/provisioning/tenant-onboarding`.
+2. Agregar validacion de permiso/modulo en `production-service`.
+3. Documentar selector de tenant para usuarios multiempresa.
+4. Disenar endpoints MVP de `billing-service` y `provisioning-service`.
+5. Agregar estados comerciales `past_due`, `suspended` y reglas de acceso.
+6. Crear pruebas de aislamiento: usuario de tenant A no puede leer tenant B.

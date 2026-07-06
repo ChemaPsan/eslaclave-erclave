@@ -1759,6 +1759,66 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `npm.cmd run validate:agents`; `npm.cmd run validate`. |
 | Observaciones | No cambia runtime; es una actualizacion documental/operativa para guiar futuros cambios. |
 
+### CHG-116
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Fortalece session/context con roles, limites y sucursales |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `backend/services/admin-service/app/main.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `backend/services/admin-service/README.md`, `contracts/api/admin-service.openapi.yaml`, `docs/arquitectura/modelo_multitenant.md`, `frontend/app.js`, `TRAZABILIDAD.md` |
+| Secciones | Admin API, session/context, roles, entitlements, alcance de sucursales, shell frontend |
+| Descripcion | Se extendio `GET /v1/session/context` para devolver roles activos detallados, `entitlement_limits` por modulo y `scope` con sucursales disponibles para la membresia. El alcance de sucursal se calcula desde `membership.metadata.scope.branch_ids` cuando exista y, si no esta configurado, permite todas las sucursales activas de `organization.profile`. El frontend ahora prioriza `session.scope.branches` para la barra global de sucursal y conserva fallback a la organizacion local/mock. |
+| Motivo | Convertir `session/context` en la fuente real para usuario, permisos, modulos, limites y sucursal activa, evitando que el shell infiera alcance operativo desde datos locales o desde todo el perfil organizacional. |
+| Impacto | La barra global de contexto queda preparada para usuarios con alcance por sucursal. Los servicios y microfrontends pueden consumir limites por modulo y roles explicitos sin recalcularlos en frontend. |
+| Validacion | `python -m py_compile services/admin-service/app/main.py services/admin-service/app/schemas.py services/admin-service/app/repositories.py`; `node --check frontend/app.js`; `pytest services/admin-service/tests/test_admin_api.py`. |
+| Observaciones | Se reemplazo el parametro directo `allow_private_network` de CORS por un middleware compatible que agrega `Access-Control-Allow-Private-Network` cuando Chrome lo solicita; esto conserva el soporte local sin depender de una version especifica de Starlette. |
+
+### CHG-117
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Endpoint interno de onboarding tenant + owner |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `backend/services/admin-service/README.md`, `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `contracts/api/admin-service.openapi.yaml`, `docs/arquitectura/modelo_multitenant.md`, `TRAZABILIDAD.md` |
+| Secciones | Provisioning, Admin API, tenants, owner inicial, organization.profile, modulos activos, Firebase Auth |
+| Descripcion | Se agrego `POST /v1/provisioning/tenant-onboarding` como comando idempotente para crear o actualizar tenant por slug, inicializar `organization.profile`, crear o enlazar el usuario owner, crear rol `owner`, asignar permisos activos, crear membresia con alcance de sucursal, habilitar modulos solicitados y auditar la operacion. El request pide datos del tenant, `source`, owner inicial, perfil organizacional y modulos. |
+| Motivo | Evitar altas manuales incompletas donde se cree tenant sin usuario owner, sin perfil organizacional, sin modulos o sin roles/permisos. |
+| Impacto | El alta de cliente nuevo puede resolverse con un unico comando interno de provisioning y queda preparada para enlazarse a flujos comerciales/billing. El usuario owner queda autenticable en Firebase por email y autorizado en ERClave por membresia/rol. |
+| Validacion | `python -m py_compile services/admin-service/app/api.py services/admin-service/app/repositories.py services/admin-service/app/schemas.py`; `pytest services/admin-service/tests/test_admin_api.py`; `npm.cmd run validate:openapi`. |
+| Observaciones | En este corte el endpoint conserva pendiente autenticacion service-to-service fuerte antes de Produccion; `ensure_firebase_user` ocurre antes de la transaccion de base, por lo que errores posteriores podrian dejar una identidad Firebase sin membresia y deberan compensarse en la fase de provisioning robusto. |
+
+### CHG-118
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Invitacion Firebase para owner inicial |
+| Autor | Codex |
+| Archivos | `backend/README.md`, `backend/shared/erclave_common/config.py`, `backend/services/admin-service/README.md`, `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/auth.py`, `backend/services/admin-service/tests/test_admin_api.py`, `contracts/api/admin-service.openapi.yaml`, `TRAZABILIDAD.md` |
+| Secciones | Firebase Auth, provisioning, tenant onboarding, invitacion owner, configuracion |
+| Descripcion | Se agrego soporte para preparar la invitacion de contrasena del owner inicial dentro de `POST /v1/provisioning/tenant-onboarding`. Si `ERCLAVE_FIREBASE_WEB_API_KEY` esta configurado, el backend llama Identity Toolkit para que Firebase envie el correo de recuperacion/activacion; si no existe esa key, genera un `reset_link` con Firebase Admin y lo devuelve en `data.invitation`. |
+| Motivo | Completar el flujo de alta tenant + owner para que el usuario no solo exista en Firebase y ERClave, sino que tenga un camino de acceso inicial para definir contrasena. |
+| Impacto | El onboarding ahora devuelve `invitation.provider`, `email`, `email_sent`, `delivery` y opcionalmente `reset_link`. QA/Prod pueden mandar correo real configurando `ERCLAVE_FIREBASE_WEB_API_KEY`; local/demo conserva respuesta `disabled`. |
+| Validacion | `python -m py_compile services/admin-service/app/auth.py services/admin-service/app/api.py shared/erclave_common/config.py`; `pytest services/admin-service/tests/test_admin_api.py`; `npm.cmd run validate:openapi`. |
+| Observaciones | El envio real usa las plantillas SMTP/configuracion de Firebase Authentication. Sigue pendiente un `notification-service` dedicado si se requiere branding, auditoria y reintentos avanzados de correo transaccional. |
+
+### CHG-119
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Front Backoffice interno para alta de tenants |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `backend/README.md`, `backend/services/admin-service/README.md`, `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/auth.py`, `backend/services/admin-service/tests/test_admin_api.py`, `backend/shared/erclave_common/config.py`, `contracts/api/admin-service.openapi.yaml`, `docs/arquitectura/modelo_multitenant.md`, `frontend/api/backoffice.js`, `frontend/backoffice/README.md`, `frontend/backoffice/app.js`, `frontend/backoffice/env.js`, `frontend/backoffice/index.html`, `frontend/backoffice/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Backoffice interno, Firebase Auth, provisioning, tenant onboarding, seguridad |
+| Descripcion | Se creo `frontend/backoffice/` como front separado para administradores internos de EsLaClave. Incluye login con Firebase, formulario de alta de tenant, owner inicial, datos fiscales, sucursal inicial, modulos contratados y panel de resultado con invitacion. Se agrego `frontend/api/backoffice.js` como frontera API hacia `POST /v1/provisioning/tenant-onboarding`. El backend ahora protege ese endpoint en modo Firebase con allowlist `ERCLAVE_BACKOFFICE_ADMIN_EMAILS`. |
+| Motivo | Crear tenants es una operacion de plataforma SaaS y no debe vivir dentro del modulo Administracion del cliente. El backoffice sera tambien la superficie futura para billing/provisioning y soporte interno. |
+| Impacto | El equipo interno puede usar una interfaz separada para crear clientes sin entrar a un tenant existente. En QA/Prod el endpoint requiere token Firebase de un correo autorizado; en demo/local conserva flujo de desarrollo. |
+| Validacion | `python -m py_compile services/admin-service/app/auth.py services/admin-service/app/api.py shared/erclave_common/config.py`; `pytest services/admin-service/tests/test_admin_api.py`; `node --check frontend/backoffice/app.js`; `node --check frontend/api/backoffice.js`. |
+| Observaciones | Para uso local se sirve en `http://localhost:4173/backoffice/`. En Firebase mode configurar `ERCLAVE_BACKOFFICE_ADMIN_EMAILS` y, para correo real del owner, `ERCLAVE_FIREBASE_WEB_API_KEY`. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

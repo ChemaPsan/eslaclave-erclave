@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+import app.api as admin_api
 from app.main import app
 from app.auth import AuthenticatedActor, get_authenticated_actor
 from app.repositories import get_admin_repository
@@ -9,7 +10,9 @@ from app.schemas import (
     PermissionRead,
     PolicyDecision,
     RoleRead,
+    SessionBranchRead,
     SessionContextRead,
+    SessionScopeRead,
     SettingRead,
     TenantRead,
     UserRead,
@@ -65,6 +68,54 @@ class FakeAdminRepository:
             locale=locale,
         )
 
+    def onboard_tenant(
+        self,
+        slug: str,
+        commercial_name: str,
+        legal_name: str | None,
+        plan_id: str | None,
+        timezone: str,
+        locale: str,
+        source: dict,
+        owner: dict,
+        organization_profile: dict | None,
+        modules: list[dict],
+        idempotency_key: str,
+        correlation_id: str,
+    ):
+        assert source == {"type": "manual", "id": "qa-onboarding"}
+        assert owner["email"] == "owner.nuevo@cliente.com"
+        assert owner["branch_ids"] == ["*"]
+        assert modules[0]["module_code"] == "admin"
+        tenant = TenantRead(
+            id="ten_new",
+            slug=slug.lower(),
+            legal_name=legal_name,
+            commercial_name=commercial_name,
+            status="active",
+            plan_id=plan_id,
+            timezone=timezone,
+            locale=locale,
+        )
+        owner_user = UserRead(
+            id="usr_owner_new",
+            email=owner["email"],
+            display_name=owner["display_name"],
+            status=owner["status"],
+            roles=["owner"],
+        )
+        return {
+            "tenant": tenant,
+            "owner": owner_user,
+            "entitlements": [EntitlementRead(module_code="admin", status="active", limits={})],
+            "organization": SettingRead(
+                key="organization.profile",
+                module_code="admin",
+                value=organization_profile or {"corporate": {"commercial_name": commercial_name}, "legal_entities": [], "branches": []},
+            ),
+            "session_context": None,
+        }
+
     def list_entitlements(self, tenant_id: str):
         return [
             EntitlementRead(module_code="admin", status="active", limits={}),
@@ -77,9 +128,23 @@ class FakeAdminRepository:
         return SessionContextRead(
             tenant=self.get_tenant(tenant_id),
             user=self.list_users(tenant_id)[0],
+            roles=[RoleRead(id=ROLE_ID, code="owner", name="Owner", status="active", permissions=[])],
             entitlements=self.list_entitlements(tenant_id),
+            entitlement_limits={"admin": {}, "production": {}},
             permissions=self.session_permissions,
             active_modules=["admin", "production"],
+            scope=SessionScopeRead(
+                branch_ids=["suc_demo"],
+                branches=[
+                    SessionBranchRead(
+                        id="suc_demo",
+                        name="Matriz QA",
+                        code="MTZ",
+                        status="active",
+                    )
+                ],
+                all_branches=True,
+            ),
         )
 
     def get_session_context_by_email(self, tenant_id: str, email: str):
@@ -389,6 +454,149 @@ def test_create_tenant_accepts_initial_organization_profile():
     assert response.json()["data"]["status"] == "provisioning"
 
 
+def test_onboard_tenant_creates_tenant_owner_modules_and_organization():
+    client = client_with_fake_repo()
+
+    response = client.post(
+        "/v1/provisioning/tenant-onboarding",
+        headers={"Idempotency-Key": "test-tenant-onboarding-001"},
+        json={
+            "slug": "Cliente-Nuevo",
+            "commercial_name": "Cliente Nuevo",
+            "legal_name": "Cliente Nuevo S.A. de C.V.",
+            "plan_id": "qa-demo",
+            "source": {"type": "manual", "id": "qa-onboarding"},
+            "owner": {
+                "email": "owner.nuevo@cliente.com",
+                "display_name": "Owner Cliente Nuevo",
+            },
+            "organization_profile": {
+                "corporate": {
+                    "commercial_name": "Cliente Nuevo",
+                    "legal_name": "Cliente Nuevo S.A. de C.V.",
+                    "tax_id": "",
+                    "phone": "",
+                    "contact_name": "Owner Cliente Nuevo",
+                    "contact_email": "owner.nuevo@cliente.com",
+                    "contact_phone": "",
+                    "contact_position": "Direccion",
+                },
+                "legal_entities": [],
+                "branches": [],
+            },
+            "modules": [{"module_code": "admin", "status": "active", "limits": {}}],
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["tenant"]["slug"] == "cliente-nuevo"
+    assert response.json()["data"]["owner"]["email"] == "owner.nuevo@cliente.com"
+    assert response.json()["data"]["owner"]["roles"] == ["owner"]
+    assert response.json()["data"]["entitlements"][0]["module_code"] == "admin"
+    assert response.json()["data"]["organization"]["key"] == "organization.profile"
+    assert response.json()["data"]["invitation"] == {
+        "provider": "demo",
+        "email": "owner.nuevo@cliente.com",
+        "email_sent": False,
+        "reset_link": None,
+        "delivery": "disabled",
+    }
+
+
+def test_onboard_tenant_requires_idempotency_key():
+    client = client_with_fake_repo()
+
+    response = client.post(
+        "/v1/provisioning/tenant-onboarding",
+        json={
+            "slug": "Cliente-Nuevo",
+            "commercial_name": "Cliente Nuevo",
+            "source": {"type": "manual", "id": "qa-onboarding"},
+            "owner": {"email": "owner.nuevo@cliente.com", "display_name": "Owner Cliente Nuevo"},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "idempotency_key_required"
+
+
+def test_onboard_tenant_sends_firebase_invitation_when_enabled(monkeypatch):
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        auth_mode="firebase",
+        firebase_web_api_key="fake-api-key",
+        backoffice_admin_emails="backoffice@erclave.local",
+    )
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-backoffice",
+        email="backoffice@erclave.local",
+        name="Backoffice",
+    )
+    calls = {"ensured": [], "invited": []}
+
+    def fake_ensure_firebase_user(email, display_name, settings):
+        calls["ensured"].append((email, display_name, settings.auth_mode))
+
+    def fake_create_firebase_password_invitation(email, settings):
+        calls["invited"].append((email, settings.firebase_web_api_key))
+        return {
+            "provider": "firebase",
+            "email": email.lower(),
+            "email_sent": True,
+            "reset_link": None,
+            "delivery": "firebase_email",
+        }
+
+    monkeypatch.setattr(admin_api, "ensure_firebase_user", fake_ensure_firebase_user)
+    monkeypatch.setattr(admin_api, "create_firebase_password_invitation", fake_create_firebase_password_invitation)
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/provisioning/tenant-onboarding",
+        headers={"Idempotency-Key": "test-tenant-onboarding-firebase-001"},
+        json={
+            "slug": "Cliente-Nuevo",
+            "commercial_name": "Cliente Nuevo",
+            "source": {"type": "manual", "id": "qa-onboarding"},
+            "owner": {"email": "owner.nuevo@cliente.com", "display_name": "Owner Cliente Nuevo"},
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["invitation"]["email_sent"] is True
+    assert calls["ensured"] == [("owner.nuevo@cliente.com", "Owner Cliente Nuevo", "firebase")]
+    assert calls["invited"] == [("owner.nuevo@cliente.com", "fake-api-key")]
+
+
+def test_onboard_tenant_requires_backoffice_allowlist_in_firebase_mode(monkeypatch):
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        auth_mode="firebase",
+        backoffice_admin_emails="backoffice@erclave.local",
+    )
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-user",
+        email="externo@cliente.com",
+        name="Externo",
+    )
+    monkeypatch.setattr(admin_api, "ensure_firebase_user", lambda *args, **kwargs: None)
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/provisioning/tenant-onboarding",
+        headers={"Idempotency-Key": "test-tenant-onboarding-denied-001"},
+        json={
+            "slug": "Cliente-Nuevo",
+            "commercial_name": "Cliente Nuevo",
+            "source": {"type": "manual", "id": "qa-onboarding"},
+            "owner": {"email": "owner.nuevo@cliente.com", "display_name": "Owner Cliente Nuevo"},
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "backoffice_admin_required"
+
+
 def test_get_session_context_returns_tenant_user_modules_and_permissions():
     client = client_with_fake_repo()
 
@@ -397,7 +605,10 @@ def test_get_session_context_returns_tenant_user_modules_and_permissions():
     assert response.status_code == 200
     assert response.json()["data"]["tenant"]["id"] == TENANT_ID
     assert response.json()["data"]["user"]["id"] == USER_ID
+    assert response.json()["data"]["roles"][0]["code"] == "owner"
     assert response.json()["data"]["active_modules"] == ["admin", "production"]
+    assert response.json()["data"]["entitlement_limits"] == {"admin": {}, "production": {}}
+    assert response.json()["data"]["scope"]["branches"][0]["id"] == "suc_demo"
     assert "production.product_service.read" in response.json()["data"]["permissions"]
 
 

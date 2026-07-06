@@ -11,7 +11,9 @@ from .schemas import (
     PermissionRead,
     PolicyDecision,
     RoleRead,
+    SessionBranchRead,
     SessionContextRead,
+    SessionScopeRead,
     SettingRead,
     TenantRead,
     UserRead,
@@ -170,6 +172,287 @@ class AdminRepository:
             )
 
         return TenantRead.model_validate(dict(row))
+
+    def onboard_tenant(
+        self,
+        slug: str,
+        commercial_name: str,
+        legal_name: str | None,
+        plan_id: str | None,
+        timezone: str,
+        locale: str,
+        source: dict,
+        owner: dict,
+        organization_profile: dict | None,
+        modules: list[dict],
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> dict:
+        tenant_id = f"ten_{uuid4().hex[:26]}"
+        owner_user_id = f"usr_{uuid4().hex[:26]}"
+        owner_role_id = f"rol_{uuid4().hex[:26]}"
+        owner_membership_id = f"mem_{uuid4().hex[:26]}"
+        profile = organization_profile or self.default_organization_profile(commercial_name, legal_name)
+        owner_status = owner.get("status", "invited")
+        branch_ids = owner.get("branch_ids") if isinstance(owner.get("branch_ids"), list) else ["*"]
+        normalized_modules = modules or [{"module_code": "admin", "status": "active", "limits": {}, "source": "provisioning"}]
+
+        with self.engine.begin() as connection:
+            before = connection.execute(
+                text(
+                    """
+                    select id, slug, legal_name, commercial_name, status, plan_id, timezone, locale
+                    from admin.tenants
+                    where slug = lower(:slug)
+                    """
+                ),
+                {"slug": slug},
+            ).mappings().first()
+            tenant_row = connection.execute(
+                text(
+                    """
+                    insert into admin.tenants (
+                        id,
+                        slug,
+                        legal_name,
+                        commercial_name,
+                        status,
+                        plan_id,
+                        timezone,
+                        locale,
+                        source_type,
+                        source_id,
+                        metadata
+                    )
+                    values (
+                        :id,
+                        lower(:slug),
+                        :legal_name,
+                        :commercial_name,
+                        'active',
+                        :plan_id,
+                        :timezone,
+                        :locale,
+                        :source_type,
+                        :source_id,
+                        cast(:metadata as jsonb)
+                    )
+                    on conflict (slug)
+                    do update set
+                        legal_name = excluded.legal_name,
+                        commercial_name = excluded.commercial_name,
+                        status = 'active',
+                        plan_id = excluded.plan_id,
+                        timezone = excluded.timezone,
+                        locale = excluded.locale,
+                        source_type = excluded.source_type,
+                        source_id = excluded.source_id,
+                        metadata = excluded.metadata,
+                        updated_at = now()
+                    returning id, slug, legal_name, commercial_name, status, plan_id, timezone, locale
+                    """
+                ),
+                {
+                    "id": tenant_id,
+                    "slug": slug,
+                    "legal_name": legal_name,
+                    "commercial_name": commercial_name,
+                    "plan_id": plan_id,
+                    "timezone": timezone,
+                    "locale": locale,
+                    "source_type": source["type"],
+                    "source_id": source["id"],
+                    "metadata": json.dumps({"source": source}),
+                },
+            ).mappings().one()
+            tenant_id = tenant_row["id"]
+
+            setting_row = connection.execute(
+                text(
+                    """
+                    insert into admin.tenant_settings (id, tenant_id, key, module_code, value)
+                    values (:id, :tenant_id, 'organization.profile', 'admin', cast(:value as jsonb))
+                    on conflict (tenant_id, key)
+                    do update set
+                        module_code = excluded.module_code,
+                        value = case
+                            when admin.tenant_settings.value = '{}'::jsonb then excluded.value
+                            else admin.tenant_settings.value
+                        end,
+                        updated_at = now()
+                    returning key, module_code, value
+                    """
+                ),
+                {
+                    "id": f"set_{uuid4().hex[:26]}",
+                    "tenant_id": tenant_id,
+                    "value": json.dumps(profile),
+                },
+            ).mappings().one()
+
+            user_row = connection.execute(
+                text(
+                    """
+                    insert into admin.users (id, email, display_name, status)
+                    values (:id, lower(:email), :display_name, :status)
+                    on conflict (email)
+                    do update set
+                        display_name = excluded.display_name,
+                        status = case
+                            when admin.users.status = 'disabled' then excluded.status
+                            else admin.users.status
+                        end,
+                        updated_at = now()
+                    returning id, email, display_name, status
+                    """
+                ),
+                {
+                    "id": owner_user_id,
+                    "email": owner["email"],
+                    "display_name": owner["display_name"],
+                    "status": owner_status,
+                },
+            ).mappings().one()
+            owner_user_id = user_row["id"]
+
+            role_row = connection.execute(
+                text(
+                    """
+                    insert into admin.roles (id, tenant_id, code, name, description, status, system_role)
+                    values (:id, :tenant_id, 'owner', 'Owner', 'Owner inicial del tenant creado por provisioning.', 'active', true)
+                    on conflict (tenant_id, code)
+                    do update set
+                        name = excluded.name,
+                        description = excluded.description,
+                        status = 'active',
+                        system_role = true,
+                        updated_at = now()
+                    returning id, code, name, status
+                    """
+                ),
+                {"id": owner_role_id, "tenant_id": tenant_id},
+            ).mappings().one()
+            owner_role_id = role_row["id"]
+
+            connection.execute(
+                text(
+                    """
+                    insert into admin.role_permissions (id, tenant_id, role_id, permission_id, scope)
+                    select
+                        'rpe_' || substr(md5(:tenant_id || ':' || :role_id || ':' || permissions.id), 1, 26),
+                        :tenant_id,
+                        :role_id,
+                        permissions.id,
+                        '{}'::jsonb
+                    from admin.permissions permissions
+                    where permissions.status = 'active'
+                    on conflict (tenant_id, role_id, permission_id) do nothing
+                    """
+                ),
+                {"tenant_id": tenant_id, "role_id": owner_role_id},
+            )
+
+            membership_row = connection.execute(
+                text(
+                    """
+                    insert into admin.memberships (
+                        id,
+                        tenant_id,
+                        user_id,
+                        status,
+                        invited_at,
+                        activated_at,
+                        metadata
+                    )
+                    values (
+                        :id,
+                        :tenant_id,
+                        :user_id,
+                        :status,
+                        now(),
+                        case when :status = 'active' then now() else null end,
+                        cast(:metadata as jsonb)
+                    )
+                    on conflict (tenant_id, user_id)
+                    do update set
+                        status = excluded.status,
+                        invited_at = coalesce(admin.memberships.invited_at, excluded.invited_at),
+                        activated_at = case
+                            when excluded.status = 'active' then coalesce(admin.memberships.activated_at, now())
+                            else admin.memberships.activated_at
+                        end,
+                        disabled_at = null,
+                        metadata = excluded.metadata,
+                        updated_at = now()
+                    returning id, status
+                    """
+                ),
+                {
+                    "id": owner_membership_id,
+                    "tenant_id": tenant_id,
+                    "user_id": owner_user_id,
+                    "status": owner_status,
+                    "metadata": json.dumps({"scope": {"branch_ids": branch_ids}, "source": source}),
+                },
+            ).mappings().one()
+
+            self._replace_membership_roles(connection, tenant_id, membership_row["id"], [owner_role_id])
+
+            entitlement_rows = []
+            for module in normalized_modules:
+                module_row = connection.execute(
+                    text(
+                        """
+                        insert into admin.tenant_modules (id, tenant_id, module_code, status, source, limits, starts_at)
+                        values (:id, :tenant_id, :module_code, :status, :source, cast(:limits as jsonb), now())
+                        on conflict (tenant_id, module_code)
+                        do update set
+                            status = excluded.status,
+                            source = excluded.source,
+                            limits = excluded.limits,
+                            starts_at = coalesce(admin.tenant_modules.starts_at, excluded.starts_at),
+                            updated_at = now()
+                        returning module_code, status, limits
+                        """
+                    ),
+                    {
+                        "id": f"tmo_{uuid4().hex[:26]}",
+                        "tenant_id": tenant_id,
+                        "module_code": module["module_code"],
+                        "status": module.get("status", "active"),
+                        "source": module.get("source", "provisioning"),
+                        "limits": json.dumps(module.get("limits", {})),
+                    },
+                ).mappings().one()
+                entitlement_rows.append(dict(module_row))
+
+            owner_read = self._get_user_for_tenant(connection, tenant_id, owner_user_id)
+            self._record_audit_event(
+                connection,
+                tenant_id=tenant_id,
+                action="admin.tenant.onboard",
+                resource_type="tenant",
+                resource_id=tenant_id,
+                before_state=dict(before) if before else None,
+                after_state={
+                    "tenant": dict(tenant_row),
+                    "owner": dict(owner_read),
+                    "modules": entitlement_rows,
+                    "organization_setting": dict(setting_row),
+                },
+                idempotency_key=idempotency_key,
+                correlation_id=correlation_id,
+                metadata={"source": source, "owner_status": owner_status},
+            )
+
+        session_context = self.get_session_context(tenant_id, owner_user_id) if owner_status == "active" else None
+        return {
+            "tenant": TenantRead.model_validate(dict(tenant_row)),
+            "owner": UserRead.model_validate(dict(owner_read)),
+            "entitlements": [EntitlementRead.model_validate(item) for item in entitlement_rows],
+            "organization": SettingRead.model_validate(dict(setting_row)),
+            "session_context": session_context,
+        }
 
     def list_entitlements(self, tenant_id: str) -> list[EntitlementRead]:
         with self.engine.connect() as connection:
@@ -399,6 +682,50 @@ class AdminRepository:
             if user is None:
                 return None
 
+            membership = connection.execute(
+                text(
+                    """
+                    select id, metadata
+                    from admin.memberships
+                    where tenant_id = :tenant_id
+                        and user_id = :actor_id
+                        and status = 'active'
+                    """
+                ),
+                {"tenant_id": tenant_id, "actor_id": actor_id},
+            ).mappings().first()
+            if membership is None:
+                return None
+
+            roles = connection.execute(
+                text(
+                    """
+                    select
+                        roles.id,
+                        roles.code,
+                        roles.name,
+                        roles.status,
+                        coalesce(array_agg(permissions.code order by permissions.code) filter (where permissions.code is not null), '{}') as permissions
+                    from admin.membership_roles membership_roles
+                    join admin.roles roles
+                        on roles.tenant_id = membership_roles.tenant_id
+                        and roles.id = membership_roles.role_id
+                    left join admin.role_permissions role_permissions
+                        on role_permissions.tenant_id = roles.tenant_id
+                        and role_permissions.role_id = roles.id
+                    left join admin.permissions permissions
+                        on permissions.id = role_permissions.permission_id
+                        and permissions.status = 'active'
+                    where membership_roles.tenant_id = :tenant_id
+                        and membership_roles.membership_id = :membership_id
+                        and roles.status = 'active'
+                    group by roles.id, roles.code, roles.name, roles.status
+                    order by roles.code
+                    """
+                ),
+                {"tenant_id": tenant_id, "membership_id": membership["id"]},
+            ).mappings().all()
+
             entitlements = connection.execute(
                 text(
                     """
@@ -438,13 +765,20 @@ class AdminRepository:
                 {"tenant_id": tenant_id, "actor_id": actor_id},
             ).scalars().all()
 
+            organization_profile = self._get_or_create_organization_profile(connection, tenant_id)
+
         entitlement_reads = [EntitlementRead.model_validate(dict(row)) for row in entitlements]
+        role_reads = [RoleRead.model_validate(dict(row)) for row in roles]
+        scope = self._build_session_scope(membership["metadata"], organization_profile)
         return SessionContextRead(
             tenant=TenantRead.model_validate(dict(tenant)),
             user=UserRead.model_validate(dict(user)),
+            roles=role_reads,
             entitlements=entitlement_reads,
+            entitlement_limits={item.module_code: item.limits for item in entitlement_reads},
             permissions=list(permissions),
             active_modules=[item.module_code for item in entitlement_reads if item.status == "active"],
+            scope=scope,
         )
 
     def get_session_context_by_email(self, tenant_id: str, email: str) -> SessionContextRead | None:
@@ -1024,6 +1358,52 @@ class AdminRepository:
             "legal_entities": [item for item in legal_entities if isinstance(item, dict)],
             "branches": [item for item in branches if isinstance(item, dict)],
         }
+
+    def _build_session_scope(self, membership_metadata: dict | None, organization_profile: dict | None) -> SessionScopeRead:
+        metadata = membership_metadata if isinstance(membership_metadata, dict) else {}
+        scope_metadata = metadata.get("scope") if isinstance(metadata.get("scope"), dict) else metadata
+        configured_branch_ids = scope_metadata.get("branch_ids")
+        if not isinstance(configured_branch_ids, list):
+            configured_branch_ids = scope_metadata.get("branches")
+        branch_ids = [str(item) for item in configured_branch_ids if item] if isinstance(configured_branch_ids, list) else []
+
+        profile = self._normalize_organization_profile(organization_profile)
+        active_branches = [
+            branch
+            for branch in profile["branches"]
+            if branch.get("status", "active") == "active" and branch.get("id") and branch.get("name")
+        ]
+        all_branches = not branch_ids or "*" in branch_ids
+        allowed_branch_ids = {item for item in branch_ids if item != "*"}
+        visible_branches = active_branches if all_branches else [branch for branch in active_branches if branch.get("id") in allowed_branch_ids]
+
+        if not visible_branches:
+            corporate = profile.get("corporate", {})
+            visible_branches = [
+                {
+                    "id": "default",
+                    "name": "Matriz",
+                    "code": corporate.get("commercial_name", ""),
+                    "status": "active",
+                    "legal_entity_id": None,
+                }
+            ]
+
+        branches = [
+            SessionBranchRead(
+                id=str(branch["id"]),
+                name=str(branch["name"]),
+                code=branch.get("code") or "",
+                status=branch.get("status", "active"),
+                legal_entity_id=branch.get("legal_entity_id"),
+            )
+            for branch in visible_branches
+        ]
+        return SessionScopeRead(
+            branch_ids=[branch.id for branch in branches],
+            branches=branches,
+            all_branches=all_branches,
+        )
 
     def _replace_membership_roles(self, connection, tenant_id: str, membership_id: str, role_ids: list[str]) -> None:
         connection.execute(

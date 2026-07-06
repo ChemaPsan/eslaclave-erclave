@@ -20,8 +20,11 @@ class Settings(BaseSettings):
     service_name: str = "admin-service"
     version: str = "0.1.0"
     api_public_base_url: str = "http://localhost:8000"
+    app_public_base_url: str = "http://localhost:4173"
     auth_mode: AuthMode = "demo"
     firebase_project_id: str | None = None
+    firebase_web_api_key: str | None = None
+    backoffice_admin_emails: str = ""
     database_url: str | None = None
     log_level: str = Field(default="INFO")
 

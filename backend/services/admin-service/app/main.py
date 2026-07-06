@@ -44,8 +44,14 @@ def create_app() -> FastAPI:
             "Idempotency-Key",
             "Authorization",
         ],
-        allow_private_network=True,
     )
+
+    @app.middleware("http")
+    async def allow_private_network_access(request, call_next):
+        response = await call_next(request)
+        if request.headers.get("access-control-request-private-network") == "true":
+            response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
 
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(TenantContextMiddleware)

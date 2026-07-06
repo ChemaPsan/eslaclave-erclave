@@ -53,6 +53,7 @@ Responsabilidades:
 - definir estrategia multi-tenant y modelo de aislamiento de datos;
 - proteger la frontera entre autenticacion externa e autorizacion propia de ERClave;
 - validar que cada flujo de login resuelva `session/context` desde `admin-service` antes de habilitar modulos o acciones;
+- validar que `session/context` incluya roles, permisos, limites de entitlements y alcance de sucursales antes de que el frontend habilite navegacion o acciones por modulo;
 - validar que todo tenant tenga perfil corporativo inicial en `admin.tenant_settings` con key `organization.profile`;
 - proteger que corporativo, razones sociales, sucursales y contactos administrativos pertenezcan al tenant y no a Firebase, frontend ni servicios operativos;
 - exigir que altas, actualizaciones, activaciones e inactivaciones de razones sociales y sucursales usen los endpoints finos de `admin-service` (`/v1/organization/legal-entities` y `/v1/organization/branches`) mientras sigan persistiendo en `organization.profile`;
@@ -70,6 +71,7 @@ Preguntas obligatorias antes de aprobar un plan:
 - El tenant tiene `organization.profile` inicial y esta estructura se actualiza por API/admin-service?
 - Si la accion modifica razon social o sucursal, usa endpoints finos auditables de `admin-service` y no reescritura manual desde frontend?
 - La identidad viene de Firebase/Auth, pero donde se resuelven membresia, roles, permisos y entitlements?
+- La sucursal activa y las sucursales disponibles vienen del alcance de `session/context` o de un supuesto local?
 - El flujo soporta usuarios con multiples tenants o documenta por que aun no aplica?
 - Que servicio es dueno del dato?
 - Que microfrontend es dueno de la pantalla?
@@ -107,6 +109,8 @@ Debe rechazar:
 - flujos de compra en linea que creen tenant sin webhook validado, provisioning idempotente y auditoria;
 - modelos sin estrategia clara de `tenant_id`, permisos y auditoria.
 - flujos de alta de tenant que creen `admin.tenants` sin inicializar `organization.profile`.
+- flujos de alta de tenant con owner inicial que no usen `POST /v1/provisioning/tenant-onboarding` o no documenten por que necesitan un camino alterno.
+- frontends de cliente que permitan crear otros tenants; esa operacion pertenece al Backoffice interno de EsLaClave o a billing/provisioning.
 
 Primeros entregables esperados:
 
@@ -1074,6 +1078,7 @@ Responsabilidad:
 - Revisar que razones sociales y sucursales se modifiquen desde `/v1/organization/legal-entities` y `/v1/organization/branches` para conservar idempotencia, auditoria y validaciones backend.
 - Revisar que todo flujo de creacion de tenant por seed, provisioning o API inicialice `organization.profile` con estructura valida.
 - Revisar que `session/context` cargue tenant, usuario, roles, permisos, entitlements, limites y estados comerciales desde backend.
+- Revisar que `session/context` cargue alcance de sucursales desde backend y que el frontend no muestre sucursales fuera de esa membresia.
 - Revisar que Firebase/Auth solo resuelva identidad y que la autorizacion viva en `admin-service`.
 - Detectar impacto tecnico de activar, ocultar o restringir funciones.
 - Definir dependencias de configuracion para frontend, API y datos.
@@ -1095,6 +1100,8 @@ Entregables:
 - Configuracion inicial por tenant.
 - Contrato y defaults de `organization.profile`.
 - Contrato de endpoints finos para crear, actualizar, activar e inactivar razones sociales y sucursales.
+- Contrato de `POST /v1/provisioning/tenant-onboarding` para crear tenant, owner inicial, rol owner, modulos y perfil organizacional en un flujo idempotente.
+- Backoffice interno de EsLaClave como superficie separada del ERClave del cliente para crear tenants, enlazar billing/provisioning y operar soporte SaaS.
 - Dependencias tecnicas de modulos activos.
 - Checklist de seguridad funcional.
 

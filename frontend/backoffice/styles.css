@@ -1,0 +1,399 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-soft: #f8fafc;
+  --line: #d9dee8;
+  --text: #101828;
+  --muted: #667085;
+  --primary: #5c16a5;
+  --primary-strong: #410f78;
+  --danger: #c81e1e;
+  --danger-bg: #fff1f1;
+  --success-bg: #ecfdf3;
+  --success: #027a48;
+  --shadow: 0 18px 60px rgba(16, 24, 40, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.backoffice-shell {
+  min-height: 100vh;
+  padding: 28px;
+}
+
+.loading-screen,
+.auth-layout {
+  min-height: calc(100vh - 56px);
+  display: grid;
+  place-items: center;
+}
+
+.auth-layout {
+  grid-template-columns: minmax(280px, 520px) minmax(320px, 420px);
+  gap: 28px;
+  align-items: stretch;
+}
+
+.auth-panel,
+.login-card,
+.tenant-form,
+.result-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.auth-panel {
+  padding: 42px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.auth-panel h1,
+.topbar h1,
+.section-header h2,
+.login-card h2,
+.result-panel h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.auth-panel h1 {
+  max-width: 420px;
+  font-size: 38px;
+  line-height: 1.06;
+}
+
+.subcopy {
+  margin: 18px 0 0;
+  max-width: 460px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.login-card {
+  padding: 28px;
+  align-self: center;
+}
+
+.login-card label,
+.tenant-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.login-card input,
+.tenant-form input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.login-card input:focus,
+.tenant-form input:focus {
+  border-color: var(--primary);
+  outline: 3px solid rgba(92, 22, 165, 0.14);
+}
+
+.login-card {
+  display: grid;
+  gap: 16px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.topbar h1 {
+  font-size: 32px;
+}
+
+.session-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.session-chip button,
+.link-button {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.work-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 20px;
+  align-items: start;
+}
+
+.tenant-form,
+.result-panel {
+  padding: 22px;
+}
+
+.result-panel {
+  position: sticky;
+  top: 24px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.api-pill {
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.form-section {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.form-section h3 {
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+
+.form-section.compact {
+  padding-bottom: 4px;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.module-check {
+  min-height: 46px;
+  display: flex !important;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 9px !important;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--surface-soft);
+  color: var(--text) !important;
+  font-size: 13px !important;
+}
+
+.module-check input {
+  width: 16px;
+  min-height: 16px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 22px;
+}
+
+.primary-button,
+.secondary-button {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.primary-button {
+  background: var(--primary);
+  color: #fff;
+}
+
+.primary-button:hover {
+  background: var(--primary-strong);
+}
+
+.primary-button:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.secondary-button {
+  margin-top: 12px;
+  background: #fff;
+  border-color: var(--line);
+  color: var(--primary);
+}
+
+.error-box,
+.notice-box {
+  margin: 0;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.error-box {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.notice-box {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.empty-state {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.result-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.result-card {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  background: var(--surface-soft);
+}
+
+.result-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.result-card strong {
+  overflow-wrap: anywhere;
+}
+
+.result-card small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+code {
+  font-family: "Cascadia Code", Consolas, monospace;
+}
+
+@media (max-width: 1100px) {
+  .auth-layout,
+  .work-area {
+    grid-template-columns: 1fr;
+  }
+
+  .result-panel {
+    position: static;
+  }
+
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+  .module-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .backoffice-shell {
+    padding: 16px;
+  }
+
+  .topbar,
+  .section-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .form-grid,
+  .module-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-panel,
+  .login-card,
+  .tenant-form,
+  .result-panel {
+    padding: 18px;
+  }
+
+  .auth-panel h1,
+  .topbar h1 {
+    font-size: 28px;
+  }
+}

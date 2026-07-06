@@ -124,6 +124,36 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /v1/provisioning/tenant-onboarding:
+    post:
+      tags: [Tenants]
+      operationId: onboardTenant
+      summary: Create a tenant, initial owner, modules and organization profile.
+      description: Internal provisioning command used by ERClave Backoffice or billing/provisioning. In Firebase mode, the bearer token email must be included in `ERCLAVE_BACKOFFICE_ADMIN_EMAILS`. It creates or updates the tenant by slug, initializes `organization.profile`, creates or links the owner user, assigns the owner role, activates requested modules and records audit trace.
+      x-required-module: admin
+      x-permissions: [internal.provisioning.tenant.create]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantOnboardingRequest'
+      responses:
+        '201':
+          description: Tenant onboarding completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantOnboardingResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /v1/tenants/{tenant_id}/suspend:
     post:
       tags: [Tenants]
@@ -946,6 +976,116 @@ components:
         organization_profile:
           $ref: '#/components/schemas/OrganizationProfile'
           description: Initial tenant organization profile. If omitted, admin-service/provisioning must create an empty `organization.profile` setting.
+    TenantOnboardingOwnerRequest:
+      type: object
+      required: [email, display_name]
+      properties:
+        email:
+          type: string
+        display_name:
+          type: string
+        status:
+          type: string
+          enum: [invited, active]
+          default: invited
+        branch_ids:
+          type: array
+          description: Branch scope for the initial owner. Use `*` for all active branches.
+          default: ['*']
+          items:
+            type: string
+    TenantOnboardingModuleRequest:
+      type: object
+      required: [module_code]
+      properties:
+        module_code:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+          default: active
+        limits:
+          type: object
+          additionalProperties: true
+        source:
+          type: string
+          enum: [subscription, manual, trial, provisioning]
+          default: provisioning
+    TenantOnboardingRequest:
+      type: object
+      required: [slug, commercial_name, source, owner]
+      properties:
+        slug:
+          type: string
+        commercial_name:
+          type: string
+        legal_name:
+          type: [string, 'null']
+        plan_id:
+          type: [string, 'null']
+        timezone:
+          type: string
+          default: America/Mexico_City
+        locale:
+          type: string
+          default: es-MX
+        source:
+          $ref: '#/components/schemas/SourceRef'
+        owner:
+          $ref: '#/components/schemas/TenantOnboardingOwnerRequest'
+        organization_profile:
+          $ref: '#/components/schemas/OrganizationProfile'
+        modules:
+          type: array
+          default:
+            - module_code: admin
+              status: active
+              limits: {}
+              source: provisioning
+          items:
+            $ref: '#/components/schemas/TenantOnboardingModuleRequest'
+    TenantOnboardingResult:
+      type: object
+      required: [tenant, owner, entitlements, organization, invitation]
+      properties:
+        tenant:
+          $ref: '#/components/schemas/Tenant'
+        owner:
+          $ref: '#/components/schemas/User'
+        entitlements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entitlement'
+        organization:
+          $ref: '#/components/schemas/Setting'
+        session_context:
+          oneOf:
+            - $ref: '#/components/schemas/SessionContext'
+            - type: 'null'
+        invitation:
+          $ref: '#/components/schemas/TenantOnboardingInvitation'
+    TenantOnboardingInvitation:
+      type: object
+      required: [provider, email, email_sent, delivery]
+      properties:
+        provider:
+          type: string
+          enum: [firebase, demo]
+        email:
+          type: string
+        email_sent:
+          type: boolean
+        reset_link:
+          type: [string, 'null']
+          description: Present only when backend generated a Firebase reset link instead of sending the Firebase email directly.
+        delivery:
+          type: string
+          enum: [firebase_email, generated_link, disabled]
+    TenantOnboardingResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/TenantOnboardingResult'
     TenantUpdateRequest:
       type: object
       properties:
@@ -996,16 +1136,25 @@ components:
             $ref: '#/components/schemas/Entitlement'
     SessionContext:
       type: object
-      required: [tenant, user, entitlements, permissions, active_modules]
+      required: [tenant, user, roles, entitlements, entitlement_limits, permissions, active_modules, scope]
       properties:
         tenant:
           $ref: '#/components/schemas/Tenant'
         user:
           $ref: '#/components/schemas/User'
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
         entitlements:
           type: array
           items:
             $ref: '#/components/schemas/Entitlement'
+        entitlement_limits:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: true
         permissions:
           type: array
           items:
@@ -1014,6 +1163,36 @@ components:
           type: array
           items:
             type: string
+        scope:
+          $ref: '#/components/schemas/SessionScope'
+    SessionBranch:
+      type: object
+      required: [id, name, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        code:
+          type: string
+        status:
+          type: string
+        legal_entity_id:
+          type: string
+    SessionScope:
+      type: object
+      required: [branch_ids, branches, all_branches]
+      properties:
+        branch_ids:
+          type: array
+          items:
+            type: string
+        branches:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionBranch'
+        all_branches:
+          type: boolean
     SessionContextResponse:
       type: object
       properties:

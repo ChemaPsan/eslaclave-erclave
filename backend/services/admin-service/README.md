@@ -106,6 +106,7 @@ GET /version
 GET /v1/session/context
 GET /v1/tenants/{tenant_id}
 POST /v1/tenants
+POST /v1/provisioning/tenant-onboarding
 GET /v1/tenants/{tenant_id}/entitlements
 PUT /v1/tenants/{tenant_id}/entitlements/{module_code}
 POST /v1/policy/evaluate
@@ -131,9 +132,52 @@ POST /v1/organization/branches/{branch_id}/activate
 POST /v1/organization/branches/{branch_id}/deactivate
 ```
 
-Estos endpoints leen y actualizan PostgreSQL por medio de `AdminRepository`. `GET /v1/session/context` devuelve tenant, usuario, entitlements, permisos efectivos y modulos activos. En QA con `ERCLAVE_AUTH_MODE=firebase`, el actor se resuelve desde `Authorization: Bearer <firebase_id_token>` y se cruza por email contra `admin.users` y `admin.memberships`; en local/demo se conserva `X-Actor-Id` como fallback. Si una membresia invitada entra con token Firebase valido, `session/context` la activa en ERClave. El `PUT` de entitlements permite activar, inactivar o suspender modulos para el tenant QA. Los endpoints de usuarios permiten invitar identidades QA, actualizar nombre/roles de membresia, desactivar membresias y eliminar el acceso del tenant; en modo Firebase, invitacion asegura identidad Firebase y eliminacion borra la identidad Firebase por email. Los endpoints de roles permiten crear roles, activar/inactivar roles y reemplazar permisos asignados. `GET /v1/settings` y `PUT /v1/settings/organization.profile` administran configuraciones por tenant; `organization.profile` es la fuente de verdad inicial para corporativo, razones sociales, sucursales y contactos. Los endpoints `POST/PATCH /v1/organization/legal-entities` y `POST/PATCH /v1/organization/branches` manipulan esas listas con auditoria e idempotencia, aunque persisten en el mismo JSONB. Los endpoints mutables de tenants siguen pendientes para una fase posterior.
+Estos endpoints leen y actualizan PostgreSQL por medio de `AdminRepository`. `GET /v1/session/context` devuelve tenant, usuario, roles activos, entitlements, limites por modulo, permisos efectivos, modulos activos y alcance operativo por sucursal. En QA con `ERCLAVE_AUTH_MODE=firebase`, el actor se resuelve desde `Authorization: Bearer <firebase_id_token>` y se cruza por email contra `admin.users` y `admin.memberships`; en local/demo se conserva `X-Actor-Id` como fallback. Si una membresia invitada entra con token Firebase valido, `session/context` la activa en ERClave. El alcance de sucursales se calcula desde `membership.metadata.scope.branch_ids` cuando exista; si no hay alcance configurado, la membresia ve todas las sucursales activas de `organization.profile`. El `PUT` de entitlements permite activar, inactivar o suspender modulos para el tenant QA. Los endpoints de usuarios permiten invitar identidades QA, actualizar nombre/roles de membresia, desactivar membresias y eliminar el acceso del tenant; en modo Firebase, invitacion asegura identidad Firebase y eliminacion borra la identidad Firebase por email. Los endpoints de roles permiten crear roles, activar/inactivar roles y reemplazar permisos asignados. `GET /v1/settings` y `PUT /v1/settings/organization.profile` administran configuraciones por tenant; `organization.profile` es la fuente de verdad inicial para corporativo, razones sociales, sucursales y contactos. Los endpoints `POST/PATCH /v1/organization/legal-entities` y `POST/PATCH /v1/organization/branches` manipulan esas listas con auditoria e idempotencia, aunque persisten en el mismo JSONB. Los endpoints mutables de tenants siguen pendientes para una fase posterior.
 
 `POST /v1/tenants` es el primer corte para provisioning: crea o actualiza idempotentemente el tenant por slug e inicializa `organization.profile`. Antes de Produccion debe conectarse a autenticacion service-to-service para `internal.provisioning.tenant.create`.
+
+`POST /v1/provisioning/tenant-onboarding` crea el tenant, inicializa `organization.profile`, crea o enlaza el owner inicial, asigna rol `owner`, habilita modulos y deja alcance de sucursales en `membership.metadata.scope.branch_ids`. En modo Firebase requiere `Authorization: Bearer <token>` de un correo incluido en `ERCLAVE_BACKOFFICE_ADMIN_EMAILS`. Tambien asegura la identidad en Firebase y prepara la invitacion de contrasena: si `ERCLAVE_FIREBASE_WEB_API_KEY` esta configurado, Firebase envia el correo de reset; si no, el endpoint devuelve `invitation.reset_link` para envio manual o para un futuro `notification-service`. Requiere `Idempotency-Key`. Estructura minima:
+
+```json
+{
+  "slug": "cliente-nuevo",
+  "commercial_name": "Cliente Nuevo",
+  "legal_name": "Cliente Nuevo S.A. de C.V.",
+  "plan_id": "qa-demo",
+  "source": {
+    "type": "manual",
+    "id": "qa-onboarding"
+  },
+  "owner": {
+    "email": "owner@cliente.com",
+    "display_name": "Owner Cliente",
+    "status": "invited",
+    "branch_ids": ["*"]
+  },
+  "organization_profile": {
+    "corporate": {
+      "commercial_name": "Cliente Nuevo",
+      "legal_name": "Cliente Nuevo S.A. de C.V.",
+      "tax_id": "",
+      "phone": "",
+      "contact_name": "Owner Cliente",
+      "contact_email": "owner@cliente.com",
+      "contact_phone": "",
+      "contact_position": "Direccion"
+    },
+    "legal_entities": [],
+    "branches": []
+  },
+  "modules": [
+    {
+      "module_code": "admin",
+      "status": "active",
+      "limits": {},
+      "source": "provisioning"
+    }
+  ]
+}
+```
 
 Los endpoints mutables requieren:
 
