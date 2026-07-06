@@ -1834,6 +1834,21 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `npm.cmd run validate`; `python -m pytest services/admin-service/tests/test_admin_api.py`; `node --check frontend/api/config.js`. |
 | Observaciones | `productionApiBaseUrl` queda configurado para el servicio QA aunque el modulo de Produccion todavia conserva consumo mayormente local/mock en frontend. |
 
+### CHG-121
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Ajusta copy de producto en login |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, autenticacion, experiencia de entrada |
+| Descripcion | Se reemplazo el texto descriptivo del mecanismo de login por un mensaje de producto: ERClave como plataforma SaaS modular para centralizar procesos, usuarios, sucursales y modulos de negocio. |
+| Motivo | La pantalla de acceso debe presentar brevemente que es ERClave y reforzar marca/eslogan, no explicar la implementacion de autenticacion. |
+| Impacto | El panel izquierdo del login comunica valor de negocio antes del formulario de acceso. |
+| Validacion | `node --check frontend/app.js`; `npm.cmd run validate:traceability`. |
+| Observaciones | No cambia comportamiento de autenticacion ni permisos. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

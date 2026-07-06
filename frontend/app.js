@@ -7570,13 +7570,13 @@ function renderAuthGate() {
           <div class="brand-mark">ER</div>
           <div>
             <strong>ERClave</strong>
-            <span>Operacion modular SaaS</span>
+            <span>Gestion empresarial modular</span>
           </div>
         </div>
         <div class="auth-copy">
-          <p class="eyebrow">Acceso seguro</p>
-          <h1>Controla usuarios, tenants y permisos desde una sola entrada.</h1>
-          <p>La identidad se valida con Firebase y ERClave decide el acceso por tenant, roles, modulos y permisos efectivos.</p>
+          <p class="eyebrow">Plataforma ERClave</p>
+          <h1>Tu operacion, clara y conectada.</h1>
+          <p>ERClave centraliza procesos, usuarios, sucursales y modulos de negocio en una plataforma SaaS preparada para crecer con cada empresa.</p>
         </div>
         <div class="auth-logo-row" aria-label="Espacio para logos de clientes o partners">
           <span>Logo cliente</span>
