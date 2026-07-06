@@ -43,6 +43,20 @@ export function getDemoTenantId() {
 }
 
 
+export function getConfiguredTenantId() {
+  return getRuntimeConfigValue("tenantId") || DEFAULT_TENANT_ID;
+}
+
+
+export function setActiveTenantId(tenantId) {
+  if (tenantId) {
+    localStorage.setItem("erclave-api-tenant-id", tenantId);
+  } else {
+    localStorage.removeItem("erclave-api-tenant-id");
+  }
+}
+
+
 export function getDemoActorId() {
   return localStorage.getItem("erclave-api-actor-id") || getRuntimeConfigValue("actorId") || DEFAULT_ACTOR_ID;
 }

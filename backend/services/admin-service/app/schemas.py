@@ -18,6 +18,27 @@ class TenantResponse(BaseModel):
     data: TenantRead
 
 
+class BackofficeTenantRead(TenantRead):
+    owner_email: str | None = None
+    active_memberships: int = 0
+    total_memberships: int = 0
+    modules: list[str] = Field(default_factory=list)
+    legal_entities_count: int = 0
+    branches_count: int = 0
+
+
+class BackofficeTenantListResponse(BaseModel):
+    data: list[BackofficeTenantRead]
+
+
+class BackofficeTenantStatusRequest(BaseModel):
+    status: Literal["active", "suspended"]
+
+
+class BackofficeTenantDeleteResponse(BaseModel):
+    data: dict[str, Any]
+
+
 class SourceRef(BaseModel):
     type: str
     id: str
@@ -276,6 +297,18 @@ class SessionContextRead(BaseModel):
 
 class SessionContextResponse(BaseModel):
     data: SessionContextRead
+
+
+class SessionTenantRead(BaseModel):
+    tenant: TenantRead
+    user_status: str
+    membership_status: str
+    roles: list[str] = Field(default_factory=list)
+
+
+class SessionTenantListResponse(BaseModel):
+    data: list[SessionTenantRead]
+    page: Page = Field(default_factory=Page)
 
 
 class TenantOnboardingResponse(BaseModel):

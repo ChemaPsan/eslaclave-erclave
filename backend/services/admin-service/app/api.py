@@ -17,6 +17,10 @@ from .auth import (
 )
 from .repositories import AdminRepository, get_admin_repository
 from .schemas import (
+    BackofficeTenantDeleteResponse,
+    BackofficeTenantListResponse,
+    BackofficeTenantRead,
+    BackofficeTenantStatusRequest,
     BranchCreateRequest,
     BranchUpdateRequest,
     EntitlementListResponse,
@@ -34,6 +38,8 @@ from .schemas import (
     RoleResponse,
     RoleUpdateRequest,
     SessionContextResponse,
+    SessionTenantListResponse,
+    SessionTenantRead,
     SettingListResponse,
     SettingResponse,
     SettingUpsertRequest,
@@ -99,6 +105,18 @@ def get_session_context(
     return SessionContextResponse(data=context)
 
 
+@router.get("/session/tenants", response_model=SessionTenantListResponse)
+def list_session_tenants(
+    settings: Settings = Depends(get_settings),
+    authenticated_actor: AuthenticatedActor | None = Depends(get_authenticated_actor),
+    repository: AdminRepository = Depends(get_admin_repository),
+) -> SessionTenantListResponse:
+    if settings.auth_mode != "firebase":
+        raise ErclaveError("firebase_auth_required", "Session tenant discovery requires Firebase auth.", status_code=400)
+    tenants = repository.list_session_tenants_by_email(authenticated_actor.email)
+    return SessionTenantListResponse(data=[SessionTenantRead.model_validate(item) for item in tenants])
+
+
 @router.get("/tenants/{tenant_id}", response_model=TenantResponse)
 def get_tenant(
     tenant_id: str,
@@ -160,6 +178,58 @@ def onboard_tenant(
     )
     result["invitation"] = create_firebase_password_invitation(payload.owner.email, settings)
     return TenantOnboardingResponse(data=result)
+
+
+@router.get("/backoffice/tenants", response_model=BackofficeTenantListResponse)
+def list_backoffice_tenants(
+    search: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+    _authorization: None = Depends(require_backoffice_admin),
+    repository: AdminRepository = Depends(get_admin_repository),
+) -> BackofficeTenantListResponse:
+    tenants = repository.list_backoffice_tenants(search=search, limit=limit)
+    return BackofficeTenantListResponse(data=[BackofficeTenantRead.model_validate(item) for item in tenants])
+
+
+@router.patch("/backoffice/tenants/{tenant_id}/status", response_model=TenantResponse)
+def set_backoffice_tenant_status(
+    tenant_id: str,
+    payload: BackofficeTenantStatusRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+    _authorization: None = Depends(require_backoffice_admin),
+    repository: AdminRepository = Depends(get_admin_repository),
+) -> TenantResponse:
+    tenant = repository.set_backoffice_tenant_status(
+        tenant_id=tenant_id,
+        new_status=payload.status,
+        idempotency_key=require_idempotency_key(idempotency_key),
+        correlation_id=resolve_correlation_id(x_correlation_id),
+    )
+    if tenant is None:
+        raise ErclaveError("tenant_not_found", "Tenant not found.", status_code=404, details={"tenant_id": tenant_id})
+    return TenantResponse(data=tenant)
+
+
+@router.delete("/backoffice/tenants/{tenant_id}", response_model=BackofficeTenantDeleteResponse)
+def delete_backoffice_tenant(
+    tenant_id: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+    _authorization: None = Depends(require_backoffice_admin),
+    settings: Settings = Depends(get_settings),
+    repository: AdminRepository = Depends(get_admin_repository),
+) -> BackofficeTenantDeleteResponse:
+    result = repository.delete_backoffice_tenant(
+        tenant_id=tenant_id,
+        idempotency_key=require_idempotency_key(idempotency_key),
+        correlation_id=resolve_correlation_id(x_correlation_id),
+    )
+    if result is None:
+        raise ErclaveError("tenant_not_found", "Tenant not found.", status_code=404, details={"tenant_id": tenant_id})
+    for email in result.get("firebase_emails", []):
+        delete_firebase_user_by_email(email, settings)
+    return BackofficeTenantDeleteResponse(data=result)
 
 
 @router.get("/tenants/{tenant_id}/entitlements", response_model=EntitlementListResponse)

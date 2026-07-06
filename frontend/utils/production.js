@@ -1,5 +1,10 @@
 import { resourceCatalog, defaultRecipes } from "../data/resources.js";
 import { mockDb } from "../data/mockDb.js";
+import { getApiMode, getConfiguredTenantId, getDemoTenantId } from "../api/config.js";
+
+function shouldUseSeedData() {
+  return getApiMode() !== "api" || getDemoTenantId() === getConfiguredTenantId();
+}
 
 export function getResource(id) {
   return getRecipeResourceCatalog().find((item) => item.id === id);
@@ -93,9 +98,17 @@ export function getProductionModuleData() {
   const recipes = mockDb.loadRecipes();
   const orders = mockDb.loadOrders();
   const selectedRecipeId = localStorage.getItem("erclave-selected-recipe");
-  const activeRecipe = recipes.find((recipe) => recipe.id === selectedRecipeId) || recipes[0] || defaultRecipes[0];
+  const activeRecipe = recipes.find((recipe) => recipe.id === selectedRecipeId) || recipes[0] || (shouldUseSeedData() ? defaultRecipes[0] : null);
   const validationQuantity = Number(localStorage.getItem("erclave-validation-qty") || 100);
-  const validation = calculateRecipe(activeRecipe, validationQuantity);
+  const validation = activeRecipe ? calculateRecipe(activeRecipe, validationQuantity) : { rows: [], totalCost: 0, missing: [] };
+
+  if (!activeRecipe) {
+    return {
+      records: [],
+      rows: [],
+      validation
+    };
+  }
 
   return {
     records: [

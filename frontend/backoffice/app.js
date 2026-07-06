@@ -1,5 +1,5 @@
 import { getApiBaseUrl } from "../api/config.js";
-import { onboardTenant } from "../api/backoffice.js";
+import { deleteBackofficeTenant, listBackofficeTenants, onboardTenant, setBackofficeTenantStatus } from "../api/backoffice.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "../auth.js";
 
 
@@ -13,6 +13,7 @@ const moduleOptions = [
 ];
 
 const state = {
+  activeTab: localStorage.getItem("erclave-backoffice-tab") || "onboarding",
   auth: {
     status: isFirebaseAuthConfigured() ? "loading" : "disabled",
     user: null,
@@ -20,10 +21,21 @@ const state = {
     error: "",
     notice: ""
   },
+  access: {
+    status: "idle",
+    error: ""
+  },
   onboarding: {
     status: "idle",
     error: "",
     result: null
+  },
+  tenantAdmin: {
+    status: "idle",
+    search: "",
+    error: "",
+    tenants: [],
+    actionTenantId: ""
   }
 };
 
@@ -179,7 +191,7 @@ function renderBackoffice() {
     <section class="topbar">
       <div>
         <p class="eyebrow">Backoffice</p>
-        <h1>Alta de tenant</h1>
+        <h1>Backoffice ERClave</h1>
       </div>
       <div class="session-chip">
         <span>${escapeHtml(userEmail)}</span>
@@ -187,6 +199,8 @@ function renderBackoffice() {
       </div>
     </section>
 
+    ${renderBackofficeTabs()}
+    ${state.activeTab === "onboarding" ? `
     <section class="work-area">
       <form class="tenant-form" data-form="tenant-onboarding">
         <header class="section-header">
@@ -308,9 +322,13 @@ function renderBackoffice() {
         ${result ? renderResult(result) : `<p class="empty-state">Cuando el alta termine veras el tenant, owner, modulos e invitacion generada.</p>`}
       </aside>
     </section>
+    ` : renderTenantAdminPanel()}
   `;
 
   app.querySelector("[data-action='logout']")?.addEventListener("click", handleLogout);
+  app.querySelectorAll("[data-tab]").forEach((button) => {
+    button.addEventListener("click", () => setBackofficeTab(button.dataset.tab));
+  });
   app.querySelector("[data-form='tenant-onboarding']")?.addEventListener("submit", handleOnboardingSubmit);
   app.querySelector("[name='commercial_name']")?.addEventListener("input", handleCommercialNameInput);
   app.querySelector("[name='slug']")?.addEventListener("input", (event) => {
@@ -319,6 +337,132 @@ function renderBackoffice() {
   app.querySelectorAll("[data-copy]").forEach((button) => {
     button.addEventListener("click", () => copyText(button.dataset.copy || ""));
   });
+  bindTenantAdminActions();
+}
+
+
+function renderAccessGate() {
+  const userEmail = state.auth.user?.email || "";
+  const isDenied = state.access.status === "denied";
+  app.innerHTML = `
+    <section class="topbar">
+      <div>
+        <p class="eyebrow">Backoffice</p>
+        <h1>Acceso interno</h1>
+      </div>
+      <div class="session-chip">
+        <span>${escapeHtml(userEmail)}</span>
+        <button type="button" data-action="logout">Cerrar sesion</button>
+      </div>
+    </section>
+
+    <section class="auth-layout compact-auth">
+      <div class="login-card">
+        <p class="eyebrow">${isDenied ? "Acceso restringido" : "Validando acceso"}</p>
+        <h2>${isDenied ? "Tu cuenta no tiene permisos de backoffice" : "Revisando lista interna"}</h2>
+        <p class="${isDenied ? "error-box" : "notice-box"}">
+          ${isDenied
+            ? escapeHtml(state.access.error || "Este portal esta reservado para administradores internos de EsLaClave.")
+            : "Estamos validando que tu correo este autorizado para operar tenants."}
+        </p>
+        ${isDenied ? `<p class="empty-state">La creacion como owner de un tenant no otorga acceso al backoffice.</p>` : ""}
+      </div>
+    </section>
+  `;
+  app.querySelector("[data-action='logout']")?.addEventListener("click", handleLogout);
+}
+
+
+function renderBackofficeTabs() {
+  return `
+    <nav class="backoffice-tabs" aria-label="Secciones de backoffice">
+      <button type="button" data-tab="onboarding" class="${state.activeTab === "onboarding" ? "active" : ""}">Alta de tenant</button>
+      <button type="button" data-tab="tenant-admin" class="${state.activeTab === "tenant-admin" ? "active" : ""}">Administracion de tenants</button>
+    </nav>
+  `;
+}
+
+
+function renderTenantAdminPanel() {
+  const tenants = state.tenantAdmin.tenants || [];
+  const isLoading = state.tenantAdmin.status === "loading";
+  return `
+    <section class="tenant-admin-layout">
+      <section class="tenant-admin-panel">
+        <header class="section-header">
+          <div>
+            <p class="eyebrow">Administracion interna</p>
+            <h2>Tenants</h2>
+          </div>
+          <span class="api-pill">${escapeHtml(getApiBaseUrl())}</span>
+        </header>
+
+        <form class="tenant-searchbar" data-form="tenant-search">
+          <label>
+            <span>Buscar por nombre comercial, slug o razon social</span>
+            <input name="search" type="search" value="${escapeHtml(state.tenantAdmin.search)}" placeholder="cliente, slug o razon social">
+          </label>
+          <button class="secondary-button inline" type="submit" ${isLoading ? "disabled" : ""}>Buscar</button>
+          <button class="secondary-button inline" type="button" data-action="refresh-tenants" ${isLoading ? "disabled" : ""}>Actualizar</button>
+        </form>
+
+        ${state.tenantAdmin.error ? `<p class="error-box">${escapeHtml(state.tenantAdmin.error)}</p>` : ""}
+        ${isLoading ? `<p class="notice-box">Cargando tenants...</p>` : ""}
+
+        <div class="tenant-table">
+          <div class="tenant-table-head">
+            <span>Tenant</span>
+            <span>Owner</span>
+            <span>Estado</span>
+            <span>Modulos</span>
+            <span>Acciones</span>
+          </div>
+          ${tenants.map(renderTenantRow).join("")}
+        </div>
+        ${!isLoading && !tenants.length ? `<p class="empty-state">No hay tenants que coincidan con la busqueda.</p>` : ""}
+      </section>
+
+      <aside class="result-panel">
+        <h2>Operacion segura</h2>
+        <p class="empty-state">Suspender bloquea el acceso de los usuarios del tenant. Eliminar borra configuracion, roles, membresias, modulos y datos administrativos del tenant; solo elimina identidad Firebase si el usuario ya no pertenece a ningun otro tenant.</p>
+      </aside>
+    </section>
+  `;
+}
+
+
+function renderTenantRow(tenant) {
+  const isBusy = state.tenantAdmin.actionTenantId === tenant.id;
+  const isSuspended = tenant.status === "suspended";
+  const modules = (tenant.modules || []).join(", ") || "Sin modulos";
+  return `
+    <article class="tenant-row">
+      <div>
+        <strong>${escapeHtml(tenant.commercial_name)}</strong>
+        <span>${escapeHtml(tenant.slug)} - ${escapeHtml(tenant.legal_name || "Sin razon social")}</span>
+        <small>${escapeHtml(tenant.id)} - Plan ${escapeHtml(tenant.plan_id || "sin plan")}</small>
+      </div>
+      <div>
+        <span>${escapeHtml(tenant.owner_email || "Sin owner")}</span>
+        <small>${Number(tenant.active_memberships || 0)} activos / ${Number(tenant.total_memberships || 0)} usuarios</small>
+      </div>
+      <div>
+        <span class="status-pill ${escapeHtml(tenant.status)}">${escapeHtml(tenant.status)}</span>
+        <small>${Number(tenant.legal_entities_count || 0)} razones - ${Number(tenant.branches_count || 0)} sucursales</small>
+      </div>
+      <div>
+        <span>${escapeHtml(modules)}</span>
+      </div>
+      <div class="tenant-actions">
+        <button class="secondary-button inline" type="button" data-action="toggle-tenant-status" data-tenant-id="${escapeHtml(tenant.id)}" data-status="${isSuspended ? "active" : "suspended"}" ${isBusy ? "disabled" : ""}>
+          ${isSuspended ? "Reactivar" : "Suspender"}
+        </button>
+        <button class="secondary-button inline danger" type="button" data-action="delete-tenant" data-tenant-id="${escapeHtml(tenant.id)}" data-name="${escapeHtml(tenant.commercial_name)}" ${isBusy ? "disabled" : ""}>
+          Eliminar
+        </button>
+      </div>
+    </article>
+  `;
 }
 
 
@@ -367,6 +511,10 @@ function render() {
     renderAuthScreen();
     return;
   }
+  if (state.access.status !== "authorized") {
+    renderAccessGate();
+    return;
+  }
   renderBackoffice();
 }
 
@@ -412,6 +560,92 @@ function handleLogout() {
 }
 
 
+function verifyBackofficeAccess() {
+  state.access = { status: "checking", error: "" };
+  render();
+  listBackofficeTenants("", 1)
+    .then((tenants) => {
+      state.access = { status: "authorized", error: "" };
+      state.tenantAdmin = { ...state.tenantAdmin, status: "ready", tenants, error: "", actionTenantId: "" };
+      render();
+      if (state.activeTab === "tenant-admin") loadTenantAdmin();
+    })
+    .catch((error) => {
+      state.access = {
+        status: "denied",
+        error: error.message || "Tu usuario no esta autorizado para usar ERClave Backoffice."
+      };
+      state.tenantAdmin = { ...state.tenantAdmin, status: "idle", tenants: [], error: "", actionTenantId: "" };
+      render();
+    });
+}
+
+
+function setBackofficeTab(tab) {
+  state.activeTab = tab;
+  localStorage.setItem("erclave-backoffice-tab", tab);
+  render();
+  if (tab === "tenant-admin" && state.tenantAdmin.status === "idle") loadTenantAdmin();
+}
+
+
+function loadTenantAdmin(search = state.tenantAdmin.search) {
+  state.tenantAdmin = { ...state.tenantAdmin, status: "loading", search, error: "" };
+  render();
+  listBackofficeTenants(search)
+    .then((tenants) => {
+      state.tenantAdmin = { ...state.tenantAdmin, status: "ready", tenants, error: "", actionTenantId: "" };
+      render();
+    })
+    .catch((error) => {
+      state.tenantAdmin = { ...state.tenantAdmin, status: "error", error: error.message || "No se pudieron cargar tenants.", actionTenantId: "" };
+      render();
+    });
+}
+
+
+function bindTenantAdminActions() {
+  app.querySelector("[data-form='tenant-search']")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    loadTenantAdmin(readFormValue(formData, "search"));
+  });
+  app.querySelector("[data-action='refresh-tenants']")?.addEventListener("click", () => loadTenantAdmin());
+  app.querySelectorAll("[data-action='toggle-tenant-status']").forEach((button) => {
+    button.addEventListener("click", () => updateTenantStatus(button.dataset.tenantId, button.dataset.status));
+  });
+  app.querySelectorAll("[data-action='delete-tenant']").forEach((button) => {
+    button.addEventListener("click", () => removeTenant(button.dataset.tenantId, button.dataset.name));
+  });
+}
+
+
+function updateTenantStatus(tenantId, status) {
+  state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: tenantId, error: "" };
+  render();
+  setBackofficeTenantStatus(tenantId, status)
+    .then(() => loadTenantAdmin())
+    .catch((error) => {
+      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: error.message || "No se pudo actualizar el tenant." };
+      render();
+    });
+}
+
+
+function removeTenant(tenantId, name) {
+  const confirmed = window.confirm(`Eliminar permanentemente el tenant ${name}? Esta accion borra sus datos administrativos y accesos.`);
+  if (!confirmed) return;
+  state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: tenantId, error: "" };
+  render();
+  deleteBackofficeTenant(tenantId)
+    .then(() => loadTenantAdmin())
+    .catch((error) => {
+      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: error.message || "No se pudo eliminar el tenant." };
+      render();
+    });
+}
+
+
 function handleCommercialNameInput(event) {
   const slugInput = app.querySelector("[name='slug']");
   if (slugInput && !slugInput.dataset.touched) slugInput.value = slugify(event.target.value);
@@ -450,7 +684,9 @@ if (isFirebaseAuthConfigured()) {
       error: "",
       notice: state.auth.notice || ""
     };
+    state.access = { status: user ? "checking" : "idle", error: "" };
     render();
+    if (user) verifyBackofficeAccess();
   }).catch((error) => {
     state.auth = { ...state.auth, status: "error", error: error.message || "Firebase Auth no disponible." };
     render();

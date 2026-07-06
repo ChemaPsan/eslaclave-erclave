@@ -7,6 +7,7 @@ from sqlalchemy.engine import Engine
 from erclave_common.db import create_database_engine
 
 from .schemas import (
+    BackofficeTenantRead,
     EntitlementRead,
     PermissionRead,
     PolicyDecision,
@@ -54,6 +55,218 @@ class AdminRepository:
             ).mappings().first()
 
         return TenantRead.model_validate(dict(row)) if row else None
+
+    def list_backoffice_tenants(self, search: str | None = None, limit: int = 50) -> list[BackofficeTenantRead]:
+        normalized_search = (search or "").strip()
+        params = {
+            "search": f"%{normalized_search.lower()}%",
+            "limit": max(1, min(limit, 100)),
+        }
+        search_clause = ""
+        if normalized_search:
+            search_clause = """
+                and (
+                    lower(tenants.id) like :search
+                    or
+                    lower(tenants.commercial_name) like :search
+                    or lower(tenants.slug) like :search
+                    or lower(coalesce(tenants.legal_name, '')) like :search
+                    or lower(coalesce(settings.value::text, '')) like :search
+                )
+            """
+        with self.engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    f"""
+                    select
+                        tenants.id,
+                        tenants.slug,
+                        tenants.legal_name,
+                        tenants.commercial_name,
+                        tenants.status,
+                        tenants.plan_id,
+                        tenants.timezone,
+                        tenants.locale,
+                        owner_users.email as owner_email,
+                        count(distinct memberships.id) filter (where memberships.status = 'active') as active_memberships,
+                        count(distinct memberships.id) as total_memberships,
+                        coalesce(
+                            array_remove(array_agg(distinct tenant_modules.module_code) filter (where tenant_modules.status = 'active'), null),
+                            array[]::varchar[]
+                        ) as modules,
+                        coalesce(jsonb_array_length(settings.value -> 'legal_entities'), 0) as legal_entities_count,
+                        coalesce(jsonb_array_length(settings.value -> 'branches'), 0) as branches_count
+                    from admin.tenants tenants
+                    left join admin.tenant_settings settings
+                        on settings.tenant_id = tenants.id
+                        and settings.key = 'organization.profile'
+                    left join admin.tenant_modules tenant_modules
+                        on tenant_modules.tenant_id = tenants.id
+                    left join admin.memberships memberships
+                        on memberships.tenant_id = tenants.id
+                    left join admin.membership_roles owner_membership_roles
+                        on owner_membership_roles.tenant_id = tenants.id
+                    left join admin.roles owner_roles
+                        on owner_roles.tenant_id = tenants.id
+                        and owner_roles.id = owner_membership_roles.role_id
+                        and owner_roles.code = 'owner'
+                    left join admin.memberships owner_memberships
+                        on owner_memberships.tenant_id = tenants.id
+                        and owner_memberships.id = owner_membership_roles.membership_id
+                    left join admin.users owner_users
+                        on owner_users.id = owner_memberships.user_id
+                    where tenants.status <> 'cancelled'
+                    {search_clause}
+                    group by
+                        tenants.id,
+                        tenants.slug,
+                        tenants.legal_name,
+                        tenants.commercial_name,
+                        tenants.status,
+                        tenants.plan_id,
+                        tenants.timezone,
+                        tenants.locale,
+                        owner_users.email,
+                        settings.value
+                    order by tenants.created_at desc, tenants.commercial_name
+                    limit :limit
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+        return [BackofficeTenantRead.model_validate(dict(row)) for row in rows]
+
+    def set_backoffice_tenant_status(
+        self,
+        tenant_id: str,
+        new_status: str,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> BackofficeTenantRead | None:
+        with self.engine.begin() as connection:
+            before = connection.execute(
+                text(
+                    """
+                    select id, slug, legal_name, commercial_name, status, plan_id, timezone, locale
+                    from admin.tenants
+                    where id = :tenant_id
+                    """
+                ),
+                {"tenant_id": tenant_id},
+            ).mappings().first()
+            if before is None:
+                return None
+            row = connection.execute(
+                text(
+                    """
+                    update admin.tenants
+                    set status = :status, updated_at = now()
+                    where id = :tenant_id
+                    returning id, slug, legal_name, commercial_name, status, plan_id, timezone, locale
+                    """
+                ),
+                {"tenant_id": tenant_id, "status": new_status},
+            ).mappings().one()
+            membership_status = "disabled" if new_status == "suspended" else "active"
+            connection.execute(
+                text(
+                    """
+                    update admin.memberships
+                    set
+                        status = :membership_status,
+                        disabled_at = case when :membership_status = 'disabled' then now() else disabled_at end,
+                        activated_at = case when :membership_status = 'active' then coalesce(activated_at, now()) else activated_at end,
+                        updated_at = now()
+                    where tenant_id = :tenant_id
+                    """
+                ),
+                {"tenant_id": tenant_id, "membership_status": membership_status},
+            )
+            self._record_audit_event(
+                connection,
+                tenant_id=tenant_id,
+                action="backoffice.tenant.status",
+                resource_type="tenant",
+                resource_id=tenant_id,
+                before_state=dict(before),
+                after_state=dict(row),
+                idempotency_key=idempotency_key,
+                correlation_id=correlation_id,
+                metadata={"status": new_status},
+            )
+
+        tenants = self.list_backoffice_tenants(search=tenant_id, limit=1)
+        return tenants[0] if tenants else BackofficeTenantRead.model_validate({**dict(row), "modules": []})
+
+    def delete_backoffice_tenant(
+        self,
+        tenant_id: str,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> dict | None:
+        with self.engine.begin() as connection:
+            before = connection.execute(
+                text(
+                    """
+                    select id, slug, legal_name, commercial_name, status, plan_id, timezone, locale
+                    from admin.tenants
+                    where id = :tenant_id
+                    """
+                ),
+                {"tenant_id": tenant_id},
+            ).mappings().first()
+            if before is None:
+                return None
+            users = connection.execute(
+                text(
+                    """
+                    select distinct users.id, users.email
+                    from admin.memberships memberships
+                    join admin.users users on users.id = memberships.user_id
+                    where memberships.tenant_id = :tenant_id
+                    """
+                ),
+                {"tenant_id": tenant_id},
+            ).mappings().all()
+            user_ids = [row["id"] for row in users]
+            orphan_emails = []
+
+            connection.execute(
+                text("delete from admin.audit_events where tenant_id = :tenant_id"),
+                {"tenant_id": tenant_id},
+            )
+            for user_id in user_ids:
+                connection.execute(
+                    text("update admin.audit_events set actor_user_id = null where actor_user_id = :user_id"),
+                    {"user_id": user_id},
+                )
+            connection.execute(text("delete from admin.role_permissions where tenant_id = :tenant_id"), {"tenant_id": tenant_id})
+            connection.execute(text("delete from admin.membership_roles where tenant_id = :tenant_id"), {"tenant_id": tenant_id})
+            connection.execute(text("delete from admin.memberships where tenant_id = :tenant_id"), {"tenant_id": tenant_id})
+            connection.execute(text("delete from admin.tenant_modules where tenant_id = :tenant_id"), {"tenant_id": tenant_id})
+            connection.execute(text("delete from admin.tenant_settings where tenant_id = :tenant_id"), {"tenant_id": tenant_id})
+            connection.execute(text("delete from admin.roles where tenant_id = :tenant_id"), {"tenant_id": tenant_id})
+            connection.execute(text("delete from admin.tenants where id = :tenant_id"), {"tenant_id": tenant_id})
+
+            removed_global_users = 0
+            for user_id in user_ids:
+                remaining = connection.execute(
+                    text("select count(*) from admin.memberships where user_id = :user_id"),
+                    {"user_id": user_id},
+                ).scalar_one()
+                if remaining == 0:
+                    connection.execute(text("delete from admin.users where id = :user_id"), {"user_id": user_id})
+                    removed_global_users += 1
+                    orphan_emails.extend(row["email"] for row in users if row["id"] == user_id)
+
+        return {
+            "tenant": dict(before),
+            "deleted": True,
+            "removed_memberships": len(user_ids),
+            "removed_global_users": removed_global_users,
+            "firebase_emails": orphan_emails,
+        }
 
     def create_tenant(
         self,
@@ -820,6 +1033,81 @@ class AdminRepository:
                 )
 
         return self.get_session_context(tenant_id, row["id"]) if row else None
+
+    def list_session_tenants_by_email(self, email: str) -> list[dict]:
+        with self.engine.begin() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    select
+                        tenants.id,
+                        tenants.slug,
+                        tenants.legal_name,
+                        tenants.commercial_name,
+                        tenants.status,
+                        tenants.plan_id,
+                        tenants.timezone,
+                        tenants.locale,
+                        users.status as user_status,
+                        memberships.status as membership_status,
+                        coalesce(
+                            jsonb_agg(distinct roles.code) filter (where roles.code is not null),
+                            '[]'::jsonb
+                        ) as role_codes
+                    from admin.memberships memberships
+                    join admin.users users on users.id = memberships.user_id
+                    join admin.tenants tenants on tenants.id = memberships.tenant_id
+                    left join admin.membership_roles membership_roles
+                        on membership_roles.tenant_id = memberships.tenant_id
+                        and membership_roles.membership_id = memberships.id
+                    left join admin.roles roles
+                        on roles.tenant_id = memberships.tenant_id
+                        and roles.id = membership_roles.role_id
+                        and roles.status = 'active'
+                    where users.email = lower(:email)
+                        and users.status in ('active', 'invited')
+                        and memberships.status in ('active', 'invited')
+                        and tenants.status in ('active', 'provisioning')
+                    group by
+                        tenants.id,
+                        tenants.slug,
+                        tenants.legal_name,
+                        tenants.commercial_name,
+                        tenants.status,
+                        tenants.plan_id,
+                        tenants.timezone,
+                        tenants.locale,
+                        users.status,
+                        memberships.status
+                    order by tenants.created_at desc, tenants.commercial_name
+                    """
+                ),
+                {"email": email},
+            ).mappings().all()
+
+        tenants = []
+        for row in rows:
+            tenant = TenantRead.model_validate(
+                {
+                    "id": row["id"],
+                    "slug": row["slug"],
+                    "legal_name": row["legal_name"],
+                    "commercial_name": row["commercial_name"],
+                    "status": row["status"],
+                    "plan_id": row["plan_id"],
+                    "timezone": row["timezone"],
+                    "locale": row["locale"],
+                }
+            )
+            tenants.append(
+                {
+                    "tenant": tenant,
+                    "user_status": row["user_status"],
+                    "membership_status": row["membership_status"],
+                    "roles": list(row["role_codes"] or []),
+                }
+            )
+        return tenants
 
     def upsert_entitlement(
         self,

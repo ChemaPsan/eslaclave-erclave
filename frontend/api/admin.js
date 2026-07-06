@@ -66,6 +66,12 @@ export async function getSessionContext() {
 }
 
 
+export async function getSessionTenants() {
+  const response = await apiRequest("/v1/session/tenants");
+  return response.data;
+}
+
+
 export async function updateTenantEntitlement(moduleCode, payload) {
   const tenantId = getDemoTenantId();
   const response = await apiRequest(`/v1/tenants/${tenantId}/entitlements/${moduleCode}`, {

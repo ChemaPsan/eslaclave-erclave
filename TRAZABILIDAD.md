@@ -1879,6 +1879,96 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `python -m pytest services/admin-service/tests/test_admin_api.py`; `python -m py_compile services/admin-service/app/repositories.py`; `npm.cmd run validate:traceability`; deploy y health online de `admin-service-qa`. |
 | Observaciones | El intento fallido pudo haber creado o actualizado la identidad Firebase del owner antes de la transaccion de base; el flujo es idempotente y el siguiente intento reutiliza/actualiza esa identidad. |
 
+### CHG-124
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Resuelve tenant activo del usuario autenticado |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `frontend/api/admin.js`, `frontend/api/config.js`, `frontend/app.js`, `TRAZABILIDAD.md` |
+| Secciones | Session context, multitenant, frontend shell, backoffice onboarding |
+| Descripcion | Se agrego `GET /v1/session/tenants` para listar tenants activos/invitados del correo autenticado por Firebase. El frontend ahora resuelve el tenant del usuario antes de pedir `session/context`, persiste el tenant activo y manda al usuario a Administracion cuando inicia sesion o cambia de tenant. |
+| Motivo | Un usuario owner creado por backoffice entraba al shell con el tenant demo hardcodeado, provocando `session_context_not_found` y dejando ver navegacion operativa sin contexto real. |
+| Impacto | El shell deja de usar el fallback de modulos MVP en modo API sin sesion; los modulos operativos solo se habilitan cuando `session/context` devuelve entitlements del tenant real. |
+| Validacion | `python -m pytest services/admin-service/tests/test_admin_api.py`; `node --check frontend/app.js`; `node --check frontend/api/admin.js`; `node --check frontend/api/config.js`; `npm.cmd run validate:traceability`; `npm.cmd run validate`. |
+| Observaciones | En esta fase se selecciona automaticamente el tenant guardado si pertenece al usuario o, en su defecto, el mas reciente disponible. Un selector multi-tenant explicito queda como mejora posterior. |
+
+### CHG-125
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Pantalla de carga para tenant real |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Frontend shell, session context, administracion |
+| Descripcion | Se agrego una vista temporal de carga para Administracion mientras se resuelve el tenant, session context o dashboard real. La pantalla muestra un skeleton desenfocado y evita renderizar datos mock del cliente piloto durante la transicion. |
+| Motivo | Al iniciar sesion con un usuario nuevo se alcanzaban a ver datos del piloto antes de cargar el tenant real, generando confusion y riesgo visual de mezclar contexto. |
+| Impacto | En modo API, la barra de sucursal y el modulo Administracion usan mensajes neutrales de carga hasta tener contexto real del tenant. |
+| Validacion | `node --check frontend/app.js`; `npm.cmd run validate:traceability`; `npm.cmd run validate`. |
+| Observaciones | No cambia permisos ni contratos backend; es una mejora de experiencia para no mostrar fallback mock mientras cargan datos reales. |
+
+### CHG-126
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Tenants nuevos sin datos operativos demo |
+| Autor | Codex |
+| Archivos | `frontend/api/config.js`, `frontend/data/mockDb.js`, `frontend/utils/production.js`, `frontend/app.js`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, mock DB local, Produccion, submodulos operativos |
+| Descripcion | Se separo el uso de datos semilla para que solo aplique en modo mock o en el tenant demo configurado. En modo API con tenants reales, recetas, ordenes, productos/servicios, areas, maquinaria y registros genericos arrancan vacios y usan llaves de `localStorage` separadas por tenant. Produccion ya no toma `defaultRecipes[0]` cuando no hay recetas reales y muestra estados vacios en listas y validacion. |
+| Motivo | Los tenants creados desde backoffice deben iniciar desde cero, sin datos piloto de produccion, ordenes o catalogos que puedan confundirse con informacion real del cliente. |
+| Impacto | Un nuevo tenant autenticado entra limpio a sus modulos; solo ve informacion cuando la capture o cuando la API la devuelva para su tenant. El tenant demo conserva datos semilla para pruebas. |
+| Validacion | `node --check frontend/app.js`; `node --check frontend/utils/production.js`; `node --check frontend/data/mockDb.js`; `node --check frontend/api/config.js`; `npm.cmd run validate`. |
+| Observaciones | La separacion es de frontend/localStorage; cuando haya persistencia operativa por API, debe conservarse la misma regla de no sembrar datos demo para tenants reales. |
+
+### CHG-127
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Limpia metricas y alertas demo en tenants reales |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Frontend shell, status strip, notificaciones operativas |
+| Descripcion | La fila superior de metricas dejo de usar valores hardcodeados de demo cuando el frontend corre en modo API con un tenant real. Para tenants nuevos calcula ceros desde los datos locales/API disponibles y muestra etiquetas neutrales. Las notificaciones ya no agregan una alerta falsa de operacion estable cuando no existen productos, recetas ni ordenes. |
+| Motivo | Evitar que un tenant recien creado vea datos piloto como produccion activa, inventario critico, margen estimado o pendientes contables. |
+| Impacto | La experiencia inicial de un nuevo tenant queda limpia y coherente con un arranque desde cero; el tenant demo conserva metricas semilla. |
+| Validacion | `node --check frontend/app.js`; `npm.cmd run validate`. |
+| Observaciones | El estado neutral se aplica en CSS con la clase `.neutral` para chips/trends sin datos. |
+
+### CHG-128
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Administracion de tenants en backoffice |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `frontend/api/backoffice.js`, `frontend/backoffice/app.js`, `frontend/backoffice/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Backoffice, provisioning, tenant lifecycle, admin-service |
+| Descripcion | Se agrego una pestaña de Administracion de tenants al backoffice con busqueda por nombre comercial, slug y razon social. El admin-service expone rutas internas protegidas para listar tenants, suspender/reactivar y eliminar tenants. Suspender cambia el estado del tenant y deshabilita membresias para impedir acceso; eliminar borra roles, permisos asignados, membresias, modulos, settings y el tenant, y solo elimina identidad Firebase de usuarios que ya no pertenecen a ningun otro tenant. |
+| Motivo | El equipo interno necesita operar el ciclo de vida de tenants desde el portal de backoffice, no solo crear altas nuevas. |
+| Impacto | Backoffice puede bloquear acceso temporalmente o remover un tenant completo desde una pantalla dedicada. La busqueda permite ubicar tenants por datos comerciales o fiscales antes de actuar. |
+| Validacion | `python -m pytest backend/services/admin-service/tests/test_admin_api.py`; `python -m py_compile backend/services/admin-service/app/api.py backend/services/admin-service/app/repositories.py backend/services/admin-service/app/schemas.py`; `node --check frontend/backoffice/app.js`; `node --check frontend/api/backoffice.js`; `npm.cmd run validate`. |
+| Observaciones | La eliminacion es permanente y esta pensada para backoffice interno; antes de produccion conviene agregar doble confirmacion textual y auditoria externa si se requiere conservar evidencia fuera del tenant eliminado. |
+
+### CHG-129
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Gate visual de autorizacion para backoffice |
+| Autor | Codex |
+| Archivos | `frontend/api/backoffice.js`, `frontend/backoffice/app.js`, `frontend/backoffice/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Backoffice, autenticacion, autorizacion interna |
+| Descripcion | El front de backoffice ahora valida autorizacion contra `GET /v1/backoffice/tenants?limit=1` antes de mostrar cualquier pestaña o formulario interno. Si la API responde rechazo, muestra una pantalla de acceso restringido y no renderiza alta de tenant ni administracion de tenants. |
+| Motivo | Un usuario owner creado por onboarding podia ver la interfaz del backoffice aunque el backend lo bloqueara con `403`, generando la percepcion de que tenia acceso interno. |
+| Impacto | Solo correos incluidos en `ERCLAVE_BACKOFFICE_ADMIN_EMAILS` ven herramientas de backoffice; los usuarios de tenants quedan fuera incluso si autenticaron correctamente en Firebase. |
+| Validacion | `node --check frontend/backoffice/app.js`; `node --check frontend/api/backoffice.js`; `npm.cmd run validate`. |
+| Observaciones | El backend ya era la barrera de seguridad efectiva; este cambio agrega la compuerta visual para evitar exposicion de pantallas internas. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

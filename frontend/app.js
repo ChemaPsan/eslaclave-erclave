@@ -9,6 +9,7 @@ import {
   deleteTenantUser,
   disableTenantUser,
   getAdminDashboard,
+  getSessionTenants,
   getSessionContext,
   inviteTenantUser,
   replaceTenantRolePermissions,
@@ -20,7 +21,7 @@ import {
   updateTenantRole,
   updateTenantSetting
 } from "./api/admin.js";
-import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId } from "./api/config.js";
+import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId, getDemoTenantId, getConfiguredTenantId, setActiveTenantId } from "./api/config.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "./auth.js";
 import {
   calculateRecipe,
@@ -52,6 +53,11 @@ const state = {
     data: null,
     error: ""
   },
+  tenantResolution: {
+    status: "idle",
+    tenants: [],
+    error: ""
+  },
   adminPanel: "organization",
   auth: {
     status: isFirebaseAuthConfigured() ? "loading" : "disabled",
@@ -77,6 +83,7 @@ const moduleNav = document.getElementById("moduleNav");
 const modulePanel = document.getElementById("modulePanel");
 const flowList = document.getElementById("flowList");
 const notificationSummary = document.getElementById("notificationSummary");
+const statusStrip = document.querySelector(".status-strip");
 const backButton = document.getElementById("backButton");
 const themeToggle = document.getElementById("themeToggle");
 const langToggle = document.getElementById("langToggle");
@@ -186,9 +193,22 @@ function hasReadyApiSession() {
   return !isAuthRequired() || (state.sessionApi.status === "ready" && Boolean(state.sessionApi.data));
 }
 
+function isApiContextLoading() {
+  return getApiMode() === "api" && hasApiSessionAccess() && (
+    state.tenantResolution.status === "idle" ||
+    state.tenantResolution.status === "loading" ||
+    state.sessionApi.status === "idle" ||
+    state.sessionApi.status === "loading"
+  );
+}
+
+function shouldUseSeedModuleData() {
+  return getApiMode() !== "api" || getDemoTenantId() === getConfiguredTenantId();
+}
+
 function getActiveUiModuleIds() {
   const session = getSessionContextData();
-  if (!session) return mvpModuleIds;
+  if (!session) return getApiMode() === "api" ? [] : mvpModuleIds;
   return (session.active_modules || []).map((moduleCode) => uiModuleByBackendModule[moduleCode]).filter(Boolean);
 }
 
@@ -306,10 +326,14 @@ function renderPanel() {
   if (module.id !== "produccion") {
     const savedRows = getSavedModuleTableRows(module);
     const savedRecords = getSavedModuleRecordRows(module);
-    module.table = { ...module.table, rows: [...savedRows, ...(module.table.rows || [])] };
-    if (module.tableEn) module.tableEn = { ...module.tableEn, rows: [...savedRows, ...(module.tableEn.rows || [])] };
-    module.records = [...savedRecords, ...(module.records || [])];
-    if (module.recordsEn) module.recordsEn = [...savedRecords, ...(module.recordsEn || [])];
+    const seedRows = shouldUseSeedModuleData() ? module.table.rows || [] : [];
+    const seedRowsEn = shouldUseSeedModuleData() ? module.tableEn?.rows || [] : [];
+    const seedRecords = shouldUseSeedModuleData() ? module.records || [] : [];
+    const seedRecordsEn = shouldUseSeedModuleData() ? module.recordsEn || [] : [];
+    module.table = { ...module.table, rows: [...savedRows, ...seedRows] };
+    if (module.tableEn) module.tableEn = { ...module.tableEn, rows: [...savedRows, ...seedRowsEn] };
+    module.records = [...savedRecords, ...seedRecords];
+    if (module.recordsEn) module.recordsEn = [...savedRecords, ...seedRecordsEn];
   }
   const label = state.lang === "en" ? module.titleEn : module.title;
   const moduleEyebrow = getModuleField(module, "eyebrow");
@@ -469,6 +493,64 @@ function renderPanel() {
   `;
 
   bindProductionPanelActions();
+}
+
+function renderStatusStrip() {
+  if (!statusStrip) return;
+  if (shouldUseSeedModuleData()) {
+    statusStrip.innerHTML = `
+      <article class="metric-card">
+        <span class="metric-label" data-i18n="metricProduction">Produccion activa</span>
+        <strong>18</strong>
+        <small class="trend positive">+12%</small>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label" data-i18n="metricInventory">Inventario critico</span>
+        <strong>7</strong>
+        <small class="trend warning">3 faltantes</small>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label" data-i18n="metricMargin">Margen estimado</span>
+        <strong>32.4%</strong>
+        <small class="trend positive">estable</small>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label" data-i18n="metricAccounting">Pendiente contable</span>
+        <strong>11</strong>
+        <small class="trend danger">requiere mapeo</small>
+      </article>
+    `;
+    return;
+  }
+  const orders = mockDb.loadOrders();
+  const recipes = mockDb.loadRecipes();
+  const activeOrders = orders.filter((order) => !["Terminada", "Cancelada"].includes(order.status)).length;
+  const missingResources = recipes.reduce((sum, recipe) => {
+    const validation = calculateRecipe(recipe, Number(localStorage.getItem("erclave-validation-qty") || 100));
+    return sum + validation.missing.length;
+  }, 0);
+  statusStrip.innerHTML = `
+    <article class="metric-card">
+      <span class="metric-label" data-i18n="metricProduction">Produccion activa</span>
+      <strong>${activeOrders}</strong>
+      <small class="trend neutral">sin ordenes</small>
+    </article>
+    <article class="metric-card">
+      <span class="metric-label" data-i18n="metricInventory">Inventario critico</span>
+      <strong>${missingResources}</strong>
+      <small class="trend neutral">sin faltantes</small>
+    </article>
+    <article class="metric-card">
+      <span class="metric-label" data-i18n="metricMargin">Margen estimado</span>
+      <strong>0%</strong>
+      <small class="trend neutral">sin datos</small>
+    </article>
+    <article class="metric-card">
+      <span class="metric-label" data-i18n="metricAccounting">Pendiente contable</span>
+      <strong>0</strong>
+      <small class="trend neutral">sin datos</small>
+    </article>
+  `;
 }
 
 function renderUnavailableModulePanel(module) {
@@ -901,6 +983,9 @@ function getBranchOptions() {
         code: branch.code || ""
       }));
   }
+  if (isApiContextLoading()) {
+    return [{ id: "loading", name: "Cargando sucursal", code: "" }];
+  }
   const data = getAdminPanelData() || getMockAdminDashboard();
   const organization = normalizeAdminOrganization(data);
   const branches = organization.branches
@@ -917,7 +1002,7 @@ function getBranchOptions() {
 function getSelectedBranch(branches) {
   const savedBranchId = localStorage.getItem("erclave-active-branch-id") || "";
   const selected = branches.find((branch) => branch.id === savedBranchId) || branches[0];
-  if (selected?.id && selected.id !== savedBranchId) {
+  if (selected?.id && selected.id !== savedBranchId && selected.id !== "loading") {
     localStorage.setItem("erclave-active-branch-id", selected.id);
   }
   return selected;
@@ -1503,8 +1588,14 @@ function renderAdminApiPanel(module) {
   const apiStatus = apiMode === "api" ? state.adminApi.status : "mock";
   const label = state.lang === "en" ? module.titleEn : module.title;
 
+  if (isApiContextLoading() || (apiMode === "api" && apiStatus === "loading" && !data)) {
+    renderAdminLoadingPanel(module, label);
+    return;
+  }
+
   if (apiMode === "api" && !hasReadyApiSession()) {
     const isSignedIn = Boolean(state.auth.user);
+    const isResolvingTenant = state.tenantResolution.status === "loading";
     modulePanel.innerHTML = `
       <div class="panel-head">
         <div>
@@ -1514,9 +1605,9 @@ function renderAdminApiPanel(module) {
         <span class="chip warning">Bloqueado</span>
       </div>
       <div class="validation-card danger">
-        <strong>Acceso no autorizado</strong>
-        <p>${isSignedIn ? "Tu correo autentico correctamente, pero no tiene una sesion ERClave activa para este tenant." : "Inicia sesion con una cuenta autorizada para cargar Administracion."}</p>
-        <small>${state.sessionApi.error || state.auth.error || getApiBaseUrl()}</small>
+        <strong>${isResolvingTenant ? "Resolviendo tenant" : "Acceso no autorizado"}</strong>
+        <p>${isResolvingTenant ? "Estamos buscando el tenant activo para tu usuario." : isSignedIn ? "Tu correo autentico correctamente, pero no tiene una sesion ERClave activa para este tenant." : "Inicia sesion con una cuenta autorizada para cargar Administracion."}</p>
+        <small>${state.tenantResolution.error || state.sessionApi.error || state.auth.error || getApiBaseUrl()}</small>
       </div>
       <div class="admin-overview-actions">
         <button class="secondary-action" type="button" data-action="admin-refresh-api">Reintentar</button>
@@ -1671,9 +1762,45 @@ function renderAdminApiPanel(module) {
   }
 }
 
+function renderAdminLoadingPanel(module, label) {
+  const tenantMessage = state.tenantResolution.status === "loading"
+    ? "Identificando el tenant asignado a tu usuario."
+    : state.sessionApi.status === "loading"
+      ? "Cargando permisos, sucursales y modulos activos."
+      : "Preparando la configuracion inicial del tenant.";
+
+  modulePanel.innerHTML = `
+    <div class="tenant-loading-shell" aria-busy="true">
+      <div class="tenant-loading-backdrop" aria-hidden="true">
+        <div class="tenant-loading-line wide"></div>
+        <div class="tenant-loading-line medium"></div>
+        <div class="tenant-loading-card-grid">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="tenant-loading-panel"></div>
+      </div>
+      <div class="tenant-loading-card">
+        <p class="eyebrow">${module.eyebrow}</p>
+        <h2>${label}</h2>
+        <strong>Preparando tu espacio de trabajo</strong>
+        <p>${tenantMessage}</p>
+        <div class="tenant-loading-progress" aria-hidden="true">
+          <span></span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function loadSessionContext() {
   if (getApiMode() !== "api" || state.sessionApi.status === "loading") return;
   if (!hasApiSessionAccess()) return;
+  if (isAuthRequired() && state.tenantResolution.status !== "ready") {
+    resolveSessionTenant();
+    return;
+  }
   state.sessionApi = { status: "loading", data: state.sessionApi.data, error: "" };
   getSessionContext()
     .then((data) => {
@@ -1686,6 +1813,54 @@ function loadSessionContext() {
     })
     .catch((error) => {
       state.sessionApi = { status: "error", data: null, error: error.message || "Session context unavailable" };
+      render();
+    });
+}
+
+function chooseSessionTenant(tenants) {
+  const currentTenantId = getDemoTenantId();
+  return tenants.find((item) => item.tenant?.id === currentTenantId) || tenants[0] || null;
+}
+
+function resolveSessionTenant() {
+  if (getApiMode() !== "api" || !hasApiSessionAccess()) return;
+  if (!isAuthRequired()) {
+    state.tenantResolution = { status: "ready", tenants: [], error: "" };
+    loadSessionContext();
+    return;
+  }
+  if (state.tenantResolution.status === "loading") return;
+  state.tenantResolution = { status: "loading", tenants: state.tenantResolution.tenants, error: "" };
+  getSessionTenants()
+    .then((tenants) => {
+      const selected = chooseSessionTenant(tenants);
+      if (!selected) {
+        state.tenantResolution = {
+          status: "error",
+          tenants: [],
+          error: "Tu usuario no tiene tenants activos asignados."
+        };
+        state.sessionApi = { status: "error", data: null, error: state.tenantResolution.error };
+        applyScreenSnapshot({ active: "administracion", activeSubmodule: null, laborArea: "" });
+        render();
+        return;
+      }
+      const previousTenantId = getDemoTenantId();
+      setActiveTenantId(selected.tenant.id);
+      state.tenantResolution = { status: "ready", tenants, error: "" };
+      if (previousTenantId !== selected.tenant.id || state.active !== "administracion") {
+        applyScreenSnapshot({ active: "administracion", activeSubmodule: null, laborArea: "" });
+      }
+      loadSessionContext();
+    })
+    .catch((error) => {
+      state.tenantResolution = {
+        status: "error",
+        tenants: [],
+        error: error.message || "No se pudieron resolver los tenants del usuario."
+      };
+      state.sessionApi = { status: "error", data: null, error: state.tenantResolution.error };
+      applyScreenSnapshot({ active: "administracion", activeSubmodule: null, laborArea: "" });
       render();
     });
 }
@@ -3135,6 +3310,7 @@ function getGenericSubmodule(module, id) {
 function buildGenericSubmoduleRows(module, submodule) {
   const savedRows = getSavedModuleTableRows(module, submodule.id);
   if (savedRows.length) return savedRows;
+  if (!shouldUseSeedModuleData()) return [];
   if (state.lang === "en") {
     return (submodule.focus.length ? submodule.focus : [submodule.name]).slice(0, 3).map((item, index) => [
       item,
@@ -3188,6 +3364,7 @@ function getGenericSubmoduleIntegrations(module) {
 function getGenericSubmoduleRecords(module, submodule) {
   const savedRecords = getSavedModuleRecordRows(module, submodule.id);
   if (savedRecords.length) return savedRecords;
+  if (!shouldUseSeedModuleData()) return [];
   if (state.lang === "en") {
     return [
       [submodule.id.toUpperCase(), submodule.detail, t("recommendedRecords")],
@@ -3728,10 +3905,10 @@ function renderProductsServicesScreen(recipes) {
     }),
     status: recipe.status
   }));
-  const services = [
+  const services = shouldUseSeedModuleData() ? [
     { code: "SER-014", name: t("assemblyService"), type: t("repeatableService"), detail: t("assemblyServiceDetail"), status: t("configurable") },
     { code: "SER-022", name: t("specialPacking"), type: t("operationalService"), detail: t("specialPackingDetail"), status: t("activeStatus") }
-  ];
+  ] : [];
 
   return `
     <div class="catalog-grid">
@@ -4201,7 +4378,19 @@ function renderRecipeValidationCard() {
 
 function renderRecipeValidationOnly(recipes = mockDb.loadRecipes()) {
   const selectedRecipeId = localStorage.getItem("erclave-selected-recipe");
-  const recipe = recipes.find((item) => item.id === selectedRecipeId) || recipes[0] || defaultRecipes[0];
+  const recipe = recipes.find((item) => item.id === selectedRecipeId) || recipes[0] || (shouldUseSeedModuleData() ? defaultRecipes[0] : null);
+  if (!recipe) {
+    return `
+      <div class="section-title">
+        <span class="section-icon">+</span>
+        <strong>Sin recetas configuradas</strong>
+      </div>
+      <p class="helper-copy">Este tenant aun no tiene recetas, recursos ni ordenes de produccion. Crea el primer producto/servicio y su receta para iniciar operaciones.</p>
+      <div class="inline-actions">
+        <button class="primary-action" type="button" data-action="open-recipe">Nueva receta</button>
+      </div>
+    `;
+  }
   const validationQuantity = Number(localStorage.getItem("erclave-validation-qty") || 100);
   const release = getReleaseReview(recipe, validationQuantity);
   const validation = release.validation;
@@ -4311,6 +4500,7 @@ function renderOrderList(orders) {
           `;
           })
           .join("")}
+        ${orders.length ? "" : `<p class="helper-copy">Todavia no hay ordenes de produccion registradas.</p>`}
       </div>
     </section>
   `;
@@ -4347,6 +4537,7 @@ function renderRecipeList(recipes) {
             `;
           })
           .join("")}
+        ${recipes.length ? "" : `<p class="helper-copy">Todavia no hay recetas configuradas.</p>`}
       </div>
     </section>
   `;
@@ -4387,6 +4578,10 @@ function buildNotifications() {
   let overdue = 0;
   let dueSoon = 0;
   let missingResources = 0;
+
+  if (!shouldUseSeedModuleData() && !orders.length && !productsServices.length && !recipes.length) {
+    return { overdue, dueSoon, missingResources, items };
+  }
 
   productsServices
     .filter((item) => item.status === "Activo")
@@ -7103,7 +7298,7 @@ function deleteRecipe(recipeId) {
   if (!confirmed) return;
   const recipes = mockDb.deleteRecipe(recipeId);
   if (localStorage.getItem("erclave-selected-recipe") === recipeId) {
-    localStorage.setItem("erclave-selected-recipe", recipes[0]?.id || defaultRecipes[0].id);
+    localStorage.setItem("erclave-selected-recipe", recipes[0]?.id || (shouldUseSeedModuleData() ? defaultRecipes[0].id : ""));
   }
   render();
   showToast(`Receta ${recipe.id} eliminada.`);
@@ -7112,7 +7307,11 @@ function deleteRecipe(recipeId) {
 function openOrderModal() {
   const recipes = mockDb.loadRecipes();
   const selectedRecipeId = localStorage.getItem("erclave-selected-recipe") || recipes[0]?.id;
-  const recipe = recipes.find((item) => item.id === selectedRecipeId) || recipes[0] || defaultRecipes[0];
+  const recipe = recipes.find((item) => item.id === selectedRecipeId) || recipes[0] || (shouldUseSeedModuleData() ? defaultRecipes[0] : null);
+  if (!recipe) {
+    showToast("Primero crea una receta para generar ordenes de produccion.");
+    return;
+  }
   const defaultQuantity = Number(localStorage.getItem("erclave-validation-qty") || 100);
 
   modalContent.innerHTML = `
@@ -7184,7 +7383,7 @@ function openOrderModal() {
   modalBackdrop.hidden = false;
   modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
   modalContent.querySelector("#orderRecipeSelect").addEventListener("change", (event) => {
-    const nextRecipe = mockDb.findRecipe(event.target.value) || defaultRecipes[0];
+    const nextRecipe = mockDb.findRecipe(event.target.value) || recipe;
     modalContent.querySelector("#areaAssignmentList").innerHTML = renderAreaAssignments(nextRecipe);
   });
   modalContent.querySelector("[data-action='preview-order']").addEventListener("click", previewOrderForm);
@@ -7215,7 +7414,8 @@ function slugify(value) {
 
 function buildOrderFromForm(form) {
   const data = new FormData(form);
-  const recipe = mockDb.findRecipe(String(data.get("recipeId"))) || defaultRecipes[0];
+  const recipe = mockDb.findRecipe(String(data.get("recipeId"))) || (shouldUseSeedModuleData() ? defaultRecipes[0] : null);
+  if (!recipe) return null;
   const quantity = Math.max(1, Number(data.get("quantity") || 1));
   const areas = (recipe.steps.length ? recipe.steps : ["Produccion"]).map((step) => ({
     area: step,
@@ -7250,6 +7450,7 @@ function buildOrderFromForm(form) {
 
 function validateOrder(order) {
   const errors = [];
+  if (!order) return ["Primero crea una receta para generar ordenes de produccion."];
   const recipe = getOrderRecipe(order);
   const release = getReleaseReview(recipe, order.quantity || 1);
   if (!order.recipeId) errors.push("Selecciona una receta.");
@@ -7699,6 +7900,10 @@ function initializeAuth() {
     };
     state.adminApi = { status: "idle", data: null, error: "" };
     state.sessionApi = { status: "idle", data: null, error: "" };
+    state.tenantResolution = { status: "idle", tenants: [], error: "" };
+    if (user) {
+      applyScreenSnapshot({ active: "administracion", activeSubmodule: null, laborArea: "" });
+    }
     render();
   }).catch((error) => {
     state.auth = {
@@ -7720,6 +7925,7 @@ function render() {
   adminShortcut.classList.toggle("active", state.active === "administracion");
   topbarPrimary.querySelector("[data-i18n]").dataset.i18n = state.active === "produccion" ? "newOrder" : "newModuleRecord";
   renderNav();
+  renderStatusStrip();
   renderPanel();
   renderFlow();
   renderContextBar();

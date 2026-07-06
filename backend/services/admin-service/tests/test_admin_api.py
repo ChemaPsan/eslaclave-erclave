@@ -6,6 +6,7 @@ from app.auth import AuthenticatedActor, get_authenticated_actor
 from app.repositories import get_admin_repository
 from erclave_common.config import Settings, get_settings
 from app.schemas import (
+    BackofficeTenantRead,
     EntitlementRead,
     PermissionRead,
     PolicyDecision,
@@ -168,6 +169,80 @@ class FakeAdminRepository:
         if email.lower() != "admin.qa@erclave.local":
             return None
         return self.get_session_context(tenant_id, USER_ID)
+
+    def list_session_tenants_by_email(self, email: str):
+        if email.lower() != "admin.qa@erclave.local":
+            return []
+        return [
+            {
+                "tenant": self.get_tenant(TENANT_ID),
+                "user_status": "active",
+                "membership_status": "active",
+                "roles": ["owner"],
+            }
+        ]
+
+    def list_backoffice_tenants(self, search: str | None = None, limit: int = 50):
+        if search and search.lower() not in {"demo", "demo-qa", "erclave demo qa"}:
+            return []
+        return [
+            BackofficeTenantRead(
+                id=TENANT_ID,
+                slug="demo-qa",
+                legal_name="ERClave Demo QA",
+                commercial_name="ERClave Demo QA",
+                status="active",
+                plan_id="qa-demo",
+                timezone="America/Mexico_City",
+                locale="es-MX",
+                owner_email="admin.qa@erclave.local",
+                active_memberships=1,
+                total_memberships=1,
+                modules=["admin", "production"],
+                legal_entities_count=1,
+                branches_count=1,
+            )
+        ]
+
+    def set_backoffice_tenant_status(
+        self,
+        tenant_id: str,
+        new_status: str,
+        idempotency_key: str,
+        correlation_id: str,
+    ):
+        if tenant_id != TENANT_ID:
+            return None
+        return BackofficeTenantRead(
+            id=TENANT_ID,
+            slug="demo-qa",
+            legal_name="ERClave Demo QA",
+            commercial_name="ERClave Demo QA",
+            status=new_status,
+            plan_id="qa-demo",
+            timezone="America/Mexico_City",
+            locale="es-MX",
+            owner_email="admin.qa@erclave.local",
+            active_memberships=0 if new_status == "suspended" else 1,
+            total_memberships=1,
+            modules=["admin", "production"],
+        )
+
+    def delete_backoffice_tenant(
+        self,
+        tenant_id: str,
+        idempotency_key: str,
+        correlation_id: str,
+    ):
+        if tenant_id != TENANT_ID:
+            return None
+        return {
+            "tenant": self.get_tenant(tenant_id).model_dump(),
+            "deleted": True,
+            "removed_memberships": 1,
+            "removed_global_users": 1,
+            "firebase_emails": ["admin.qa@erclave.local"],
+        }
 
     def upsert_entitlement(
         self,
@@ -614,6 +689,46 @@ def test_onboard_tenant_requires_backoffice_allowlist_in_firebase_mode(monkeypat
     assert response.json()["error"]["code"] == "backoffice_admin_required"
 
 
+def test_backoffice_lists_tenants_with_search():
+    client = client_with_fake_repo()
+
+    response = client.get("/v1/backoffice/tenants?search=demo")
+
+    assert response.status_code == 200
+    assert response.json()["data"][0]["slug"] == "demo-qa"
+    assert response.json()["data"][0]["owner_email"] == "admin.qa@erclave.local"
+    assert response.json()["data"][0]["modules"] == ["admin", "production"]
+
+
+def test_backoffice_suspends_tenant():
+    client = client_with_fake_repo()
+
+    response = client.patch(
+        f"/v1/backoffice/tenants/{TENANT_ID}/status",
+        headers={"Idempotency-Key": "test-backoffice-suspend-001"},
+        json={"status": "suspended"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "suspended"
+
+
+def test_backoffice_deletes_tenant_and_firebase_identity(monkeypatch):
+    client = client_with_fake_repo()
+    deleted_emails = []
+    monkeypatch.setattr(admin_api, "delete_firebase_user_by_email", lambda email, settings: deleted_emails.append(email))
+
+    response = client.delete(
+        f"/v1/backoffice/tenants/{TENANT_ID}",
+        headers={"Idempotency-Key": "test-backoffice-delete-001"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["deleted"] is True
+    assert response.json()["data"]["removed_memberships"] == 1
+    assert deleted_emails == ["admin.qa@erclave.local"]
+
+
 def test_get_session_context_returns_tenant_user_modules_and_permissions():
     client = client_with_fake_repo()
 
@@ -661,6 +776,23 @@ def test_get_session_context_uses_firebase_actor_email_when_enabled():
 
     assert response.status_code == 200
     assert response.json()["data"]["user"]["id"] == USER_ID
+
+
+def test_list_session_tenants_uses_firebase_actor_email_when_enabled():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-user",
+        email="admin.qa@erclave.local",
+        name="Admin QA",
+    )
+    client = TestClient(app)
+
+    response = client.get("/v1/session/tenants")
+
+    assert response.status_code == 200
+    assert response.json()["data"][0]["tenant"]["id"] == TENANT_ID
+    assert response.json()["data"][0]["roles"] == ["owner"]
 
 
 def test_list_tenant_entitlements_returns_modules():

@@ -22,3 +22,34 @@ export async function onboardTenant(payload) {
 
   return response.data;
 }
+
+
+export async function listBackofficeTenants(search = "", limit = 50) {
+  const params = new URLSearchParams();
+  if (search.trim()) params.set("search", search.trim());
+  params.set("limit", String(limit));
+  const query = params.toString();
+  const response = await apiRequest(`/v1/backoffice/tenants${query ? `?${query}` : ""}`);
+  return response.data;
+}
+
+
+export async function setBackofficeTenantStatus(tenantId, status) {
+  const response = await apiRequest(`/v1/backoffice/tenants/${encodeURIComponent(tenantId)}/status`, {
+    method: "PATCH",
+    headers: commandHeaders(),
+    body: JSON.stringify({ status })
+  });
+
+  return response.data;
+}
+
+
+export async function deleteBackofficeTenant(tenantId) {
+  const response = await apiRequest(`/v1/backoffice/tenants/${encodeURIComponent(tenantId)}`, {
+    method: "DELETE",
+    headers: commandHeaders()
+  });
+
+  return response.data;
+}
