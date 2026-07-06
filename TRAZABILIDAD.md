@@ -1849,6 +1849,21 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `node --check frontend/app.js`; `npm.cmd run validate:traceability`. |
 | Observaciones | No cambia comportamiento de autenticacion ni permisos. |
 
+### CHG-122
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Corrige preflight private-network de backoffice online |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/main.py`, `backend/services/admin-service/tests/test_admin_api.py`, `TRAZABILIDAD.md` |
+| Secciones | Admin API, CORS, backoffice online |
+| Descripcion | Se agrego una respuesta explicita para preflight CORS con `Access-Control-Request-Private-Network: true` cuando el origen pertenece a Firebase Hosting autorizado. Esto evita que `CORSMiddleware` rechace la solicitud con `400 Disallowed CORS private-network` antes de que el navegador ejecute `POST /v1/provisioning/tenant-onboarding`. |
+| Motivo | Edge/Chrome puede enviar la cabecera private-network en preflight y bloquear el alta de tenant online con `Failed to fetch` aunque la API este disponible. |
+| Impacto | El backoffice publicado en `https://erclave.web.app/backoffice/` puede completar el preflight y conectar con `admin-service-qa` para crear tenants. |
+| Validacion | `python -m pytest services/admin-service/tests/test_admin_api.py`; `python -m py_compile services/admin-service/app/main.py`; `npm.cmd run validate:traceability`; validacion online del `OPTIONS` private-network posterior al deploy. |
+| Observaciones | El cambio se acota a `admin-service`, que es la API consumida por el backoffice interno. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

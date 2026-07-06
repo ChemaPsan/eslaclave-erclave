@@ -25,6 +25,23 @@ ROLE_ID = "rol_demo"
 PERMISSION_ID = "per_demo"
 
 
+def test_private_network_cors_preflight_is_allowed_for_firebase_host():
+    client = TestClient(app)
+    response = client.options(
+        "/v1/provisioning/tenant-onboarding",
+        headers={
+            "Origin": "https://erclave.web.app",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type,idempotency-key,x-correlation-id",
+            "Access-Control-Request-Private-Network": "true",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "https://erclave.web.app"
+    assert response.headers["access-control-allow-private-network"] == "true"
+
+
 class FakeAdminRepository:
     session_permissions = ["admin.tenant.read", "production.product_service.read"]
 

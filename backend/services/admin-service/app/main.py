@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import PlainTextResponse
 
 from erclave_common.config import get_settings
 from erclave_common.errors import ErclaveError, erclave_error_handler
@@ -10,6 +11,39 @@ from .api import router as admin_router
 
 
 QA_FIREBASE_ORIGIN_REGEX = r"https://erclave(--[a-z0-9-]+)?\.web\.app|https://erclave\.firebaseapp\.com"
+ALLOWED_ORIGINS = {
+    "http://127.0.0.1:4173",
+    "http://localhost:4173",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+    "https://erclave.web.app",
+    "https://erclave.firebaseapp.com",
+}
+ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+ALLOWED_HEADERS = "Accept, Accept-Language, Authorization, Content-Language, Content-Type, Idempotency-Key, X-Actor-Id, X-Correlation-Id, X-Tenant-Id"
+
+
+def _is_allowed_origin(origin: str | None) -> bool:
+    if not origin:
+        return False
+    if origin in ALLOWED_ORIGINS:
+        return True
+    return origin.startswith("https://erclave--") and origin.endswith(".web.app")
+
+
+def _private_network_preflight_response(origin: str) -> PlainTextResponse:
+    return PlainTextResponse(
+        "OK",
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": ALLOWED_METHODS,
+            "Access-Control-Allow-Headers": ALLOWED_HEADERS,
+            "Access-Control-Allow-Private-Network": "true",
+            "Access-Control-Max-Age": "600",
+            "Vary": "Origin",
+        },
+    )
 
 
 def create_app() -> FastAPI:
@@ -25,14 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_router)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://127.0.0.1:4173",
-            "http://localhost:4173",
-            "http://127.0.0.1:8000",
-            "http://localhost:8000",
-            "https://erclave.web.app",
-            "https://erclave.firebaseapp.com",
-        ],
+        allow_origins=list(ALLOWED_ORIGINS),
         allow_origin_regex=QA_FIREBASE_ORIGIN_REGEX,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -48,6 +75,12 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def allow_private_network_access(request, call_next):
+        if (
+            request.method == "OPTIONS"
+            and request.headers.get("access-control-request-private-network") == "true"
+            and _is_allowed_origin(request.headers.get("origin"))
+        ):
+            return _private_network_preflight_response(request.headers["origin"])
         response = await call_next(request)
         if request.headers.get("access-control-request-private-network") == "true":
             response.headers["Access-Control-Allow-Private-Network"] = "true"
