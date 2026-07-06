@@ -368,9 +368,9 @@ class AdminRepository:
                         :id,
                         :tenant_id,
                         :user_id,
-                        :status,
+                        cast(:status as varchar),
                         now(),
-                        case when :status = 'active' then now() else null end,
+                        case when cast(:status as varchar) = 'active' then now() else null end,
                         cast(:metadata as jsonb)
                     )
                     on conflict (tenant_id, user_id)

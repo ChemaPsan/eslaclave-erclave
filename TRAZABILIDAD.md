@@ -1864,6 +1864,21 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `python -m pytest services/admin-service/tests/test_admin_api.py`; `python -m py_compile services/admin-service/app/main.py`; `npm.cmd run validate:traceability`; validacion online del `OPTIONS` private-network posterior al deploy. |
 | Observaciones | El cambio se acota a `admin-service`, que es la API consumida por el backoffice interno. |
 
+### CHG-123
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Corrige tipo ambiguo al crear membresia owner |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/repositories.py`, `TRAZABILIDAD.md` |
+| Secciones | Admin API, provisioning, tenant onboarding, PostgreSQL |
+| Descripcion | Se casteo explicitamente `:status` como `varchar` en el insert de `admin.memberships` usado por `POST /v1/provisioning/tenant-onboarding`. Esto evita el error `psycopg.errors.AmbiguousParameter: inconsistent types deduced for parameter` al calcular `activated_at` con `case when :status = 'active'`. |
+| Motivo | El backoffice online ya pasaba CORS, pero el alta de tenant terminaba en `500 Internal Server Error` al crear la membresia inicial del owner. |
+| Impacto | El onboarding puede crear la membresia owner con estado `invited` o `active` sin error de tipos en PostgreSQL. |
+| Validacion | `python -m pytest services/admin-service/tests/test_admin_api.py`; `python -m py_compile services/admin-service/app/repositories.py`; `npm.cmd run validate:traceability`; deploy y health online de `admin-service-qa`. |
+| Observaciones | El intento fallido pudo haber creado o actualizado la identidad Firebase del owner antes de la transaccion de base; el flujo es idempotente y el siguiente intento reutiliza/actualiza esa identidad. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
