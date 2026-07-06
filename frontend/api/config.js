@@ -28,10 +28,11 @@ export function getApiBaseUrl() {
   const runtimeBaseUrl = getRuntimeConfigValue("apiBaseUrl");
   if (isLocalPreviewHost()) {
     const localOverride = localStorage.getItem("erclave-api-base-url") || "";
+    const localRuntimeBaseUrl = getRuntimeConfigValue("localApiBaseUrl");
     if (localOverride && localOverride !== LEGACY_DEFAULT_API_BASE_URL) {
       return localOverride.replace("localhost", "127.0.0.1");
     }
-    return (runtimeBaseUrl || DEFAULT_API_BASE_URL).replace("localhost", "127.0.0.1");
+    return (localRuntimeBaseUrl || runtimeBaseUrl || DEFAULT_API_BASE_URL).replace("localhost", "127.0.0.1");
   }
   return localStorage.getItem("erclave-api-base-url") || runtimeBaseUrl || DEFAULT_API_BASE_URL;
 }

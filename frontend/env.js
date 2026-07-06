@@ -1,8 +1,10 @@
 window.ERCLAVE_CONFIG = {
   apiMode: "api",
   authMode: "firebase-local",
-  apiBaseUrl: "http://127.0.0.1:8010",
-  productionApiBaseUrl: "http://localhost:8002",
+  apiBaseUrl: "https://admin-service-qa-370105017372.us-central1.run.app",
+  localApiBaseUrl: "http://127.0.0.1:8010",
+  productionApiBaseUrl: "https://production-service-qa-370105017372.us-central1.run.app",
+  localProductionApiBaseUrl: "http://localhost:8002",
   tenantId: "ten_739ee59d765d5e14818674800d",
   actorId: "usr_595f3cd6d4325901a8dbd028e1",
   firebaseConfig: {

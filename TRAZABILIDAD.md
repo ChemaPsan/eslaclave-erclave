@@ -1819,6 +1819,21 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `python -m py_compile services/admin-service/app/auth.py services/admin-service/app/api.py shared/erclave_common/config.py`; `pytest services/admin-service/tests/test_admin_api.py`; `node --check frontend/backoffice/app.js`; `node --check frontend/api/backoffice.js`. |
 | Observaciones | Para uso local se sirve en `http://localhost:4173/backoffice/`. En Firebase mode configurar `ERCLAVE_BACKOFFICE_ADMIN_EMAILS` y, para correo real del owner, `ERCLAVE_FIREBASE_WEB_API_KEY`. |
 
+### CHG-120
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Configuracion runtime online para Firebase Hosting |
+| Autor | Codex |
+| Archivos | `frontend/env.js`, `frontend/backoffice/env.js`, `frontend/api/config.js`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, backoffice, despliegue QA |
+| Descripcion | Se actualizo la configuracion runtime del frontend para que Firebase Hosting apunte a `admin-service-qa` y `production-service-qa` en Cloud Run, conservando `localApiBaseUrl` para desarrollo local. `getApiBaseUrl()` ahora prioriza `localApiBaseUrl` cuando se ejecuta en `localhost` o `127.0.0.1`, evitando que la configuracion online rompa pruebas locales. |
+| Motivo | Subir el front y backoffice en linea sin que el navegador intente llamar a `localhost` como API QA. |
+| Impacto | `https://erclave.web.app/` y `/backoffice/` quedan listos para consumir los servicios QA publicados, mientras que el entorno local mantiene `http://127.0.0.1:8010` por defecto. |
+| Validacion | `npm.cmd run validate`; `python -m pytest services/admin-service/tests/test_admin_api.py`; `node --check frontend/api/config.js`. |
+| Observaciones | `productionApiBaseUrl` queda configurado para el servicio QA aunque el modulo de Produccion todavia conserva consumo mayormente local/mock en frontend. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
