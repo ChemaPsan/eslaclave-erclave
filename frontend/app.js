@@ -3,16 +3,25 @@ import { defaultRecipes } from "./data/resources.js";
 import { mockDb } from "./data/mockDb.js";
 import { translations } from "./i18n/translations.js";
 import {
+  createTenantBranch,
+  createTenantLegalEntity,
   createTenantRole,
+  deleteTenantUser,
   disableTenantUser,
   getAdminDashboard,
   getSessionContext,
   inviteTenantUser,
   replaceTenantRolePermissions,
+  setTenantBranchStatus,
+  setTenantLegalEntityStatus,
   updateTenantEntitlement,
-  updateTenantRole
+  updateTenantBranch,
+  updateTenantLegalEntity,
+  updateTenantRole,
+  updateTenantSetting
 } from "./api/admin.js";
 import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId } from "./api/config.js";
+import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "./auth.js";
 import {
   calculateRecipe,
   getOrderCostSnapshot,
@@ -42,6 +51,14 @@ const state = {
     status: "idle",
     data: null,
     error: ""
+  },
+  adminPanel: "organization",
+  auth: {
+    status: isFirebaseAuthConfigured() ? "loading" : "disabled",
+    user: null,
+    email: "",
+    error: "",
+    notice: ""
   }
 };
 
@@ -65,9 +82,14 @@ const themeToggle = document.getElementById("themeToggle");
 const langToggle = document.getElementById("langToggle");
 const adminShortcut = document.getElementById("adminShortcut");
 const topbarPrimary = document.querySelector(".topbar .primary-action");
+const authButton = document.getElementById("authButton");
+const contextUser = document.getElementById("contextUser");
+const contextBranch = document.getElementById("contextBranch");
+const branchContext = document.getElementById("branchContext");
 const modalBackdrop = document.getElementById("modalBackdrop");
 const modalContent = document.getElementById("modalContent");
 const toast = document.getElementById("toast");
+const authGate = document.getElementById("authGate");
 
 function t(key, values = {}) {
   const template = translations[state.lang]?.[key] || translations.es[key] || key;
@@ -152,6 +174,18 @@ function getSessionContextData() {
   return getApiMode() === "api" ? state.sessionApi.data : null;
 }
 
+function isAuthRequired() {
+  return getApiMode() === "api" && isFirebaseAuthConfigured();
+}
+
+function hasApiSessionAccess() {
+  return !isAuthRequired() || Boolean(state.auth.user);
+}
+
+function hasReadyApiSession() {
+  return !isAuthRequired() || (state.sessionApi.status === "ready" && Boolean(state.sessionApi.data));
+}
+
 function getActiveUiModuleIds() {
   const session = getSessionContextData();
   if (!session) return mvpModuleIds;
@@ -166,6 +200,7 @@ function isModuleAccessible(moduleId) {
 function getModuleAccessState(module) {
   if (!mvpModuleIds.includes(module.id)) return { enabled: false, reason: t("comingSoon") };
   if (getApiMode() !== "api") return { enabled: true, reason: "" };
+  if (!hasApiSessionAccess()) return { enabled: false, reason: "Inicia sesion" };
   if (state.sessionApi.status === "loading" || state.sessionApi.status === "idle") {
     return { enabled: false, reason: "Cargando contexto" };
   }
@@ -459,14 +494,16 @@ function renderUnavailableModulePanel(module) {
 }
 
 function getMockAdminDashboard() {
+  const tenant = {
+    commercial_name: "Cliente piloto",
+    legal_name: "Cliente Piloto S.A. de C.V.",
+    slug: "demo-local",
+    status: "mock",
+    locale: "es-MX",
+    timezone: "America/Mexico_City"
+  };
   return {
-    tenant: {
-      commercial_name: "Cliente piloto",
-      slug: "demo-local",
-      status: "mock",
-      locale: "es-MX",
-      timezone: "America/Mexico_City"
-    },
+    tenant,
     entitlements: [
       { module_code: "production", status: "active" },
       { module_code: "inventory", status: "active" },
@@ -479,17 +516,21 @@ function getMockAdminDashboard() {
     permissions: [
       { id: "per_local_tenant_read", code: "admin.tenant.read", module_code: "admin", resource: "tenant", action: "read", status: "active" }
     ],
+    organization: mockDb.loadAdminOrganization(tenant),
     policy: { allowed: false, reason: "mock_mode", matched_permissions: [] },
     session: null
   };
 }
 
 function getAdminPanelData() {
-  return getApiMode() === "api" && state.adminApi.data ? state.adminApi.data : getMockAdminDashboard();
+  if (getApiMode() === "api") return state.adminApi.data;
+  return getMockAdminDashboard();
 }
 
 function loadAdminApiDashboard() {
   if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
+  if (!hasApiSessionAccess()) return;
+  if (!hasReadyApiSession()) return;
   state.adminApi = { status: "loading", data: state.adminApi.data, error: "" };
   render();
   getAdminDashboard()
@@ -563,9 +604,19 @@ function getDefaultRoleId(roles) {
   return roles.find((role) => role.code === "owner")?.id || roles[0]?.id || "";
 }
 
-function renderAdminUserCard(user, apiMode, apiStatus) {
+function getAdminUserRoleIds(user, roles) {
+  const roleCodes = new Set(user.roles || []);
+  return roles.filter((role) => roleCodes.has(role.code)).map((role) => role.id);
+}
+
+function renderAdminUserCard(user, data, apiMode, apiStatus) {
   const actorId = getDemoActorId();
-  const canDisable = apiMode === "api" && apiStatus === "ready" && user.status !== "disabled" && user.id !== actorId;
+  const isApiReady = apiMode === "api" && apiStatus === "ready";
+  const isCurrentActor = user.id === actorId;
+  const canInvite = isApiReady && !isCurrentActor && user.status !== "active";
+  const canDisable = isApiReady && !isCurrentActor && user.status === "active";
+  const canDelete = isApiReady && !isCurrentActor;
+  const roleIds = getAdminUserRoleIds(user, data.roles).join(",");
   return `
     <article class="admin-record">
       <div class="admin-record-main">
@@ -577,8 +628,14 @@ function renderAdminUserCard(user, apiMode, apiStatus) {
         <span>${user.roles.join(", ") || "sin rol"}</span>
       </div>
       <div class="admin-actions">
+        <button class="secondary-action small-action" type="button" data-action="admin-reinvite-user" data-user-id="${user.id}" data-role-ids="${roleIds}" ${canInvite ? "" : "disabled"}>
+          Activar / invitar
+        </button>
         <button class="secondary-action small-action" type="button" data-action="admin-disable-user" data-user-id="${user.id}" ${canDisable ? "" : "disabled"}>
-          Desactivar
+          Inactivar
+        </button>
+        <button class="secondary-action danger-action small-action" type="button" data-action="admin-delete-user" data-user-id="${user.id}" ${canDelete ? "" : "disabled"}>
+          Eliminar
         </button>
       </div>
     </article>
@@ -613,15 +670,42 @@ function inviteAdminUser(form) {
   if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
   const formData = new FormData(form);
   const roleId = String(formData.get("role_id") || "");
+  const email = String(formData.get("email") || "").trim();
   state.adminApi = { ...state.adminApi, status: "loading", error: "" };
   render();
   inviteTenantUser({
     display_name: String(formData.get("display_name") || "").trim(),
-    email: String(formData.get("email") || "").trim(),
+    email,
     role_ids: roleId ? [roleId] : []
   })
     .then((user) => {
-      showToast(`Usuario ${user.email} invitado.`);
+      sendPasswordReset(user.email).catch(() => null);
+      showToast(`Usuario ${user.email} invitado. Enviamos correo de activacion.`);
+      state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      loadAdminApiDashboard();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
+function reinviteAdminUser(userId) {
+  if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
+  const data = getAdminPanelData();
+  const user = data.users.find((item) => item.id === userId);
+  if (!user) return;
+  const roleIds = getAdminUserRoleIds(user, data.roles);
+  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+  render();
+  inviteTenantUser({
+    display_name: user.display_name,
+    email: user.email,
+    role_ids: roleIds
+  })
+    .then((updatedUser) => {
+      sendPasswordReset(updatedUser.email).catch(() => null);
+      showToast(`Invitacion enviada a ${updatedUser.email}.`);
       state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
       loadAdminApiDashboard();
     })
@@ -638,6 +722,26 @@ function disableAdminUser(userId) {
   disableTenantUser(userId)
     .then((user) => {
       showToast(`Usuario ${user.email} desactivado.`);
+      state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      loadAdminApiDashboard();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
+function deleteAdminUser(userId) {
+  if (getApiMode() !== "api" || state.adminApi.status === "loading" || userId === getDemoActorId()) return;
+  const user = getAdminPanelData().users.find((item) => item.id === userId);
+  if (!user) return;
+  const confirmed = window.confirm(`Eliminar a ${user.email} de ERClave y Firebase? Necesitara una nueva invitacion para volver.`);
+  if (!confirmed) return;
+  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+  render();
+  deleteTenantUser(userId)
+    .then((deletedUser) => {
+      showToast(`Usuario ${deletedUser.email} eliminado.`);
       state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
       loadAdminApiDashboard();
     })
@@ -763,14 +867,657 @@ function assignAdminRolePermission(form) {
     });
 }
 
+function createLocalId(prefix) {
+  const suffix = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  return `${prefix}_${String(suffix).replaceAll("-", "").slice(0, 18)}`;
+}
+
+function getDefaultAdminOrganization(tenant = {}) {
+  return mockDb.getDefaultAdminOrganization(tenant);
+}
+
+function normalizeAdminOrganization(data) {
+  const base = getDefaultAdminOrganization(data.tenant);
+  const organization = data.organization || {};
+  return {
+    corporate: { ...base.corporate, ...(organization.corporate || {}) },
+    legal_entities: Array.isArray(organization.legal_entities) ? organization.legal_entities : [],
+    branches: Array.isArray(organization.branches) ? organization.branches : []
+  };
+}
+
+function getAdminOrganization() {
+  return normalizeAdminOrganization(getAdminPanelData() || getMockAdminDashboard());
+}
+
+function getBranchOptions() {
+  const data = getAdminPanelData() || getMockAdminDashboard();
+  const organization = normalizeAdminOrganization(data);
+  const branches = organization.branches
+    .filter((branch) => branch.name)
+    .map((branch) => ({
+      id: branch.id || slugify(branch.name),
+      name: branch.name,
+      code: branch.code || ""
+    }));
+  if (branches.length) return branches;
+  return [{ id: "default", name: "Matriz", code: data.tenant?.commercial_name || "" }];
+}
+
+function getSelectedBranch(branches) {
+  const savedBranchId = localStorage.getItem("erclave-active-branch-id") || "";
+  return branches.find((branch) => branch.id === savedBranchId) || branches[0];
+}
+
+function getContextUserLabel() {
+  const sessionUser = getSessionContextData()?.user;
+  if (state.auth.user?.email) return state.auth.user.displayName || state.auth.user.email;
+  if (sessionUser?.display_name) return sessionUser.display_name;
+  if (sessionUser?.email) return sessionUser.email;
+  return "Sesion local";
+}
+
+function renderContextBar() {
+  if (!contextUser || !contextBranch || !branchContext) return;
+  const branches = getBranchOptions();
+  const selectedBranch = getSelectedBranch(branches);
+  contextUser.textContent = getContextUserLabel();
+  if (branches.length > 1) {
+    branchContext.classList.add("is-selectable");
+    contextBranch.innerHTML = `
+      <select id="branchSelector" aria-label="Seleccionar sucursal activa">
+        ${branches
+          .map((branch) => `<option value="${escapeAttribute(branch.id)}" ${selectedOption(branch.id, selectedBranch.id)}>${escapeAttribute(branch.name)}${branch.code ? ` · ${escapeAttribute(branch.code)}` : ""}</option>`)
+          .join("")}
+      </select>
+    `;
+    contextBranch.querySelector("#branchSelector")?.addEventListener("change", (event) => {
+      localStorage.setItem("erclave-active-branch-id", event.target.value);
+      render();
+    });
+    return;
+  }
+  branchContext.classList.remove("is-selectable");
+  contextBranch.textContent = selectedBranch.code ? `${selectedBranch.name} · ${selectedBranch.code}` : selectedBranch.name;
+}
+
+function getOrganizationContact(payload) {
+  return {
+    contact_name: String(payload.get("contact_name") || "").trim(),
+    contact_email: String(payload.get("contact_email") || "").trim(),
+    contact_phone: String(payload.get("contact_phone") || "").trim(),
+    contact_position: String(payload.get("contact_position") || "").trim()
+  };
+}
+
+function saveAdminOrganization(organization, message) {
+  if (getApiMode() !== "api") {
+    mockDb.saveAdminOrganization(organization);
+    showToast(message);
+    render();
+    return;
+  }
+  if (state.adminApi.status === "loading") return;
+  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+  render();
+  updateTenantSetting("organization.profile", { module_code: "admin", value: organization })
+    .then(() => {
+      showToast(message);
+      state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      loadAdminApiDashboard();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
+function updateAdminCorporate(form) {
+  const formData = new FormData(form);
+  const organization = getAdminOrganization();
+  const corporate = {
+    commercial_name: String(formData.get("commercial_name") || "").trim(),
+    legal_name: String(formData.get("legal_name") || "").trim(),
+    tax_id: String(formData.get("tax_id") || "").trim(),
+    phone: String(formData.get("phone") || "").trim(),
+    ...getOrganizationContact(formData)
+  };
+  saveAdminOrganization({ ...organization, corporate }, "Corporativo actualizado.");
+}
+
+function createAdminLegalEntity(form) {
+  const formData = new FormData(form);
+  const organization = getAdminOrganization();
+  const legalEntity = {
+    legal_name: String(formData.get("legal_name") || "").trim(),
+    tax_id: String(formData.get("tax_id") || "").trim(),
+    fiscal_regime: String(formData.get("fiscal_regime") || "").trim(),
+    cfdi_usage: String(formData.get("cfdi_usage") || "").trim(),
+    fiscal_address: String(formData.get("fiscal_address") || "").trim(),
+    ...getOrganizationContact(formData)
+  };
+  if (getApiMode() === "api") {
+    if (state.adminApi.status === "loading") return;
+    state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+    render();
+    createTenantLegalEntity(legalEntity)
+      .then((created) => {
+        showToast(`Razon social ${created.legal_name} registrada.`);
+        state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+        loadAdminApiDashboard();
+      })
+      .catch((error) => {
+        state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+        render();
+      });
+    return;
+  }
+  saveAdminOrganization(
+    { ...organization, legal_entities: [{ ...legalEntity, id: createLocalId("rso"), status: "active" }, ...organization.legal_entities] },
+    `Razon social ${legalEntity.legal_name} registrada.`
+  );
+}
+
+function createAdminBranch(form) {
+  const formData = new FormData(form);
+  const organization = getAdminOrganization();
+  const branch = {
+    name: String(formData.get("name") || "").trim(),
+    code: String(formData.get("code") || "").trim(),
+    legal_entity_id: String(formData.get("legal_entity_id") || "").trim(),
+    address: String(formData.get("address") || "").trim(),
+    phone: String(formData.get("phone") || "").trim()
+  };
+  if (getApiMode() === "api") {
+    if (state.adminApi.status === "loading") return;
+    state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+    render();
+    createTenantBranch(branch)
+      .then((created) => {
+        showToast(`Sucursal ${created.name} registrada.`);
+        state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+        loadAdminApiDashboard();
+      })
+      .catch((error) => {
+        state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+        render();
+      });
+    return;
+  }
+  saveAdminOrganization({ ...organization, branches: [{ ...branch, id: createLocalId("suc"), status: "active" }, ...organization.branches] }, `Sucursal ${branch.name} registrada.`);
+}
+
+function setAdminLegalEntityStatus(legalEntityId, status) {
+  const organization = getAdminOrganization();
+  if (getApiMode() !== "api") {
+    saveAdminOrganization(
+      {
+        ...organization,
+        legal_entities: organization.legal_entities.map((item) => item.id === legalEntityId ? { ...item, status } : item)
+      },
+      `Razon social ${status === "active" ? "activada" : "inactivada"}.`
+    );
+    return;
+  }
+  if (state.adminApi.status === "loading") return;
+  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+  render();
+  setTenantLegalEntityStatus(legalEntityId, status)
+    .then(() => {
+      showToast(`Razon social ${status === "active" ? "activada" : "inactivada"}.`);
+      state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      loadAdminApiDashboard();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
+function setAdminBranchStatus(branchId, status) {
+  const organization = getAdminOrganization();
+  if (getApiMode() !== "api") {
+    saveAdminOrganization(
+      {
+        ...organization,
+        branches: organization.branches.map((item) => item.id === branchId ? { ...item, status } : item)
+      },
+      `Sucursal ${status === "active" ? "activada" : "inactivada"}.`
+    );
+    return;
+  }
+  if (state.adminApi.status === "loading") return;
+  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+  render();
+  setTenantBranchStatus(branchId, status)
+    .then(() => {
+      showToast(`Sucursal ${status === "active" ? "activada" : "inactivada"}.`);
+      state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
+      loadAdminApiDashboard();
+    })
+    .catch((error) => {
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      render();
+    });
+}
+
+function getAdminCards(data) {
+  return [
+    {
+      id: "organization",
+      title: "Organizacion",
+      detail: "Corporativo, razones sociales, sucursales y datos fiscales.",
+      count: "Base",
+      tone: "neutral"
+    },
+    {
+      id: "base-config",
+      title: "Configuracion base",
+      detail: "Catalogos iniciales y modulos necesarios para operar.",
+      count: data.entitlements.filter((item) => item.status === "active").length,
+      tone: "active"
+    },
+    {
+      id: "users",
+      title: "Usuarios",
+      detail: "Invitaciones, activacion, inactivacion y eliminacion de accesos.",
+      count: data.users.length,
+      tone: "active"
+    },
+    {
+      id: "roles",
+      title: "Roles",
+      detail: "Perfiles operativos y paquetes de permisos por tenant.",
+      count: data.roles.length,
+      tone: "warning"
+    },
+    {
+      id: "permissions",
+      title: "Permisos",
+      detail: "Catalogo de permisos efectivos consumido por policy.",
+      count: data.permissions.length,
+      tone: "active"
+    }
+  ];
+}
+
+function renderAdminHubCards(data) {
+  return `
+    <div class="admin-hub-grid">
+      ${getAdminCards(data).map((card) => `
+        <button class="admin-hub-card ${state.adminPanel === card.id ? "selected" : ""}" type="button" data-action="admin-open-panel" data-panel-id="${card.id}">
+          <span class="chip ${card.tone === "active" ? "active" : card.tone === "warning" ? "warning" : ""}">${card.count}</span>
+          <strong>${card.title}</strong>
+          <p>${card.detail}</p>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderAdminPanelContent(panelId, data, apiMode, apiStatus) {
+  if (!panelId) {
+    return `
+      <section class="admin-empty-panel">
+        <strong>Selecciona una configuracion</strong>
+        <p>Administracion funciona como bienvenida operativa: primero define usuarios, roles, permisos, organizacion y catalogos base antes de usar el resto de modulos.</p>
+      </section>
+    `;
+  }
+  if (panelId === "users") return renderAdminUsersPanel(data, apiMode, apiStatus);
+  if (panelId === "roles") return renderAdminRolesPanel(data, apiMode, apiStatus);
+  if (panelId === "permissions") return renderAdminPermissionsPanel(data);
+  if (panelId === "organization") return renderAdminOrganizationPanel(data, apiMode, apiStatus);
+  if (panelId === "base-config") return renderAdminBaseConfigPanel(data, apiMode, apiStatus);
+  return "";
+}
+
+function renderAdminUsersPanel(data, apiMode, apiStatus) {
+  return `
+    <section class="admin-section admin-section-users admin-detail-panel">
+      <div class="admin-section-head">
+        <div>
+          <h3>Usuarios</h3>
+          <p>Invita usuarios, reenvia activaciones, inactiva acceso o elimina identidad.</p>
+        </div>
+        <span class="chip active">${data.users.length}</span>
+      </div>
+      ${renderAdminInviteForm(data, apiMode, apiStatus)}
+      <div class="admin-list">
+        ${data.users.map((user) => renderAdminUserCard(user, data, apiMode, apiStatus)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminRolesPanel(data, apiMode, apiStatus) {
+  return `
+    <section class="admin-section admin-section-roles admin-detail-panel">
+      <div class="admin-section-head">
+        <div>
+          <h3>Roles</h3>
+          <p>Define responsabilidades y asigna permisos a cada perfil.</p>
+        </div>
+        <span class="chip active">${data.roles.length}</span>
+      </div>
+      ${renderAdminRoleForm(apiMode, apiStatus)}
+      <div class="admin-list">
+        ${data.roles.map((role) => renderAdminRoleCard(role, data, apiMode, apiStatus)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminPermissionsPanel(data) {
+  const grouped = data.permissions.reduce((groups, permission) => {
+    const moduleCode = permission.module_code || "admin";
+    groups[moduleCode] = groups[moduleCode] || [];
+    groups[moduleCode].push(permission);
+    return groups;
+  }, {});
+  return `
+    <section class="admin-section admin-detail-panel">
+      <div class="admin-section-head">
+        <div>
+          <h3>Permisos</h3>
+          <p>Catalogo tecnico de permisos disponibles para roles y policy.</p>
+        </div>
+        <span class="chip active">${data.permissions.length}</span>
+      </div>
+      <div class="admin-permission-grid">
+        ${Object.entries(grouped).map(([moduleCode, permissions]) => `
+          <article class="admin-record">
+            <div class="admin-record-main">
+              <strong>${moduleCode}</strong>
+              <span>${permissions.length} permisos</span>
+            </div>
+            <div class="admin-pill-list">
+              ${permissions.map((permission) => `<span>${permission.code}</span>`).join("")}
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminOrganizationPanel(data, apiMode, apiStatus) {
+  const tenant = data.tenant;
+  const organization = normalizeAdminOrganization(data);
+  const corporate = organization.corporate;
+  const isWritable = apiMode !== "api" || apiStatus === "ready";
+  return `
+    <section class="admin-section admin-detail-panel">
+      <div class="admin-section-head">
+        <div>
+          <h3>Organizacion</h3>
+          <p>Datos generales para operacion, facturacion, razones sociales y sucursales.</p>
+        </div>
+        <span class="chip active">${tenant.status}</span>
+      </div>
+      <div class="admin-organization-layout">
+        <form class="admin-form admin-organization-form" data-form="admin-update-corporate">
+          <div class="admin-form-title">
+            <strong>Corporativo</strong>
+            <span>Editar y actualizar datos base del tenant.</span>
+          </div>
+          <label>
+            <span>Nombre corporativo</span>
+            <input name="commercial_name" type="text" value="${escapeAttribute(corporate.commercial_name)}" ${isWritable ? "" : "disabled"} required />
+          </label>
+          <label>
+            <span>Razon social principal</span>
+            <input name="legal_name" type="text" value="${escapeAttribute(corporate.legal_name)}" ${isWritable ? "" : "disabled"} />
+          </label>
+          <label>
+            <span>RFC</span>
+            <input name="tax_id" type="text" value="${escapeAttribute(corporate.tax_id)}" ${isWritable ? "" : "disabled"} />
+          </label>
+          <label>
+            <span>Telefono corporativo</span>
+            <input name="phone" type="tel" value="${escapeAttribute(corporate.phone)}" ${isWritable ? "" : "disabled"} />
+          </label>
+          ${renderAdminContactFields(corporate, isWritable)}
+          <button class="primary-action small-action" type="submit" ${isWritable ? "" : "disabled"}>Actualizar corporativo</button>
+        </form>
+
+        <section class="admin-nested-section">
+          <div class="admin-section-head">
+            <div>
+              <h3>Razones sociales</h3>
+              <p>Alta de entidades fiscales del corporativo.</p>
+            </div>
+            <span class="chip active">${organization.legal_entities.length}</span>
+          </div>
+          <form class="admin-form admin-organization-form" data-form="admin-create-legal-entity">
+            <label>
+              <span>Razon social</span>
+              <input name="legal_name" type="text" placeholder="Empresa Operadora S.A. de C.V." ${isWritable ? "" : "disabled"} required />
+            </label>
+            <label>
+              <span>RFC</span>
+              <input name="tax_id" type="text" placeholder="RFC000000XXX" ${isWritable ? "" : "disabled"} />
+            </label>
+            <label>
+              <span>Regimen fiscal</span>
+              <input name="fiscal_regime" type="text" placeholder="601 General de Ley Personas Morales" ${isWritable ? "" : "disabled"} />
+            </label>
+            <label>
+              <span>Uso CFDI default</span>
+              <input name="cfdi_usage" type="text" placeholder="G03 Gastos en general" ${isWritable ? "" : "disabled"} />
+            </label>
+            <label class="wide-field">
+              <span>Direccion fiscal</span>
+              <input name="fiscal_address" type="text" placeholder="Calle, numero, colonia, CP, ciudad" ${isWritable ? "" : "disabled"} />
+            </label>
+            ${renderAdminContactFields({}, isWritable)}
+            <button class="primary-action small-action" type="submit" ${isWritable ? "" : "disabled"}>Dar de alta razon social</button>
+          </form>
+          <div class="admin-list">
+            ${organization.legal_entities.length ? organization.legal_entities.map((item) => renderAdminLegalEntityCard(item, apiMode, apiStatus)).join("") : renderAdminEmptyRecord("Sin razones sociales registradas.")}
+          </div>
+        </section>
+
+        <section class="admin-nested-section">
+          <div class="admin-section-head">
+            <div>
+              <h3>Sucursales</h3>
+              <p>Matriz, centros de trabajo, almacenes o puntos de venta.</p>
+            </div>
+            <span class="chip active">${organization.branches.length}</span>
+          </div>
+          <form class="admin-form admin-organization-form" data-form="admin-create-branch">
+            <label>
+              <span>Nombre sucursal</span>
+              <input name="name" type="text" placeholder="Matriz" ${isWritable ? "" : "disabled"} required />
+            </label>
+            <label>
+              <span>Codigo</span>
+              <input name="code" type="text" placeholder="MTY-01" ${isWritable ? "" : "disabled"} />
+            </label>
+            <label>
+              <span>Razon social</span>
+              <select name="legal_entity_id" ${isWritable && organization.legal_entities.length ? "" : "disabled"}>
+                <option value="">Sin asignar</option>
+                ${organization.legal_entities.map((item) => `<option value="${escapeAttribute(item.id)}">${escapeAttribute(item.legal_name)}</option>`).join("")}
+              </select>
+            </label>
+            <label>
+              <span>Telefono</span>
+              <input name="phone" type="tel" placeholder="+52 55 0000 0000" ${isWritable ? "" : "disabled"} />
+            </label>
+            <label class="wide-field">
+              <span>Direccion</span>
+              <input name="address" type="text" placeholder="Direccion operativa" ${isWritable ? "" : "disabled"} />
+            </label>
+            <button class="primary-action small-action" type="submit" ${isWritable ? "" : "disabled"}>Dar de alta sucursal</button>
+          </form>
+          <div class="admin-list">
+            ${organization.branches.length ? organization.branches.map((item) => renderAdminBranchCard(item, organization.legal_entities, apiMode, apiStatus)).join("") : renderAdminEmptyRecord("Sin sucursales registradas.")}
+          </div>
+        </section>
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminContactFields(source, isWritable) {
+  return `
+    <label>
+      <span>Nombre contacto</span>
+      <input name="contact_name" type="text" value="${escapeAttribute(source.contact_name || "")}" placeholder="Nombre y apellido" ${isWritable ? "" : "disabled"} />
+    </label>
+    <label>
+      <span>Email contacto</span>
+      <input name="contact_email" type="email" value="${escapeAttribute(source.contact_email || "")}" placeholder="contacto@empresa.com" ${isWritable ? "" : "disabled"} />
+    </label>
+    <label>
+      <span>Telefono contacto</span>
+      <input name="contact_phone" type="tel" value="${escapeAttribute(source.contact_phone || "")}" placeholder="+52 55 0000 0000" ${isWritable ? "" : "disabled"} />
+    </label>
+    <label>
+      <span>Cargo o puesto</span>
+      <input name="contact_position" type="text" value="${escapeAttribute(source.contact_position || "")}" placeholder="Direccion administrativa" ${isWritable ? "" : "disabled"} />
+    </label>
+  `;
+}
+
+function renderAdminLegalEntityCard(item, apiMode, apiStatus) {
+  const status = item.status || "active";
+  const nextStatus = status === "active" ? "inactive" : "active";
+  const isWritable = apiMode !== "api" || apiStatus === "ready";
+  return `
+    <article class="admin-record">
+      <div class="admin-record-main">
+        <strong>${escapeAttribute(item.legal_name)}</strong>
+        <span>${escapeAttribute(item.tax_id || "RFC pendiente")}</span>
+      </div>
+      <div class="admin-actions">
+        <span class="admin-status ${status}">${status}</span>
+        <button class="secondary-action small-action" type="button" data-action="admin-toggle-legal-entity" data-legal-entity-id="${escapeAttribute(item.id)}" data-next-status="${nextStatus}" ${isWritable ? "" : "disabled"}>
+          ${nextStatus === "active" ? "Activar" : "Inactivar"}
+        </button>
+      </div>
+      <p class="admin-meta-line">${escapeAttribute(item.fiscal_regime || "Regimen pendiente")} · ${escapeAttribute(item.cfdi_usage || "Uso CFDI pendiente")}</p>
+      <p class="admin-meta-line">Contacto: ${escapeAttribute(item.contact_name || "Pendiente")} ${item.contact_email ? `· ${escapeAttribute(item.contact_email)}` : ""}</p>
+    </article>
+  `;
+}
+
+function renderAdminBranchCard(item, legalEntities, apiMode, apiStatus) {
+  const legalEntity = legalEntities.find((entity) => entity.id === item.legal_entity_id);
+  const status = item.status || "active";
+  const nextStatus = status === "active" ? "inactive" : "active";
+  const isWritable = apiMode !== "api" || apiStatus === "ready";
+  return `
+    <article class="admin-record">
+      <div class="admin-record-main">
+        <strong>${escapeAttribute(item.name)}</strong>
+        <span>${escapeAttribute(item.code || "Sin codigo")}</span>
+      </div>
+      <div class="admin-actions">
+        <span class="admin-status ${status}">${status}</span>
+        <button class="secondary-action small-action" type="button" data-action="admin-toggle-branch" data-branch-id="${escapeAttribute(item.id)}" data-next-status="${nextStatus}" ${isWritable ? "" : "disabled"}>
+          ${nextStatus === "active" ? "Activar" : "Inactivar"}
+        </button>
+      </div>
+      <p class="admin-meta-line">${escapeAttribute(item.address || "Direccion pendiente")}</p>
+      <p class="admin-meta-line">Razon social: ${escapeAttribute(legalEntity?.legal_name || "Sin asignar")} ${item.phone ? `· ${escapeAttribute(item.phone)}` : ""}</p>
+    </article>
+  `;
+}
+
+function renderAdminEmptyRecord(message) {
+  return `
+    <article class="admin-record">
+      <div class="admin-record-main">
+        <strong>${message}</strong>
+        <span>Usa el formulario superior para crear el primer registro.</span>
+      </div>
+    </article>
+  `;
+}
+
+function renderAdminBaseConfigPanel(data, apiMode, apiStatus) {
+  const baseCatalogs = [
+    "Centros de negocio",
+    "Areas operativas",
+    "Unidades de medida",
+    "Impuestos",
+    "Monedas",
+    "Condiciones de pago",
+    "Almacenes y ubicaciones",
+    "Estados documentales"
+  ];
+  return `
+    <section class="admin-section admin-detail-panel">
+      <div class="admin-section-head">
+        <div>
+          <h3>Configuracion base</h3>
+          <p>Catalogos iniciales y modulos contratados que habilitan la operacion diaria.</p>
+        </div>
+        <span class="chip active">${baseCatalogs.length}</span>
+      </div>
+      <div class="admin-list admin-module-list">
+        ${baseCatalogs.map((catalog) => `
+          <article class="admin-record compact-admin-record">
+            <div class="admin-record-main">
+              <strong>${catalog}</strong>
+              <span>Catalogo base</span>
+            </div>
+            <span class="admin-status invited">Pendiente</span>
+          </article>
+        `).join("")}
+      </div>
+      <div class="admin-section-head admin-subsection-head">
+        <div>
+          <h3>Modulos activos</h3>
+          <p>Activa, inactiva o suspende la disponibilidad del tenant.</p>
+        </div>
+        <span class="chip active">${data.entitlements.filter((item) => item.status === "active").length}</span>
+      </div>
+      <div class="admin-list admin-module-list">
+        ${data.entitlements.map((item) => renderAdminEntitlementCard(item, apiMode, apiStatus)).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderAdminApiPanel(module) {
   const data = getAdminPanelData();
   const apiMode = getApiMode();
   const apiStatus = apiMode === "api" ? state.adminApi.status : "mock";
-  const tenant = data.tenant;
-  const policy = data.policy;
   const label = state.lang === "en" ? module.titleEn : module.title;
-  const session = data.session || getSessionContextData();
+
+  if (apiMode === "api" && !hasReadyApiSession()) {
+    const isSignedIn = Boolean(state.auth.user);
+    modulePanel.innerHTML = `
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">${module.eyebrow}</p>
+          <h2>${label}</h2>
+        </div>
+        <span class="chip warning">Bloqueado</span>
+      </div>
+      <div class="validation-card danger">
+        <strong>Acceso no autorizado</strong>
+        <p>${isSignedIn ? "Tu correo autentico correctamente, pero no tiene una sesion ERClave activa para este tenant." : "Inicia sesion con una cuenta autorizada para cargar Administracion."}</p>
+        <small>${state.sessionApi.error || state.auth.error || getApiBaseUrl()}</small>
+      </div>
+      <div class="admin-overview-actions">
+        <button class="secondary-action" type="button" data-action="admin-refresh-api">Reintentar</button>
+      </div>
+    `;
+    modulePanel.querySelector("[data-action='admin-refresh-api']").addEventListener("click", () => {
+      state.sessionApi = { status: "idle", data: null, error: "" };
+      state.adminApi = { status: "idle", data: null, error: "" };
+      render();
+    });
+    return;
+  }
+
+  const safeData = data || getMockAdminDashboard();
+  const tenant = safeData.tenant;
 
   modulePanel.innerHTML = `
     <div class="panel-head">
@@ -778,77 +1525,28 @@ function renderAdminApiPanel(module) {
         <p class="eyebrow">${module.eyebrow}</p>
         <h2>${label}</h2>
       </div>
-      <span class="chip ${apiMode === "api" && apiStatus !== "error" ? "active" : "warning"}">${apiMode === "api" ? "API QA" : "Mock"}</span>
+      <div class="admin-toolbar">
+        <span class="chip ${apiMode === "api" && apiStatus !== "error" ? "active" : "warning"}">${apiMode === "api" ? "API QA" : "Mock"}</span>
+        <button class="secondary-action small-action" type="button" data-action="admin-refresh-api">Actualizar</button>
+        <button class="secondary-action small-action" type="button" data-action="admin-toggle-api">${apiMode === "api" ? "Mock" : "API"}</button>
+      </div>
     </div>
 
-    <div class="admin-overview">
-      <div class="admin-overview-main">
+    <div class="admin-welcome">
+      <div>
+        <p class="eyebrow">Bienvenida y configuracion</p>
         <h1>${tenant.commercial_name}</h1>
-        <p>${module.summary}</p>
-      </div>
-      <div class="admin-overview-actions">
-          <button class="primary-action hero-action" type="button" data-action="admin-toggle-api">
-            <span>${apiMode === "api" ? "Mock" : "API"}</span>
-          </button>
-          <button class="secondary-action" type="button" data-action="admin-refresh-api">
-            <span>Actualizar</span>
-          </button>
-      </div>
-      <div class="admin-overview-kpis">
-        <article class="admin-kpi positive">
-          <span>Tenant</span>
-          <strong>${tenant.status}</strong>
-        </article>
-        <article class="admin-kpi positive">
-          <span>Modulos</span>
-          <strong>${data.entitlements.length}</strong>
-        </article>
-        <article class="admin-kpi ${policy.allowed ? "positive" : "warning"}">
-          <span>Policy</span>
-          <strong>${policy.allowed ? "allowed" : policy.reason}</strong>
-        </article>
-        <article class="admin-kpi ${session ? "positive" : "warning"}">
-          <span>Sesion</span>
-          <strong>${session?.user?.display_name || state.sessionApi.status}</strong>
-        </article>
+        <p>Configura la administracion inicial del sistema antes de operar modulos: usuarios, roles, permisos, organizacion y catalogos base.</p>
       </div>
     </div>
 
     ${state.adminApi.error ? `<div class="validation-card danger"><strong>API QA</strong><p>${state.adminApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
     ${state.sessionApi.error ? `<div class="validation-card danger"><strong>Session Context</strong><p>${state.sessionApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
 
+    ${renderAdminHubCards(safeData)}
+
     <div class="admin-workspace">
-      <section class="admin-section admin-section-modules">
-        <div class="admin-section-head">
-          <h3>Modulos activos</h3>
-          <span class="chip active">${data.entitlements.filter((item) => item.status === "active").length}</span>
-        </div>
-        <div class="admin-list admin-module-list">
-          ${data.entitlements.map((item) => renderAdminEntitlementCard(item, apiMode, apiStatus)).join("")}
-        </div>
-      </section>
-
-      <section class="admin-section admin-section-users">
-        <div class="admin-section-head">
-          <h3>Usuarios</h3>
-          <span class="chip active">${data.users.length}</span>
-        </div>
-        ${renderAdminInviteForm(data, apiMode, apiStatus)}
-        <div class="admin-list">
-          ${data.users.map((user) => renderAdminUserCard(user, apiMode, apiStatus)).join("")}
-        </div>
-      </section>
-
-      <section class="admin-section admin-section-roles">
-        <div class="admin-section-head">
-          <h3>Roles</h3>
-          <span class="chip active">${data.roles.length}</span>
-        </div>
-        ${renderAdminRoleForm(apiMode, apiStatus)}
-        <div class="admin-list">
-          ${data.roles.map((role) => renderAdminRoleCard(role, data, apiMode, apiStatus)).join("")}
-        </div>
-      </section>
+      ${renderAdminPanelContent(state.adminPanel || "organization", safeData, apiMode, apiStatus)}
     </div>
   `;
 
@@ -867,6 +1565,40 @@ function renderAdminApiPanel(module) {
     loadAdminApiDashboard();
   });
 
+  modulePanel.querySelectorAll("[data-action='admin-open-panel']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.adminPanel = button.dataset.panelId;
+      render();
+    });
+  });
+
+  modulePanel.querySelector("[data-form='admin-update-corporate']")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    updateAdminCorporate(event.currentTarget);
+  });
+
+  modulePanel.querySelector("[data-form='admin-create-legal-entity']")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    createAdminLegalEntity(event.currentTarget);
+  });
+
+  modulePanel.querySelector("[data-form='admin-create-branch']")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    createAdminBranch(event.currentTarget);
+  });
+
+  modulePanel.querySelectorAll("[data-action='admin-toggle-legal-entity']").forEach((button) => {
+    button.addEventListener("click", () => {
+      setAdminLegalEntityStatus(button.dataset.legalEntityId, button.dataset.nextStatus);
+    });
+  });
+
+  modulePanel.querySelectorAll("[data-action='admin-toggle-branch']").forEach((button) => {
+    button.addEventListener("click", () => {
+      setAdminBranchStatus(button.dataset.branchId, button.dataset.nextStatus);
+    });
+  });
+
   modulePanel.querySelectorAll("[data-action='admin-update-entitlement']").forEach((button) => {
     button.addEventListener("click", () => {
       updateAdminEntitlement(button.dataset.moduleCode, button.dataset.nextStatus);
@@ -879,9 +1611,15 @@ function renderAdminApiPanel(module) {
     });
   });
 
-  modulePanel.querySelector("[data-form='admin-invite-user']").addEventListener("submit", (event) => {
+  modulePanel.querySelector("[data-form='admin-invite-user']")?.addEventListener("submit", (event) => {
     event.preventDefault();
     inviteAdminUser(event.currentTarget);
+  });
+
+  modulePanel.querySelectorAll("[data-action='admin-reinvite-user']").forEach((button) => {
+    button.addEventListener("click", () => {
+      reinviteAdminUser(button.dataset.userId);
+    });
   });
 
   modulePanel.querySelectorAll("[data-action='admin-disable-user']").forEach((button) => {
@@ -890,7 +1628,13 @@ function renderAdminApiPanel(module) {
     });
   });
 
-  modulePanel.querySelector("[data-form='admin-create-role']").addEventListener("submit", (event) => {
+  modulePanel.querySelectorAll("[data-action='admin-delete-user']").forEach((button) => {
+    button.addEventListener("click", () => {
+      deleteAdminUser(button.dataset.userId);
+    });
+  });
+
+  modulePanel.querySelector("[data-form='admin-create-role']")?.addEventListener("submit", (event) => {
     event.preventDefault();
     createAdminRole(event.currentTarget);
   });
@@ -915,6 +1659,7 @@ function renderAdminApiPanel(module) {
 
 function loadSessionContext() {
   if (getApiMode() !== "api" || state.sessionApi.status === "loading") return;
+  if (!hasApiSessionAccess()) return;
   state.sessionApi = { status: "loading", data: state.sessionApi.data, error: "" };
   getSessionContext()
     .then((data) => {
@@ -932,7 +1677,7 @@ function loadSessionContext() {
 }
 
 function ensureSessionContext() {
-  if (getApiMode() === "api" && state.sessionApi.status === "idle") {
+  if (getApiMode() === "api" && hasApiSessionAccess() && state.sessionApi.status === "idle") {
     loadSessionContext();
   }
 }
@@ -3594,6 +4339,11 @@ function renderRecipeList(recipes) {
 }
 
 function renderFlow() {
+  if (state.active === "administracion") {
+    flowList.innerHTML = "";
+    notificationSummary.innerHTML = "";
+    return;
+  }
   const notifications = buildNotifications();
   flowList.innerHTML = notifications.items
     .map(
@@ -6747,8 +7497,210 @@ function applyI18n() {
   langToggle.querySelector(".icon").textContent = state.lang.toUpperCase();
 }
 
+function renderAuthControls() {
+  if (!authButton) return;
+  const enabled = isFirebaseAuthConfigured();
+  authButton.hidden = !enabled;
+  if (!enabled) return;
+  authButton.hidden = !state.auth.user;
+  authButton.disabled = state.auth.status === "loading";
+  authButton.textContent = "Cerrar sesion";
+  authButton.title = state.auth.user ? `Cerrar sesion de ${state.auth.user.email}` : "Cerrar sesion";
+}
+
+function escapeAttribute(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function getAuthErrorMessage(error, fallback) {
+  const code = error?.code || "";
+  if (["auth/invalid-credential", "auth/user-not-found", "auth/wrong-password"].includes(code)) {
+    return "Correo o contrasena incorrectos.";
+  }
+  if (code === "auth/invalid-email") return "Revisa que el correo tenga un formato valido.";
+  if (code === "auth/too-many-requests") {
+    return "Hay demasiados intentos. Espera unos minutos y vuelve a intentar.";
+  }
+  if (code === "auth/network-request-failed") {
+    return "No pudimos conectar con Firebase. Revisa tu conexion e intenta de nuevo.";
+  }
+  return error?.message || fallback;
+}
+
+function getPasswordResetNotice(email) {
+  return `Si existe una cuenta para ${email}, te enviaremos instrucciones para restablecer tu contrasena.`;
+}
+
+function shouldTreatPasswordResetAsSent(error) {
+  return ["auth/user-not-found"].includes(error?.code || "");
+}
+
+function renderAuthGate() {
+  if (!authGate) return;
+  const shouldShow = isAuthRequired() && !state.auth.user;
+  authGate.hidden = !shouldShow;
+  if (!shouldShow) {
+    authGate.innerHTML = "";
+    return;
+  }
+  const isLoading = state.auth.status === "loading";
+  const authEmail = escapeAttribute(state.auth.email);
+  authGate.innerHTML = `
+    <section class="auth-screen" aria-labelledby="authGateTitle">
+      <div class="auth-brand-panel">
+        <div class="auth-logo-slot">
+          <div class="brand-mark">ER</div>
+          <div>
+            <strong>ERClave</strong>
+            <span>Operacion modular SaaS</span>
+          </div>
+        </div>
+        <div class="auth-copy">
+          <p class="eyebrow">Acceso seguro</p>
+          <h1>Controla usuarios, tenants y permisos desde una sola entrada.</h1>
+          <p>La identidad se valida con Firebase y ERClave decide el acceso por tenant, roles, modulos y permisos efectivos.</p>
+        </div>
+        <div class="auth-logo-row" aria-label="Espacio para logos de clientes o partners">
+          <span>Logo cliente</span>
+          <span>Partner</span>
+          <span>QA</span>
+        </div>
+      </div>
+      <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authGateTitle">
+        <p class="eyebrow">ERClave QA</p>
+        <h2 id="authGateTitle">Iniciar sesion</h2>
+        <p>Usa el correo autorizado por tu organizacion.</p>
+        ${state.auth.error ? `<div class="form-errors"><p>${state.auth.error}</p></div>` : ""}
+        ${state.auth.notice ? `<div class="form-notice"><p>${state.auth.notice}</p></div>` : ""}
+        <form class="auth-form" data-form="auth-email">
+          <label>
+            <span>Correo electronico</span>
+            <input type="email" name="email" autocomplete="email" placeholder="nombre@empresa.com" value="${authEmail}" required ${isLoading ? "disabled" : ""}>
+          </label>
+          <label>
+            <span>Contrasena</span>
+            <input type="password" name="password" autocomplete="current-password" required ${isLoading ? "disabled" : ""}>
+          </label>
+          <button class="primary-action full" type="submit" ${isLoading ? "disabled" : ""}>
+            ${isLoading ? "Validando..." : "Entrar"}
+          </button>
+        </form>
+        <button class="link-action" type="button" data-action="auth-reset-password" ${isLoading ? "disabled" : ""}>
+          Recuperar contrasena
+        </button>
+        <p class="auth-legal">El acceso queda sujeto a la membresia activa del tenant y a los permisos asignados por tu administrador.</p>
+      </div>
+    </section>
+  `;
+  authGate.querySelector("[data-form='auth-email']").addEventListener("submit", handleEmailAuthSubmit);
+  authGate.querySelector("[data-action='auth-reset-password']").addEventListener("click", handlePasswordReset);
+}
+
+function handleEmailAuthSubmit(event) {
+  event.preventDefault();
+  if (!isFirebaseAuthConfigured() || state.auth.status === "loading") return;
+  const formData = new FormData(event.currentTarget);
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const password = String(formData.get("password") || "");
+  if (!email || !password) {
+    state.auth = { ...state.auth, status: "error", email, error: "Correo y contrasena son requeridos.", notice: "" };
+    render();
+    return;
+  }
+  state.auth = { ...state.auth, status: "loading", email, error: "", notice: "" };
+  render();
+  signInWithEmail(email, password).catch((error) => {
+    state.auth = {
+      status: "error",
+      user: null,
+      email,
+      error: getAuthErrorMessage(error, "No se pudo iniciar sesion con correo."),
+      notice: ""
+    };
+    render();
+  });
+}
+
+function handlePasswordReset() {
+  if (!isFirebaseAuthConfigured() || state.auth.status === "loading") return;
+  const emailInput = authGate.querySelector("[name='email']");
+  const email = String(emailInput?.value || "").trim().toLowerCase();
+  if (!email) {
+    state.auth = { ...state.auth, status: "error", email, error: "Escribe tu correo para recuperar la contrasena.", notice: "" };
+    render();
+    return;
+  }
+  state.auth = { ...state.auth, status: "loading", email, error: "", notice: "" };
+  render();
+  sendPasswordReset(email)
+    .then(() => {
+      state.auth = {
+        status: "signed_out",
+        user: null,
+        email,
+        error: "",
+        notice: getPasswordResetNotice(email)
+      };
+      render();
+    })
+    .catch((error) => {
+      if (shouldTreatPasswordResetAsSent(error)) {
+        state.auth = { status: "signed_out", user: null, email, error: "", notice: getPasswordResetNotice(email) };
+      } else {
+        state.auth = {
+          status: "error",
+          user: null,
+          email,
+          error: getAuthErrorMessage(error, "No se pudo enviar la recuperacion."),
+          notice: ""
+        };
+      }
+      render();
+    });
+}
+
+function handleAuthButton() {
+  if (!isFirebaseAuthConfigured() || state.auth.status === "loading") return;
+  if (state.auth.user) {
+    signOutUser().catch((error) => {
+      state.auth = { ...state.auth, error: error.message || "No se pudo cerrar sesion." };
+      render();
+    });
+  }
+}
+
+function initializeAuth() {
+  if (!isFirebaseAuthConfigured()) return;
+  onAuthChanged((user) => {
+    state.auth = {
+      status: user ? "ready" : "signed_out",
+      user: user ? { email: user.email, displayName: user.displayName } : null,
+      email: user?.email || state.auth.email || "",
+      error: "",
+      notice: ""
+    };
+    state.adminApi = { status: "idle", data: null, error: "" };
+    state.sessionApi = { status: "idle", data: null, error: "" };
+    render();
+  }).catch((error) => {
+    state.auth = {
+      status: "error",
+      user: null,
+      email: state.auth.email || "",
+      error: getAuthErrorMessage(error, "Firebase Auth no disponible."),
+      notice: ""
+    };
+    render();
+  });
+}
+
 function render() {
   shell.dataset.theme = state.theme;
+  shell.classList.toggle("admin-focus", state.active === "administracion");
   document.body.dataset.theme = state.theme;
   backButton.disabled = !state.history.length;
   adminShortcut.classList.toggle("active", state.active === "administracion");
@@ -6756,6 +7708,9 @@ function render() {
   renderNav();
   renderPanel();
   renderFlow();
+  renderContextBar();
+  renderAuthControls();
+  renderAuthGate();
   applyI18n();
   ensureSessionContext();
 }
@@ -6794,4 +7749,7 @@ topbarPrimary.addEventListener("click", () => {
   openGenericRecordModal(state.active, state.activeSubmodule);
 });
 
+authButton?.addEventListener("click", handleAuthButton);
+
+initializeAuth();
 render();

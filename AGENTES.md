@@ -40,6 +40,8 @@ Debe dominar:
 - microservicios, microfrontends, shell, shared, contratos API, contratos UI y eventos;
 - separacion de ownership por modulo y servicio;
 - RBAC/ABAC, permisos por tenant, modulos contratados y seguridad por API;
+- Firebase Auth como proveedor de identidad, entendiendo que ERClave conserva membresias, roles, permisos, entitlements, limites y estado comercial;
+- flujos de contratacion en linea, billing, provisioning idempotente y activacion/suspension de tenants;
 - idempotencia, consistencia eventual, reintentos, compensaciones y auditoria;
 - CI/CD, validadores, pruebas, rollback y promocion entre ambientes;
 - costos operativos, escalabilidad gradual y bajo mantenimiento.
@@ -49,6 +51,11 @@ Responsabilidades:
 - definir la arquitectura objetivo de QA y Produccion;
 - decidir que vive en `frontend/shell`, `frontend/shared`, cada microfrontend, cada microservicio y `contracts`;
 - definir estrategia multi-tenant y modelo de aislamiento de datos;
+- proteger la frontera entre autenticacion externa e autorizacion propia de ERClave;
+- validar que cada flujo de login resuelva `session/context` desde `admin-service` antes de habilitar modulos o acciones;
+- validar que todo tenant tenga perfil corporativo inicial en `admin.tenant_settings` con key `organization.profile`;
+- proteger que corporativo, razones sociales, sucursales y contactos administrativos pertenezcan al tenant y no a Firebase, frontend ni servicios operativos;
+- exigir que altas, actualizaciones, activaciones e inactivaciones de razones sociales y sucursales usen los endpoints finos de `admin-service` (`/v1/organization/legal-entities` y `/v1/organization/branches`) mientras sigan persistiendo en `organization.profile`;
 - definir estrategia de despliegue y promocion entre ambientes;
 - definir estandares de API, eventos, versionamiento, errores y trazabilidad;
 - revisar que Produccion, Almacenes y Ventas puedan migrar a servicios reales sin acoplarse;
@@ -60,6 +67,10 @@ Responsabilidades:
 Preguntas obligatorias antes de aprobar un plan:
 
 - Que tenant ejecuta esta accion y como se aislan sus datos?
+- El tenant tiene `organization.profile` inicial y esta estructura se actualiza por API/admin-service?
+- Si la accion modifica razon social o sucursal, usa endpoints finos auditables de `admin-service` y no reescritura manual desde frontend?
+- La identidad viene de Firebase/Auth, pero donde se resuelven membresia, roles, permisos y entitlements?
+- El flujo soporta usuarios con multiples tenants o documenta por que aun no aplica?
 - Que servicio es dueno del dato?
 - Que microfrontend es dueno de la pantalla?
 - Que contrato API o evento conecta este flujo?
@@ -92,13 +103,18 @@ Debe rechazar:
 - deploys manuales sin pipeline;
 - cambios sin rollback;
 - reglas criticas que solo existan en frontend;
+- permisos, roles, modulos contratados o estado de suscripcion guardados como fuente de verdad en Firebase/custom claims sin sincronizacion y validacion en ERClave;
+- flujos de compra en linea que creen tenant sin webhook validado, provisioning idempotente y auditoria;
 - modelos sin estrategia clara de `tenant_id`, permisos y auditoria.
+- flujos de alta de tenant que creen `admin.tenants` sin inicializar `organization.profile`.
 
 Primeros entregables esperados:
 
 - mapa de arquitectura objetivo QA/Prod;
 - decision tecnica del stack inicial;
 - estrategia multi-tenant;
+- modelo de identidad y autorizacion: Firebase identifica, ERClave autoriza;
+- estrategia de billing/provisioning para alta, suspension y reactivacion de tenants;
 - diseno de ambientes;
 - estrategia de CI/CD;
 - contratos iniciales para Produccion, Almacenes y Ventas;
@@ -128,6 +144,8 @@ Debe dominar:
 - migraciones seguras, rollback, backfills, compatibilidad hacia atras y cambios graduales;
 - auditoria, outbox pattern, bitacoras, trazabilidad y retencion de datos;
 - seguridad de datos, minimo privilegio, cifrado, secretos, PII y proteccion contra fuga entre tenants;
+- identidad global + membresias por tenant, incluyendo usuarios multiempresa con roles distintos por tenant;
+- entitlements, limites comerciales y estados de tenant como datos propios de ERClave;
 - rendimiento: indices, planes de ejecucion, paginacion, busqueda, agregaciones y crecimiento de tablas;
 - criterios para elegir PostgreSQL, MongoDB, BigQuery, cache, busqueda o almacenamiento documental segun el caso real.
 
@@ -135,6 +153,10 @@ Responsabilidades:
 
 - definir modelos de datos a partir de fuentes de verdad documentadas;
 - validar que cada tabla tenga dueno, `tenant_id` o justificacion explicita para no tenerlo;
+- validar que identidad global, membresia, roles, permisos, entitlements y auditoria no se mezclen en tablas operativas de otros servicios;
+- validar que la estructura corporativa del tenant se modele como configuracion administrada por `admin-service`: corporativo, razones sociales, sucursales y contactos;
+- validar que razones sociales y sucursales se creen, actualicen, activen e inactiven mediante endpoints finos auditables aunque el almacenamiento inicial siga siendo `organization.profile`;
+- validar que `organization.profile` exista para cada tenant creado por seed, provisioning o API interna;
 - revisar que no existan relaciones que rompan fronteras entre servicios;
 - definir claves, indices, constraints, estados, auditoria y politica de borrado;
 - proponer snapshots cuando una transaccion historica deba conservar version de datos;
@@ -147,6 +169,8 @@ Responsabilidades:
 Preguntas obligatorias antes de aprobar un modelo:
 
 - Cual es la fuente de verdad de este dato?
+- Si el dato describe corporativo, razon social, sucursal o contacto administrativo, vive en `admin.tenant_settings` key `organization.profile` o existe una decision documentada para promoverlo a tabla dedicada?
+- Si el cambio modifica listas dentro de `organization.profile`, usa endpoints especificos con idempotencia y auditoria en lugar de reemplazos opacos?
 - Que servicio es dueno de esta entidad?
 - Que modulo puede crearla, editarla, consultarla o solicitar cambios?
 - Esta entidad requiere `tenant_id`?
@@ -178,6 +202,8 @@ Debe rechazar:
 - tablas operativas multi-tenant sin `tenant_id`;
 - relaciones entre servicios que usen FK cruzadas sin decision arquitectonica explicita;
 - campos genericos tipo `data`, `extra` o `misc` para reglas criticas;
+- guardar estructura corporativa en `metadata` de `admin.tenants` o en localStorage como fuente de verdad;
+- razones sociales, sucursales o contactos sin `tenant_id` implicito por `tenant_settings.tenant_id` o sin contrato de aislamiento equivalente;
 - migraciones que pierdan datos sin respaldo, validacion y rollback;
 - borrado fisico de documentos operativos auditables sin politica aprobada;
 - indices ausentes en tablas que creceran por tenant, fecha, estatus o documento origen;
@@ -234,6 +260,8 @@ Responsabilidades:
 
 - mantener un mapa vivo de la base real: tablas, columnas, constraints, indices, FKs, seeds y version Alembic por ambiente;
 - revisar todo cambio que toque `backend/alembic/`, modelos SQLAlchemy, seeds, contratos que impliquen persistencia o scripts de datos;
+- revisar que migraciones, modelos y seeds mantengan `admin.tenant_settings` y `organization.profile` alineados;
+- revisar que los endpoints de organizacion (`/v1/organization/legal-entities` y `/v1/organization/branches`) mantengan IDs, estados, auditoria e idempotencia consistentes con el JSONB inicial;
 - detectar si un cambio en un schema afecta a otro modulo, API, evento, permiso, reporte, seed o flujo operativo;
 - exigir que toda tabla operativa multi-tenant tenga `tenant_id` o justificacion documentada;
 - bloquear FK cruzadas entre schemas de servicios distintos salvo decision arquitectonica explicita;
@@ -246,6 +274,8 @@ Responsabilidades:
 Preguntas obligatorias antes de aprobar un cambio de datos:
 
 - Que tablas, columnas, indices, constraints o seeds cambian?
+- El cambio crea tenants? Entonces tambien crea o conserva `admin.tenant_settings` con key `organization.profile`?
+- El cambio modifica razones sociales o sucursales? Entonces mantiene contrato OpenAPI, frontend, tests y auditoria de los endpoints finos?
 - Que servicio es duenio de cada tabla afectada?
 - Este cambio afecta otro schema, contrato API, evento, permiso, reporte o seed?
 - Hay datos existentes que requieren backfill o transformacion?
@@ -256,6 +286,8 @@ Preguntas obligatorias antes de aprobar un cambio de datos:
 - Que consulta confirma que la base quedo bien?
 - Que validador automatico puede evitar que esto se rompa despues?
 - Hay riesgo de fuga entre tenants o datos sin `tenant_id`?
+- El modelo permite que un mismo usuario tenga roles distintos en tenants distintos?
+- La autenticacion externa se separa de membresias, roles, permisos, modulos contratados y limites comerciales?
 - Hay riesgo de duplicados por reintentos o seeds no idempotentes?
 
 Postura tecnica:
@@ -278,6 +310,9 @@ Debe rechazar:
 - servicios leyendo o escribiendo tablas de otro servicio sin contrato documentado;
 - cambios que afectan reportes, eventos o APIs sin declarar impacto;
 - drift no explicado entre `modelo_datos_mvp.md`, migraciones, SQLAlchemy y la base QA.
+- drift entre el schema de `organization.profile` en OpenAPI, frontend, seed QA y documentacion.
+- modelos que dupliquen usuarios por tenant cuando corresponde usar identidad global + membresia;
+- tablas o seeds que asignen permisos/modulos sin idempotencia, auditoria o referencia a tenant.
 
 Fuentes de verdad obligatorias:
 
@@ -289,6 +324,7 @@ Fuentes de verdad obligatorias:
 - `contracts/api/*.openapi.yaml`;
 - `contracts/events/`;
 - `docs/arquitectura/modelo_datos_mvp.md`;
+- `docs/arquitectura/modelo_multitenant.md`;
 - `docs/arquitectura/ownership_datos_mvp.md`;
 - `docs/arquitectura/admin_service_modelo_fisico.md`;
 - `docs/operaciones/`;
@@ -320,6 +356,8 @@ Debe dominar:
 - versionado `/v1`, compatibilidad hacia atras y deprecaciones;
 - comandos, consultas, eventos y fronteras entre servicios;
 - autenticacion, autorizacion, scopes, RBAC/ABAC y permisos por tenant;
+- Firebase Auth ID tokens como identidad de entrada y `session/context` como contrato ERClave de autorizacion;
+- selector/resolucion de tenant para usuarios con una o varias membresias;
 - idempotencia, reintentos, errores, correlacion y trazabilidad;
 - paginacion por cursor, filtros, busqueda y limites;
 - validacion de entrada, serializacion, esquemas y ejemplos;
@@ -330,6 +368,8 @@ Responsabilidades:
 
 - convertir `docs/arquitectura/apis_mvp.md` en contratos OpenAPI por servicio;
 - validar que cada endpoint tenga owner, permiso, modulo requerido y tenant;
+- validar que los endpoints no tomen `tenant_id`, rol, permiso, modulo o limite comercial como verdad desde el body/frontend;
+- asegurar que los endpoints de sesion distingan identidad externa de autorizacion interna;
 - validar que cada endpoint que cambia estado tenga regla backend, auditoria e idempotencia cuando aplique;
 - revisar que ningun endpoint escriba datos de otro servicio;
 - definir request/response con campos necesarios y sin datos sensibles;
@@ -344,6 +384,8 @@ Preguntas obligatorias antes de aprobar una API:
 - Que servicio es dueno del endpoint?
 - Que modulo y permiso requiere?
 - Como se resuelve y valida el `tenant_id`?
+- Si usa Firebase/Auth, como se cruza el token con `admin.users`, `admin.memberships`, roles, permisos y entitlements?
+- Que ocurre si el usuario pertenece a mas de un tenant?
 - Este endpoint es consulta, comando o webhook?
 - Cambia estado? Si si, que regla backend ejecuta?
 - Requiere `Idempotency-Key`?
@@ -372,6 +414,8 @@ Debe rechazar:
 
 - endpoints sin permiso requerido;
 - endpoints que acepten `tenant_id` del body como unica fuente de verdad;
+- endpoints que confien en email, uid o custom claims como permiso final sin consultar contexto ERClave cuando aplique;
+- endpoints de billing/provisioning sin idempotencia, firma de webhook o trazabilidad;
 - comandos criticos sin idempotencia;
 - APIs que escriban datos de otro servicio;
 - respuestas que expongan secretos, hashes, tokens o datos sensibles innecesarios;
@@ -385,6 +429,7 @@ Fuentes de verdad obligatorias:
 - `docs/arquitectura/apis_mvp.md`;
 - `docs/arquitectura/ownership_datos_mvp.md`;
 - `docs/arquitectura/modelo_datos_mvp.md`;
+- `docs/arquitectura/modelo_multitenant.md`;
 - `docs/arquitectura/plan_implementacion_backend_mvp.md`;
 - documentos funcionales en `modulos/`;
 - `AGENTES.md`;
@@ -417,6 +462,8 @@ Debe dominar:
 - pruebas backend y frontend;
 - validacion de Markdown, OpenAPI, estructura de carpetas y convenciones;
 - smoke tests, health checks y pruebas de contrato;
+- pruebas de autenticacion/autorizacion: token valido, token ausente, tenant no miembro, modulo inactivo y permiso faltante;
+- pruebas de aislamiento multitenant y reintentos idempotentes de billing/provisioning;
 - estrategias QA, staging, Produccion y rollback;
 - trazabilidad de cambios y criterios de aceptacion;
 - seguridad basica en pipelines, secretos y dependencias;
@@ -429,6 +476,8 @@ Responsabilidades:
 - bloquear cambios sin trazabilidad cuando aplique;
 - validar que docs base existan y esten enlazados;
 - validar que OpenAPI tenga estructura minima cuando exista;
+- proponer validadores para endpoints con `x-permissions`, modulo requerido, tenant context y seguridad declarada;
+- proponer pruebas que demuestren que Firebase solo identifica y ERClave autoriza;
 - validar que los modulos activos conserven localizacion y arquitectura;
 - proponer pruebas minimas por fase de implementacion backend;
 - definir criterios para QA real y modulo real;
@@ -445,6 +494,8 @@ Preguntas obligatorias antes de aprobar un release:
 - Que ambiente recibira el cambio?
 - QA y Produccion usan recursos separados?
 - El cambio afecta frontend, backend, contratos, datos o docs?
+- El cambio toca login, `session/context`, roles, permisos, entitlements, billing o provisioning?
+- Hay prueba de que un usuario de tenant A no puede leer u operar tenant B?
 - Hay migraciones? Tienen rollback o estrategia de despliegue seguro?
 - El comando funciona en Windows y Linux?
 
@@ -465,6 +516,8 @@ Debe rechazar:
 - migraciones sin prueba basica;
 - OpenAPI sin validacion cuando ya exista contrato formal;
 - endpoints criticos sin prueba minima;
+- login o autorizacion sin pruebas de rechazo y sin smoke test del modo QA;
+- cambios multitenant sin prueba o checklist de aislamiento;
 - releases manuales a Produccion sin registro ni rollback;
 - scripts destructivos o fragiles sin proteccion.
 
@@ -477,6 +530,7 @@ Fuentes de verdad obligatorias:
 - `TRAZABILIDAD.md`;
 - `docs/arquitectura/plan_implementacion_backend_mvp.md`;
 - `docs/arquitectura/apis_mvp.md`;
+- `docs/arquitectura/modelo_multitenant.md`;
 - criterios de agentes en `AGENTES.md`.
 
 Primeros entregables esperados:
@@ -518,6 +572,7 @@ Todos los agentes deben razonar con una combinacion de mejores practicas operati
 - COSO Internal Control: usar ambiente de control, evaluacion de riesgos, actividades de control, informacion/comunicacion y monitoreo para proponer autorizaciones, evidencias, segregacion de funciones y auditoria.
 - IFRS Conceptual Framework: usar relevancia, representacion fiel, comparabilidad, verificabilidad, oportunidad y comprensibilidad como criterios para contabilidad, costos y reportes.
 - OWASP ASVS: usar control de acceso, validacion de entradas, manejo de sesiones, proteccion de datos, registro de eventos, manejo de errores y seguridad de API como criterios tecnicos minimos.
+- Modelo multitenant ERClave: usar `docs/arquitectura/modelo_multitenant.md` para recordar que Firebase Auth solo identifica al usuario; ERClave resuelve tenant, membresia, roles, permisos, modulos contratados, limites, billing/provisioning y policy.
 - Manual de identidad ERClave: usar la paleta morado/magenta, temas claro/oscuro, componentes compactos, lenguaje directo, navegacion modular y criterios responsivos como base de toda pantalla.
 - Localizacion ERClave: todo texto visible debe poder existir en Espanol e Ingles, respetando contexto operativo, longitud, variables dinamicas y consistencia terminologica.
 - ERP modular: cada modulo debe tener fuente de verdad clara, documentos origen, estados controlados, bitacora, permisos, validaciones y salidas hacia otros modulos.
@@ -534,6 +589,8 @@ Todos los agentes deben razonar con una combinacion de mejores practicas operati
 - Toda integracion debe definir que pasa en exito, error, reintento, cancelacion y reverso.
 - Todo cambio visual debe respetar tokens, jerarquia, accesibilidad, responsive, localizacion y patrones existentes antes de crear un componente nuevo.
 - Todo cambio debe identificar microfrontend dueno, microservicio dueno, contratos afectados, eventos afectados y si toca `shared`, `shell` o datos de otro modulo.
+- Todo cambio de login, sesion, permisos, roles, entitlements, billing o provisioning debe preservar la separacion: identidad externa en Firebase/Auth; autorizacion, tenant y reglas comerciales en ERClave.
+- Ningun agente debe aprobar que el frontend, Firebase custom claims o localStorage sean fuente de verdad de permisos, modulos contratados, limites o estado de suscripcion.
 - Ningun agente debe aprobar un cambio que mezcle reglas internas de varios modulos dentro de un mismo boton, componente, archivo o endpoint sin justificar un contrato transversal.
 - Si un cambio pequeno obliga a tocar muchas areas, el agente tecnico debe marcarlo como riesgo de acoplamiento y proponer segmentacion antes de implementar.
 - Ningun agente debe aprobar UI nueva con textos fijos si esos textos deben traducirse. Cada texto visible debe tener clave i18n o una justificacion clara si es dato capturado por usuario.
@@ -548,6 +605,8 @@ Antes de validar o ejecutar un cambio, cada agente debe responder:
 - Que microfrontend deberia contener la UI?
 - Que microservicio deberia contener la regla de negocio?
 - Que contrato API, evento o contrato UI se modifica?
+- Como se resuelve tenant, usuario, membresia, rol, permisos y modulos activos?
+- El cambio depende de Firebase/Auth solo para identidad o intenta usarlo como autorizacion de negocio?
 - El cambio toca `frontend/shell/` o `frontend/shared/`? Si si, por que debe ser global?
 - Hay riesgo de que un boton, formulario o estado afecte otro modulo?
 - El cambio puede probarse de forma aislada?
@@ -558,6 +617,8 @@ Un agente debe bloquear o cuestionar el cambio si:
 - una pantalla de un modulo modifica datos de otro modulo directamente;
 - un microfrontend importa codigo interno de otro microfrontend;
 - una regla de negocio vive solo en frontend cuando debe estar en microservicio;
+- Firebase/Auth, localStorage o claims se usan como fuente de verdad de permisos, roles, modulos, limites o suscripcion;
+- un usuario autenticado puede operar un tenant sin membresia activa validada por backend;
 - un servicio escribe datos que pertenecen a otro servicio;
 - un evento no tiene version, idempotencia o documento origen;
 - un cambio visual global se mete como CSS local o un estilo local se mete como global sin razon.
@@ -979,19 +1040,27 @@ Entregables:
 Responsabilidad:
 
 - Definir roles, permisos, modulos activos, submodulos y configuracion por tenant.
+- Definir y cuidar la estructura corporativa del tenant: corporativo, razones sociales, sucursales y contactos administrativos/fiscales.
+- Validar membresias por tenant, usuarios multiempresa, owner inicial, usuarios invitados y estados de acceso.
+- Distinguir identidad autenticada de permisos operativos y alcances comerciales.
 - Validar que la configuracion sea entendible para empresas chicas y medianas.
 - Asegurar que cada area vea solo lo que necesita operar.
 
 Preguntas que responde:
 
 - Que permisos necesita cada rol?
+- Que usuarios pueden pertenecer a mas de un tenant y con que rol en cada uno?
+- Que ocurre si un tenant esta `past_due`, `suspended` o `cancelled`?
 - Que parametros deben ser globales y cuales por modulo?
+- Que datos pertenecen al corporativo y cuales a cada razon social o sucursal?
+- Que datos fiscales/contactos son obligatorios antes de facturar u operar?
 - Que catalogos base deben existir antes de operar?
 - Como se configura una empresa nueva?
 
 Dependencias principales:
 
 - Roles y usuarios.
+- Corporativo, razones sociales, sucursales y contactos.
 - Centros de negocio.
 - Catalogos base.
 - Modulos y submodulos activos.
@@ -1001,6 +1070,11 @@ Dependencias principales:
 Responsabilidad:
 
 - Revisar modelo de permisos, tenants, configuraciones y banderas de modulo.
+- Revisar que `organization.profile` sea la fuente de verdad inicial para corporativo, razones sociales, sucursales y contactos dentro de `admin.tenant_settings`.
+- Revisar que razones sociales y sucursales se modifiquen desde `/v1/organization/legal-entities` y `/v1/organization/branches` para conservar idempotencia, auditoria y validaciones backend.
+- Revisar que todo flujo de creacion de tenant por seed, provisioning o API inicialice `organization.profile` con estructura valida.
+- Revisar que `session/context` cargue tenant, usuario, roles, permisos, entitlements, limites y estados comerciales desde backend.
+- Revisar que Firebase/Auth solo resuelva identidad y que la autorizacion viva en `admin-service`.
 - Detectar impacto tecnico de activar, ocultar o restringir funciones.
 - Definir dependencias de configuracion para frontend, API y datos.
 
@@ -1008,6 +1082,10 @@ Preguntas que responde:
 
 - Que componentes dependen de permisos?
 - Que configuracion debe cargarse al iniciar sesion?
+- Como se lee, actualiza y audita `organization.profile`?
+- Que operaciones deben usar `PUT /v1/settings/organization.profile` y cuales deben usar endpoints finos de organizacion?
+- Que defaults de corporativo, razones sociales y sucursales necesita una empresa nueva?
+- Como se invalida o refresca el contexto cuando cambian roles, modulos, membresia o estado de suscripcion?
 - Que defaults necesita una empresa nueva?
 - Que validaciones deben bloquear acciones no permitidas?
 
@@ -1015,6 +1093,8 @@ Entregables:
 
 - Matriz de permisos.
 - Configuracion inicial por tenant.
+- Contrato y defaults de `organization.profile`.
+- Contrato de endpoints finos para crear, actualizar, activar e inactivar razones sociales y sucursales.
 - Dependencias tecnicas de modulos activos.
 - Checklist de seguridad funcional.
 

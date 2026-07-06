@@ -1489,6 +1489,276 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | Deploy exitoso de Cloud Run para `admin-service-qa` y `production-service-qa`; deploy exitoso de Firebase Hosting; smoke test `GET /ready`, `GET /v1/session/context`, `GET /v1/production/product-services`, `curl -I https://erclave.web.app`, CORS preflight desde `https://erclave.web.app`. |
 | Observaciones | Los servicios QA estan expuestos sin autenticacion final para facilitar revision temprana. Antes de compartir masivamente conviene agregar control de acceso, login o proteccion temporal. |
 
+### CHG-098
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-02 |
+| Cambio | Login QA con Firebase Auth |
+| Autor | Codex |
+| Archivos | `backend/pyproject.toml`, `backend/shared/erclave_common/config.py`, `backend/services/admin-service/app/auth.py`, `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/tests/test_admin_api.py`, `backend/scripts/seed_admin_qa_demo.py`, `backend/README.md`, `contracts/api/admin-service.openapi.yaml`, `frontend/auth.js`, `frontend/api/client.js`, `frontend/api/admin.js`, `frontend/api/config.js`, `frontend/app.js`, `frontend/env.js`, `frontend/index.html`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Firebase Auth, admin-service, session context, frontend QA, Cloud Run, Firebase Hosting |
+| Descripcion | Se conecto la maqueta QA con Firebase Auth Web usando Google Sign-In en el frontend y verificacion de Firebase ID tokens en `admin-service`. En `ERCLAVE_AUTH_MODE=firebase`, `GET /v1/session/context` resuelve el usuario por email autenticado y tenant, dejando `X-Actor-Id` como fallback local/demo. El frontend envia `Authorization: Bearer <idToken>`, muestra una puerta de acceso Google en modo API y conserva el modo mock para revision sin backend. |
+| Motivo | Pasar del contexto temporal por header a una primera autenticacion real reutilizable para QA, sin perder velocidad de desarrollo local. |
+| Impacto | `admin-service-qa` ya rechaza `session/context` sin token, el tenant QA tiene owner corporativo `eslaclavecaf@gmail.com` sembrado como usuario activo, y la maqueta publicada en `https://erclave.web.app` pide login antes de consumir APIs reales. |
+| Validacion | `python -m pytest`; `node --check frontend/app.js`; `node --check frontend/auth.js`; `node --check frontend/api/client.js`; deploy Cloud Run `admin-service-qa` revision `admin-service-qa-00002-xmr`; seed QA aplicado via Cloud SQL Auth Proxy; deploy Firebase Hosting; smoke tests `curl -I https://erclave.web.app`, `GET /ready`, `GET /v1/session/context` sin token devuelve 401 `auth_required`, preflight CORS con `Authorization` devuelve 200. |
+| Observaciones | Falta inicializar Firebase Authentication y habilitar el proveedor Google en Firebase Console; el intento por API devolvio `CONFIGURATION_NOT_FOUND` porque Auth aun no tiene configuracion inicial en el proyecto. |
+
+### CHG-099
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-02 |
+| Cambio | Modelo multitenant e identidad SaaS |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/modelo_multitenant.md`, `docs/arquitectura/qa_prod.md`, `docs/arquitectura/ownership_datos_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | Multitenant, Firebase Auth, roles, permisos, entitlements, billing, provisioning, contratacion en linea |
+| Descripcion | Se documento el modelo multitenant objetivo: Firebase Auth solo resuelve identidad, mientras ERClave gobierna tenant, membresias, roles, permisos efectivos, modulos contratados, limites, estados comerciales y policy. Tambien se aterrizo el flujo de `session/context`, seleccion de tenant, estados de tenant, reglas de contratacion en linea, provisioning idempotente, implicaciones para APIs, datos, frontend y soporte interno. |
+| Motivo | Evitar que la incorporacion de Firebase Auth desplace reglas de negocio hacia el proveedor de identidad y dejar claro como escalar a usuarios multiempresa, roles por tenant y compra en linea. |
+| Impacto | Arquitectura queda alineada para implementar login real, selector de tenant, autorizacion backend, billing/provisioning y pruebas de aislamiento sin redisenar la base conceptual. |
+| Validacion | Documento revisado contra `ownership_datos_mvp.md`, `onboarding_comercial_saas.md`, `modelo_datos_mvp.md` y estado actual de `session/context`. |
+| Observaciones | No cambia codigo ni contratos; es definicion arquitectonica para guiar siguientes fases. |
+
+### CHG-100
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-02 |
+| Cambio | Actualizacion de agentes con contexto multitenant |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Agentes transversales, plataforma SaaS, datos, APIs, QA, reglas comunes, Administracion |
+| Descripcion | Se actualizaron los agentes necesarios para incorporar el modelo multitenant definido: Firebase/Auth solo identifica, mientras ERClave resuelve tenant, membresias, roles, permisos, entitlements, limites, billing/provisioning y policy. Se agregaron preguntas, rechazos y fuentes obligatorias para Arquitectura SaaS, Datos/Persistencia, APIs/Contratos, QA/Release, reglas comunes y Administracion. |
+| Motivo | Asegurar que futuras decisiones tecnicas y funcionales no coloquen permisos, modulos contratados o estado comercial en Firebase, frontend o localStorage, y que los agentes protejan usuarios multiempresa y aislamiento por tenant. |
+| Impacto | Las revisiones futuras deberan validar `session/context`, membresia activa, rol por tenant, modulo contratado, permiso efectivo, estados comerciales e idempotencia de billing/provisioning antes de aprobar cambios relacionados. |
+| Validacion | Revision documental de `AGENTES.md` contra `docs/arquitectura/modelo_multitenant.md`; `npm.cmd run validate:traceability`; `npm.cmd run validate`. |
+| Observaciones | No cambia codigo de ejecucion; fortalece criterios de revision y decision. |
+
+### CHG-101
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-03 |
+| Cambio | Cierre login local y autorizacion backend comun |
+| Autor | Codex |
+| Archivos | `frontend/api/config.js`, `frontend/env.js`, `backend/services/admin-service/app/auth.py`, `backend/services/admin-service/app/api.py`, `backend/services/admin-service/tests/test_admin_api.py`, `backend/README.md`, `backend/services/admin-service/README.md`, `TRAZABILIDAD.md` |
+| Secciones | Firebase Auth, local demo, admin-service, permisos efectivos, mutaciones, QA |
+| Descripcion | Se ajusto la configuracion frontend para que `localhost`/`127.0.0.1` usen backend local y modo demo sin quedar bloqueados por Firebase Auth, mientras `erclave.web.app` conserva `authMode=firebase`. Se agrego una dependencia comun de autorizacion en `admin-service` que, en `ERCLAVE_AUTH_MODE=firebase`, valida token, membresia activa y permiso efectivo antes de ejecutar mutaciones de entitlements, usuarios y roles. |
+| Motivo | Cerrar el paso minimo de login QA/local sin bloquear desarrollo, y avanzar al guard backend recomendado para que las acciones criticas no dependan solo de UI o de token autenticado sin permiso. |
+| Impacto | Local vuelve a cargar con `http://127.0.0.1:8000` y `X-Actor-Id` demo; QA mantiene Firebase obligatorio. Las mutaciones en QA quedan protegidas por permisos como `admin.entitlement.manage`, `admin.user.invite`, `admin.user.update`, `admin.user.disable`, `admin.role.create` y `admin.role.update`. |
+| Validacion | `python -m pytest`; `npm.cmd run validate`; deploy Cloud Run `admin-service-qa` revision `admin-service-qa-00003-cwf`; deploy Firebase Hosting; smoke local `GET /v1/session/context` con `X-Actor-Id`; smoke QA `GET /ready`; `GET /v1/session/context` sin token devuelve 401 `auth_required`; mutacion `PUT /v1/tenants/{tenant_id}/entitlements/inventory` sin token devuelve 401 `auth_required`; intento por API de inicializar Firebase Auth devolvio `CONFIGURATION_NOT_FOUND`, confirmando que falta el paso manual de Firebase Console. |
+| Observaciones | Para cerrar login real en QA falta iniciar Firebase Authentication en consola y habilitar Google provider; la automatizacion por API no puede crear la config inicial si Auth no fue inicializado. |
+
+### CHG-102
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Administracion como centro de configuracion inicial |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/auth.py`, `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/tests/test_admin_api.py`, `backend/README.md`, `backend/services/admin-service/README.md`, `contracts/api/admin-service.openapi.yaml`, `frontend/api/admin.js`, `frontend/app.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, usuarios, roles, permisos, organizacion, configuracion base, Firebase Auth |
+| Descripcion | Se rediseño Administracion como hub de configuracion con tarjetas clicables para Usuarios, Roles, Permisos, Organizacion y Configuracion base. Los paneles internos solo se abren al seleccionarlos. Usuarios ahora permite invitar/reactivar enviando correo de activacion, inactivar membresia y eliminar acceso; el backend agrega `DELETE /v1/users/{user_id}`, asegura identidad Firebase al invitar y elimina identidad Firebase por email al borrar. `session/context` activa membresias invitadas cuando el usuario entra con token Firebase valido. |
+| Motivo | Convertir Administracion en el modulo de bienvenida/configuracion inicial del sistema, evitando usar espacio en metricas generales y cerrando el flujo operativo de alta, baja y reingreso por invitacion. |
+| Impacto | El tenant puede administrar accesos de forma mas clara y preparar organizacion/catalogos base antes de operar otros modulos. La eliminacion de usuario queda protegida por permiso `admin.user.delete`, contrato OpenAPI e idempotencia. En un usuario sin otras membresias, ERClave elimina tambien la identidad global local; en modo Firebase elimina la identidad del proveedor. |
+| Validacion | `node --check frontend/app.js`; `node --check frontend/api/admin.js`; `npm.cmd run validate:syntax`; `npm.cmd run validate:openapi`; `npm.cmd run validate`; `ERCLAVE_AUTH_MODE=demo python -m pytest services/admin-service/tests/test_admin_api.py`; `ERCLAVE_AUTH_MODE=demo python -m pytest`; seed local QA `scripts/seed_admin_mvp.py` y `scripts/seed_admin_qa_demo.py` aplicado correctamente con 94 permisos. |
+| Observaciones | Los paneles Organizacion y Configuracion base quedan como estructura funcional inicial; sus formularios persistentes se implementaran cuando existan endpoints de tenant settings, razones sociales, sucursales y catalogos base. El seed de permisos y asignaciones del owner se reejecuto en la base QA local para incluir `admin.user.delete`. |
+
+### CHG-103
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Organizacion configurable desde tenant settings |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260705_0003_admin_tenant_settings.py`, `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `frontend/api/admin.js`, `frontend/app.js`, `frontend/data/mockDb.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, Organizacion, Settings, corporativo, razones sociales, sucursales |
+| Descripcion | Se implemento persistencia generica de configuraciones por tenant con `admin.tenant_settings` y endpoints `GET /v1/settings` y `PUT /v1/settings/{key}`. El frontend ahora guarda `organization.profile` con formulario editable de corporativo, altas de razones sociales y altas de sucursales. El contacto dejo de ser una seccion independiente y se movio como campos de corporativo y razon social. Se reordeno el hub de Administracion para mostrar primero Organizacion, despues Configuracion base y luego Usuarios, Roles y Permisos. |
+| Motivo | Convertir Administracion en la bienvenida real de configuracion del tenant, permitiendo capturar datos corporativos y fiscales antes de operar los demas modulos. |
+| Impacto | Los cambios de organizacion quedan persistidos por tenant, auditados por `admin.setting.upsert` y consumidos por el panel al refrescar. En modo mock se mantiene persistencia local para pruebas sin API. |
+| Validacion | `node --check frontend/app.js`; `node --check frontend/api/admin.js`; `python -m py_compile` de admin-service y migracion; `ERCLAVE_AUTH_MODE=demo python -m pytest services/admin-service/tests/test_admin_api.py`. |
+| Observaciones | Las razones sociales y sucursales se guardan inicialmente dentro de `organization.profile` en JSONB; cuando el modelo fiscal requiera relaciones transaccionales o integracion de facturacion se podran promover a tablas dedicadas. |
+
+### CHG-104
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Agentes y alta de tenants alineados a estructura corporativa |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `backend/scripts/seed_admin_qa_demo.py`, `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/models.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `backend/services/admin-service/tests/test_qa_demo_seed.py`, `backend/README.md`, `backend/services/admin-service/README.md`, `contracts/api/admin-service.openapi.yaml`, `docs/arquitectura/admin_service_modelo_fisico.md`, `docs/arquitectura/modelo_datos_mvp.md`, `docs/arquitectura/modelo_multitenant.md`, `TRAZABILIDAD.md` |
+| Secciones | Agentes transversales, Administracion, tenant settings, OpenAPI, seed QA, alta de tenants |
+| Descripcion | Se actualizaron los agentes para tratar la estructura corporativa como dato central del tenant: corporativo, razones sociales, sucursales y contactos viven en `organization.profile` dentro de `admin.tenant_settings`. Se agrego modelo SQLAlchemy `TenantSetting`, se reforzo el seed QA para inicializar `organization.profile`, se documento el schema en OpenAPI y se agrego `POST /v1/tenants` como primer corte idempotente de provisioning que crea tenant e inicializa el perfil organizacional. |
+| Motivo | Evitar que futuras iteraciones pasen por alto la estructura corporativa, la guarden en Firebase/localStorage/metadatos ambiguos o creen tenants sin configuracion base administrativa. |
+| Impacto | Los agentes, contratos, docs, seeds, API y base quedan alineados para que cada tenant soporte configuracion organizacional desde su creacion. |
+| Validacion | `python -m py_compile` de admin-service, modelos y seed; `npm.cmd run validate:openapi`; `npm.cmd run validate:agents`; `ERCLAVE_AUTH_MODE=demo python -m pytest`. |
+| Observaciones | `POST /v1/tenants` conserva pendiente el endurecimiento de autenticacion service-to-service para `internal.provisioning.tenant.create` antes de Produccion. |
+
+### CHG-105
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Corrige base URL local de admin API |
+| Autor | Codex |
+| Archivos | `frontend/api/config.js`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, API QA local, configuracion runtime |
+| Descripcion | Se corrigio `getApiBaseUrl()` para que en localhost respete `window.ERCLAVE_CONFIG.apiBaseUrl` y use `http://127.0.0.1:8010` como default local. Tambien se ignora el valor legado `http://127.0.0.1:8000` si quedo persistido en `localStorage`, evitando que el panel de Administracion consuma un admin-service viejo sin endpoints de settings. |
+| Motivo | El boton API QA mostraba 404 porque el frontend apuntaba al puerto local anterior `8000`, donde `/v1/settings` no existe, aunque el admin-service vigente esta en `8010`. |
+| Impacto | La Administracion local en modo API QA debe cargar contra el admin-service correcto y dejar de mostrar 404 por rutas nuevas. |
+| Validacion | `node --check frontend/api/config.js`; smoke `GET http://127.0.0.1:8010/ready`; comparacion manual: `8010/v1/settings` responde 401 por auth, `8000/v1/settings` responde 404 por servicio viejo. |
+| Observaciones | Si el navegador conserva modulo JS cacheado, hacer hard refresh. Hay un listener viejo en `8000` reportado por Windows, pero la app local ya no deberia usarlo con esta configuracion. |
+
+### CHG-106
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Administracion sin tablero operativo |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Shell frontend, modulo Administracion, topbar, KPIs, notificaciones |
+| Descripcion | Se agrego modo visual `admin-focus` cuando el modulo activo es Administracion. En ese modo se ocultan buscador global, boton Nuevo registro, KPIs superiores y panel lateral de notificaciones/resumen operativo. Tambien se evita renderizar notificaciones mientras Administracion esta activa. |
+| Motivo | Administracion debe funcionar como centro de configuracion del sistema, no como tablero operativo de Produccion, Inventario, Ventas o Contabilidad. |
+| Impacto | El modulo de Administracion queda enfocado en configuracion: Organizacion, Configuracion base, Usuarios, Roles y Permisos. Los elementos operativos permanecen disponibles en los demas modulos. |
+| Validacion | `node --check frontend/app.js`; `npm.cmd run validate`. |
+| Observaciones | Cambio visual/frontend sin impacto en APIs ni base de datos. |
+
+### CHG-107
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Barra global de usuario y sucursal |
+| Autor | Codex |
+| Archivos | `frontend/index.html`, `frontend/app.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Shell frontend, contexto de sesion, sucursal activa, usuario autenticado |
+| Descripcion | Se agrego una barra superior discreta global visible en todas las pantallas y modulos. La barra muestra el usuario logueado o usuario de sesion local y la sucursal activa. Si hay mas de una sucursal configurada en `organization.profile`, muestra selector para cambiar la sucursal activa; si hay una sola o ninguna configurada, usa `Matriz` como valor por default. |
+| Motivo | Dar contexto operativo constante al usuario sobre con que identidad y sucursal esta trabajando, preparando navegacion futura por sucursal y alcances por usuario. |
+| Impacto | Todos los modulos comparten contexto visible de usuario/sucursal sin duplicar controles por pantalla. La seleccion de sucursal se persiste localmente en `erclave-active-branch-id`. |
+| Validacion | `node --check frontend/app.js`; `npm.cmd run validate`. |
+| Observaciones | Por ahora el selector toma todas las sucursales configuradas en Organizacion; cuando existan alcances por usuario/sucursal en backend, debe filtrarse desde `session/context` o policy. |
+
+### CHG-108
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Logout discreto en barra de contexto |
+| Autor | Codex |
+| Archivos | `frontend/index.html`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Shell frontend, barra global de contexto, sesion |
+| Descripcion | Se movio el boton de cerrar sesion desde el topbar principal hacia la barra global de contexto de usuario/sucursal y se ajusto su estilo para que sea un control discreto tipo chip. |
+| Motivo | Cerrar sesion pertenece al contexto de usuario y no debe competir visualmente con acciones operativas o de configuracion del modulo activo. |
+| Impacto | La barra superior muestra usuario, sucursal y cierre de sesion en un mismo lugar, con menor peso visual. |
+| Validacion | `node --check frontend/app.js`; `npm.cmd run validate`. |
+| Observaciones | Cambio visual/frontend sin impacto en APIs ni base de datos. |
+
+### CHG-109
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Normaliza Admin API local a localhost |
+| Autor | Codex |
+| Archivos | `frontend/env.js`, `frontend/api/config.js`, `frontend/api/client.js`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, API QA local, fetch diagnostics |
+| Descripcion | Se cambio la URL local de Admin API a `http://localhost:8010` cuando la app corre en `localhost`, normalizando overrides que usen `127.0.0.1`. Tambien se mejoro el mensaje de error de `fetch` para mostrar la URL base real y orientar sobre servicio local/cache. |
+| Motivo | El navegador mostraba `Failed to fetch` al intentar conectar con la API QA local desde `localhost:4173`, aunque el backend respondia por curl. Alinear host de pagina y API reduce bloqueos/rarezas de navegador y facilita diagnostico. |
+| Impacto | El boton API QA debe conectar contra `localhost:8010` y, si falla, mostrar un mensaje accionable en lugar de un error generico. |
+| Validacion | `node --check frontend/api/config.js`; `node --check frontend/api/client.js`; `npm.cmd run validate`. |
+| Observaciones | `localhost:8010/ready` y preflight CORS desde `localhost:4173` responden correctamente. |
+
+### CHG-110
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Permite Private Network Access en Admin API local |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/main.py`, `frontend/api/client.js`, `TRAZABILIDAD.md` |
+| Secciones | Backend Admin API, CORS, API QA local, fetch diagnostics |
+| Descripcion | Se habilito `allow_private_network=True` en el CORS del Admin API y se agrego `DELETE` a los metodos permitidos para operaciones administrativas. En el cliente API se agrego fallback local entre `localhost` y `127.0.0.1` cuando `fetch` falla por red, conservando un mensaje diagnostico con URL base y fallback. |
+| Motivo | Chrome enviaba un preflight con `Access-Control-Request-Private-Network: true` desde `localhost:4173` hacia `localhost:8010` y Starlette lo rechazaba con `400 Disallowed CORS private-network`, provocando `Failed to fetch` en API QA. |
+| Impacto | La Administracion local puede consumir Admin API QA desde el navegador sin bloqueo PNA/CORS y mantiene compatibilidad si el host local se resuelve distinto. |
+| Validacion | `python -m py_compile backend/services/admin-service/app/main.py`; `node --check frontend/api/client.js`; `curl -i http://localhost:8010/ready`; preflight `OPTIONS /v1/session/context` desde `Origin: http://localhost:4173` con `Access-Control-Request-Private-Network: true`; `npm.cmd run validate`. |
+| Observaciones | Se reinicio el Admin API local en `127.0.0.1:8010`; si el navegador conserva cache de modulos, hacer hard refresh. |
+
+### CHG-111
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Fuerza Admin API local por IPv4 |
+| Autor | Codex |
+| Archivos | `frontend/env.js`, `frontend/api/config.js`, `frontend/api/client.js`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, API QA local, diagnostico de red |
+| Descripcion | Se cambio la URL base local del Admin API a `http://127.0.0.1:8010` y se dejo la normalizacion local para convertir overrides `localhost` a IPv4. Tambien se amplio el mensaje de error para indicar la URL fallback intentada. |
+| Motivo | El navegador continuaba mostrando `Failed to fetch` contra `localhost:8010` aunque los preflights y endpoints respondian por curl. Usar IPv4 explicito evita diferencias de resolucion local entre `localhost`, `::1` y `127.0.0.1`. |
+| Impacto | API QA local debe intentar primero `127.0.0.1:8010`, manteniendo fallback hacia `localhost:8010` solo si hiciera falta. |
+| Validacion | `node --check frontend/api/config.js`; `node --check frontend/api/client.js`; `curl http://localhost:4173/env.js`; `curl http://localhost:4173/api/config.js`; `npm.cmd run validate`. |
+| Observaciones | El Admin API local se dejo escuchando en `0.0.0.0:8010` para aceptar conexiones IPv4 locales. |
+
+### CHG-112
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Serializa carga de Administracion y fija controles laterales |
+| Autor | Codex |
+| Archivos | `frontend/api/admin.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, Administracion, API QA local, navegacion lateral |
+| Descripcion | Se cambio la carga inicial del dashboard de Administracion de `Promise.all` a requests secuenciales para evitar fallos intermitentes de fetch contra el Admin API local cuando Chrome abre varias conexiones simultaneas. Tambien se hizo sticky el sidebar y su footer para que los controles de tema, idioma y acceso a Administracion permanezcan visibles en escritorio. |
+| Motivo | En local el navegador seguia reportando `Failed to fetch` en `/v1/settings` aunque los endpoints y preflights respondian individualmente. Ademas, los controles inferiores del sidebar quedaban accesibles solo al llegar al final de paginas largas. |
+| Impacto | API QA local carga de forma mas estable y la navegacion auxiliar del shell queda siempre a mano en pantallas de escritorio. |
+| Validacion | `node --check frontend/api/admin.js`; `curl http://localhost:4173/api/admin.js`; `npm.cmd run validate`; smoke `GET http://127.0.0.1:8010/ready`. |
+| Observaciones | El Admin API local quedo reiniciado y escuchando en `0.0.0.0:8010`. |
+
+### CHG-113
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Corrige consulta de settings por modulo |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/main.py`, `backend/services/admin-service/app/repositories.py`, `TRAZABILIDAD.md` |
+| Secciones | Backend Admin API, settings, PostgreSQL, Administracion |
+| Descripcion | Se separo la consulta de `AdminRepository.list_settings()` en dos variantes: una sin filtro de modulo y otra con `module_code = :module_code`. Tambien se dejo el registro de routers antes de middlewares en el bootstrap del Admin API. |
+| Motivo | PostgreSQL/psycopg no podia inferir el tipo del parametro en `(:module_code is null or module_code = :module_code)`, causando `500 Internal Server Error` al cargar `/v1/settings?module_code=admin` desde API QA. |
+| Impacto | El endpoint de settings de Administracion ya puede devolver `organization.profile` para el tenant QA sin romper la carga del panel. |
+| Validacion | `python -m py_compile services/admin-service/app/repositories.py services/admin-service/app/main.py`; ejecucion directa de `repo.list_settings('ten_739ee59d765d5e14818674800d', module_code='admin')`; `curl http://127.0.0.1:8010/ready`; `npm.cmd run validate`. |
+| Observaciones | El Admin API local se reinicio despues del cambio y quedo escuchando en `0.0.0.0:8010`. |
+
+### CHG-114
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | APIs finas para razones sociales y sucursales |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `frontend/api/admin.js`, `frontend/app.js`, `contracts/api/admin-service.openapi.yaml`, `backend/services/admin-service/README.md`, `docs/arquitectura/modelo_multitenant.md`, `docs/arquitectura/admin_service_modelo_fisico.md`, `TRAZABILIDAD.md` |
+| Secciones | Admin API, Administracion, organizacion, razones sociales, sucursales, OpenAPI |
+| Descripcion | Se agregaron endpoints para crear, actualizar, activar e inactivar razones sociales y sucursales: `/v1/organization/legal-entities` y `/v1/organization/branches`. Por ahora persisten en `admin.tenant_settings` key `organization.profile`, pero cada accion tiene endpoint propio, idempotencia y auditoria. El frontend usa estas APIs para altas y cambios de estado cuando corre en API QA; en mock conserva persistencia local. |
+| Motivo | Administracion necesitaba operaciones reales de alta/actualizacion/activacion/inactivacion para estructura corporativa sin reescribir manualmente todo el JSON desde la UI. |
+| Impacto | El tenant QA puede administrar razones sociales y sucursales desde API QA con acciones auditables, manteniendo compatibilidad con el modelo JSONB inicial. |
+| Validacion | `python -m py_compile services/admin-service/app/api.py services/admin-service/app/repositories.py services/admin-service/app/schemas.py`; `node --check frontend/api/admin.js`; `node --check frontend/app.js`; `pytest services/admin-service/tests/test_admin_api.py`; `npm.cmd run validate`. |
+| Observaciones | Los endpoints usan `admin.setting.update` como permiso vigente. Si mas adelante se requieren permisos granulares, crear `admin.legal_entity.*` y `admin.branch.*` en seed/migracion de permisos. |
+
+### CHG-115
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-05 |
+| Cambio | Actualiza agentes para endpoints finos de organizacion |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Agentes transversales, Administracion, estructura corporativa |
+| Descripcion | Se actualizaron los agentes para exigir que razones sociales y sucursales se creen, actualicen, activen e inactiven mediante los endpoints finos de `admin-service` (`/v1/organization/legal-entities` y `/v1/organization/branches`) mientras persistan en `organization.profile`. Tambien se agregaron preguntas de revision sobre idempotencia, auditoria, contrato OpenAPI, frontend y tests. |
+| Motivo | Evitar que futuros cambios vuelvan a tratar razones sociales y sucursales como reemplazos opacos del JSON completo o como datos locales del frontend. |
+| Impacto | Los agentes tecnicos y transversales ahora alinean sus revisiones con el modelo actual: `organization.profile` como almacenamiento inicial y endpoints finos como superficie de mutacion. |
+| Validacion | `npm.cmd run validate:agents`; `npm.cmd run validate`. |
+| Observaciones | No cambia runtime; es una actualizacion documental/operativa para guiar futuros cambios. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

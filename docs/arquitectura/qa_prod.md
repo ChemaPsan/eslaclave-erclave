@@ -171,6 +171,10 @@ flowchart TB
 
 Para el MVP real se recomienda iniciar con aislamiento logico por `tenant_id` en la base de datos.
 
+Detalle normativo del modelo multitenant, identidad, membresias, roles, permisos, entitlements y contratacion en linea:
+
+- `docs/arquitectura/modelo_multitenant.md`
+
 ```mermaid
 flowchart LR
   Request[Request autenticado] --> TenantCtx[Resolver tenant]

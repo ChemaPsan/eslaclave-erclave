@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from "./config.js";
+import { getAuthToken } from "../auth.js";
 
 
 export class ErclaveApiError extends Error {
@@ -10,16 +11,49 @@ export class ErclaveApiError extends Error {
   }
 }
 
+function getLocalFallbackUrl(url) {
+  if (url.includes("://localhost:")) return url.replace("://localhost:", "://127.0.0.1:");
+  if (url.includes("://127.0.0.1:")) return url.replace("://127.0.0.1:", "://localhost:");
+  return "";
+}
 
-export async function apiRequest(path, options = {}) {
-  const url = `${getApiBaseUrl()}${path}`;
-  const response = await fetch(url, {
+async function fetchApi(url, token, options) {
+  return fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {})
     }
   });
+}
+
+export async function apiRequest(path, options = {}) {
+  const url = `${getApiBaseUrl()}${path}`;
+  const token = await getAuthToken();
+  let response;
+  try {
+    response = await fetchApi(url, token, options);
+  } catch (error) {
+    const fallbackUrl = getLocalFallbackUrl(url);
+    if (fallbackUrl) {
+      try {
+        response = await fetchApi(fallbackUrl, token, options);
+      } catch (fallbackError) {
+        throw new ErclaveApiError(`No se pudo conectar con Admin API en ${getApiBaseUrl()}. Tambien se intento ${fallbackUrl}. Revisa que el servicio local este activo y que el navegador no tenga cache de la URL anterior.`, 0, {
+          cause: error?.message || "fetch_failed",
+          fallback_cause: fallbackError?.message || "fallback_fetch_failed",
+          url,
+          fallback_url: fallbackUrl
+        });
+      }
+    } else {
+      throw new ErclaveApiError(`No se pudo conectar con Admin API en ${getApiBaseUrl()}. Revisa que el servicio local este activo y que el navegador no tenga cache de la URL anterior.`, 0, {
+        cause: error?.message || "fetch_failed",
+        url
+      });
+    }
+  }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {

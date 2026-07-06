@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 Environment = Literal["local", "qa", "prod"]
+AuthMode = Literal["demo", "firebase"]
 
 
 class Settings(BaseSettings):
@@ -19,6 +20,8 @@ class Settings(BaseSettings):
     service_name: str = "admin-service"
     version: str = "0.1.0"
     api_public_base_url: str = "http://localhost:8000"
+    auth_mode: AuthMode = "demo"
+    firebase_project_id: str | None = None
     database_url: str | None = None
     log_level: str = Field(default="INFO")
 
@@ -26,4 +29,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

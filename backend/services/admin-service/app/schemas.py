@@ -18,6 +18,28 @@ class TenantResponse(BaseModel):
     data: TenantRead
 
 
+class SourceRef(BaseModel):
+    type: str
+    id: str
+
+
+class OrganizationProfile(BaseModel):
+    corporate: dict[str, Any]
+    legal_entities: list[dict[str, Any]] = Field(default_factory=list)
+    branches: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class TenantCreateRequest(BaseModel):
+    slug: str
+    commercial_name: str
+    legal_name: str | None = None
+    plan_id: str | None = None
+    timezone: str = "America/Mexico_City"
+    locale: str = "es-MX"
+    source: SourceRef
+    organization_profile: OrganizationProfile | None = None
+
+
 class EntitlementRead(BaseModel):
     module_code: str
     status: str
@@ -36,6 +58,69 @@ class EntitlementUpsertRequest(BaseModel):
 
 class EntitlementResponse(BaseModel):
     data: EntitlementRead
+
+
+class SettingRead(BaseModel):
+    key: str
+    module_code: str | None = None
+    value: dict[str, Any] = Field(default_factory=dict)
+
+
+class SettingListResponse(BaseModel):
+    data: list[SettingRead]
+
+
+class SettingUpsertRequest(BaseModel):
+    module_code: str | None = None
+    value: dict[str, Any]
+
+
+class SettingResponse(BaseModel):
+    data: SettingRead
+
+
+class LegalEntityCreateRequest(BaseModel):
+    legal_name: str
+    tax_id: str | None = None
+    fiscal_regime: str | None = None
+    cfdi_usage: str | None = None
+    fiscal_address: str | None = None
+    contact_name: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
+    contact_position: str | None = None
+
+
+class LegalEntityUpdateRequest(BaseModel):
+    legal_name: str | None = None
+    tax_id: str | None = None
+    fiscal_regime: str | None = None
+    cfdi_usage: str | None = None
+    fiscal_address: str | None = None
+    contact_name: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
+    contact_position: str | None = None
+
+
+class BranchCreateRequest(BaseModel):
+    name: str
+    code: str | None = None
+    legal_entity_id: str | None = None
+    address: str | None = None
+    phone: str | None = None
+
+
+class BranchUpdateRequest(BaseModel):
+    name: str | None = None
+    code: str | None = None
+    legal_entity_id: str | None = None
+    address: str | None = None
+    phone: str | None = None
+
+
+class OrganizationItemResponse(BaseModel):
+    data: dict[str, Any]
 
 
 class PolicyEvaluateRequest(BaseModel):

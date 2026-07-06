@@ -2,11 +2,12 @@
 
 Estado: definido para implementacion MVP.
 
-Este documento aterriza el primer modelo fisico real de `admin-service` en PostgreSQL/Cloud SQL. El objetivo es crear la fuente de verdad para tenants, usuarios, roles, permisos, modulos contratados, membresias y auditoria.
+Este documento aterriza el primer modelo fisico real de `admin-service` en PostgreSQL/Cloud SQL. El objetivo es crear la fuente de verdad para tenants, usuarios, roles, permisos, modulos contratados, configuracion organizacional, membresias y auditoria.
 
 ## Principios
 
 - `admin-service` es duenio de tenants, usuarios, roles, permisos y modulos activos.
+- `admin-service` es duenio del perfil organizacional inicial del tenant mediante `admin.tenant_settings` key `organization.profile`.
 - Ningun servicio operativo debe escribir estas tablas directamente.
 - Todo dato operable por tenant debe tener separacion clara por `tenant_id`.
 - El usuario se modela como identidad global y la relacion con cada tenant vive en `memberships`.
@@ -26,6 +27,7 @@ Este documento aterriza el primer modelo fisico real de `admin-service` en Postg
 | `admin.role_permissions` | Permisos asignados a cada rol. | Si. |
 | `admin.membership_roles` | Roles asignados a una membresia. | Si. |
 | `admin.tenant_modules` | Modulos activos, suspendidos o inactivos por tenant. | Si. |
+| `admin.tenant_settings` | Parametros por tenant; incluye `organization.profile`. | Si. |
 | `admin.audit_events` | Bitacora de acciones criticas y cambios administrativos. | Puede ser global o por tenant. |
 
 ## Decision sobre usuarios y membresias
@@ -67,11 +69,30 @@ La idempotencia final se debera complementar con una tabla dedicada de comandos 
 - `POST /v1/users/invitations`;
 - `POST /v1/roles`;
 - `PUT /v1/roles/{role_id}/permissions`.
+- `PUT /v1/settings/{key}`.
+
+## Perfil organizacional
+
+Cada tenant debe nacer con:
+
+```text
+admin.tenant_settings.key = organization.profile
+admin.tenant_settings.module_code = admin
+```
+
+Este setting contiene:
+
+- `corporate`: nombre corporativo, razon social principal, RFC, telefono y contacto.
+- `legal_entities`: razones sociales del corporativo, datos fiscales y contacto por razon social.
+- `branches`: sucursales, matriz, centros de trabajo, almacenes o puntos de venta.
+
+No debe guardarse como fuente de verdad en `admin.tenants.metadata`, Firebase Auth o localStorage. El frontend solo lo presenta y lo actualiza mediante `GET /v1/settings`, `PUT /v1/settings/organization.profile` para corporativo, y endpoints finos de `admin-service` para razones sociales y sucursales.
 
 ## Archivos fuente
 
 - ORM: `backend/services/admin-service/app/models.py`
 - Migracion: `backend/alembic/versions/20260617_0001_admin_service_initial.py`
+- Migracion settings: `backend/alembic/versions/20260705_0003_admin_tenant_settings.py`
 - Alembic metadata: `backend/alembic/env.py`
 - Catalogo seed MVP: `backend/services/admin-service/app/seeds/catalog.py`
 
@@ -113,6 +134,6 @@ python scripts/seed_admin_mvp.py
 
 1. Definir si agregaremos tabla global `admin.modules` o mantenemos modulos como catalogo en codigo durante el MVP.
 2. Implementar repositorios o unidad de trabajo para `admin-service`.
-3. Implementar endpoints de tenants y tenant modules.
+3. Implementar endpoints mutables de tenants y asegurar que `POST /v1/tenants` inicialice `organization.profile`.
 4. Agregar tabla de idempotencia para comandos reales.
 5. Agregar pruebas de migracion contra PostgreSQL en QA.

@@ -18,6 +18,10 @@ La regla central es:
 
 > Cada servicio es dueno de sus datos, sus reglas y sus estados. Los demas servicios solo pueden consultar o solicitar acciones por contratos explicitos.
 
+Complemento recomendado:
+
+- `docs/arquitectura/modelo_multitenant.md` define como se resuelve identidad, tenant, membresias, roles, permisos, entitlements y contratacion en linea.
+
 ---
 
 ## 2. Principios obligatorios

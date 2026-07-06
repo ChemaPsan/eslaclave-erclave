@@ -105,6 +105,7 @@ GET /version
 ```text
 GET /v1/session/context
 GET /v1/tenants/{tenant_id}
+POST /v1/tenants
 GET /v1/tenants/{tenant_id}/entitlements
 PUT /v1/tenants/{tenant_id}/entitlements/{module_code}
 POST /v1/policy/evaluate
@@ -112,20 +113,47 @@ GET /v1/users
 POST /v1/users/invitations
 PATCH /v1/users/{user_id}
 POST /v1/users/{user_id}/disable
+DELETE /v1/users/{user_id}
 GET /v1/roles
 POST /v1/roles
 PATCH /v1/roles/{role_id}
 PUT /v1/roles/{role_id}/permissions
 GET /v1/permissions
+GET /v1/settings
+PUT /v1/settings/{key}
+POST /v1/organization/legal-entities
+PATCH /v1/organization/legal-entities/{legal_entity_id}
+POST /v1/organization/legal-entities/{legal_entity_id}/activate
+POST /v1/organization/legal-entities/{legal_entity_id}/deactivate
+POST /v1/organization/branches
+PATCH /v1/organization/branches/{branch_id}
+POST /v1/organization/branches/{branch_id}/activate
+POST /v1/organization/branches/{branch_id}/deactivate
 ```
 
-Estos endpoints leen y actualizan PostgreSQL por medio de `AdminRepository`. `GET /v1/session/context` devuelve tenant, usuario, entitlements, permisos efectivos y modulos activos usando `X-Tenant-Id` y `X-Actor-Id` mientras llega el login real. El `PUT` de entitlements permite activar, inactivar o suspender modulos para el tenant QA. Los endpoints de usuarios permiten invitar identidades QA, actualizar nombre/roles de membresia y desactivar membresias sin crear contrasenas ni login real. Los endpoints de roles permiten crear roles, activar/inactivar roles y reemplazar permisos asignados. Los endpoints mutables de tenants siguen pendientes para una fase posterior.
+Estos endpoints leen y actualizan PostgreSQL por medio de `AdminRepository`. `GET /v1/session/context` devuelve tenant, usuario, entitlements, permisos efectivos y modulos activos. En QA con `ERCLAVE_AUTH_MODE=firebase`, el actor se resuelve desde `Authorization: Bearer <firebase_id_token>` y se cruza por email contra `admin.users` y `admin.memberships`; en local/demo se conserva `X-Actor-Id` como fallback. Si una membresia invitada entra con token Firebase valido, `session/context` la activa en ERClave. El `PUT` de entitlements permite activar, inactivar o suspender modulos para el tenant QA. Los endpoints de usuarios permiten invitar identidades QA, actualizar nombre/roles de membresia, desactivar membresias y eliminar el acceso del tenant; en modo Firebase, invitacion asegura identidad Firebase y eliminacion borra la identidad Firebase por email. Los endpoints de roles permiten crear roles, activar/inactivar roles y reemplazar permisos asignados. `GET /v1/settings` y `PUT /v1/settings/organization.profile` administran configuraciones por tenant; `organization.profile` es la fuente de verdad inicial para corporativo, razones sociales, sucursales y contactos. Los endpoints `POST/PATCH /v1/organization/legal-entities` y `POST/PATCH /v1/organization/branches` manipulan esas listas con auditoria e idempotencia, aunque persisten en el mismo JSONB. Los endpoints mutables de tenants siguen pendientes para una fase posterior.
+
+`POST /v1/tenants` es el primer corte para provisioning: crea o actualiza idempotentemente el tenant por slug e inicializa `organization.profile`. Antes de Produccion debe conectarse a autenticacion service-to-service para `internal.provisioning.tenant.create`.
 
 Los endpoints mutables requieren:
 
 ```text
 Idempotency-Key=<clave_unica_del_comando>
 X-Correlation-Id=<id_opcional_para_traza>
+```
+
+En `ERCLAVE_AUTH_MODE=firebase`, las mutaciones actuales validan permiso efectivo antes de ejecutar:
+
+```text
+admin.entitlement.manage
+admin.user.invite
+admin.user.update
+admin.user.disable
+admin.user.delete
+admin.role.create
+admin.role.update
+admin.setting.read
+admin.setting.update
 ```
 
 Cada mutacion registra un evento en `admin.audit_events` con accion, recurso, estado anterior, estado posterior, `correlation_id` e `idempotency_key`.

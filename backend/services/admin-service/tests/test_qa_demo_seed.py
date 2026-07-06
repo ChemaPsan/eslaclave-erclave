@@ -30,3 +30,14 @@ def test_demo_modules_are_intentional_for_qa():
     module = load_seed_module()
 
     assert module.ACTIVE_DEMO_MODULES == ("admin", "production", "inventory", "sales", "integrations")
+
+
+def test_demo_seed_default_organization_profile_matches_admin_structure():
+    module = load_seed_module()
+
+    profile = module.default_organization_profile("ERClave Demo QA")
+
+    assert profile["corporate"]["commercial_name"] == "ERClave Demo QA"
+    assert profile["corporate"]["contact_email"] == ""
+    assert profile["legal_entities"] == []
+    assert profile["branches"] == []

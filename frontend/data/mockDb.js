@@ -1,6 +1,30 @@
 import { defaultProductsServices, defaultLaborRoles, defaultMachines, defaultRecipes, defaultOrders } from "./resources.js";
 
 export const mockDb = {
+  getDefaultAdminOrganization(tenant = {}) {
+    return {
+      corporate: {
+        commercial_name: tenant.commercial_name || "Cliente piloto",
+        legal_name: tenant.legal_name || "",
+        tax_id: "",
+        phone: "",
+        contact_name: "",
+        contact_email: "",
+        contact_phone: "",
+        contact_position: ""
+      },
+      legal_entities: [],
+      branches: []
+    };
+  },
+  loadAdminOrganization(tenant = {}) {
+    const raw = localStorage.getItem("erclave-admin-organization");
+    return raw ? JSON.parse(raw) : this.getDefaultAdminOrganization(tenant);
+  },
+  saveAdminOrganization(organization) {
+    localStorage.setItem("erclave-admin-organization", JSON.stringify(organization));
+    return organization;
+  },
   loadProductsServices() {
     const raw = localStorage.getItem("erclave-products-services");
     return raw ? JSON.parse(raw) : defaultProductsServices;

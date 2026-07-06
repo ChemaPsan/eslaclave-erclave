@@ -71,6 +71,7 @@ class Tenant(TimestampMixin, Base):
     roles: Mapped[list["Role"]] = relationship(back_populates="tenant")
     memberships: Mapped[list["Membership"]] = relationship(back_populates="tenant")
     tenant_modules: Mapped[list["TenantModule"]] = relationship(back_populates="tenant")
+    tenant_settings: Mapped[list["TenantSetting"]] = relationship(back_populates="tenant")
 
 
 class User(TimestampMixin, Base):
@@ -172,6 +173,32 @@ class TenantModule(TimestampMixin, Base):
     )
 
     tenant: Mapped[Tenant] = relationship(back_populates="tenant_modules")
+
+
+class TenantSetting(TimestampMixin, Base):
+    __tablename__ = "tenant_settings"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "key", name="uq_tenant_settings_tenant_key"),
+        Index("ix_tenant_settings_tenant_module", "tenant_id", "module_code"),
+        {"schema": "admin"},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("set"))
+    tenant_id: Mapped[str] = mapped_column(
+        String(40),
+        ForeignKey("admin.tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    key: Mapped[str] = mapped_column(String(160), nullable=False)
+    module_code: Mapped[str | None] = mapped_column(String(80))
+    value: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+        default=dict,
+    )
+
+    tenant: Mapped[Tenant] = relationship(back_populates="tenant_settings")
 
 
 class Membership(TimestampMixin, Base):

@@ -131,6 +131,7 @@ Primer corte real de lectura, administracion de entitlements y evaluacion de pol
 ```text
 GET /v1/session/context
 GET /v1/tenants/{tenant_id}
+POST /v1/tenants
 GET /v1/tenants/{tenant_id}/entitlements
 PUT /v1/tenants/{tenant_id}/entitlements/{module_code}
 POST /v1/policy/evaluate
@@ -138,11 +139,14 @@ GET /v1/users
 POST /v1/users/invitations
 PATCH /v1/users/{user_id}
 POST /v1/users/{user_id}/disable
+DELETE /v1/users/{user_id}
 GET /v1/roles
 POST /v1/roles
 PATCH /v1/roles/{role_id}
 PUT /v1/roles/{role_id}/permissions
 GET /v1/permissions
+GET /v1/settings
+PUT /v1/settings/{key}
 ```
 
 `GET /v1/session/context`, `GET /v1/users` y `GET /v1/roles` requieren header:
@@ -151,13 +155,19 @@ GET /v1/permissions
 X-Tenant-Id=<tenant_id>
 ```
 
-`GET /v1/session/context` tambien requiere temporalmente:
+En modo local/demo, `GET /v1/session/context` tambien requiere temporalmente:
 
 ```text
 X-Actor-Id=<user_id>
 ```
 
-Este endpoint devuelve tenant, usuario, entitlements, permisos efectivos y modulos activos. Es la antesala al login real: cuando exista OIDC/JWT, `X-Actor-Id` se reemplazara por el subject del token.
+En QA con `ERCLAVE_AUTH_MODE=firebase`, `GET /v1/session/context` requiere:
+
+```text
+Authorization=Bearer <firebase_id_token>
+```
+
+El servicio verifica el token de Firebase Auth, toma el email autenticado y lo cruza contra `admin.users` y `admin.memberships` del tenant activo. Si la membresia esta invitada, la activa al primer login valido. El endpoint devuelve tenant, usuario, entitlements, permisos efectivos y modulos activos.
 
 Los endpoints mutables de `admin-service` requieren:
 
@@ -166,7 +176,11 @@ Idempotency-Key=<clave_unica_del_comando>
 X-Correlation-Id=<id_opcional_para_traza>
 ```
 
-Las mutaciones actuales de entitlements y usuarios registran auditoria en `admin.audit_events`.
+En QA con `ERCLAVE_AUTH_MODE=firebase`, las mutaciones de entitlements, usuarios y roles tambien validan el permiso efectivo del usuario autenticado contra `admin-service`. En local/demo se conserva el fallback de desarrollo para no bloquear pruebas locales.
+
+Las mutaciones actuales de entitlements, usuarios, roles y settings registran auditoria en `admin.audit_events`. La invitacion de usuarios asegura identidad Firebase cuando el servicio corre en modo Firebase; la eliminacion borra el acceso en ERClave y elimina la identidad Firebase por email. El perfil organizacional del tenant vive en `admin.tenant_settings` con key `organization.profile` y se actualiza via `PUT /v1/settings/organization.profile`.
+
+`POST /v1/tenants` crea tenants desde provisioning de forma idempotente y siempre inicializa `organization.profile`. La autorizacion service-to-service de provisioning queda como siguiente endurecimiento antes de Produccion.
 
 Ejemplo de policy evaluation:
 
@@ -226,6 +240,7 @@ Este seed crea o actualiza:
 - rol `owner`;
 - membresia activa;
 - modulos activos `admin`, `production`, `inventory`, `sales` e `integrations`;
+- setting inicial `organization.profile` para corporativo, razones sociales y sucursales;
 - asignacion del rol owner a todos los permisos activos.
 
 No crea contrasenas ni credenciales de login. El usuario es una identidad de QA para

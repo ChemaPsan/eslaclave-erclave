@@ -17,32 +17,33 @@ function commandHeaders(extraHeaders = {}) {
 
 export async function getAdminDashboard() {
   const tenantId = getDemoTenantId();
-  const actorId = getDemoActorId();
+  const session = await getSessionContext();
+  const actorId = session?.user?.id || getDemoActorId();
 
-  const [session, tenant, entitlements, users, roles, permissions, policy] = await Promise.all([
-    getSessionContext(),
-    apiRequest(`/v1/tenants/${tenantId}`),
-    apiRequest(`/v1/tenants/${tenantId}/entitlements`),
-    apiRequest("/v1/users", { headers: { "X-Tenant-Id": tenantId } }),
-    apiRequest("/v1/roles", { headers: { "X-Tenant-Id": tenantId } }),
-    apiRequest("/v1/permissions"),
-    apiRequest("/v1/policy/evaluate", {
-      method: "POST",
-      body: JSON.stringify({
-        tenant_id: tenantId,
-        actor_id: actorId,
-        module: "admin",
-        resource: "tenant",
-        action: "read",
-        scope: {}
-      })
+  const tenant = await apiRequest(`/v1/tenants/${tenantId}`);
+  const entitlements = await apiRequest(`/v1/tenants/${tenantId}/entitlements`);
+  const settings = await apiRequest("/v1/settings?module_code=admin", { headers: { "X-Tenant-Id": tenantId } });
+  const users = await apiRequest("/v1/users", { headers: { "X-Tenant-Id": tenantId } });
+  const roles = await apiRequest("/v1/roles", { headers: { "X-Tenant-Id": tenantId } });
+  const permissions = await apiRequest("/v1/permissions");
+  const policy = await apiRequest("/v1/policy/evaluate", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      actor_id: actorId,
+      module: "admin",
+      resource: "tenant",
+      action: "read",
+      scope: {}
     })
-  ]);
+  });
 
   return {
     tenant: tenant.data,
     session,
     entitlements: entitlements.data,
+    settings: settings.data,
+    organization: settings.data.find((item) => item.key === "organization.profile")?.value || null,
     users: users.data,
     roles: roles.data,
     permissions: permissions.data,
@@ -77,6 +78,88 @@ export async function updateTenantEntitlement(moduleCode, payload) {
 }
 
 
+export async function updateTenantSetting(key, payload) {
+  const tenantId = getDemoTenantId();
+  const response = await apiRequest(`/v1/settings/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    headers: commandHeaders({ "X-Tenant-Id": tenantId }),
+    body: JSON.stringify(payload)
+  });
+
+  return response.data;
+}
+
+
+export async function createTenantLegalEntity(payload) {
+  const tenantId = getDemoTenantId();
+  const response = await apiRequest("/v1/organization/legal-entities", {
+    method: "POST",
+    headers: commandHeaders({ "X-Tenant-Id": tenantId }),
+    body: JSON.stringify(payload)
+  });
+
+  return response.data;
+}
+
+
+export async function updateTenantLegalEntity(legalEntityId, payload) {
+  const tenantId = getDemoTenantId();
+  const response = await apiRequest(`/v1/organization/legal-entities/${legalEntityId}`, {
+    method: "PATCH",
+    headers: commandHeaders({ "X-Tenant-Id": tenantId }),
+    body: JSON.stringify(payload)
+  });
+
+  return response.data;
+}
+
+
+export async function setTenantLegalEntityStatus(legalEntityId, status) {
+  const tenantId = getDemoTenantId();
+  const response = await apiRequest(`/v1/organization/legal-entities/${legalEntityId}/${status === "active" ? "activate" : "deactivate"}`, {
+    method: "POST",
+    headers: commandHeaders({ "X-Tenant-Id": tenantId })
+  });
+
+  return response.data;
+}
+
+
+export async function createTenantBranch(payload) {
+  const tenantId = getDemoTenantId();
+  const response = await apiRequest("/v1/organization/branches", {
+    method: "POST",
+    headers: commandHeaders({ "X-Tenant-Id": tenantId }),
+    body: JSON.stringify(payload)
+  });
+
+  return response.data;
+}
+
+
+export async function updateTenantBranch(branchId, payload) {
+  const tenantId = getDemoTenantId();
+  const response = await apiRequest(`/v1/organization/branches/${branchId}`, {
+    method: "PATCH",
+    headers: commandHeaders({ "X-Tenant-Id": tenantId }),
+    body: JSON.stringify(payload)
+  });
+
+  return response.data;
+}
+
+
+export async function setTenantBranchStatus(branchId, status) {
+  const tenantId = getDemoTenantId();
+  const response = await apiRequest(`/v1/organization/branches/${branchId}/${status === "active" ? "activate" : "deactivate"}`, {
+    method: "POST",
+    headers: commandHeaders({ "X-Tenant-Id": tenantId })
+  });
+
+  return response.data;
+}
+
+
 export async function inviteTenantUser(payload) {
   const tenantId = getDemoTenantId();
   const response = await apiRequest("/v1/users/invitations", {
@@ -105,6 +188,16 @@ export async function disableTenantUser(userId) {
   const tenantId = getDemoTenantId();
   const response = await apiRequest(`/v1/users/${userId}/disable`, {
     method: "POST",
+    headers: commandHeaders({ "X-Tenant-Id": tenantId })
+  });
+
+  return response.data;
+}
+
+export async function deleteTenantUser(userId) {
+  const tenantId = getDemoTenantId();
+  const response = await apiRequest(`/v1/users/${userId}`, {
+    method: "DELETE",
     headers: commandHeaders({ "X-Tenant-Id": tenantId })
   });
 

@@ -26,6 +26,7 @@ paths:
       tags: [Session]
       operationId: getSessionContext
       summary: Get current tenant, actor, active modules and granted permissions.
+      description: In QA/prod, resolves the actor from a Firebase Auth ID token sent as `Authorization: Bearer <token>`. In local/demo mode, `X-Actor-Id` can be used as a temporary fallback.
       x-required-module: admin
       x-permissions: [internal.session.context.read]
       parameters:
@@ -311,6 +312,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserResponse'
+    delete:
+      tags: [Users]
+      operationId: deleteUser
+      summary: Delete a tenant user and its identity when no other membership remains.
+      x-required-module: admin
+      x-permissions: [admin.user.delete]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: User deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
   /v1/users/{user_id}/disable:
     post:
       tags: [Users]
@@ -540,6 +563,204 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SettingResponse'
+  /v1/organization/legal-entities:
+    post:
+      tags: [Settings]
+      operationId: createLegalEntity
+      summary: Create legal entity inside organization profile.
+      x-required-module: admin
+      x-permissions: [admin.setting.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalEntityCreateRequest'
+      responses:
+        '201':
+          description: Legal entity created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationItemResponse'
+  /v1/organization/legal-entities/{legal_entity_id}:
+    patch:
+      tags: [Settings]
+      operationId: updateLegalEntity
+      summary: Update legal entity inside organization profile.
+      x-required-module: admin
+      x-permissions: [admin.setting.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: legal_entity_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalEntityUpdateRequest'
+      responses:
+        '200':
+          description: Legal entity updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationItemResponse'
+  /v1/organization/legal-entities/{legal_entity_id}/activate:
+    post:
+      tags: [Settings]
+      operationId: activateLegalEntity
+      summary: Activate legal entity.
+      x-required-module: admin
+      x-permissions: [admin.setting.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: legal_entity_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Legal entity activated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationItemResponse'
+  /v1/organization/legal-entities/{legal_entity_id}/deactivate:
+    post:
+      tags: [Settings]
+      operationId: deactivateLegalEntity
+      summary: Deactivate legal entity.
+      x-required-module: admin
+      x-permissions: [admin.setting.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: legal_entity_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Legal entity deactivated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationItemResponse'
+  /v1/organization/branches:
+    post:
+      tags: [Settings]
+      operationId: createBranch
+      summary: Create branch inside organization profile.
+      x-required-module: admin
+      x-permissions: [admin.setting.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BranchCreateRequest'
+      responses:
+        '201':
+          description: Branch created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationItemResponse'
+  /v1/organization/branches/{branch_id}:
+    patch:
+      tags: [Settings]
+      operationId: updateBranch
+      summary: Update branch inside organization profile.
+      x-required-module: admin
+      x-permissions: [admin.setting.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: branch_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BranchUpdateRequest'
+      responses:
+        '200':
+          description: Branch updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationItemResponse'
+  /v1/organization/branches/{branch_id}/activate:
+    post:
+      tags: [Settings]
+      operationId: activateBranch
+      summary: Activate branch.
+      x-required-module: admin
+      x-permissions: [admin.setting.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: branch_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Branch activated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationItemResponse'
+  /v1/organization/branches/{branch_id}/deactivate:
+    post:
+      tags: [Settings]
+      operationId: deactivateBranch
+      summary: Deactivate branch.
+      x-required-module: admin
+      x-permissions: [admin.setting.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: branch_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Branch deactivated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationItemResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -557,10 +778,10 @@ components:
     ActorHeader:
       name: X-Actor-Id
       in: header
-      required: true
+      required: false
       schema:
         type: string
-      description: Temporary actor context for Session Context MVP. Replaced by token subject in login phase.
+      description: Local/demo fallback only. QA/prod resolve the actor from the Firebase Auth bearer token.
     TenantIdPath:
       name: tenant_id
       in: path
@@ -722,6 +943,9 @@ components:
           default: es-MX
         source:
           $ref: '#/components/schemas/SourceRef'
+        organization_profile:
+          $ref: '#/components/schemas/OrganizationProfile'
+          description: Initial tenant organization profile. If omitted, admin-service/provisioning must create an empty `organization.profile` setting.
     TenantUpdateRequest:
       type: object
       properties:
@@ -851,7 +1075,7 @@ components:
           type: string
         status:
           type: string
-          enum: [invited, active, disabled]
+          enum: [invited, active, disabled, deleted]
         roles:
           type: array
           items:
@@ -1007,6 +1231,7 @@ components:
           type: string
     Setting:
       type: object
+      description: Tenant setting. `organization.profile` is the canonical key for corporate, legal entities and branches configured in Administration.
       properties:
         key:
           type: string
@@ -1036,3 +1261,131 @@ components:
         value:
           type: object
           additionalProperties: true
+          description: For key `organization.profile`, this value must match `OrganizationProfile`.
+    OrganizationItemResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+    LegalEntityCreateRequest:
+      type: object
+      required: [legal_name]
+      properties:
+        legal_name:
+          type: string
+        tax_id:
+          type: string
+        fiscal_regime:
+          type: string
+        cfdi_usage:
+          type: string
+        fiscal_address:
+          type: string
+        contact_name:
+          type: string
+        contact_email:
+          type: string
+          format: email
+        contact_phone:
+          type: string
+        contact_position:
+          type: string
+    LegalEntityUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/LegalEntityCreateRequest'
+      required: []
+    BranchCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        legal_entity_id:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+    BranchUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/BranchCreateRequest'
+      required: []
+    OrganizationProfile:
+      type: object
+      required: [corporate, legal_entities, branches]
+      properties:
+        corporate:
+          $ref: '#/components/schemas/CorporateProfile'
+        legal_entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/LegalEntityProfile'
+        branches:
+          type: array
+          items:
+            $ref: '#/components/schemas/BranchProfile'
+    CorporateProfile:
+      type: object
+      required: [commercial_name]
+      properties:
+        commercial_name:
+          type: string
+        legal_name:
+          type: string
+        tax_id:
+          type: string
+        phone:
+          type: string
+        contact_name:
+          type: string
+        contact_email:
+          type: string
+          format: email
+        contact_phone:
+          type: string
+        contact_position:
+          type: string
+    LegalEntityProfile:
+      type: object
+      required: [id, legal_name]
+      properties:
+        id:
+          type: string
+        legal_name:
+          type: string
+        tax_id:
+          type: string
+        fiscal_regime:
+          type: string
+        cfdi_usage:
+          type: string
+        fiscal_address:
+          type: string
+        contact_name:
+          type: string
+        contact_email:
+          type: string
+          format: email
+        contact_phone:
+          type: string
+        contact_position:
+          type: string
+    BranchProfile:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        code:
+          type: string
+        legal_entity_id:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string

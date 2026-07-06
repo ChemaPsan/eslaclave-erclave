@@ -6,12 +6,37 @@ from sqlalchemy.engine import Engine
 
 from erclave_common.db import create_database_engine
 
-from .schemas import EntitlementRead, PermissionRead, PolicyDecision, RoleRead, SessionContextRead, TenantRead, UserRead
+from .schemas import (
+    EntitlementRead,
+    PermissionRead,
+    PolicyDecision,
+    RoleRead,
+    SessionContextRead,
+    SettingRead,
+    TenantRead,
+    UserRead,
+)
 
 
 class AdminRepository:
     def __init__(self, engine: Engine):
         self.engine = engine
+
+    def default_organization_profile(self, commercial_name: str, legal_name: str | None = None) -> dict:
+        return {
+            "corporate": {
+                "commercial_name": commercial_name,
+                "legal_name": legal_name or commercial_name,
+                "tax_id": "",
+                "phone": "",
+                "contact_name": "",
+                "contact_email": "",
+                "contact_phone": "",
+                "contact_position": "",
+            },
+            "legal_entities": [],
+            "branches": [],
+        }
 
     def get_tenant(self, tenant_id: str) -> TenantRead | None:
         with self.engine.connect() as connection:
@@ -28,6 +53,124 @@ class AdminRepository:
 
         return TenantRead.model_validate(dict(row)) if row else None
 
+    def create_tenant(
+        self,
+        slug: str,
+        commercial_name: str,
+        legal_name: str | None,
+        plan_id: str | None,
+        timezone: str,
+        locale: str,
+        source: dict,
+        organization_profile: dict | None,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> TenantRead:
+        tenant_id = f"ten_{uuid4().hex[:26]}"
+        profile = organization_profile or self.default_organization_profile(commercial_name, legal_name)
+        with self.engine.begin() as connection:
+            before = connection.execute(
+                text(
+                    """
+                    select id, slug, legal_name, commercial_name, status, plan_id, timezone, locale
+                    from admin.tenants
+                    where slug = lower(:slug)
+                    """
+                ),
+                {"slug": slug},
+            ).mappings().first()
+            row = connection.execute(
+                text(
+                    """
+                    insert into admin.tenants (
+                        id,
+                        slug,
+                        legal_name,
+                        commercial_name,
+                        status,
+                        plan_id,
+                        timezone,
+                        locale,
+                        source_type,
+                        source_id,
+                        metadata
+                    )
+                    values (
+                        :id,
+                        lower(:slug),
+                        :legal_name,
+                        :commercial_name,
+                        'provisioning',
+                        :plan_id,
+                        :timezone,
+                        :locale,
+                        :source_type,
+                        :source_id,
+                        cast(:metadata as jsonb)
+                    )
+                    on conflict (slug)
+                    do update set
+                        legal_name = excluded.legal_name,
+                        commercial_name = excluded.commercial_name,
+                        plan_id = excluded.plan_id,
+                        timezone = excluded.timezone,
+                        locale = excluded.locale,
+                        source_type = excluded.source_type,
+                        source_id = excluded.source_id,
+                        metadata = excluded.metadata,
+                        updated_at = now()
+                    returning id, slug, legal_name, commercial_name, status, plan_id, timezone, locale
+                    """
+                ),
+                {
+                    "id": tenant_id,
+                    "slug": slug,
+                    "legal_name": legal_name,
+                    "commercial_name": commercial_name,
+                    "plan_id": plan_id,
+                    "timezone": timezone,
+                    "locale": locale,
+                    "source_type": source["type"],
+                    "source_id": source["id"],
+                    "metadata": json.dumps({"source": source}),
+                },
+            ).mappings().one()
+            connection.execute(
+                text(
+                    """
+                    insert into admin.tenant_settings (id, tenant_id, key, module_code, value)
+                    values (:id, :tenant_id, 'organization.profile', 'admin', cast(:value as jsonb))
+                    on conflict (tenant_id, key)
+                    do update set
+                        module_code = excluded.module_code,
+                        value = case
+                            when admin.tenant_settings.value = '{}'::jsonb then excluded.value
+                            else admin.tenant_settings.value
+                        end,
+                        updated_at = now()
+                    """
+                ),
+                {
+                    "id": f"set_{uuid4().hex[:26]}",
+                    "tenant_id": row["id"],
+                    "value": json.dumps(profile),
+                },
+            )
+            self._record_audit_event(
+                connection,
+                tenant_id=row["id"],
+                action="admin.tenant.create",
+                resource_type="tenant",
+                resource_id=row["id"],
+                before_state=dict(before) if before else None,
+                after_state=dict(row),
+                idempotency_key=idempotency_key,
+                correlation_id=correlation_id,
+                metadata={"source": source, "initialized_settings": ["organization.profile"]},
+            )
+
+        return TenantRead.model_validate(dict(row))
+
     def list_entitlements(self, tenant_id: str) -> list[EntitlementRead]:
         with self.engine.connect() as connection:
             rows = connection.execute(
@@ -43,6 +186,199 @@ class AdminRepository:
             ).mappings().all()
 
         return [EntitlementRead.model_validate(dict(row)) for row in rows]
+
+    def list_settings(self, tenant_id: str, module_code: str | None = None) -> list[SettingRead]:
+        query = """
+            select key, module_code, value
+            from admin.tenant_settings
+            where tenant_id = :tenant_id
+            order by module_code nulls last, key
+        """
+        params = {"tenant_id": tenant_id}
+        if module_code is not None:
+            query = """
+                select key, module_code, value
+                from admin.tenant_settings
+                where tenant_id = :tenant_id
+                    and module_code = :module_code
+                order by module_code nulls last, key
+            """
+            params["module_code"] = module_code
+
+        with self.engine.connect() as connection:
+            rows = connection.execute(
+                text(query),
+                params,
+            ).mappings().all()
+
+        return [SettingRead.model_validate(dict(row)) for row in rows]
+
+    def upsert_setting(
+        self,
+        tenant_id: str,
+        key: str,
+        module_code: str | None,
+        value: dict,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> SettingRead | None:
+        with self.engine.begin() as connection:
+            before = connection.execute(
+                text(
+                    """
+                    select key, module_code, value
+                    from admin.tenant_settings
+                    where tenant_id = :tenant_id and key = :key
+                    """
+                ),
+                {"tenant_id": tenant_id, "key": key},
+            ).mappings().first()
+            row = connection.execute(
+                text(
+                    """
+                    insert into admin.tenant_settings (id, tenant_id, key, module_code, value)
+                    values (:id, :tenant_id, :key, :module_code, cast(:value as jsonb))
+                    on conflict (tenant_id, key)
+                    do update set
+                        module_code = excluded.module_code,
+                        value = excluded.value,
+                        updated_at = now()
+                    returning key, module_code, value
+                    """
+                ),
+                {
+                    "id": f"set_{uuid4().hex[:26]}",
+                    "tenant_id": tenant_id,
+                    "key": key,
+                    "module_code": module_code,
+                    "value": json.dumps(value),
+                },
+            ).mappings().first()
+            if row:
+                self._record_audit_event(
+                    connection,
+                    tenant_id=tenant_id,
+                    action="admin.setting.upsert",
+                    resource_type="tenant_setting",
+                    resource_id=key,
+                    before_state=dict(before) if before else None,
+                    after_state=dict(row),
+                    idempotency_key=idempotency_key,
+                    correlation_id=correlation_id,
+                    metadata={"module_code": module_code},
+                )
+
+        return SettingRead.model_validate(dict(row)) if row else None
+
+    def create_legal_entity(
+        self,
+        tenant_id: str,
+        payload: dict,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> dict | None:
+        item = {key: value for key, value in payload.items() if value is not None}
+        item["id"] = f"rso_{uuid4().hex[:18]}"
+        item["status"] = "active"
+        return self._append_organization_item(
+            tenant_id=tenant_id,
+            collection_key="legal_entities",
+            item=item,
+            action="admin.organization.legal_entity.create",
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+        )
+
+    def update_legal_entity(
+        self,
+        tenant_id: str,
+        legal_entity_id: str,
+        payload: dict,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> dict | None:
+        return self._update_organization_item(
+            tenant_id=tenant_id,
+            collection_key="legal_entities",
+            item_id=legal_entity_id,
+            patch={key: value for key, value in payload.items() if value is not None},
+            action="admin.organization.legal_entity.update",
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+        )
+
+    def set_legal_entity_status(
+        self,
+        tenant_id: str,
+        legal_entity_id: str,
+        status: str,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> dict | None:
+        return self._update_organization_item(
+            tenant_id=tenant_id,
+            collection_key="legal_entities",
+            item_id=legal_entity_id,
+            patch={"status": status},
+            action=f"admin.organization.legal_entity.{status}",
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+        )
+
+    def create_branch(
+        self,
+        tenant_id: str,
+        payload: dict,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> dict | None:
+        item = {key: value for key, value in payload.items() if value is not None}
+        item["id"] = f"suc_{uuid4().hex[:18]}"
+        item["status"] = "active"
+        return self._append_organization_item(
+            tenant_id=tenant_id,
+            collection_key="branches",
+            item=item,
+            action="admin.organization.branch.create",
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+        )
+
+    def update_branch(
+        self,
+        tenant_id: str,
+        branch_id: str,
+        payload: dict,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> dict | None:
+        return self._update_organization_item(
+            tenant_id=tenant_id,
+            collection_key="branches",
+            item_id=branch_id,
+            patch={key: value for key, value in payload.items() if value is not None},
+            action="admin.organization.branch.update",
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+        )
+
+    def set_branch_status(
+        self,
+        tenant_id: str,
+        branch_id: str,
+        status: str,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> dict | None:
+        return self._update_organization_item(
+            tenant_id=tenant_id,
+            collection_key="branches",
+            item_id=branch_id,
+            patch={"status": status},
+            action=f"admin.organization.branch.{status}",
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+        )
 
     def get_session_context(self, tenant_id: str, actor_id: str) -> SessionContextRead | None:
         with self.engine.connect() as connection:
@@ -110,6 +446,46 @@ class AdminRepository:
             permissions=list(permissions),
             active_modules=[item.module_code for item in entitlement_reads if item.status == "active"],
         )
+
+    def get_session_context_by_email(self, tenant_id: str, email: str) -> SessionContextRead | None:
+        with self.engine.begin() as connection:
+            row = connection.execute(
+                text(
+                    """
+                    select users.id, users.status as user_status, memberships.status as membership_status
+                    from admin.memberships memberships
+                    join admin.users users on users.id = memberships.user_id
+                    where memberships.tenant_id = :tenant_id
+                        and users.email = lower(:email)
+                        and users.status in ('active', 'invited')
+                        and memberships.status in ('active', 'invited')
+                    """
+                ),
+                {"tenant_id": tenant_id, "email": email},
+            ).mappings().first()
+            if row and (row["user_status"] == "invited" or row["membership_status"] == "invited"):
+                connection.execute(
+                    text(
+                        """
+                        update admin.users
+                        set status = 'active', updated_at = now()
+                        where id = :user_id and status = 'invited'
+                        """
+                    ),
+                    {"user_id": row["id"]},
+                )
+                connection.execute(
+                    text(
+                        """
+                        update admin.memberships
+                        set status = 'active', activated_at = now(), disabled_at = null, updated_at = now()
+                        where tenant_id = :tenant_id and user_id = :user_id and status = 'invited'
+                        """
+                    ),
+                    {"tenant_id": tenant_id, "user_id": row["id"]},
+                )
+
+        return self.get_session_context(tenant_id, row["id"]) if row else None
 
     def upsert_entitlement(
         self,
@@ -376,6 +752,76 @@ class AdminRepository:
 
         return UserRead.model_validate(dict(row)) if row else None
 
+    def delete_user(
+        self,
+        tenant_id: str,
+        user_id: str,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> UserRead | None:
+        with self.engine.begin() as connection:
+            before = self._get_user_for_tenant(connection, tenant_id, user_id)
+            if before is None:
+                return None
+
+            membership_id = connection.execute(
+                text(
+                    """
+                    select id
+                    from admin.memberships
+                    where tenant_id = :tenant_id and user_id = :user_id
+                    """
+                ),
+                {"tenant_id": tenant_id, "user_id": user_id},
+            ).scalar_one_or_none()
+            if membership_id is None:
+                return None
+
+            connection.execute(
+                text(
+                    """
+                    delete from admin.membership_roles
+                    where tenant_id = :tenant_id and membership_id = :membership_id
+                    """
+                ),
+                {"tenant_id": tenant_id, "membership_id": membership_id},
+            )
+            connection.execute(
+                text(
+                    """
+                    delete from admin.memberships
+                    where tenant_id = :tenant_id and id = :membership_id
+                    """
+                ),
+                {"tenant_id": tenant_id, "membership_id": membership_id},
+            )
+
+            remaining_memberships = connection.execute(
+                text("select count(*) from admin.memberships where user_id = :user_id"),
+                {"user_id": user_id},
+            ).scalar_one()
+
+            after_state = dict(before)
+            after_state["status"] = "deleted"
+            self._record_audit_event(
+                connection,
+                tenant_id=tenant_id,
+                action="admin.user.delete",
+                resource_type="user",
+                resource_id=user_id,
+                before_state=dict(before),
+                after_state=after_state,
+                idempotency_key=idempotency_key,
+                correlation_id=correlation_id,
+                metadata={"removed_global_user": remaining_memberships == 0},
+            )
+            if remaining_memberships == 0:
+                connection.execute(text("delete from admin.users where id = :user_id"), {"user_id": user_id})
+
+        deleted = dict(before)
+        deleted["status"] = "deleted"
+        return UserRead.model_validate(deleted)
+
     def _record_audit_event(
         self,
         connection,
@@ -435,6 +881,149 @@ class AdminRepository:
                 "metadata": json.dumps(metadata, default=str),
             },
         )
+
+    def _append_organization_item(
+        self,
+        tenant_id: str,
+        collection_key: str,
+        item: dict,
+        action: str,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> dict | None:
+        with self.engine.begin() as connection:
+            profile = self._get_or_create_organization_profile(connection, tenant_id)
+            if profile is None:
+                return None
+            before_state = json.loads(json.dumps(profile))
+            profile[collection_key] = [item, *profile.get(collection_key, [])]
+            self._write_organization_profile(connection, tenant_id, profile)
+            self._record_audit_event(
+                connection,
+                tenant_id=tenant_id,
+                action=action,
+                resource_type=self._organization_resource_type(collection_key),
+                resource_id=item["id"],
+                before_state=None,
+                after_state=item,
+                idempotency_key=idempotency_key,
+                correlation_id=correlation_id,
+                metadata={"setting": "organization.profile", "collection": collection_key, "before_count": len(before_state.get(collection_key, []))},
+            )
+        return item
+
+    def _update_organization_item(
+        self,
+        tenant_id: str,
+        collection_key: str,
+        item_id: str,
+        patch: dict,
+        action: str,
+        idempotency_key: str,
+        correlation_id: str,
+    ) -> dict | None:
+        with self.engine.begin() as connection:
+            profile = self._get_or_create_organization_profile(connection, tenant_id)
+            if profile is None:
+                return None
+            items = profile.get(collection_key, [])
+            for index, current in enumerate(items):
+                if current.get("id") != item_id:
+                    continue
+                before = dict(current)
+                updated = {**current, **patch}
+                items[index] = updated
+                profile[collection_key] = items
+                self._write_organization_profile(connection, tenant_id, profile)
+                self._record_audit_event(
+                    connection,
+                    tenant_id=tenant_id,
+                    action=action,
+                    resource_type=self._organization_resource_type(collection_key),
+                    resource_id=item_id,
+                    before_state=before,
+                    after_state=updated,
+                    idempotency_key=idempotency_key,
+                    correlation_id=correlation_id,
+                    metadata={"setting": "organization.profile", "collection": collection_key},
+                )
+                return updated
+        return None
+
+    def _organization_resource_type(self, collection_key: str) -> str:
+        if collection_key == "legal_entities":
+            return "legal_entity"
+        if collection_key == "branches":
+            return "branch"
+        return "organization_item"
+
+    def _get_or_create_organization_profile(self, connection, tenant_id: str) -> dict | None:
+        row = connection.execute(
+            text(
+                """
+                select key, module_code, value
+                from admin.tenant_settings
+                where tenant_id = :tenant_id and key = 'organization.profile'
+                for update
+                """
+            ),
+            {"tenant_id": tenant_id},
+        ).mappings().first()
+        if row:
+            return self._normalize_organization_profile(row["value"])
+
+        tenant = connection.execute(
+            text(
+                """
+                select commercial_name, legal_name
+                from admin.tenants
+                where id = :tenant_id
+                """
+            ),
+            {"tenant_id": tenant_id},
+        ).mappings().first()
+        if tenant is None:
+            return None
+
+        profile = self.default_organization_profile(tenant["commercial_name"], tenant["legal_name"])
+        connection.execute(
+            text(
+                """
+                insert into admin.tenant_settings (id, tenant_id, key, module_code, value)
+                values (:id, :tenant_id, 'organization.profile', 'admin', cast(:value as jsonb))
+                on conflict (tenant_id, key) do nothing
+                """
+            ),
+            {
+                "id": f"set_{uuid4().hex[:26]}",
+                "tenant_id": tenant_id,
+                "value": json.dumps(profile),
+            },
+        )
+        return profile
+
+    def _write_organization_profile(self, connection, tenant_id: str, profile: dict) -> None:
+        connection.execute(
+            text(
+                """
+                update admin.tenant_settings
+                set value = cast(:value as jsonb), module_code = 'admin', updated_at = now()
+                where tenant_id = :tenant_id and key = 'organization.profile'
+                """
+            ),
+            {"tenant_id": tenant_id, "value": json.dumps(profile)},
+        )
+
+    def _normalize_organization_profile(self, profile: dict | None) -> dict:
+        profile = profile if isinstance(profile, dict) else {}
+        corporate = profile.get("corporate") if isinstance(profile.get("corporate"), dict) else {}
+        legal_entities = profile.get("legal_entities") if isinstance(profile.get("legal_entities"), list) else []
+        branches = profile.get("branches") if isinstance(profile.get("branches"), list) else []
+        return {
+            "corporate": corporate,
+            "legal_entities": [item for item in legal_entities if isinstance(item, dict)],
+            "branches": [item for item in branches if isinstance(item, dict)],
+        }
 
     def _replace_membership_roles(self, connection, tenant_id: str, membership_id: str, role_ids: list[str]) -> None:
         connection.execute(

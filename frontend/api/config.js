@@ -1,6 +1,12 @@
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+const LEGACY_DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+const DEFAULT_API_BASE_URL = "http://127.0.0.1:8010";
 const DEFAULT_TENANT_ID = "ten_739ee59d765d5e14818674800d";
 const DEFAULT_ACTOR_ID = "usr_595f3cd6d4325901a8dbd028e1";
+
+
+function isLocalPreviewHost() {
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+}
 
 
 function getRuntimeConfigValue(key) {
@@ -19,7 +25,15 @@ export function setApiMode(mode) {
 
 
 export function getApiBaseUrl() {
-  return localStorage.getItem("erclave-api-base-url") || getRuntimeConfigValue("apiBaseUrl") || DEFAULT_API_BASE_URL;
+  const runtimeBaseUrl = getRuntimeConfigValue("apiBaseUrl");
+  if (isLocalPreviewHost()) {
+    const localOverride = localStorage.getItem("erclave-api-base-url") || "";
+    if (localOverride && localOverride !== LEGACY_DEFAULT_API_BASE_URL) {
+      return localOverride.replace("localhost", "127.0.0.1");
+    }
+    return (runtimeBaseUrl || DEFAULT_API_BASE_URL).replace("localhost", "127.0.0.1");
+  }
+  return localStorage.getItem("erclave-api-base-url") || runtimeBaseUrl || DEFAULT_API_BASE_URL;
 }
 
 
@@ -30,4 +44,11 @@ export function getDemoTenantId() {
 
 export function getDemoActorId() {
   return localStorage.getItem("erclave-api-actor-id") || getRuntimeConfigValue("actorId") || DEFAULT_ACTOR_ID;
+}
+
+
+export function getFirebaseConfig() {
+  const authMode = localStorage.getItem("erclave-auth-mode") || getRuntimeConfigValue("authMode") || "demo";
+  if (isLocalPreviewHost() && authMode !== "firebase-local") return null;
+  return window.ERCLAVE_CONFIG?.firebaseConfig || null;
 }

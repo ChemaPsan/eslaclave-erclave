@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from uuid import NAMESPACE_URL, uuid5
 
@@ -12,6 +13,7 @@ DEFAULT_TENANT_NAME = "ERClave Demo QA"
 DEFAULT_ADMIN_EMAIL = "admin.qa@erclave.local"
 DEFAULT_ADMIN_NAME = "Admin QA ERClave"
 ACTIVE_DEMO_MODULES = ("admin", "production", "inventory", "sales", "integrations")
+DEFAULT_EXTRA_OWNER_EMAILS = ("eslaclavecaf@gmail.com",)
 
 
 def stable_id(prefix: str, natural_key: str) -> str:
@@ -31,12 +33,30 @@ def demo_ids(tenant_slug: str, admin_email: str) -> dict[str, str]:
     }
 
 
+def default_organization_profile(tenant_name: str) -> dict:
+    return {
+        "corporate": {
+            "commercial_name": tenant_name,
+            "legal_name": tenant_name,
+            "tax_id": "",
+            "phone": "",
+            "contact_name": "",
+            "contact_email": "",
+            "contact_phone": "",
+            "contact_position": "",
+        },
+        "legal_entities": [],
+        "branches": [],
+    }
+
+
 def apply_demo_seed(
     database_url: str,
     tenant_slug: str,
     tenant_name: str,
     admin_email: str,
     admin_name: str,
+    extra_owner_emails: tuple[str, ...] = DEFAULT_EXTRA_OWNER_EMAILS,
 ) -> dict[str, int | str]:
     ids = demo_ids(tenant_slug, admin_email)
     engine = create_engine(database_url)
@@ -88,6 +108,39 @@ def apply_demo_seed(
                 "tenant_id": ids["tenant_id"],
                 "tenant_slug": tenant_slug,
                 "tenant_name": tenant_name,
+            },
+        )
+
+        connection.execute(
+            text(
+                """
+                insert into admin.tenant_settings (
+                    id,
+                    tenant_id,
+                    key,
+                    module_code,
+                    value
+                )
+                values (
+                    :setting_id,
+                    :tenant_id,
+                    'organization.profile',
+                    'admin',
+                    cast(:value as jsonb)
+                )
+                on conflict (tenant_id, key) do update set
+                    module_code = excluded.module_code,
+                    value = case
+                        when admin.tenant_settings.value = '{}'::jsonb then excluded.value
+                        else admin.tenant_settings.value
+                    end,
+                    updated_at = now()
+                """
+            ),
+            {
+                "setting_id": stable_id("set", f"{ids['tenant_id']}:organization.profile"),
+                "tenant_id": ids["tenant_id"],
+                "value": json.dumps(default_organization_profile(tenant_name)),
             },
         )
 
@@ -274,6 +327,56 @@ def apply_demo_seed(
                 "membership_role_id": stable_id("mro", f"{ids['membership_id']}:{ids['role_id']}"),
             },
         ).rowcount
+
+        for owner_email in extra_owner_emails:
+            owner_email = owner_email.lower().strip()
+            if not owner_email or owner_email == admin_email.lower():
+                continue
+            owner_user_id = stable_id("usr", owner_email)
+            owner_membership_id = stable_id("mem", f"{tenant_slug}:{owner_email}")
+            connection.execute(
+                text(
+                    """
+                    insert into admin.users (id, identity_provider_id, email, display_name, status, metadata)
+                    values (:user_id, null, :email, :display_name, 'active', '{"seed": "qa-demo-firebase"}'::jsonb)
+                    on conflict (email) do update set
+                        display_name = excluded.display_name,
+                        status = excluded.status,
+                        metadata = excluded.metadata,
+                        updated_at = now()
+                    """
+                ),
+                {"user_id": owner_user_id, "email": owner_email, "display_name": "ERClave QA"},
+            )
+            connection.execute(
+                text(
+                    """
+                    insert into admin.memberships (id, tenant_id, user_id, status, invited_at, activated_at, metadata)
+                    values (:membership_id, :tenant_id, :user_id, 'active', now(), now(), '{"seed": "qa-demo-firebase"}'::jsonb)
+                    on conflict (tenant_id, user_id) do update set
+                        status = excluded.status,
+                        activated_at = coalesce(admin.memberships.activated_at, excluded.activated_at),
+                        metadata = excluded.metadata,
+                        updated_at = now()
+                    """
+                ),
+                {"membership_id": owner_membership_id, "tenant_id": ids["tenant_id"], "user_id": owner_user_id},
+            )
+            connection.execute(
+                text(
+                    """
+                    insert into admin.membership_roles (id, tenant_id, membership_id, role_id)
+                    values (:membership_role_id, :tenant_id, :membership_id, :role_id)
+                    on conflict (tenant_id, membership_id, role_id) do nothing
+                    """
+                ),
+                {
+                    "membership_role_id": stable_id("mro", f"{owner_membership_id}:{ids['role_id']}"),
+                    "tenant_id": ids["tenant_id"],
+                    "membership_id": owner_membership_id,
+                    "role_id": ids["role_id"],
+                },
+            )
 
         permission_count = connection.execute(text("select count(*) from admin.permissions")).scalar_one()
 

@@ -21,6 +21,8 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
+    app.include_router(health_router)
+    app.include_router(admin_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -33,7 +35,7 @@ def create_app() -> FastAPI:
         ],
         allow_origin_regex=QA_FIREBASE_ORIGIN_REGEX,
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[
             "Content-Type",
             "X-Tenant-Id",
@@ -42,12 +44,12 @@ def create_app() -> FastAPI:
             "Idempotency-Key",
             "Authorization",
         ],
+        allow_private_network=True,
     )
+
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(TenantContextMiddleware)
     app.add_exception_handler(ErclaveError, erclave_error_handler)
-    app.include_router(health_router)
-    app.include_router(admin_router)
     return app
 
 

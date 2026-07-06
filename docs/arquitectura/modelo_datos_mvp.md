@@ -362,11 +362,46 @@ Parametros por tenant.
 | `module_code` | `varchar(80)` | Nullable para parametros globales. |
 | `key` | `varchar(160)` | Clave. |
 | `value` | `jsonb` | Valor estructurado. |
-| `status` | `varchar(40)` | `active`, `inactive`. |
+| `created_at` | `timestamptz` | Obligatorio. |
+| `updated_at` | `timestamptz` | Obligatorio. |
 
 Indices:
 
-- `unique(tenant_id, module_code, key)`.
+- `unique(tenant_id, key)`;
+- `index(tenant_id, module_code)`.
+
+#### `organization.profile`
+
+Todo tenant creado por seed, provisioning o API interna debe tener un registro:
+
+| Campo | Valor |
+|---|---|
+| `module_code` | `admin` |
+| `key` | `organization.profile` |
+| `value.corporate` | Perfil corporativo del tenant. |
+| `value.legal_entities` | Lista inicial de razones sociales/fiscales. |
+| `value.branches` | Lista inicial de sucursales. |
+
+Estructura minima:
+
+```json
+{
+  "corporate": {
+    "commercial_name": "Cliente",
+    "legal_name": "Cliente S.A. de C.V.",
+    "tax_id": "",
+    "phone": "",
+    "contact_name": "",
+    "contact_email": "",
+    "contact_phone": "",
+    "contact_position": ""
+  },
+  "legal_entities": [],
+  "branches": []
+}
+```
+
+Regla de evolucion: mientras Administracion use `tenant_settings`, este JSONB es la fuente de verdad administrativa. Cuando facturacion/contabilidad requieran constraints fiscales, folios, certificados o integracion SAT, las razones sociales y sucursales podran promoverse a tablas dedicadas con migracion/backfill documentado.
 
 ---
 
