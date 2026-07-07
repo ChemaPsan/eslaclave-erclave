@@ -381,41 +381,101 @@ input {
   margin-bottom: 16px;
 }
 
+.usage-filterbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) auto auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.usage-filterbar label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.usage-filterbar input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.usage-filterbar input:focus {
+  border-color: var(--primary);
+  outline: 3px solid rgba(92, 22, 165, 0.14);
+}
+
+.usage-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
 .tenant-table {
   display: grid;
   gap: 8px;
 }
 
-.tenant-table-head,
-.tenant-row {
+.usage-table {
   display: grid;
-  grid-template-columns: minmax(240px, 1.4fr) minmax(180px, 1fr) minmax(120px, 0.8fr) minmax(160px, 1fr) minmax(190px, auto);
+  gap: 8px;
+}
+
+.tenant-table-head,
+.tenant-row,
+.usage-table-head,
+.usage-row {
+  display: grid;
   gap: 12px;
   align-items: center;
 }
 
-.tenant-table-head {
+.tenant-table-head,
+.tenant-row {
+  grid-template-columns: minmax(240px, 1.4fr) minmax(180px, 1fr) minmax(120px, 0.8fr) minmax(160px, 1fr) minmax(190px, auto);
+}
+
+.usage-table-head,
+.usage-row {
+  grid-template-columns: minmax(110px, 0.8fr) minmax(220px, 1.5fr) repeat(4, minmax(100px, 0.8fr));
+}
+
+.tenant-table-head,
+.usage-table-head {
   color: var(--muted);
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
-.tenant-row {
+.tenant-row,
+.usage-row {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 12px;
   background: var(--surface-soft);
 }
 
-.tenant-row div {
+.tenant-row div,
+.usage-row div {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
 .tenant-row span,
-.tenant-row small {
+.tenant-row small,
+.usage-row span,
+.usage-row small {
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -502,12 +562,17 @@ code {
   }
 
   .tenant-searchbar,
+  .usage-filterbar,
   .tenant-table-head,
-  .tenant-row {
+  .tenant-row,
+  .usage-table-head,
+  .usage-row,
+  .usage-summary-grid {
     grid-template-columns: 1fr;
   }
 
-  .tenant-table-head {
+  .tenant-table-head,
+  .usage-table-head {
     display: none;
   }
 

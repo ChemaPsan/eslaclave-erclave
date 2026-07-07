@@ -34,6 +34,17 @@ export async function listBackofficeTenants(search = "", limit = 50) {
 }
 
 
+export async function listBackofficeUsage({ fromDate = "", toDate = "", tenantId = "", limit = 200 } = {}) {
+  const params = new URLSearchParams();
+  if (fromDate) params.set("from_date", fromDate);
+  if (toDate) params.set("to_date", toDate);
+  if (tenantId) params.set("tenant_id", tenantId);
+  params.set("limit", String(limit));
+  const response = await apiRequest(`/v1/backoffice/usage?${params.toString()}`);
+  return response;
+}
+
+
 export async function setBackofficeTenantStatus(tenantId, status) {
   const response = await apiRequest(`/v1/backoffice/tenants/${encodeURIComponent(tenantId)}/status`, {
     method: "PATCH",

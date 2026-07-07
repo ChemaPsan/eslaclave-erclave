@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi.testclient import TestClient
 
 import app.api as admin_api
@@ -7,6 +9,8 @@ from app.repositories import get_admin_repository
 from erclave_common.config import Settings, get_settings
 from app.schemas import (
     BackofficeTenantRead,
+    BackofficeUsageDailyRead,
+    BackofficeUsageSummaryRead,
     EntitlementRead,
     PermissionRead,
     PolicyDecision,
@@ -243,6 +247,31 @@ class FakeAdminRepository:
             "removed_global_users": 1,
             "firebase_emails": ["admin.qa@erclave.local"],
         }
+
+    def list_backoffice_usage(self, from_date, to_date, tenant_id: str | None = None, limit: int = 200):
+        if tenant_id and tenant_id != TENANT_ID:
+            return [], BackofficeUsageSummaryRead()
+        metrics = [
+            BackofficeUsageDailyRead(
+                tenant_id=TENANT_ID,
+                tenant_slug="demo-qa",
+                tenant_name="ERClave Demo QA",
+                usage_date=date(2026, 7, 6),
+                active_users=3,
+                api_requests=128,
+                storage_mb="42.50",
+                estimated_cost_mxn="19.75",
+                source="test",
+            )
+        ]
+        return metrics[:limit], BackofficeUsageSummaryRead(
+            tenants=1,
+            days=1,
+            active_users=3,
+            api_requests=128,
+            storage_mb="42.50",
+            estimated_cost_mxn="19.75",
+        )
 
     def upsert_entitlement(
         self,
@@ -727,6 +756,26 @@ def test_backoffice_deletes_tenant_and_firebase_identity(monkeypatch):
     assert response.json()["data"]["deleted"] is True
     assert response.json()["data"]["removed_memberships"] == 1
     assert deleted_emails == ["admin.qa@erclave.local"]
+
+
+def test_backoffice_lists_usage_metrics():
+    client = client_with_fake_repo()
+
+    response = client.get("/v1/backoffice/usage?from_date=2026-07-01&to_date=2026-07-07")
+
+    assert response.status_code == 200
+    assert response.json()["data"][0]["tenant_id"] == TENANT_ID
+    assert response.json()["data"][0]["api_requests"] == 128
+    assert response.json()["summary"]["estimated_cost_mxn"] == "19.75"
+
+
+def test_backoffice_usage_rejects_invalid_date_range():
+    client = client_with_fake_repo()
+
+    response = client.get("/v1/backoffice/usage?from_date=2026-07-07&to_date=2026-07-01")
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_usage_date_range"
 
 
 def test_get_session_context_returns_tenant_user_modules_and_permissions():

@@ -1,3 +1,5 @@
+from datetime import date
+from decimal import Decimal
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -29,6 +31,32 @@ class BackofficeTenantRead(TenantRead):
 
 class BackofficeTenantListResponse(BaseModel):
     data: list[BackofficeTenantRead]
+
+
+class BackofficeUsageDailyRead(BaseModel):
+    tenant_id: str
+    tenant_slug: str
+    tenant_name: str
+    usage_date: date
+    active_users: int = 0
+    api_requests: int = 0
+    storage_mb: Decimal = Decimal("0")
+    estimated_cost_mxn: Decimal = Decimal("0")
+    source: str | None = None
+
+
+class BackofficeUsageSummaryRead(BaseModel):
+    tenants: int = 0
+    days: int = 0
+    active_users: int = 0
+    api_requests: int = 0
+    storage_mb: Decimal = Decimal("0")
+    estimated_cost_mxn: Decimal = Decimal("0")
+
+
+class BackofficeUsageListResponse(BaseModel):
+    data: list[BackofficeUsageDailyRead]
+    summary: BackofficeUsageSummaryRead = Field(default_factory=BackofficeUsageSummaryRead)
 
 
 class BackofficeTenantStatusRequest(BaseModel):

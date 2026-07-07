@@ -8,6 +8,8 @@ from erclave_common.db import create_database_engine
 
 from .schemas import (
     BackofficeTenantRead,
+    BackofficeUsageDailyRead,
+    BackofficeUsageSummaryRead,
     EntitlementRead,
     PermissionRead,
     PolicyDecision,
@@ -137,6 +139,67 @@ class AdminRepository:
 
         return [BackofficeTenantRead.model_validate(dict(row)) for row in rows]
 
+    def list_backoffice_usage(
+        self,
+        from_date,
+        to_date,
+        tenant_id: str | None = None,
+        limit: int = 200,
+    ) -> tuple[list[BackofficeUsageDailyRead], BackofficeUsageSummaryRead]:
+        params = {
+            "from_date": from_date,
+            "to_date": to_date,
+            "tenant_id": tenant_id,
+            "limit": max(1, min(limit, 500)),
+        }
+        tenant_clause = "and usage.tenant_id = :tenant_id" if tenant_id else ""
+        with self.engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    f"""
+                    select
+                        usage.tenant_id,
+                        tenants.slug as tenant_slug,
+                        tenants.commercial_name as tenant_name,
+                        usage.usage_date,
+                        usage.active_users,
+                        usage.api_requests,
+                        usage.storage_mb,
+                        usage.estimated_cost_mxn,
+                        usage.source
+                    from admin.tenant_usage_daily usage
+                    join admin.tenants tenants on tenants.id = usage.tenant_id
+                    where usage.usage_date between :from_date and :to_date
+                    {tenant_clause}
+                    order by usage.usage_date desc, tenants.commercial_name
+                    limit :limit
+                    """
+                ),
+                params,
+            ).mappings().all()
+            summary_row = connection.execute(
+                text(
+                    f"""
+                    select
+                        count(distinct usage.tenant_id) as tenants,
+                        count(distinct usage.usage_date) as days,
+                        coalesce(sum(usage.active_users), 0) as active_users,
+                        coalesce(sum(usage.api_requests), 0) as api_requests,
+                        coalesce(sum(usage.storage_mb), 0) as storage_mb,
+                        coalesce(sum(usage.estimated_cost_mxn), 0) as estimated_cost_mxn
+                    from admin.tenant_usage_daily usage
+                    where usage.usage_date between :from_date and :to_date
+                    {tenant_clause}
+                    """
+                ),
+                params,
+            ).mappings().one()
+
+        return (
+            [BackofficeUsageDailyRead.model_validate(dict(row)) for row in rows],
+            BackofficeUsageSummaryRead.model_validate(dict(summary_row)),
+        )
+
     def set_backoffice_tenant_status(
         self,
         tenant_id: str,
@@ -246,6 +309,7 @@ class AdminRepository:
             connection.execute(text("delete from admin.memberships where tenant_id = :tenant_id"), {"tenant_id": tenant_id})
             connection.execute(text("delete from admin.tenant_modules where tenant_id = :tenant_id"), {"tenant_id": tenant_id})
             connection.execute(text("delete from admin.tenant_settings where tenant_id = :tenant_id"), {"tenant_id": tenant_id})
+            connection.execute(text("delete from admin.tenant_usage_daily where tenant_id = :tenant_id"), {"tenant_id": tenant_id})
             connection.execute(text("delete from admin.roles where tenant_id = :tenant_id"), {"tenant_id": tenant_id})
             connection.execute(text("delete from admin.tenants where id = :tenant_id"), {"tenant_id": tenant_id})
 

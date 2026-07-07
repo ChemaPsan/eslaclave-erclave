@@ -1969,6 +1969,21 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `node --check frontend/backoffice/app.js`; `node --check frontend/api/backoffice.js`; `npm.cmd run validate`. |
 | Observaciones | El backend ya era la barrera de seguridad efectiva; este cambio agrega la compuerta visual para evitar exposicion de pantallas internas. |
 
+### CHG-130
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-07 14:09 |
+| Cambio | Primer modulo de uso y costos por tenant |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260707_0004_admin_tenant_usage_daily.py`, `backend/services/admin-service/app/api.py`, `backend/services/admin-service/app/repositories.py`, `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `contracts/api/admin-service.openapi.yaml`, `frontend/api/backoffice.js`, `frontend/backoffice/app.js`, `frontend/backoffice/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Backoffice interno, Admin API, medicion SaaS, migraciones admin, contrato OpenAPI |
+| Descripcion | Se agrego la tabla `admin.tenant_usage_daily` para metricas diarias por tenant con usuarios activos, requests API, storage MB y costo estimado MXN. El admin-service expone `GET /v1/backoffice/usage` protegido por `require_backoffice_admin`, con filtros por rango, tenant y limite, devolviendo filas y resumen agregado. El backoffice incorpora la pestaña `Uso y costos` con filtros, resumen y tabla de consulta. |
+| Motivo | Dar al equipo interno una primera base auditable para observar consumo y costos por tenant sin mezclar datos operativos de modulos cliente ni exponer ingestion publica. |
+| Impacto | Backoffice puede consultar uso diario por tenant desde una tabla propia del schema `admin`; la eliminacion interna de tenants limpia sus metricas antes de borrar el tenant. La ingesta de metricas queda reservada para jobs internos futuros. |
+| Validacion | `python -m py_compile backend/services/admin-service/app/api.py backend/services/admin-service/app/repositories.py backend/services/admin-service/app/schemas.py backend/alembic/versions/20260707_0004_admin_tenant_usage_daily.py`; `node --check frontend/backoffice/app.js`; `node --check frontend/api/backoffice.js`; `python -m pytest backend/services/admin-service/tests/test_admin_api.py`; `npm.cmd run validate`; `python -m pytest` desde `backend`. |
+| Observaciones | Primer corte de lectura; no calcula costos reales de proveedor cloud ni abre endpoints mutables de metricas. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

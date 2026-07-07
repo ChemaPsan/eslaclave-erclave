@@ -1,5 +1,5 @@
 import { getApiBaseUrl } from "../api/config.js";
-import { deleteBackofficeTenant, listBackofficeTenants, onboardTenant, setBackofficeTenantStatus } from "../api/backoffice.js";
+import { deleteBackofficeTenant, listBackofficeTenants, listBackofficeUsage, onboardTenant, setBackofficeTenantStatus } from "../api/backoffice.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "../auth.js";
 
 
@@ -11,6 +11,8 @@ const moduleOptions = [
   { code: "sales", label: "Ventas" },
   { code: "integrations", label: "Integraciones" }
 ];
+const defaultUsageToDate = new Date().toISOString().slice(0, 10);
+const defaultUsageFromDate = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 const state = {
   activeTab: localStorage.getItem("erclave-backoffice-tab") || "onboarding",
@@ -36,6 +38,22 @@ const state = {
     error: "",
     tenants: [],
     actionTenantId: ""
+  },
+  usage: {
+    status: "idle",
+    fromDate: defaultUsageFromDate,
+    toDate: defaultUsageToDate,
+    tenantId: "",
+    error: "",
+    rows: [],
+    summary: {
+      tenants: 0,
+      days: 0,
+      active_users: 0,
+      api_requests: 0,
+      storage_mb: "0",
+      estimated_cost_mxn: "0"
+    }
   }
 };
 
@@ -69,6 +87,16 @@ function createLocalId(prefix, value) {
 
 function readFormValue(formData, key) {
   return String(formData.get(key) || "").trim();
+}
+
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString("es-MX");
+}
+
+
+function formatMoney(value) {
+  return Number(value || 0).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
 }
 
 
@@ -322,7 +350,7 @@ function renderBackoffice() {
         ${result ? renderResult(result) : `<p class="empty-state">Cuando el alta termine veras el tenant, owner, modulos e invitacion generada.</p>`}
       </aside>
     </section>
-    ` : renderTenantAdminPanel()}
+    ` : state.activeTab === "tenant-admin" ? renderTenantAdminPanel() : renderUsagePanel()}
   `;
 
   app.querySelector("[data-action='logout']")?.addEventListener("click", handleLogout);
@@ -338,6 +366,7 @@ function renderBackoffice() {
     button.addEventListener("click", () => copyText(button.dataset.copy || ""));
   });
   bindTenantAdminActions();
+  bindUsageActions();
 }
 
 
@@ -378,6 +407,7 @@ function renderBackofficeTabs() {
     <nav class="backoffice-tabs" aria-label="Secciones de backoffice">
       <button type="button" data-tab="onboarding" class="${state.activeTab === "onboarding" ? "active" : ""}">Alta de tenant</button>
       <button type="button" data-tab="tenant-admin" class="${state.activeTab === "tenant-admin" ? "active" : ""}">Administracion de tenants</button>
+      <button type="button" data-tab="usage" class="${state.activeTab === "usage" ? "active" : ""}">Uso y costos</button>
     </nav>
   `;
 }
@@ -427,6 +457,93 @@ function renderTenantAdminPanel() {
         <p class="empty-state">Suspender bloquea el acceso de los usuarios del tenant. Eliminar borra configuracion, roles, membresias, modulos y datos administrativos del tenant; solo elimina identidad Firebase si el usuario ya no pertenece a ningun otro tenant.</p>
       </aside>
     </section>
+  `;
+}
+
+
+function renderUsagePanel() {
+  const rows = state.usage.rows || [];
+  const summary = state.usage.summary || {};
+  const isLoading = state.usage.status === "loading";
+  return `
+    <section class="tenant-admin-layout">
+      <section class="tenant-admin-panel">
+        <header class="section-header">
+          <div>
+            <p class="eyebrow">Medicion SaaS</p>
+            <h2>Uso y costos</h2>
+          </div>
+          <span class="api-pill">${escapeHtml(getApiBaseUrl())}</span>
+        </header>
+
+        <form class="usage-filterbar" data-form="usage-search">
+          <label>
+            <span>Desde</span>
+            <input name="from_date" type="date" value="${escapeHtml(state.usage.fromDate)}">
+          </label>
+          <label>
+            <span>Hasta</span>
+            <input name="to_date" type="date" value="${escapeHtml(state.usage.toDate)}">
+          </label>
+          <label>
+            <span>Tenant ID</span>
+            <input name="tenant_id" value="${escapeHtml(state.usage.tenantId)}" placeholder="Todos">
+          </label>
+          <button class="secondary-button inline" type="submit" ${isLoading ? "disabled" : ""}>Consultar</button>
+          <button class="secondary-button inline" type="button" data-action="refresh-usage" ${isLoading ? "disabled" : ""}>Actualizar</button>
+        </form>
+
+        ${state.usage.error ? `<p class="error-box">${escapeHtml(state.usage.error)}</p>` : ""}
+        ${isLoading ? `<p class="notice-box">Cargando metricas...</p>` : ""}
+
+        <div class="usage-summary-grid">
+          <div class="result-card"><span>Tenants</span><strong>${formatNumber(summary.tenants)}</strong></div>
+          <div class="result-card"><span>Dias</span><strong>${formatNumber(summary.days)}</strong></div>
+          <div class="result-card"><span>Usuarios activos</span><strong>${formatNumber(summary.active_users)}</strong></div>
+          <div class="result-card"><span>Requests API</span><strong>${formatNumber(summary.api_requests)}</strong></div>
+          <div class="result-card"><span>Storage MB</span><strong>${formatNumber(summary.storage_mb)}</strong></div>
+          <div class="result-card"><span>Costo estimado</span><strong>${formatMoney(summary.estimated_cost_mxn)}</strong></div>
+        </div>
+
+        <div class="usage-table">
+          <div class="usage-table-head">
+            <span>Fecha</span>
+            <span>Tenant</span>
+            <span>Usuarios</span>
+            <span>Requests</span>
+            <span>Storage</span>
+            <span>Costo</span>
+          </div>
+          ${rows.map(renderUsageRow).join("")}
+        </div>
+        ${!isLoading && !rows.length ? `<p class="empty-state">No hay metricas de uso para el rango seleccionado.</p>` : ""}
+      </section>
+
+      <aside class="result-panel">
+        <h2>Criterio de medicion</h2>
+        <p class="empty-state">La tabla muestra agregados diarios por tenant desde `admin.tenant_usage_daily`. Este primer corte es de consulta; la ingesta queda reservada para jobs internos o integraciones controladas.</p>
+      </aside>
+    </section>
+  `;
+}
+
+
+function renderUsageRow(row) {
+  return `
+    <article class="usage-row">
+      <div>
+        <strong>${escapeHtml(row.usage_date)}</strong>
+        <small>${escapeHtml(row.source || "sin fuente")}</small>
+      </div>
+      <div>
+        <strong>${escapeHtml(row.tenant_name)}</strong>
+        <small>${escapeHtml(row.tenant_slug)} - ${escapeHtml(row.tenant_id)}</small>
+      </div>
+      <div><span>${formatNumber(row.active_users)}</span></div>
+      <div><span>${formatNumber(row.api_requests)}</span></div>
+      <div><span>${formatNumber(row.storage_mb)} MB</span></div>
+      <div><span>${formatMoney(row.estimated_cost_mxn)}</span></div>
+    </article>
   `;
 }
 
@@ -569,6 +686,7 @@ function verifyBackofficeAccess() {
       state.tenantAdmin = { ...state.tenantAdmin, status: "ready", tenants, error: "", actionTenantId: "" };
       render();
       if (state.activeTab === "tenant-admin") loadTenantAdmin();
+      if (state.activeTab === "usage") loadUsage();
     })
     .catch((error) => {
       state.access = {
@@ -586,6 +704,7 @@ function setBackofficeTab(tab) {
   localStorage.setItem("erclave-backoffice-tab", tab);
   render();
   if (tab === "tenant-admin" && state.tenantAdmin.status === "idle") loadTenantAdmin();
+  if (tab === "usage" && state.usage.status === "idle") loadUsage();
 }
 
 
@@ -617,6 +736,46 @@ function bindTenantAdminActions() {
   app.querySelectorAll("[data-action='delete-tenant']").forEach((button) => {
     button.addEventListener("click", () => removeTenant(button.dataset.tenantId, button.dataset.name));
   });
+}
+
+
+function bindUsageActions() {
+  app.querySelector("[data-form='usage-search']")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    loadUsage({
+      fromDate: readFormValue(formData, "from_date"),
+      toDate: readFormValue(formData, "to_date"),
+      tenantId: readFormValue(formData, "tenant_id")
+    });
+  });
+  app.querySelector("[data-action='refresh-usage']")?.addEventListener("click", () => loadUsage());
+}
+
+
+function loadUsage(filters = {}) {
+  const nextFilters = {
+    fromDate: filters.fromDate ?? state.usage.fromDate,
+    toDate: filters.toDate ?? state.usage.toDate,
+    tenantId: filters.tenantId ?? state.usage.tenantId
+  };
+  state.usage = { ...state.usage, ...nextFilters, status: "loading", error: "" };
+  render();
+  listBackofficeUsage(nextFilters)
+    .then((response) => {
+      state.usage = {
+        ...state.usage,
+        status: "ready",
+        rows: response.data || [],
+        summary: response.summary || state.usage.summary,
+        error: ""
+      };
+      render();
+    })
+    .catch((error) => {
+      state.usage = { ...state.usage, status: "error", error: error.message || "No se pudieron cargar metricas de uso." };
+      render();
+    });
 }
 
 

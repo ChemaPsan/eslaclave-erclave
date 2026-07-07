@@ -14,6 +14,7 @@ security:
 tags:
   - name: Session
   - name: Tenants
+  - name: Backoffice
   - name: Entitlements
   - name: Policy
   - name: Users
@@ -154,6 +155,53 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /v1/backoffice/usage:
+    get:
+      tags: [Backoffice]
+      operationId: listBackofficeUsage
+      summary: List daily tenant usage and estimated costs for internal backoffice.
+      description: Internal read endpoint for ERClave Backoffice. In Firebase mode, the bearer token email must be included in `ERCLAVE_BACKOFFICE_ADMIN_EMAILS`.
+      x-required-module: admin
+      x-permissions: [internal.backoffice.usage.read]
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: from_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: tenant_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 200
+            maximum: 500
+      responses:
+        '200':
+          description: Daily usage metrics and range summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeUsageListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /v1/tenants/{tenant_id}/suspend:
     post:
       tags: [Tenants]
@@ -1086,6 +1134,65 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/TenantOnboardingResult'
+    BackofficeUsageDaily:
+      type: object
+      required: [tenant_id, tenant_slug, tenant_name, usage_date, active_users, api_requests, storage_mb, estimated_cost_mxn]
+      properties:
+        tenant_id:
+          type: string
+        tenant_slug:
+          type: string
+        tenant_name:
+          type: string
+        usage_date:
+          type: string
+          format: date
+        active_users:
+          type: integer
+          minimum: 0
+        api_requests:
+          type: integer
+          minimum: 0
+        storage_mb:
+          type: number
+          minimum: 0
+        estimated_cost_mxn:
+          type: number
+          minimum: 0
+        source:
+          type: [string, 'null']
+    BackofficeUsageSummary:
+      type: object
+      required: [tenants, days, active_users, api_requests, storage_mb, estimated_cost_mxn]
+      properties:
+        tenants:
+          type: integer
+          minimum: 0
+        days:
+          type: integer
+          minimum: 0
+        active_users:
+          type: integer
+          minimum: 0
+        api_requests:
+          type: integer
+          minimum: 0
+        storage_mb:
+          type: number
+          minimum: 0
+        estimated_cost_mxn:
+          type: number
+          minimum: 0
+    BackofficeUsageListResponse:
+      type: object
+      required: [data, summary]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackofficeUsageDaily'
+        summary:
+          $ref: '#/components/schemas/BackofficeUsageSummary'
     TenantUpdateRequest:
       type: object
       properties:

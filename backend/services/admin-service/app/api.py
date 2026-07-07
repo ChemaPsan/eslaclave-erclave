@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, Query, status
@@ -21,6 +22,7 @@ from .schemas import (
     BackofficeTenantListResponse,
     BackofficeTenantRead,
     BackofficeTenantStatusRequest,
+    BackofficeUsageListResponse,
     BranchCreateRequest,
     BranchUpdateRequest,
     EntitlementListResponse,
@@ -230,6 +232,33 @@ def delete_backoffice_tenant(
     for email in result.get("firebase_emails", []):
         delete_firebase_user_by_email(email, settings)
     return BackofficeTenantDeleteResponse(data=result)
+
+
+@router.get("/backoffice/usage", response_model=BackofficeUsageListResponse)
+def list_backoffice_usage(
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    tenant_id: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+    _authorization: None = Depends(require_backoffice_admin),
+    repository: AdminRepository = Depends(get_admin_repository),
+) -> BackofficeUsageListResponse:
+    resolved_to_date = to_date or date.today()
+    resolved_from_date = from_date or (resolved_to_date - timedelta(days=29))
+    if resolved_from_date > resolved_to_date:
+        raise ErclaveError(
+            "invalid_usage_date_range",
+            "from_date must be earlier than or equal to to_date.",
+            status_code=400,
+            details={"from_date": resolved_from_date.isoformat(), "to_date": resolved_to_date.isoformat()},
+        )
+    metrics, summary = repository.list_backoffice_usage(
+        from_date=resolved_from_date,
+        to_date=resolved_to_date,
+        tenant_id=tenant_id,
+        limit=limit,
+    )
+    return BackofficeUsageListResponse(data=metrics, summary=summary)
 
 
 @router.get("/tenants/{tenant_id}/entitlements", response_model=EntitlementListResponse)
