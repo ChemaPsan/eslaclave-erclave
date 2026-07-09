@@ -521,7 +521,7 @@ function renderUsagePanel() {
 
       <aside class="result-panel">
         <h2>Criterio de medicion</h2>
-        <p class="empty-state">La tabla muestra agregados diarios por tenant desde `admin.tenant_usage_daily`. Este primer corte es de consulta; la ingesta queda reservada para jobs internos o integraciones controladas.</p>
+        <p class="empty-state">La tabla muestra agregados diarios por tenant desde admin.tenant_usage_daily. Este primer corte es de consulta; la ingesta queda reservada para jobs internos o integraciones controladas.</p>
       </aside>
     </section>
   `;

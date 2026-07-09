@@ -2,7 +2,7 @@ window.ERCLAVE_CONFIG = {
   apiMode: "api",
   authMode: "firebase-local",
   apiBaseUrl: "https://admin-service-qa-370105017372.us-central1.run.app",
-  localApiBaseUrl: "http://127.0.0.1:8010",
+  localApiBaseUrl: "http://127.0.0.1:8000",
   firebaseConfig: {
     apiKey: "AIzaSyDrGpV0gigxwx74BBkrqlZxF89pn93MFYc",
     authDomain: "erclave.firebaseapp.com",

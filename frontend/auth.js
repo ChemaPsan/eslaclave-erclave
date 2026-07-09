@@ -6,6 +6,14 @@ const FIREBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-a
 let firebaseModulesPromise = null;
 let authInstance = null;
 
+function withTimeout(promise, timeoutMs, message) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
 export function isFirebaseAuthConfigured() {
   const config = getFirebaseConfig();
   return Boolean(config?.apiKey && config?.authDomain && config?.appId);
@@ -68,5 +76,7 @@ export async function signOutUser() {
 export async function getAuthToken() {
   const auth = await getFirebaseAuth();
   const user = auth?.currentUser;
-  return user ? user.getIdToken() : "";
+  return user
+    ? withTimeout(user.getIdToken(), 10000, "Firebase tardo demasiado en entregar el token de sesion. Vuelve a iniciar sesion e intenta de nuevo.")
+    : "";
 }

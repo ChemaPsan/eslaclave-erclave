@@ -1,6 +1,7 @@
 import { getApiBaseUrl } from "./config.js";
 import { getAuthToken } from "../auth.js";
 
+const API_REQUEST_TIMEOUT_MS = 15000;
 
 export class ErclaveApiError extends Error {
   constructor(message, status, payload = null) {
@@ -18,14 +19,21 @@ function getLocalFallbackUrl(url) {
 }
 
 async function fetchApi(url, token, options) {
-  return fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {})
-    }
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: options.signal || controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {})
+      }
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function apiRequest(path, options = {}) {
