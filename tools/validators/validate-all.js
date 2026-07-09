@@ -10,6 +10,7 @@ const validators = [
   "validate-backend-scaffold.js",
   "validate-cross-platform.js",
   "validate-db-guardrails.js",
+  "validate-tenant-isolation.js",
   "validate-openapi-contracts.js",
   "validate-traceability.js",
   "validate-syntax.js"

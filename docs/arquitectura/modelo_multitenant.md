@@ -10,6 +10,10 @@ La regla central es:
 
 Por lo tanto, Firebase no debe convertirse en la fuente de verdad de roles, permisos, planes, alcances operativos ni estado comercial del cliente.
 
+La politica normativa de aislamiento para tablas, APIs, repositorios, frontend y pruebas anti-fuga vive en
+`docs/arquitectura/politica_aislamiento_tenant.md`. Este documento describe el modelo; la politica define los
+guardrails obligatorios para implementar funcionalidades ERP cliente.
+
 ---
 
 ## 2. Responsabilidades por capa

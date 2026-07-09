@@ -1984,6 +1984,21 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `python -m py_compile backend/services/admin-service/app/api.py backend/services/admin-service/app/repositories.py backend/services/admin-service/app/schemas.py backend/alembic/versions/20260707_0004_admin_tenant_usage_daily.py`; `node --check frontend/backoffice/app.js`; `node --check frontend/api/backoffice.js`; `python -m pytest backend/services/admin-service/tests/test_admin_api.py`; `npm.cmd run validate`; `python -m pytest` desde `backend`. |
 | Observaciones | Primer corte de lectura; no calcula costos reales de proveedor cloud ni abre endpoints mutables de metricas. |
 
+### CHG-131
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-08 |
+| Cambio | Politica de aislamiento tenant |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/politica_aislamiento_tenant.md`, `docs/arquitectura/modelo_multitenant.md`, `tools/validators/validate-tenant-isolation.js`, `tools/validators/validate-all.js`, `backend/services/production-service/tests/test_production_api.py`, `TRAZABILIDAD.md` |
+| Secciones | Arquitectura multitenant, seguridad SaaS, guardrails, pruebas anti-fuga |
+| Descripcion | Se agrego una politica normativa para el modelo pooled multi-tenant de ERClave. La politica define tablas globales permitidas, tablas tenant-scoped con `tenant_id` obligatorio, excepcion controlada para auditoria, reglas para base de datos, APIs, repositorios, frontend, backoffice y pruebas anti-fuga. Se agrego un validador automatico que revisa migraciones tenant-scoped, repositorio/API de Produccion y presencia de cobertura anti-fuga. |
+| Motivo | El producto apunta a volumen con multi-tenancy logico; se necesitaba convertir la intencion arquitectonica en reglas verificables para evitar fugas entre tenants al iniciar funcionalidades ERP cliente. |
+| Impacto | Nuevas funcionalidades ERP deben nacer con `tenant_id`, contexto de tenant y pruebas de aislamiento. El suite `npm run validate` ahora falla si se crean tablas tenant-scoped sin `tenant_id` o si Produccion pierde filtros basicos de tenant. |
+| Validacion | `node tools/validators/validate-tenant-isolation.js`; `python -m pytest backend/services/production-service/tests/test_production_api.py`. |
+| Observaciones | El validador es un primer guardrail estatico; no sustituye revision de codigo ni futuras pruebas de integracion con PostgreSQL Row-Level Security. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

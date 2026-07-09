@@ -21,11 +21,14 @@ ProductServiceRead = schemas_module.ProductServiceRead
 
 
 TENANT_ID = "ten_demo"
+OTHER_TENANT_ID = "ten_other_tenant"
 PRODUCT_SERVICE_ID = "prs_demo"
 
 
 class FakeProductionRepository:
     def list_product_services(self, tenant_id: str, limit: int = 50, status: str | None = None, q: str | None = None, type_: str | None = None):
+        if tenant_id != TENANT_ID:
+            return []
         return [
             ProductServiceRead(
                 id=PRODUCT_SERVICE_ID,
@@ -144,6 +147,15 @@ def test_list_product_services_returns_catalog():
     assert response.json()["data"][0]["code"] == "pan-caja"
 
 
+def test_list_product_services_does_not_leak_other_tenant_data():
+    client = client_with_fake_repo()
+
+    response = client.get("/v1/production/product-services", headers={"X-Tenant-Id": OTHER_TENANT_ID})
+
+    assert response.status_code == 200
+    assert response.json()["data"] == []
+
+
 def test_create_product_service_requires_idempotency_key():
     client = client_with_fake_repo()
 
@@ -179,6 +191,18 @@ def test_get_product_service_returns_item():
     assert response.json()["data"]["id"] == PRODUCT_SERVICE_ID
 
 
+def test_get_product_service_from_other_tenant_returns_404():
+    client = client_with_fake_repo()
+
+    response = client.get(
+        f"/v1/production/product-services/{PRODUCT_SERVICE_ID}",
+        headers={"X-Tenant-Id": OTHER_TENANT_ID},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "product_service_not_found"
+
+
 def test_update_product_service_returns_updated_item():
     client = client_with_fake_repo()
 
@@ -190,6 +214,19 @@ def test_update_product_service_returns_updated_item():
 
     assert response.status_code == 200
     assert response.json()["data"]["name"] == "Pan de caja actualizado"
+
+
+def test_update_product_service_from_other_tenant_returns_404():
+    client = client_with_fake_repo()
+
+    response = client.patch(
+        f"/v1/production/product-services/{PRODUCT_SERVICE_ID}",
+        headers={"X-Tenant-Id": OTHER_TENANT_ID},
+        json={"name": "No debe cruzar tenant"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "product_service_not_found"
 
 
 def test_update_product_service_status_requires_idempotency_key():
