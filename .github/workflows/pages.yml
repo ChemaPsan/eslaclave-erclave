@@ -19,7 +19,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality-gate:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run validators
+        run: npm run validate
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend test dependencies
+        working-directory: backend
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run backend tests
+        working-directory: backend
+        run: python -m pytest -q
+
   deploy:
+    needs: quality-gate
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

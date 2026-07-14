@@ -1999,6 +1999,21 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `node tools/validators/validate-tenant-isolation.js`; `python -m pytest backend/services/production-service/tests/test_production_api.py`. |
 | Observaciones | El validador es un primer guardrail estatico; no sustituye revision de codigo ni futuras pruebas de integracion con PostgreSQL Row-Level Security. |
 
+### CHG-132
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-13 |
+| Cambio | Quality gate CI para pruebas backend |
+| Autor | Codex |
+| Archivos | `.github/workflows/validate.yml`, `.github/workflows/pages.yml`, `TRAZABILIDAD.md` |
+| Secciones | CI/CD, pruebas automaticas, despliegue frontend |
+| Descripcion | El workflow de validacion ahora ejecuta en paralelo los validadores del repositorio y la suite Pytest completa con Python 3.11. El workflow de GitHub Pages incorpora el mismo quality gate y declara que el despliegue depende de su resultado exitoso. |
+| Motivo | Las 67 pruebas backend existentes no se ejecutaban en CI, por lo que una regresion podia aprobar validadores estructurales y llegar a `main` o a un despliegue de frontend. |
+| Impacto | Los pull requests y pushes cubiertos por el workflow muestran checks separados para validadores y backend; Pages no despliega cuando falla cualquiera de las validaciones o pruebas. |
+| Validacion | `npm.cmd run validate` con 11 validadores correctos; `python -m pytest -q` desde `backend` con 67 pruebas correctas. |
+| Observaciones | Para impedir merges desde la configuracion de GitHub se deben marcar `Agent rule validators` y `Backend tests (Python 3.11)` como required status checks de la rama `main`. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

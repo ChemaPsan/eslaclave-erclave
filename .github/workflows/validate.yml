@@ -16,6 +16,7 @@ on:
       - "package.json"
       - "tools/**"
       - ".github/workflows/validate.yml"
+      - ".github/workflows/pages.yml"
   push:
     branches:
       - main
@@ -31,13 +32,14 @@ on:
       - "package.json"
       - "tools/**"
       - ".github/workflows/validate.yml"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  validate:
+  validators:
     name: Agent rule validators
     runs-on: ubuntu-latest
     steps:
@@ -51,3 +53,26 @@ jobs:
 
       - name: Run validators
         run: npm run validate
+
+  backend-tests:
+    name: Backend tests (Python 3.11)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend test dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run backend tests
+        run: python -m pytest -q
