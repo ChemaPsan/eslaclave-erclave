@@ -37,7 +37,11 @@ async function fetchApi(url, token, options) {
 }
 
 export async function apiRequest(path, options = {}) {
-  const url = `${getApiBaseUrl()}${path}`;
+  return apiRequestAt(getApiBaseUrl(), path, options, "Admin API");
+}
+
+export async function apiRequestAt(baseUrl, path, options = {}, apiLabel = "API") {
+  const url = `${baseUrl}${path}`;
   const token = await getAuthToken();
   let response;
   try {
@@ -48,7 +52,7 @@ export async function apiRequest(path, options = {}) {
       try {
         response = await fetchApi(fallbackUrl, token, options);
       } catch (fallbackError) {
-        throw new ErclaveApiError(`No se pudo conectar con Admin API en ${getApiBaseUrl()}. Tambien se intento ${fallbackUrl}. Revisa que el servicio local este activo y que el navegador no tenga cache de la URL anterior.`, 0, {
+        throw new ErclaveApiError(`No se pudo conectar con ${apiLabel} en ${baseUrl}. Tambien se intento ${fallbackUrl}. Revisa que el servicio local este activo y que el navegador no tenga cache de la URL anterior.`, 0, {
           cause: error?.message || "fetch_failed",
           fallback_cause: fallbackError?.message || "fallback_fetch_failed",
           url,
@@ -56,7 +60,7 @@ export async function apiRequest(path, options = {}) {
         });
       }
     } else {
-      throw new ErclaveApiError(`No se pudo conectar con Admin API en ${getApiBaseUrl()}. Revisa que el servicio local este activo y que el navegador no tenga cache de la URL anterior.`, 0, {
+      throw new ErclaveApiError(`No se pudo conectar con ${apiLabel} en ${baseUrl}. Revisa que el servicio local este activo y que el navegador no tenga cache de la URL anterior.`, 0, {
         cause: error?.message || "fetch_failed",
         url
       });

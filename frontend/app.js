@@ -21,6 +21,14 @@ import {
   updateTenantRole,
   updateTenantSetting
 } from "./api/admin.js";
+import {
+  approveProductionRecipeVersion,
+  createProductionRecipe,
+  createProductionRecipeVersion,
+  getProductionCatalog,
+  submitProductionRecipeVersion,
+  updateProductionRecipeVersion
+} from "./api/production.js";
 import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId, getDemoTenantId, getConfiguredTenantId, setActiveTenantId } from "./api/config.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "./auth.js";
 import {
@@ -53,6 +61,7 @@ const state = {
     data: null,
     error: ""
   },
+  productionApi: { status: "idle", error: "" },
   tenantResolution: {
     status: "idle",
     tenants: [],
@@ -294,6 +303,18 @@ function renderPanel() {
     return;
   }
   if (module.id === "produccion") {
+    if (getApiMode() === "api" && state.sessionApi.status === "ready") {
+      if (state.productionApi.status === "idle") loadProductionApiData();
+      if (state.productionApi.status === "loading" && !mockDb.loadRecipes().length) {
+        renderAdminLoadingPanel(module, "Cargando Produccion");
+        return;
+      }
+      if (state.productionApi.status === "error") {
+        modulePanel.innerHTML = `<section class="section-card"><strong>No se pudo cargar Produccion</strong><p>${state.productionApi.error}</p><button class="secondary-action" data-action="retry-production-api">Reintentar</button></section>`;
+        modulePanel.querySelector("[data-action='retry-production-api']")?.addEventListener("click", () => { state.productionApi.status = "idle"; render(); });
+        return;
+      }
+    }
     const production = getProductionModuleData();
     module.table = { ...module.table, rows: production.rows };
     if (module.tableEn) module.tableEn = { ...module.tableEn, rows: production.rows };
@@ -1805,6 +1826,7 @@ function loadSessionContext() {
   getSessionContext()
     .then((data) => {
       state.sessionApi = { status: "ready", data, error: "" };
+      state.productionApi = { status: "idle", error: "" };
       if (!isModuleAccessible(state.active)) {
         const firstModule = getActiveUiModuleIds()[0] || "administracion";
         applyScreenSnapshot({ active: firstModule, activeSubmodule: null, laborArea: "" });
@@ -1813,6 +1835,73 @@ function loadSessionContext() {
     })
     .catch((error) => {
       state.sessionApi = { status: "error", data: null, error: error.message || "Session context unavailable" };
+      render();
+    });
+}
+
+function mapApiProduct(item) {
+  return {
+    id: item.id,
+    sku: item.code,
+    name: item.name,
+    kind: item.type === "service" ? "Servicio" : "Producto",
+    category: item.category || "Sin categoria",
+    unit: item.base_unit,
+    status: item.status === "active" ? "Activo" : item.status === "inactive" ? "Inactivo" : "En espera de aprobacion",
+    targetPrice: Number(item.target_price || 0),
+    standardCost: Number(item.standard_cost || 0),
+    center: item.responsible_area || "Produccion",
+    owner: item.responsible_area || "Sin asignar",
+    description: "Catalogo conectado a Production API"
+  };
+}
+
+function mapApiRecipe(item, products) {
+  const version = [...(item.versions || [])].sort((a, b) => Number(b.version_number) - Number(a.version_number))[0];
+  const product = products.find((entry) => entry.id === item.product_service_id);
+  const approval = { draft: "Borrador", pending_approval: "Pendiente de aprobacion", approved: "Aprobada", obsolete: "Obsoleta" };
+  return {
+    id: item.id,
+    productServiceId: item.product_service_id,
+    product: product?.name || item.name,
+    version: version?.version_number || 1,
+    versionId: version?.id || "",
+    versionStatus: version?.status || "draft",
+    quantityBase: Number(version?.base_quantity || 1),
+    unit: version?.base_unit || product?.unit || "pieza",
+    status: item.status === "active" ? "Activa" : "Borrador",
+    approvalStatus: approval[version?.status] || "Borrador",
+    approvedBy: version?.approved_by || "",
+    approvedAt: version?.approved_at || "",
+    changeReason: version?.change_reason || "",
+    center: product?.center || "Produccion",
+    resources: (version?.resources || []).map((resource) => ({
+      resourceId: resource.resource_ref_id || resource.resource_code,
+      resourceCode: resource.resource_code,
+      resourceName: resource.resource_name,
+      resourceType: resource.resource_type,
+      quantity: Number(resource.quantity),
+      unit: resource.unit,
+      unitCost: Number(resource.unit_cost || 0)
+    })),
+    steps: (version?.stages || []).filter((stage) => stage.status === "active").map((stage) => stage.name),
+    createdAt: new Date().toISOString().slice(0, 10)
+  };
+}
+
+function loadProductionApiData() {
+  if (getApiMode() !== "api" || state.productionApi.status === "loading") return Promise.resolve();
+  state.productionApi = { status: "loading", error: "" };
+  return getProductionCatalog()
+    .then(({ products, recipes }) => {
+      const mappedProducts = products.map(mapApiProduct);
+      mockDb.saveProductsServices(mappedProducts);
+      mockDb.saveRecipes(recipes.map((recipe) => mapApiRecipe(recipe, mappedProducts)));
+      state.productionApi = { status: "ready", error: "" };
+      render();
+    })
+    .catch((error) => {
+      state.productionApi = { status: "error", error: error.message || "Production API unavailable" };
       render();
     });
 }
@@ -7003,7 +7092,7 @@ function openRecipeModal(recipeId = null) {
 
       <div class="selected-resource-list" id="selectedResourceList">
         ${recipeResources
-          .map((item) => renderSelectedResourceRow(item.resourceId, item.quantity))
+          .map((item) => renderSelectedResourceRow(item.resourceId, item.quantity, item))
           .join("")}
       </div>
 
@@ -7098,9 +7187,16 @@ function syncRecipeProductFields(event) {
   form.querySelector("[name='center']").value = item.center;
 }
 
-function renderSelectedResourceRow(resourceId, quantity = 0) {
-  const resource = getResource(resourceId);
-  if (!resource) return "";
+function renderSelectedResourceRow(resourceId, quantity = 0, fallback = {}) {
+  const resource = getResource(resourceId) || {
+    id: resourceId,
+    name: fallback.resourceName || resourceId,
+    type: fallback.resourceType || "Recurso",
+    source: "Production API",
+    available: 0,
+    unit: fallback.unit || "",
+    cost: Number(fallback.unitCost || 0)
+  };
   return `
     <div class="selected-resource-row" data-resource-row="${resource.id}">
       <div>
@@ -7154,12 +7250,19 @@ function buildRecipeFromForm(form) {
   const productServiceId = String(data.get("productServiceId") || "").trim();
   const productService = mockDb.findProductService(productServiceId);
   const selectedRows = [...form.querySelectorAll("[data-resource-row]")];
+  const existingRecipe = recipeId ? mockDb.findRecipe(recipeId) : null;
   const resources = selectedRows
     .map((row) => {
       const resourceId = row.dataset.resourceRow;
+      const existingResource = existingRecipe?.resources?.find((item) => item.resourceId === resourceId);
       return {
         resourceId,
-        quantity: Number(data.get(`resource_${resourceId}`) || 0)
+        quantity: Number(data.get(`resource_${resourceId}`) || 0),
+        resourceCode: existingResource?.resourceCode,
+        resourceName: existingResource?.resourceName,
+        resourceType: existingResource?.resourceType,
+        unit: existingResource?.unit,
+        unitCost: existingResource?.unitCost
       };
     })
     .filter((item) => item.quantity > 0);
@@ -7183,6 +7286,28 @@ function buildRecipeFromForm(form) {
       .map((step) => step.trim())
       .filter(Boolean),
     createdAt: recipeId ? (mockDb.findRecipe(recipeId)?.createdAt || new Date().toISOString().slice(0, 10)) : new Date().toISOString().slice(0, 10)
+  };
+}
+
+function toApiRecipeVersionPayload(recipe) {
+  return {
+    base_quantity: recipe.quantityBase,
+    base_unit: recipe.unit,
+    change_reason: recipe.changeReason || null,
+    resources: recipe.resources.map((item, index) => {
+      const catalogItem = getResource(item.resourceId);
+      return {
+        resource_type: item.resourceType || (catalogItem?.type === "Maquinaria" ? "machine" : catalogItem?.type === "Mano de obra" ? "labor" : "other"),
+        resource_ref_id: item.resourceId || null,
+        resource_code: item.resourceCode || catalogItem?.id || item.resourceId,
+        resource_name: item.resourceName || catalogItem?.name || item.resourceId,
+        quantity: Number(item.quantity),
+        unit: item.unit || catalogItem?.unit || recipe.unit,
+        unit_cost: Number(item.unitCost ?? catalogItem?.cost ?? 0),
+        sort_order: index + 1
+      };
+    }),
+    stages: recipe.steps.map((name, index) => ({ name, sort_order: index + 1, status: "active" }))
   };
 }
 
@@ -7245,14 +7370,56 @@ function previewRecipeForm() {
   `;
 }
 
-function saveRecipeForm(event) {
+async function saveRecipeForm(event) {
   event.preventDefault();
   const recipe = buildRecipeFromForm(event.currentTarget);
   const errors = validateRecipe(recipe);
   renderFormErrors(errors);
   if (errors.length) return;
 
-  const exists = Boolean(mockDb.findRecipe(recipe.id));
+  const currentRecipe = mockDb.findRecipe(recipe.id);
+  const exists = Boolean(currentRecipe);
+  if (getApiMode() === "api") {
+    try {
+      const versionPayload = toApiRecipeVersionPayload(recipe);
+      let savedVersion;
+      if (!exists) {
+        const created = await createProductionRecipe({
+          ...versionPayload,
+          product_service_id: recipe.productServiceId,
+          code: recipe.id,
+          name: `Receta ${recipe.product}`
+        });
+        savedVersion = created.versions?.[0];
+      } else if (currentRecipe.versionStatus === "draft") {
+        savedVersion = await updateProductionRecipeVersion(currentRecipe.versionId, versionPayload);
+      } else {
+        savedVersion = await createProductionRecipeVersion(currentRecipe.id, {
+          ...versionPayload,
+          change_reason: recipe.changeReason || "Nueva version desde frontend"
+        });
+      }
+
+      if (["Pendiente de aprobacion", "Aprobada"].includes(recipe.approvalStatus) && savedVersion?.status === "draft") {
+        savedVersion = await submitProductionRecipeVersion(savedVersion.id);
+      }
+      if (recipe.approvalStatus === "Aprobada" && savedVersion?.status === "pending_approval") {
+        await approveProductionRecipeVersion(savedVersion.id, {
+          approval_notes: recipe.changeReason || "Aprobada desde frontend"
+        });
+      }
+
+      localStorage.removeItem("erclave-recipe-product");
+      closeModal();
+      await loadProductionApiData();
+      navigateTo({ active: "produccion", activeSubmodule: "recetas", laborArea: "" });
+      showToast(`Receta ${recipe.id} ${exists ? "actualizada" : "guardada"} en QA.`);
+    } catch (error) {
+      renderFormErrors([error.message || "No se pudo guardar la receta en Production API."]);
+    }
+    return;
+  }
+
   if (exists) {
     mockDb.updateRecipe(recipe);
   } else {
@@ -7272,9 +7439,25 @@ function saveRecipeForm(event) {
   showToast(`Receta ${recipe.id} ${exists ? "actualizada" : "guardada"} y validada contra almacen.`);
 }
 
-function approveRecipe(recipeId) {
+async function approveRecipe(recipeId) {
   const recipe = mockDb.findRecipe(recipeId);
   if (!recipe) return;
+  if (getApiMode() === "api") {
+    try {
+      let versionStatus = recipe.versionStatus;
+      if (versionStatus === "draft") {
+        versionStatus = (await submitProductionRecipeVersion(recipe.versionId)).status;
+      }
+      if (versionStatus === "pending_approval") {
+        await approveProductionRecipeVersion(recipe.versionId, { approval_notes: "Aprobada desde frontend" });
+      }
+      await loadProductionApiData();
+      showToast(`Receta ${recipe.id} aprobada para produccion.`);
+    } catch (error) {
+      showToast(error.message || "No se pudo aprobar la receta en Production API.");
+    }
+    return;
+  }
   mockDb.updateRecipe({
     ...recipe,
     status: "Activa",
@@ -7289,6 +7472,10 @@ function approveRecipe(recipeId) {
 function deleteRecipe(recipeId) {
   const recipe = mockDb.findRecipe(recipeId);
   if (!recipe) return;
+  if (getApiMode() === "api") {
+    showToast("Production API conserva recetas auditables; crea una nueva version en lugar de eliminarla.");
+    return;
+  }
   const hasOrders = mockDb.loadOrders().some((order) => order.recipeId === recipeId);
   if (hasOrders) {
     showToast(`Receta ${recipe.id} tiene ordenes relacionadas; no se puede eliminar.`);

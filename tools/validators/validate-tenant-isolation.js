@@ -110,6 +110,7 @@ if (fs.existsSync(versionsDir)) {
 
 const productionApi = readText("backend/services/production-service/app/api.py");
 const productionRepository = readText("backend/services/production-service/app/repositories.py");
+const productionAuthorization = readText("backend/services/production-service/app/authorization.py");
 
 if (!productionApi.includes("def require_tenant_id(")) {
   errors.push("production-service API must define require_tenant_id.");
@@ -119,6 +120,21 @@ const routeMatches = [...productionApi.matchAll(/@router\.(get|post|patch|put|de
 const requireTenantCalls = [...productionApi.matchAll(/require_tenant_id\(x_tenant_id\)/g)];
 if (requireTenantCalls.length < routeMatches.length) {
   errors.push(`production-service routes must call require_tenant_id; found ${requireTenantCalls.length} calls for ${routeMatches.length} routes.`);
+}
+
+const authorizationGuards = [...productionApi.matchAll(/Depends\(require_production_access\(/g)];
+if (authorizationGuards.length < routeMatches.length) {
+  errors.push(`production-service routes must enforce production access; found ${authorizationGuards.length} guards for ${routeMatches.length} routes.`);
+}
+for (const fragment of ["/v1/session/context", "module_not_enabled", "permission_denied", "tenant_access_denied"]) {
+  if (!productionAuthorization.includes(fragment)) {
+    errors.push(`production-service authorization is missing required fragment: ${fragment}`);
+  }
+}
+for (const fragment of ["production.idempotency_records", "request_hash", "idempotency_key_reused", "for update"]) {
+  if (!productionRepository.toLowerCase().includes(fragment.toLowerCase())) {
+    errors.push(`production-service idempotency is missing required fragment: ${fragment}`);
+  }
 }
 
 const productServiceMutations = [...productionRepository.matchAll(/(update|delete from) production\.product_services[\s\S]*?(?="""|\n\s*""")/g)].map((match) => match[0]);

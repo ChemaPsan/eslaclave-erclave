@@ -2014,6 +2014,81 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `npm.cmd run validate` con 11 validadores correctos; `python -m pytest -q` desde `backend` con 67 pruebas correctas. |
 | Observaciones | Para impedir merges desde la configuracion de GitHub se deben marcar `Agent rule validators` y `Backend tests (Python 3.11)` como required status checks de la rama `main`. |
 
+### CHG-133
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-21 |
+| Cambio | Recetas y versiones reales en production-service |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260721_0005_production_recipes.py`, `backend/services/production-service/app/api.py`, `backend/services/production-service/app/repositories.py`, `backend/services/production-service/app/schemas.py`, `backend/services/production-service/tests/test_production_api.py`, `backend/services/production-service/README.md`, `tools/validators/validate-db-guardrails.js`, `TRAZABILIDAD.md` |
+| Secciones | Produccion, recetas, versionado, persistencia multi-tenant, API |
+| Descripcion | Se agregaron las tablas `production.recipes`, `recipe_versions`, `recipe_resources` y `recipe_stages`, junto con endpoints para crear, consultar, versionar, editar borradores y ejecutar las transiciones submit, approve y obsolete. La aprobacion exige recursos y etapas, actualiza la version vigente y el costo estandar del producto. |
+| Motivo | Continuar la Fase 4 del plan del arquitecto convirtiendo recetas en datos backend reales antes de implementar ordenes, Inventarios o Ventas. |
+| Impacto | Cada receta y sus componentes quedan aislados por `tenant_id`; las versiones aprobadas son inmutables y una nueva aprobacion vuelve obsoleta la anterior. El validador de FKs ahora distingue relaciones internas del mismo schema de relaciones cruzadas prohibidas. |
+| Validacion | `python -m py_compile`; `python -m pytest -q` con 72 pruebas; `npm.cmd run validate`. |
+| Observaciones | Este corte no incluye todavia ordenes de produccion, integracion con inventario ni conexion del frontend de recetas. |
+
+### CHG-134
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-21 |
+| Cambio | Prueba directa de API de recetas contra Cloud SQL QA |
+| Autor | Codex + agentes QA y seguridad |
+| Archivos | `backend/services/production-service/app/repositories.py`, `TRAZABILIDAD.md` |
+| Secciones | Produccion, API QA, recetas, aislamiento tenant, aprobacion |
+| Descripcion | Se ejecuto el flujo real crear-leer-listar-submit-approve contra `production-service` local conectado a Cloud SQL QA. La prueba encontro y corrigio una asignacion duplicada de `updated_at` que provocaba `500` al enviar una version a aprobacion. Tambien se endurecio la aprobacion para exigir al menos una etapa activa. |
+| Motivo | Verificar que el segundo corte de Produccion persiste y recupera datos reales antes de conectarlo al frontend o desplegarlo publicamente. |
+| Impacto | El flujo funcional completo queda comprobado en PostgreSQL QA; lectura cruzada y creacion de version desde otro tenant fueron rechazadas. Se confirmo que receta y producto apuntan a la version aprobada y que el snapshot contiene recursos y etapas. |
+| Validacion | API real: create `201`, read/list `200`, cross-tenant `404`, submit `200`, approve `200`; consulta SQL de snapshot y versiones vigentes; 72 pruebas Pytest; todos los validadores automaticos aprobados. |
+| Observaciones | La idempotencia real, autenticacion/autorizacion, `approved_by` confiable, FKs tenant-aware/RLS y concurrencia de versionado siguen pendientes; no debe desplegarse publicamente este corte hasta resolver al menos autenticacion e idempotencia. |
+
+### CHG-135
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-21 |
+| Cambio | Autorizacion e idempotencia real para production-service |
+| Autor | Codex + agentes de seguridad y persistencia |
+| Archivos | `backend/alembic/versions/20260721_0006_production_idempotency.py`, `backend/shared/erclave_common/config.py`, `backend/services/production-service/app/authorization.py`, `backend/services/production-service/app/api.py`, `backend/services/production-service/app/repositories.py`, `backend/services/production-service/app/schemas.py`, `backend/services/production-service/tests/test_production_api.py`, `contracts/api/production-service.openapi.yaml`, `backend/.env.example`, `backend/README.md`, `tools/validators/validate-backend-scaffold.js`, `tools/validators/validate-tenant-isolation.js`, `TRAZABILIDAD.md` |
+| Secciones | Seguridad, Firebase Auth, RBAC, multi-tenancy, idempotencia, Produccion |
+| Descripcion | Cada ruta de Produccion valida el Bearer token indirectamente mediante `admin-service /v1/session/context`, comprueba tenant activo, modulo contratado y permiso exacto. El aprobador se deriva de la sesion. Los comandos sensibles registran llave, hash, actor y respuesta en `production.idempotency_records` dentro de la misma transaccion, permitiendo replay y rechazando reutilizacion con otro payload. |
+| Motivo | Eliminar la confianza en `X-Tenant-Id` como autoridad y hacer seguros los reintentos antes de desplegar publicamente o conectar el frontend. |
+| Impacto | `X-Tenant-Id` queda como selector; Administracion conserva ownership de membresias/permisos. Las versiones se bloquean al numerarlas para evitar carreras. PATCH de borrador ahora tambien exige `Idempotency-Key`. |
+| Validacion | 76 pruebas Pytest; validadores completos; migracion QA `20260721_0006`; replay real devuelve el mismo ID, payload distinto devuelve `409`, y PostgreSQL confirma una receta y un registro completed. |
+| Observaciones | La prueba con token Firebase real se ejecutara durante el despliegue QA; local/demo conserva `X-Actor-Id` exclusivamente para pruebas controladas. RLS y FKs compuestas por tenant permanecen como endurecimiento posterior. |
+
+### CHG-136
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-21 |
+| Cambio | Despliegue seguro de production-service en Cloud Run QA |
+| Autor | Codex |
+| Archivos | `TRAZABILIDAD.md` |
+| Secciones | Cloud Run QA, Produccion, autenticacion entre servicios |
+| Descripcion | Se desplego el backend actualizado de Produccion y se configuro `ERCLAVE_AUTH_MODE=firebase`, proyecto Firebase, Cloud SQL, secreto de base y URL canonica de `admin-service`. La revision final `production-service-qa-00005-bmp` recibe el 100% del trafico. |
+| Motivo | Publicar en QA el corte de recetas con autorizacion e idempotencia antes de conectar el frontend. |
+| Impacto | Health y OpenAPI responden; recetas sin token reciben `401 auth_required` y un token invalido es rechazado por la integracion real con Administracion como `401 invalid_token`. |
+| Validacion | `/health` 200; `/openapi.json` 200; ruta protegida sin token 401; ruta protegida con token invalido 401; lectura positiva de recetas con token Firebase y permiso `production.recipe.read`; revision lista y 100% de trafico. |
+| Observaciones | El servicio QA quedo disponible en `https://production-service-qa-370105017372.us-central1.run.app`; el token usado para la comprobacion positiva no se almaceno en el repositorio. |
+
+### CHG-137
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-21 |
+| Cambio | Conexion del frontend de recetas con Production API QA |
+| Autor | Codex |
+| Archivos | `frontend/api/config.js`, `frontend/api/client.js`, `frontend/api/production.js`, `frontend/app.js`, `frontend/utils/production.js`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, Produccion, recetas, Firebase Auth, QA |
+| Descripcion | El modulo de Produccion carga productos y recetas desde la API usando la sesion Firebase y el tenant activo. Crear y editar receta persiste en QA; editar una receta no borrador genera una nueva version y las acciones de envio y aprobacion usan las transiciones auditables del backend. |
+| Motivo | Sustituir la persistencia local del flujo de recetas una vez comprobada la autorizacion positiva de un usuario QA. |
+| Impacto | Las recetas visibles en modo API reflejan PostgreSQL QA. Se preservan costos y metadatos de recursos externos al catalogo simulado, se generan llaves de idempotencia por comando y se impide la eliminacion fisica desde el frontend. |
+| Validacion | Sintaxis JavaScript y suite completa de validadores automaticos aprobadas; Firebase Hosting version `e3ab27b1b2f047d8` publicada; cliente servido verificado y preflight CORS de Production API respondio `200`. |
+| Observaciones | QA esta disponible en `https://erclave.web.app`. Ordenes y otros submodulos de Produccion conservan su comportamiento previo; este corte conecta el catalogo y ciclo de versiones de recetas. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

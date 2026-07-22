@@ -38,6 +38,17 @@ export function getApiBaseUrl() {
 }
 
 
+export function getProductionApiBaseUrl() {
+  const runtimeBaseUrl = getRuntimeConfigValue("productionApiBaseUrl") || "http://127.0.0.1:8002";
+  if (isLocalPreviewHost()) {
+    const localOverride = localStorage.getItem("erclave-production-api-base-url") || "";
+    const localRuntimeBaseUrl = getRuntimeConfigValue("localProductionApiBaseUrl");
+    return (localOverride || localRuntimeBaseUrl || runtimeBaseUrl).replace("localhost", "127.0.0.1");
+  }
+  return localStorage.getItem("erclave-production-api-base-url") || runtimeBaseUrl;
+}
+
+
 export function getDemoTenantId() {
   return localStorage.getItem("erclave-api-tenant-id") || getRuntimeConfigValue("tenantId") || DEFAULT_TENANT_ID;
 }

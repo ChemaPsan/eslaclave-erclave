@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     service_name: str = "admin-service"
     version: str = "0.1.0"
     api_public_base_url: str = "http://localhost:8000"
+    admin_service_url: str = "http://localhost:8000"
+    authorization_timeout_seconds: float = 5.0
     app_public_base_url: str = "http://localhost:4173"
     auth_mode: AuthMode = "demo"
     firebase_project_id: str | None = None

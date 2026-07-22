@@ -25,11 +25,11 @@ export function calculateRecipe(recipe, batchQuantity = 100) {
     const resource = getResource(item.resourceId);
     const required = Number(item.quantity) * multiplier;
     const available = resource?.available || 0;
-    const cost = required * (resource?.cost || 0);
+    const cost = required * Number(item.unitCost ?? resource?.cost ?? 0);
     return {
-      name: resource?.name || item.resourceId,
-      unit: resource?.unit || "",
-      type: resource?.type || "",
+      name: resource?.name || item.resourceName || item.resourceId,
+      unit: resource?.unit || item.unit || "",
+      type: resource?.type || item.resourceType || "",
       source: resource?.source || "",
       required,
       available,

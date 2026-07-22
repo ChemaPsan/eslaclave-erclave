@@ -72,10 +72,16 @@ for (const fileName of migrationFiles) {
     }
   }
 
-  const foreignKeyTargets = [...upgradeBlock.matchAll(/ForeignKeyConstraint\(\[[^\]]+\],\s*\["([^"]+)"\]/g)].map((match) => match[1]);
-  for (const target of foreignKeyTargets) {
+  const foreignKeyTargets = [...upgradeBlock.matchAll(/ForeignKeyConstraint\(\[[^\]]+\],\s*\["([^"]+)"\]/g)];
+  for (const match of foreignKeyTargets) {
+    const target = match[1];
     const [schema] = target.split(".");
-    if (schema && schema !== "admin") {
+    const blockStart = upgradeBlock.lastIndexOf("op.create_table(", match.index);
+    const blockEndCandidate = upgradeBlock.indexOf("op.create_table(", match.index);
+    const blockEnd = blockEndCandidate === -1 ? upgradeBlock.length : blockEndCandidate;
+    const sourceBlock = upgradeBlock.slice(blockStart, blockEnd);
+    const sourceSchema = sourceBlock.match(/schema="([^"]+)"/)?.[1];
+    if (schema && sourceSchema && schema !== sourceSchema) {
       errors.push(`${relativePath} contains cross-schema FK target ${target}; use contract references unless explicitly approved.`);
     }
   }

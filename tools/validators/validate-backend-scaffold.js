@@ -32,6 +32,7 @@ const requiredPaths = [
   "backend/alembic/versions/20260701_0002_production_service_initial.py",
   "backend/services/production-service/app/main.py",
   "backend/services/production-service/app/api.py",
+  "backend/services/production-service/app/authorization.py",
   "backend/services/production-service/app/repositories.py",
   "backend/services/production-service/app/schemas.py",
   "backend/services/production-service/tests/test_production_api.py",
@@ -77,6 +78,7 @@ const requiredFragments = [
   ["backend/services/production-service/app/main.py", "include_router(production_router)"],
   ["backend/services/production-service/app/api.py", "@router.get(\"/product-services\""],
   ["backend/services/production-service/app/api.py", "@router.post(\"/product-services\""],
+  ["backend/services/production-service/app/authorization.py", "require_production_access"],
   ["backend/services/production-service/app/repositories.py", "class ProductionRepository"],
   ["backend/services/production-service/app/repositories.py", "def create_product_service"],
   ["backend/services/production_service_adapter.py", "production-service"]
