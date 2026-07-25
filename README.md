@@ -11,6 +11,7 @@ ERClave es una propuesta SaaS modular bajo la marca EsLaClave para gestionar pro
 - Instrucciones operativas de Codex en `AGENTS.md` y skills del proyecto en `.agents/skills/`.
 - Arquitectura objetivo de microservicios y microfrontends en `docs/arquitectura/microservicios_microfrontends.md`.
 - Guias operativas paso a paso en `docs/operaciones/`.
+- Guia manual de pruebas del alcance real, prototipos y modulos futuros en `docs/qa/guia_pruebas_qa_mvp.md` y version Word en `docs/qa/guia_pruebas_qa_mvp.docx`.
 - Mapa de catalogos base para Administracion y Configuracion en `docs/catalogos_base.md`.
 - Manual de identidad visual.
 - Trazabilidad detallada de cambios en `TRAZABILIDAD.md`.
@@ -72,6 +73,12 @@ npm run traceability:draft -- --title "Descripcion del cambio"
 ```
 
 El comando muestra el borrador sin modificar archivos. Agregar `--write` lo inserta antes de la convencion final; los campos generados deben revisarse y completarse.
+
+Para regenerar el documento Word QA desde su guia Markdown:
+
+```bash
+npm run qa:document
+```
 
 En GitHub, el workflow `.github/workflows/validate.yml` ejecuta estas validaciones automaticamente en `push`, `pull_request` y ejecucion manual.
 

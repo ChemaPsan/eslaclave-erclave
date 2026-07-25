@@ -2119,6 +2119,36 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | Revision Cloud Run `admin-service-qa-00011-bd5` lista con 100% de trafico; variable publica verificada; `/health` HTTP 200; `npm.cmd run verify`. |
 | Observaciones | Las ligas emitidas antes del cambio conservan el `continueUrl` anterior; para comprobar el flujo completo se debe usar una invitacion o recuperacion de contrasena nueva. |
 
+### CHG-140
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-24 |
+| Cambio | Guia manual de pruebas QA del MVP |
+| Autor | Codex + especialistas funcionales, tecnicos y QA |
+| Archivos | `docs/qa/guia_pruebas_qa_mvp.md`, `README.md`, `TRAZABILIDAD.md` |
+| Secciones | QA, onboarding, Administracion, Produccion, modulos prototipo, regresion |
+| Descripcion | Se documento el alcance comprobable por una persona de QA con contexto de negocio, prioridades P0/P1/P2, precondiciones, smoke diario, pasos, resultados esperados, motivo de cada prueba, evidencia minima y plantilla de defectos. La guia separa funciones reales en QA, prototipos locales y modulos todavia no disponibles. |
+| Motivo | Dar al equipo QA una referencia operativa basada en lo realmente implementado y evitar certificar como backend real una maqueta o reportar como defecto una integracion futura. |
+| Impacto | QA puede priorizar acceso, aislamiento, Administracion y recetas reales; evaluar Almacenes/Ventas como prototipos; y registrar resultados y defectos con contexto suficiente para desarrollo. |
+| Validacion | Revision cruzada de `AGENTES.md`, documentos funcionales, frontend, APIs, tests y `TRAZABILIDAD.md`; `npm.cmd run verify`. |
+| Observaciones | La guia no contiene credenciales ni datos reales. Debe actualizarse cuando un submodulo cambie de local/mock a API persistente o se habilite un nuevo servicio. |
+
+### CHG-141
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-24 |
+| Cambio | Documento Word de pruebas QA |
+| Autor | Codex |
+| Archivos | `docs/qa/guia_pruebas_qa_mvp.docx`, `tools/generate-qa-document.py`, `package.json`, `README.md`, `TRAZABILIDAD.md` |
+| Secciones | QA, Word, casos de prueba, contexto de negocio |
+| Descripcion | La guia Markdown se transformo en un documento Word profesional con portada, metadatos del ambiente, indice actualizable, encabezados, pie de pagina, listas y tablas formateadas para alcance, casos, evidencia y defectos. |
+| Motivo | Entregar al equipo QA una guia legible y compartible en Word que explique que probar, como hacerlo y por que importa para el negocio. |
+| Impacto | QA puede consultar, imprimir o compartir el documento y regenerarlo desde la fuente Markdown con `npm run qa:document`. |
+| Validacion | Generacion y reapertura con python-docx 1.2.0; contenido clave, tablas y tamano comprobados; `npm.cmd run verify`. |
+| Observaciones | El Markdown sigue siendo la fuente de verdad; regenerar el Word despues de modificar los casos. No capturar secretos, tokens o ligas vigentes. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

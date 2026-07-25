@@ -13,6 +13,7 @@
     "validate:traceability": "node tools/validators/validate-traceability.js",
     "validate:syntax": "node tools/validators/validate-syntax.js",
     "verify": "node tools/verify.js",
-    "traceability:draft": "node tools/traceability-draft.js"
+    "traceability:draft": "node tools/traceability-draft.js",
+    "qa:document": "python tools/generate-qa-document.py"
   }
 }
