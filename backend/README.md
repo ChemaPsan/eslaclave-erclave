@@ -41,6 +41,7 @@ Usar:
 
 ```text
 ERCLAVE_API_PUBLIC_BASE_URL
+ERCLAVE_APP_PUBLIC_BASE_URL
 ```
 
 Ejemplos:
@@ -162,6 +163,8 @@ En modo local/demo, `GET /v1/session/context` tambien requiere temporalmente:
 ```text
 X-Actor-Id=<user_id>
 ```
+
+En QA y Produccion, `ERCLAVE_APP_PUBLIC_BASE_URL` debe ser la URL HTTPS publica del frontend (por ejemplo, `https://erclave.web.app`). Firebase redirige a esta URL despues de establecer la contrasena; el servicio rechaza configuraciones locales o HTTP fuera del ambiente local.
 
 En QA con `ERCLAVE_AUTH_MODE=firebase`, `GET /v1/session/context` requiere:
 

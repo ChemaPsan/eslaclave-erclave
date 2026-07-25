@@ -1,7 +1,9 @@
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import Field
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +31,19 @@ class Settings(BaseSettings):
     backoffice_admin_emails: str = ""
     database_url: str | None = None
     log_level: str = Field(default="INFO")
+
+    @model_validator(mode="after")
+    def validate_public_app_url(self) -> "Settings":
+        if self.environment == "local" or self.service_name != "admin-service":
+            return self
+
+        parsed = urlparse(self.app_public_base_url)
+        local_hosts = {"localhost", "127.0.0.1", "::1"}
+        if parsed.scheme != "https" or not parsed.hostname or parsed.hostname.lower() in local_hosts:
+            raise ValueError(
+                "ERCLAVE_APP_PUBLIC_BASE_URL must be a public HTTPS URL in QA and production."
+            )
+        return self
 
 
 @lru_cache

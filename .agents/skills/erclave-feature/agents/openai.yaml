@@ -1,0 +1,4 @@
+interface:
+  display_name: "ERClave Feature Delivery"
+  short_description: "Entrega funcionalidades completas y verificadas"
+  default_prompt: "Usa $erclave-feature para implementar una funcionalidad completa de ERClave."

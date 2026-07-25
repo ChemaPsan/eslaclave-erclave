@@ -31,9 +31,6 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Run validators
-        run: npm run validate
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -45,9 +42,8 @@ jobs:
         working-directory: backend
         run: python -m pip install -e ".[dev]"
 
-      - name: Run backend tests
-        working-directory: backend
-        run: python -m pytest -q
+      - name: Run complete verification
+        run: npm run verify
 
   deploy:
     needs: quality-gate

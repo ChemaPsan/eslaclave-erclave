@@ -8,6 +8,7 @@ ERClave es una propuesta SaaS modular bajo la marca EsLaClave para gestionar pro
 - Requerimientos no funcionales e infraestructura Google Cloud.
 - Documentación funcional por módulos.
 - Lista de agentes especializados por modulo en `AGENTES.md`.
+- Instrucciones operativas de Codex en `AGENTS.md` y skills del proyecto en `.agents/skills/`.
 - Arquitectura objetivo de microservicios y microfrontends en `docs/arquitectura/microservicios_microfrontends.md`.
 - Guias operativas paso a paso en `docs/operaciones/`.
 - Mapa de catalogos base para Administracion y Configuracion en `docs/catalogos_base.md`.
@@ -57,6 +58,20 @@ npm run validate:syntax
 ```
 
 Estas validaciones convierten reglas de `AGENTES.md` en checks concretos: agentes transversales y por modulo, paridad Espanol/Ingles, fronteras de microfrontends, carpetas de microservicios, scaffolding backend, compatibilidad Linux/Windows/macOS, guardrails de base de datos y migraciones, contratos OpenAPI, trazabilidad y sintaxis JavaScript.
+
+Para ejecutar el criterio completo de terminado (validadores, compilacion Python y pruebas backend):
+
+```bash
+npm run verify
+```
+
+Para preparar la siguiente entrada de trazabilidad a partir de los cambios detectados por Git:
+
+```bash
+npm run traceability:draft -- --title "Descripcion del cambio"
+```
+
+El comando muestra el borrador sin modificar archivos. Agregar `--write` lo inserta antes de la convencion final; los campos generados deben revisarse y completarse.
 
 En GitHub, el workflow `.github/workflows/validate.yml` ejecuta estas validaciones automaticamente en `push`, `pull_request` y ejecucion manual.
 

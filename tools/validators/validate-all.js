@@ -3,6 +3,7 @@ const path = require("path");
 const { fail, ok } = require("./shared");
 
 const validators = [
+  "validate-codex-tooling.js",
   "validate-i18n.js",
   "validate-active-module-localization.js",
   "validate-agents.js",

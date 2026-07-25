@@ -2089,6 +2089,36 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | Sintaxis JavaScript y suite completa de validadores automaticos aprobadas; Firebase Hosting version `e3ab27b1b2f047d8` publicada; cliente servido verificado y preflight CORS de Production API respondio `200`. |
 | Observaciones | QA esta disponible en `https://erclave.web.app`. Ordenes y otros submodulos de Produccion conservan su comportamiento previo; este corte conecta el catalogo y ciclo de versiones de recetas. |
 
+### CHG-138
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-24 |
+| Cambio | Capa operativa de Codex para desarrollo verificable |
+| Autor | Codex |
+| Archivos | `AGENTS.md`, `.agents/skills/erclave-feature/`, `.agents/skills/erclave-db-migration/`, `tools/verify.js`, `tools/traceability-draft.js`, `tools/validators/validate-codex-tooling.js`, `tools/validators/validate-all.js`, `tools/validators/validate-cross-platform.js`, `package.json`, `.github/workflows/validate.yml`, `.github/workflows/pages.yml`, `README.md`, `TRAZABILIDAD.md` |
+| Secciones | Desarrollo asistido, calidad, CI/CD, skills, trazabilidad |
+| Descripcion | Se agregaron instrucciones persistentes para Codex, dos skills de proyecto para entrega funcional y migraciones seguras, un comando unificado que ejecuta guardrails, compilacion y Pytest, un generador de borradores CHG basado en Git y un validador que protege esta capa. Los workflows de validacion y Pages usan ahora el mismo criterio completo. |
+| Motivo | Reducir explicaciones repetidas, homogeneizar la implementacion entre modulos y asegurar que los cambios asistidos terminen con contratos, pruebas y trazabilidad alineados. |
+| Impacto | Codex dispone de un flujo versionado y descubrible dentro del repositorio. Desarrollo local y CI comparten `npm run verify`; los borradores de trazabilidad siguen requiriendo revision humana antes de considerarse completos. |
+| Validacion | Validacion oficial de ambas skills con `quick_validate.py`; `npm.cmd run verify`. |
+| Observaciones | El generador incluye todos los cambios visibles en Git para que el autor decida cuales pertenecen al corte. Se preservaron sin modificar el diagrama Draw.io y su archivo temporal preexistentes. |
+
+### CHG-139
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-24 |
+| Cambio | Correccion de redireccion posterior a invitacion Firebase |
+| Autor | Codex |
+| Archivos | `backend/shared/erclave_common/config.py`, `backend/services/admin-service/tests/test_config.py`, `backend/.env.example`, `backend/README.md`, `TRAZABILIDAD.md` |
+| Secciones | Onboarding, Firebase Auth, configuracion QA, seguridad operativa |
+| Descripcion | Se configuro `ERCLAVE_APP_PUBLIC_BASE_URL=https://erclave.web.app` en `admin-service-qa` para que Firebase redirija al frontend publico despues de establecer la contrasena. La configuracion ahora rechaza URLs locales, invalidas o sin HTTPS cuando el ambiente es QA o Produccion. |
+| Motivo | Las invitaciones completaban el cambio de contrasena pero redirigian al valor local por defecto `http://localhost:4173`, provocando que Safari no pudiera conectarse al servidor. |
+| Impacto | Las invitaciones generadas a partir de la correccion regresan al frontend QA. Una configuracion futura insegura impide que el servicio arranque en QA/Produccion en lugar de generar ligas defectuosas. |
+| Validacion | Revision Cloud Run `admin-service-qa-00011-bd5` lista con 100% de trafico; variable publica verificada; `/health` HTTP 200; `npm.cmd run verify`. |
+| Observaciones | Las ligas emitidas antes del cambio conservan el `continueUrl` anterior; para comprobar el flujo completo se debe usar una invitacion o recuperacion de contrasena nueva. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

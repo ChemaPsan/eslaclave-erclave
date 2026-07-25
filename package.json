@@ -1,6 +1,7 @@
 {
   "scripts": {
     "validate": "node tools/validators/validate-all.js",
+    "validate:codex-tooling": "node tools/validators/validate-codex-tooling.js",
     "validate:agents": "node tools/validators/validate-agents.js",
     "validate:i18n": "node tools/validators/validate-i18n.js",
     "validate:active-localization": "node tools/validators/validate-active-module-localization.js",
@@ -10,6 +11,8 @@
     "validate:db-guardrails": "node tools/validators/validate-db-guardrails.js",
     "validate:openapi": "node tools/validators/validate-openapi-contracts.js",
     "validate:traceability": "node tools/validators/validate-traceability.js",
-    "validate:syntax": "node tools/validators/validate-syntax.js"
+    "validate:syntax": "node tools/validators/validate-syntax.js",
+    "verify": "node tools/verify.js",
+    "traceability:draft": "node tools/traceability-draft.js"
   }
 }

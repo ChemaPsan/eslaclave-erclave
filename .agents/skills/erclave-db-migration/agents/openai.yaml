@@ -1,0 +1,4 @@
+interface:
+  display_name: "ERClave Database Migration"
+  short_description: "Crea migraciones multitenant seguras y reversibles"
+  default_prompt: "Usa $erclave-db-migration para diseñar y validar un cambio de datos en ERClave."
