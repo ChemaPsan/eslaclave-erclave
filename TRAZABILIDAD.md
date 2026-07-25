@@ -2149,6 +2149,21 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | Generacion y reapertura con python-docx 1.2.0; contenido clave, tablas y tamano comprobados; `npm.cmd run verify`. |
 | Observaciones | El Markdown sigue siendo la fuente de verdad; regenerar el Word despues de modificar los casos. No capturar secretos, tokens o ligas vigentes. |
 
+### CHG-142
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-24 |
+| Cambio | Promocion del guardrail de invitaciones a Admin QA |
+| Autor | Codex |
+| Archivos | `TRAZABILIDAD.md` |
+| Secciones | Cloud Run QA, configuracion publica, onboarding |
+| Descripcion | Se construyo y desplego `backend/` en `admin-service-qa` para activar la validacion que rechaza URLs locales o sin HTTPS en QA/Produccion. Tambien se configuro `ERCLAVE_API_PUBLIC_BASE_URL` con la URL publica del servicio para que `/version` no anuncie localhost. |
+| Motivo | La revision que corrigio la redireccion Firebase solo habia actualizado variables sobre una imagen anterior; faltaba promover el guardrail de codigo y corregir la metadata publica del servicio. |
+| Impacto | QA queda protegido contra futuras invitaciones con `continueUrl` local y reporta sus URLs publicas correctas. |
+| Validacion | Revision final `admin-service-qa-00013-xmz` lista con 100% de trafico; `ERCLAVE_APP_PUBLIC_BASE_URL=https://erclave.web.app`; health y readiness HTTP 200; `/version` con URL publica; GitHub Actions aprobado. |
+| Observaciones | La guia QA y su documento Word no requieren despliegue de frontend; se publican como artefactos del repositorio. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
