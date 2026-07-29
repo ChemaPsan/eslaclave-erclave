@@ -1,4 +1,4 @@
-import { defaultProductsServices, defaultLaborRoles, defaultMachines, defaultRecipes, defaultOrders } from "./resources.js";
+import { defaultProductsServices, defaultLaborAreas, defaultLaborRoles, defaultMachines, defaultRecipes, defaultOrders } from "./resources.js";
 import { getApiMode, getConfiguredTenantId, getDemoTenantId } from "../api/config.js";
 
 function shouldUseSeedData() {
@@ -56,21 +56,69 @@ export const mockDb = {
   findProductService(itemId) {
     return this.loadProductsServices().find((item) => item.id === itemId);
   },
+  loadLaborAreas() {
+    const raw = localStorage.getItem(storageKey("erclave-labor-areas"));
+    if (raw) return JSON.parse(raw);
+    return shouldUseSeedData() ? [...defaultLaborAreas] : [];
+  },
+  saveLaborAreas(items) {
+    localStorage.setItem(storageKey("erclave-labor-areas"), JSON.stringify(items));
+  },
+  addLaborArea(item) {
+    const items = this.loadLaborAreas();
+    if (items.some((area) => area.code.toLowerCase() === item.code.toLowerCase() || area.name.toLowerCase() === item.name.toLowerCase())) {
+      throw new Error("duplicate_labor_area");
+    }
+    items.unshift(item);
+    this.saveLaborAreas(items);
+    return items;
+  },
+  updateLaborArea(item) {
+    const previous = this.findLaborArea(item.id);
+    if (!previous) throw new Error("labor_area_not_found");
+    if (this.loadLaborAreas().some((area) => area.id !== item.id && (area.code.toLowerCase() === item.code.toLowerCase() || area.name.toLowerCase() === item.name.toLowerCase()))) {
+      throw new Error("duplicate_labor_area");
+    }
+    const items = this.loadLaborAreas().map((current) => (current.id === item.id ? item : current));
+    this.saveLaborAreas(items);
+    if (previous && previous.name !== item.name) {
+      this.saveLaborRoles(this.loadLaborRoles().map((role) => role.areaId === item.id ? { ...role, area: item.name } : role));
+    }
+    return items;
+  },
+  findLaborArea(itemId) {
+    return this.loadLaborAreas().find((item) => item.id === itemId);
+  },
   loadLaborRoles() {
     const raw = localStorage.getItem(storageKey("erclave-labor-roles"));
-    return raw ? JSON.parse(raw) : shouldUseSeedData() ? defaultLaborRoles : [];
+    const roles = raw ? JSON.parse(raw) : shouldUseSeedData() ? defaultLaborRoles : [];
+    const areas = this.loadLaborAreas();
+    let changed = false;
+    const migrated = roles.map((role) => {
+      if (role.areaId && areas.some((area) => area.id === role.areaId)) return role;
+      const area = areas.find((item) => item.name.trim().toLowerCase() === String(role.area || "").trim().toLowerCase());
+      if (!area) return role;
+      changed = true;
+      return { ...role, areaId: area.id, area: area.name };
+    });
+    if (changed) this.saveLaborRoles(migrated);
+    return migrated;
   },
   saveLaborRoles(items) {
     localStorage.setItem(storageKey("erclave-labor-roles"), JSON.stringify(items));
   },
   addLaborRole(item) {
+    const area = this.findLaborArea(item.areaId);
+    if (!area) throw new Error("labor_area_not_found");
     const items = this.loadLaborRoles();
-    items.unshift(item);
+    items.unshift({ ...item, areaId: area.id, area: area.name });
     this.saveLaborRoles(items);
     return items;
   },
   updateLaborRole(item) {
-    const items = this.loadLaborRoles().map((current) => (current.id === item.id ? item : current));
+    const area = this.findLaborArea(item.areaId);
+    if (!area) throw new Error("labor_area_not_found");
+    const items = this.loadLaborRoles().map((current) => (current.id === item.id ? { ...item, areaId: area.id, area: area.name } : current));
     this.saveLaborRoles(items);
     return items;
   },

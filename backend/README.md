@@ -107,6 +107,16 @@ Desde `backend`:
 uvicorn services.production_service_adapter:app --reload --port 8002
 ```
 
+## Ejecutar inventory-service
+
+Con la migracion de Inventarios aplicada en una base local aislada:
+
+```bash
+uvicorn services.inventory_service_adapter:app --reload --port 8004
+```
+
+No aplicar la migracion de Inventarios a QA o Produccion sin autorizacion explicita. En Windows, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_inventory_local.ps1` inicia el PostgreSQL portatil aislado en `5434` y `inventory-service` en `8004` sin cambiar la politica global.
+
 En QA/Produccion, `production-service` debe configurar `ERCLAVE_AUTH_MODE=firebase`, `ERCLAVE_FIREBASE_PROJECT_ID` y `ERCLAVE_ADMIN_SERVICE_URL`. Cada ruta reenvia el Bearer token a `admin-service /v1/session/context` y valida tenant activo, modulo Produccion y permiso exacto. `X-Tenant-Id` funciona solamente como selector. En modo local `demo` se admite `X-Actor-Id` para pruebas controladas.
 
 Primer corte real de Produccion:

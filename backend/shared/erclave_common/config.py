@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     firebase_web_api_key: str | None = None
     backoffice_admin_emails: str = ""
     database_url: str | None = None
+    inventory_database_url: str | None = None
     log_level: str = Field(default="INFO")
 
     @model_validator(mode="after")

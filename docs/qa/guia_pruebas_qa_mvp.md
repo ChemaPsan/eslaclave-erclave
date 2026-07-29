@@ -3,7 +3,7 @@
 **Ambiente:** QA
 **Aplicación cliente:** `https://erclave.web.app`
 **Backoffice interno:** `https://erclave.web.app/backoffice/`
-**Última actualización:** 2026-07-24
+**Última actualización:** 2026-07-26
 
 ## 1. Objetivo
 
@@ -44,6 +44,18 @@ Estados de ejecución: `Pasa`, `Falla`, `Bloqueado`, `No aplica`.
 ## 4. Preparación
 
 No guardar contraseñas, tokens ni ligas vigentes de invitación en Git, documentos o tickets.
+
+### Tenant autorizado para desarrollo y datos dummy
+
+En desarrollo local y pruebas con información ficticia se debe trabajar exclusivamente con:
+
+| Campo | Valor autorizado |
+|---|---|
+| Nombre | `ERClave Demo QA` |
+| Tenant ID | `ten_739ee59d765d5e14818674800d` |
+| Sucursal de referencia | `Matriz · ERClave Demo QA` |
+
+Antes de capturar, modificar, eliminar, importar o generar datos de prueba, confirmar en la sesión y en la petición que el tenant activo coincide con ese ID. Si aparece cualquier otro tenant, detener la prueba. Los tenants creados para el equipo de QA no deben recibir datos dummy, seeds ni mutaciones de desarrollo salvo autorización explícita.
 
 Preparar:
 
@@ -333,6 +345,17 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 Recorrer Órdenes, Entregables, Validación de recursos, Áreas y puestos y Maquinaria. Evaluar formularios, cálculos, estados, impresión y claridad del flujo.
 
+Para **Áreas y puestos** validar además:
+
+- [ ] Nueva área solicita únicamente código, nombre, descripción y estatus; no crea puestos.
+- [ ] Nuevo puesto muestra un selector y no permite escribir un área libremente.
+- [ ] No puede guardarse un puesto si su `area_id` no existe o pertenece a otro tenant.
+- [ ] Código y nombre de área no se duplican ignorando mayúsculas/minúsculas.
+- [ ] Renombrar un área conserva sus puestos vinculados por ID.
+- [ ] Editar un puesto actualiza cantidad de recursos, minutos, capacidad total, costo y estatus sin crear otra área.
+- [ ] Un rol con `production.labor_area.update` puede editar áreas sin obtener `production.labor_role.update`, y viceversa.
+- [ ] Alta de área, alta de puesto, edición de área y edición de puesto producen auditoría e idempotencia cuando el backend sea implementado.
+
 **Esperado:** experiencia coherente en el mismo navegador. No exigir sincronización entre dispositivos ni persistencia PostgreSQL.
 
 **Por qué:** permite validar tempranamente el proceso antes de conectar el backend.
@@ -444,3 +467,70 @@ Una liberación candidata puede avanzar cuando:
 - P2 están registrados y priorizados;
 - lo local/demo está identificado y no se comunica como persistencia real;
 - se guardó evidencia de ambiente, build y dispositivo.
+
+## 16. Validacion local previa de volumen de Inventario
+
+El nombre visible objetivo del modulo es **Inventario**, conservando `existencias` como identificador tecnico de la consulta. Esta decision documental no cambia por si sola el alcance desplegado ni autoriza pruebas sobre QA.
+
+Antes de conectar busqueda, filtros y paginacion server-side, ejecutar localmente:
+
+```powershell
+node tools/benchmarks/inventory-volume.js
+```
+
+El guardrail usa 10,000 articulos sinteticos por tenant y no requiere red ni credenciales. Debe pasar busqueda parcial, filtros combinados, aislamiento, paginacion sin duplicados y la regla temporal `available_quantity = on_hand_quantity` mientras Reservas no exista.
+
+No ejecutar cargas de volumen, seeds, migraciones ni benchmarks en Cloud SQL QA. Cuando el corte funcional se implemente y se autorice su promocion, agregar casos QA separados para el API real y actualizar el mapa de alcance; hasta entonces esta validacion es exclusivamente local.
+
+## 17. Checklist responsive transversal
+
+Aplicar este checklist a toda pantalla nueva o modificada. La fuente tecnica es `docs/arquitectura/estandar_responsive_transversal.md`.
+
+### Matriz minima
+
+Probar 1,440 x 900, 1,280 x 720, 1,024 x 768, 768 x 1,024, 390 x 844 y 320 x 568. En escritorio repetir a zoom 200%. Si hay tabla operativa movil, probar tambien orientacion horizontal.
+
+No basta cambiar el viewport: reducir el ancho real del panel abriendo sidebar, guia de flujo, alertas u otro panel lateral. Repetir estados amplio, intermedio y estrecho con Espanol e Ingles.
+
+### QA-RESP-02 - Contenedor y estructura
+
+- [ ] El componente cambia por su ancho de contenedor, no solamente por el viewport.
+- [ ] No hay scroll horizontal de pagina, superposiciones ni regiones fuera de pantalla.
+- [ ] Sidebar, flujo y alertas pueden coexistir sin comprimir el area operativa hasta hacerla inutilizable.
+- [ ] Carga, vacio, error, sin permisos y resultados reales conservan la misma calidad responsive.
+
+### QA-RESP-03 - Tablas y colecciones
+
+- [ ] La tabla usa tarjeta, scroll interno o vista reducida de acuerdo con la estrategia documentada.
+- [ ] En tarjetas cada valor conserva etiqueta, unidad, estado y accion; no depende de encabezados ocultos.
+- [ ] Si existe scroll, queda dentro de la tabla, es perceptible y no oculta acciones esenciales.
+- [ ] Identificadores, cantidades y acciones no se cortan ni se solapan.
+- [ ] El orden de lectura y tabulacion sigue siendo logico.
+
+### QA-RESP-04 - Texto y localizacion
+
+- [ ] Titulos, breadcrumbs, chips, botones, alertas y ayudas soportan textos ES/EN largos.
+- [ ] Correos, URLs, IDs y correlation IDs envuelven o permiten consultar/copiar el valor completo.
+- [ ] No hay alturas fijas que corten traducciones o mensajes de validacion.
+- [ ] La elipsis, si existe, ofrece acceso al contenido completo.
+
+### QA-RESP-05 - Formularios y acciones
+
+- [ ] Campos pasan a una columna sin perder label, ayuda, error o contexto.
+- [ ] Lookups, calendarios, selects y textareas no desbordan.
+- [ ] Acciones primaria, secundaria y destructiva conservan orden y significado al apilarse.
+- [ ] Modal/drawer permite alcanzar encabezado, cierre, errores y acciones con teclado y tacto.
+- [ ] Targets tactiles tienen al menos 44 x 44 CSS px o superficie equivalente.
+
+### QA-RESP-06 - Flujos, filtros y alertas
+
+- [ ] En escritorio e intermedio la guia descriptiva conserva el riel vertical izquierdo y su compresion; no cambia globalmente a barra horizontal.
+- [ ] Una excepcion responsive de un modulo no altera el formato de la guia ni otros componentes compartidos en las demas secciones.
+- [ ] La guia abierta, cerrada y en transicion no cubre contenido ni deja un control ambiguo.
+- [ ] Filtros hacen wrap; filtros secundarios y chips no expulsan acciones del panel.
+- [ ] Alertas y banners conservan titulo, mensaje, accion y cierre sin tapar la operacion.
+- [ ] El foco es visible y no queda detras de contenido sticky, modal o panel lateral.
+
+### Evidencia
+
+Adjuntar capturas de al menos un estado amplio, uno intermedio y uno estrecho, indicando viewport, ancho aproximado del panel, zoom, idioma, navegador y paneles laterales activos. Registrar como P1 cualquier bloqueo operativo, contenido esencial inaccesible o accion fuera de pantalla; defectos cosmeticos con alternativa pueden clasificarse P2.

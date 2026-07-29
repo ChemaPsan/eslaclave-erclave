@@ -4,11 +4,12 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 
 ## Antes de modificar
 
-1. Leer `AGENTES.md` y el documento del módulo en `modulos/`.
-2. Para arquitectura, datos, seguridad o ambientes, consultar los documentos pertinentes en `docs/arquitectura/`.
-3. Identificar el módulo, microfrontend, microservicio, dueño del dato, contratos y dependencias afectadas.
-4. Revisar `git status --short` y preservar cambios locales ajenos.
-5. No inventar reglas de negocio, entidades, permisos ni estados. Registrar supuestos pendientes si la fuente de verdad no los define.
+1. Ejecutar `npm run session:context` y leer `docs/contexto/INICIO_SESION.md`.
+2. Leer `AGENTES.md`, los documentos de `docs/contexto/` y el documento del módulo en `modulos/`.
+3. Para arquitectura, datos, seguridad o ambientes, consultar los documentos pertinentes en `docs/arquitectura/`.
+4. Identificar el módulo, microfrontend, microservicio, dueño del dato, contratos y dependencias afectadas.
+5. Revisar `git status --short` y preservar cambios locales ajenos.
+6. No inventar reglas de negocio, entidades, permisos ni estados. Registrar supuestos pendientes si la fuente de verdad no los define.
 
 ## Reglas obligatorias
 
@@ -18,9 +19,12 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 - Mantener reglas críticas, autorización e idempotencia en backend, no sólo en frontend.
 - El consumo HTTP del frontend vive en `frontend/api/`; las pantallas no llaman `fetch` directamente.
 - Todo texto visible nuevo o modificado debe existir en español e inglés con las mismas variables.
+- Toda interfaz nueva o modificada debe cumplir `docs/arquitectura/estandar_responsive_transversal.md`; ejecutar `npm run validate:responsive` y validar el ancho real del contenedor, no solo el viewport.
+- No cambiar globalmente la composicion de componentes compartidos para corregir una sola pantalla. Las excepciones responsive deben usar una clase explicita del modulo o seccion, conservar el patron estandar fuera de ese alcance y quedar documentadas.
 - Cambios de API deben actualizar OpenAPI, schemas, consumidores y pruebas en el mismo corte.
 - Cambios persistentes deben incluir modelo, migración Alembic, índices/constraints, estrategia de datos existentes y prueba.
 - No desplegar, migrar QA/Producción, publicar, enviar mensajes ni crear PRs salvo petición explícita.
+- Para desarrollo local, pruebas manuales y datos dummy usar exclusivamente el tenant `ERClave Demo QA` con ID `ten_739ee59d765d5e14818674800d`. No ejecutar seeds, cargas de prueba ni mutaciones de ensayo sobre ningún otro tenant sin autorización explícita del usuario. Antes de una operación que escriba datos, confirmar el `tenant_id`; si no coincide, detenerse.
 
 ## Flujo de implementación
 
@@ -29,7 +33,8 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 3. Agregar o actualizar pruebas negativas, de permisos, idempotencia y aislamiento según aplique.
 4. Actualizar documentación contractual y operativa afectada.
 5. Agregar una entrada correlativa a `TRAZABILIDAD.md`. Usar `npm run traceability:draft -- --title "..."` para preparar el borrador.
-6. Ejecutar `npm run verify`.
+6. Actualizar `docs/contexto/ESTADO_ACTUAL.md` y `docs/contexto/PENDIENTES.md` cuando cambie el estado real.
+7. Ejecutar `npm run verify`.
 
 Para funcionalidades completas usar la skill `$erclave-feature`. Para modelos o migraciones usar además `$erclave-db-migration`.
 
@@ -41,8 +46,10 @@ Un cambio termina sólo cuando cumple los criterios documentados, conserva owner
 
 ```powershell
 npm.cmd run validate
+npm.cmd run validate:responsive
 npm.cmd run verify
 npm.cmd run traceability:draft -- --title "Descripción del cambio"
+npm.cmd run session:context
 ```
 
 Las pruebas backend usan el intérprete indicado por `PYTHON` cuando exista; en caso contrario usan `python`.

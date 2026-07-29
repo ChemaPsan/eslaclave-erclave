@@ -111,7 +111,7 @@ export const modules = [
       ["Almacenes", "Materia prima, herramientas, producto en proceso y terminado."],
       ["Articulos", "Catalogo maestro de articulos inventariables autorizados.", "articulos"],
       ["Movimientos", "Entradas, salidas, transferencias, ajustes y devoluciones."],
-      ["Existencias", "Saldo calculado desde movimientos por articulo y almacen.", "existencias"],
+      ["Inventario", "Existencia fisica calculada desde movimientos por articulo y almacen.", "existencias"],
       ["Reservas", "Apartado para ordenes de produccion o pedidos de venta."],
       ["Kardex", "Historial completo por articulo, lote, serie o ubicacion."]
     ],
@@ -708,8 +708,8 @@ export const erpSubmoduleCatalog = {
       }
     },
     existencias: {
-      enName: "Stock",
-      enDetail: "Balance calculated from movements by item and warehouse.",
+      enName: "Inventory",
+      enDetail: "Physical inventory calculated from movements by item and warehouse.",
       focus: {
         es: ["Saldo disponible", "Articulo", "Almacen", "Ultimo movimiento"],
         en: ["Available balance", "Item", "Warehouse", "Last movement"]

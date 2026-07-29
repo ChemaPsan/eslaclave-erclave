@@ -2164,6 +2164,141 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | Revision final `admin-service-qa-00013-xmz` lista con 100% de trafico; `ERCLAVE_APP_PUBLIC_BASE_URL=https://erclave.web.app`; health y readiness HTTP 200; `/version` con URL publica; GitHub Actions aprobado. |
 | Observaciones | La guia QA y su documento Word no requieren despliegue de frontend; se publican como artefactos del repositorio. |
 
+### CHG-143
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-26 |
+| Cambio | Guardrail del tenant autorizado para desarrollo |
+| Autor | Codex |
+| Archivos | `AGENTS.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `docs/qa/guia_pruebas_qa_mvp.docx`, `TRAZABILIDAD.md` |
+| Secciones | Desarrollo local, QA, aislamiento multitenant, datos dummy |
+| Descripcion | Se establecio `ERClave Demo QA` (`ten_739ee59d765d5e14818674800d`) como el unico tenant autorizado para desarrollo local, pruebas manuales y datos dummy. Se exige confirmar el tenant antes de toda escritura y detenerse si no coincide. |
+| Motivo | Proteger el tenant separado del equipo de QA y evitar que seeds, cargas ficticias o mutaciones de ensayo contaminen sus datos. |
+| Impacto | Las futuras sesiones de Codex y la ejecucion manual de QA tienen una regla persistente y verificable para seleccionar el tenant de trabajo. Cualquier uso de otro tenant requiere autorizacion explicita. |
+| Validacion | Regla operativa revisada en `AGENTS.md`; guia Markdown y documento Word regenerado; `npm.cmd run verify`. |
+| Observaciones | No se documentan identificadores ni credenciales del tenant reservado del equipo de QA; la proteccion se expresa mediante una lista permitida de un solo tenant. |
+
+### CHG-144
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-26 |
+| Cambio | Catalogo enfocado de productos y servicios |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `frontend/i18n/translations.js`, `modulos/01_produccion.md`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, Produccion, productos y servicios, ordenes |
+| Descripcion | Se reorganizo la vista inicial de Productos y servicios como un catalogo a ancho completo con resumen, buscador, datos maestros, costos, receta vigente y acciones por ficha. El historial de ordenes dejo de mostrarse dentro de la tarjeta y se sustituyo por una accion `Ver ordenes` con contador que abre Ordenes filtradas por el producto seleccionado. |
+| Motivo | Mantener la primera pantalla enfocada en consultar y administrar el catalogo, evitando mezclar el detalle operativo de ordenes y corrigiendo la distribucion estrecha causada por el riel lateral. |
+| Impacto | Cada producto o servicio conserva acceso a su ficha y receta, y ahora permite consultar sus ordenes en una vista especializada con regreso al catalogo o eliminacion del filtro. La relacion se resuelve por producto y recetas asociadas sin cambiar APIs ni persistencia. |
+| Validacion | Paridad i18n ES/EN, sintaxis JavaScript, validadores del repositorio y pruebas backend mediante `npm.cmd run verify`. |
+| Observaciones | El cambio es exclusivamente de frontend y documentacion funcional. No se desplego ni se escribieron datos en QA. |
+
+### CHG-145
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-26 |
+| Cambio | MVP real local de Almacenes e Inventarios |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260726_0007_inventory_service_initial.py`, `backend/services/inventory-service/`, `backend/services/inventory_service_adapter.py`, `backend/pyproject.toml`, `backend/README.md`, `contracts/api/inventory-service.openapi.yaml`, `frontend/api/inventory.js`, `frontend/api/config.js`, `frontend/app.js`, `frontend/env.js`, `TRAZABILIDAD.md` |
+| Secciones | Almacenes, articulos, movimientos, existencias, Kardex, autorizacion, auditoria |
+| Descripcion | Se implemento el corte vertical de inventory-service con schema propio, almacenes y articulos por tenant, movimientos inmutables, transferencias y reversas atomicas, bloqueo de saldos negativos, existencias y Kardex calculados, idempotencia, auditoria, autorizacion contra Admin y cliente frontend. |
+| Motivo | Proveer una fuente de verdad de materiales antes de continuar la integracion real del flujo de Produccion. |
+| Impacto | El frontend consume inventory-service local en el puerto 8004 contra PostgreSQL portatil aislado en 5434. Las escrituras requieren tenant, permiso e Idempotency-Key; no se modificaron datos ni infraestructura de QA. |
+| Validacion | `npm.cmd run verify` con 91 pruebas; 7 pruebas nuevas de API Inventory; ciclo Alembic real `upgrade -> downgrade -> upgrade` en `erclave_local`; smoke persistente con 2 almacenes, 1 articulo, entrada, salida, saldo 17, Kardex, auditoria, idempotencia y lectura negativa de aislamiento. |
+| Observaciones | PostgreSQL 17.10 portatil vive en `C:\tmp\erclave-postgresql17`, escucha solo en `127.0.0.1:5434` con SCRAM y puede iniciarse junto con Inventory API usando el script documentado con bypass por proceso, sin cambiar la politica global. Cloud SQL QA no recibio migraciones ni escrituras. Reservas quedan fuera de este corte. |
+
+### CHG-146
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-27 |
+| Cambio | Especificacion escalable y validacion local de volumen de Inventario |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `frontend/api/inventory.js`, `frontend/data/modules.js`, `frontend/i18n/translations.js`, `backend/services/inventory-service/app/`, `backend/services/inventory-service/tests/`, `backend/alembic/versions/20260727_0008_inventory_search_indexes.py`, `contracts/api/inventory-service.openapi.yaml`, `docs/arquitectura/inventario_consulta_escalable.md`, `docs/operaciones/validacion_volumen_inventario_local.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `modulos/02_almacenes_inventarios.md`, `tools/benchmarks/inventory-volume.js`, `TRAZABILIDAD.md` |
+| Secciones | Inventario, Existencias, busqueda, filtros, paginacion, volumen local |
+| Descripcion | Se renombro visualmente el submodulo Existencias a Inventario conservando el modulo Almacenes y los identificadores tecnicos `almacenes` y `existencias`. Se implementaron filtros y paginacion server-side, la igualdad temporal entre disponible y existencia fisica hasta implementar Reservas, y validaciones locales con 10,000 articulos por tenant. |
+| Motivo | Preparar una consulta operativa que pueda crecer sin descargar catalogos completos al navegador y verificar desde ahora su semantica de aislamiento, filtros y recorrido por cursor. |
+| Impacto | La consulta de Inventario consume balances enriquecidos y paginados desde `inventory-service`; incorpora busqueda parcial, filtros, orden y controles multitenant sin cambiar rutas tecnicas. |
+| Validacion | 19 pruebas de inventory-service; 103 pruebas backend totales; benchmark en memoria de 10,000 articulos/20,000 filas en 59.1 ms; PostgreSQL local con 10,000 articulos y 10,000 movimientos, busqueda sin acento y pagina de 50 en 30.896 ms tras `ANALYZE`; migracion `0008`; `npm.cmd run verify`. |
+| Observaciones | No se desplego, migro, cargo ni escribio informacion en QA. El umbral local de 2 segundos detecta regresiones gruesas y no constituye un SLO de produccion. |
+
+### CHG-147
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-27 |
+| Cambio | Memoria operativa persistente entre sesiones |
+| Autor | Codex |
+| Archivos | `AGENTS.md`, `package.json`, `docs/contexto/`, `tools/session-context.js`, `tools/validators/validate-session-context.js`, `tools/validators/validate-all.js`, `tools/validators/validate-codex-tooling.js`, `TRAZABILIDAD.md` |
+| Secciones | Inicio de sesion, estado actual, decisiones, tenants, pendientes, automatizacion Codex |
+| Descripcion | Se agrego `npm.cmd run session:context` para recuperar en modo solo lectura la rama, cambios locales, ultima migracion, ultima trazabilidad, memoria operativa y estado de servicios. Se incorporaron documentos persistentes y un validador obligatorio. |
+| Motivo | Reducir la perdida de contexto y asegurar que nuevas sesiones recuperen validaciones, decisiones de arquitectura, limites de agentes, tenant autorizado y siguiente prioridad desde el repositorio. |
+| Impacto | Las nuevas sesiones cuentan con un bootstrap reproducible y sin secretos. El flujo de inicio y cierre de `AGENTS.md` obliga a consultar y mantener esta memoria. |
+| Validacion | `npm.cmd run session:context`, `npm.cmd run validate:session-context`, `npm.cmd run verify`. |
+| Observaciones | El comando es solo lectura y no inicia servicios, modifica datos ni contacta QA. El contenido sigue requiriendo mantenimiento al cerrar cada corte. |
+
+### CHG-148
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-27 |
+| Cambio | Responsividad de la vista Inventario |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/index.html`, `frontend/styles.css`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Inventario, flujo guiado, filtros, tabla, alertas, responsive |
+| Descripcion | Se colapso el flujo de Inventario por defecto, se agregaron container queries para adaptar filtros y filas al ancho real del panel, etiquetas en modo tarjeta, hero flexible y reubicacion de Alertas en viewports intermedios. |
+| Motivo | Evitar encabezados encimados, textos cortados y compresion excesiva cuando conviven sidebar, flujo y panel de alertas. |
+| Impacto | Inventario conserva la tabla completa en paneles amplios y cambia a tarjetas de dos o una columna cuando el contenedor se estrecha, sin depender solo del ancho total de la ventana. |
+| Validacion | `npm.cmd run validate:syntax`, `npm.cmd run validate:i18n`, `npm.cmd run validate:active-localization`, comprobacion HTTP del copy Inventario y `npm.cmd run verify`. |
+| Observaciones | Se agrego version al entrypoint del frontend para evitar que el navegador conserve el copy anterior. No hubo despliegues ni escrituras sobre QA. |
+
+### CHG-149
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-27 |
+| Cambio | Estandar responsive transversal para agentes y QA |
+| Autor | Codex |
+| Archivos | `frontend/styles.css`, `frontend/index.html`, `frontend/backoffice/styles.css`, `frontend/backoffice/app.js`, `frontend/backoffice/index.html`, `tools/validators/validate-responsive-ui.js`, `tools/validators/validate-all.js`, `package.json`, `docs/arquitectura/estandar_responsive_transversal.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `AGENTS.md`, `AGENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Responsive, container queries, tablas, formularios, flujos, alertas, QA |
+| Descripcion | Se implemento y documento un estandar transversal con container queries para el panel operativo, modales y backoffice; layouts flexibles para catalogos, formularios, guias y acciones; filas etiquetadas en Inventario y backoffice; navegacion movil accesible, foco visible, salto al contenido y soporte de movimiento reducido. Un validador automatico protege sus puntos estructurales. |
+| Motivo | Evitar que cada modulo resuelva responsive de forma aislada o dependa solo del viewport cuando sidebar y paneles laterales determinan el ancho operativo real. |
+| Impacto | Los modulos y secciones existentes responden al ancho util que dejan sidebar, flujo y alertas; todos los agentes cuentan con criterios comunes y QA dispone de una matriz reproducible para detectar bloqueos, truncamientos, superposiciones y perdida de operabilidad. |
+| Validacion | `npm.cmd run validate:responsive`, revision cruzada de arquitectura, accesibilidad y reglas de agentes; `npm.cmd run verify`; `git diff --check`. |
+| Observaciones | Se actualizaron codigo fuente y documentacion Markdown, sin desplegar, regenerar el DOCX ni escribir datos en QA. La matriz visual manual permanece como requisito antes de promover el corte. |
+
+### CHG-150
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-28 |
+| Cambio | Separacion funcional de areas y puestos de Produccion |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/data/mockDb.js`, `frontend/data/resources.js`, `frontend/i18n/translations.js`, `frontend/index.html`, `contracts/api/production-service.openapi.yaml`, `docs/arquitectura/apis_mvp.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `modulos/01_produccion.md`, `tools/validators/validate-labor-catalog.js`, `tools/validators/validate-all.js`, `package.json`, `TRAZABILIDAD.md` |
+| Secciones | Produccion, areas, puestos, recursos, permisos, OpenAPI |
+| Descripcion | Se sustituyo el formulario combinado por un catalogo independiente de areas y otro formulario para puestos. Los puestos seleccionan por `areaId` una area previamente creada; areas y puestos pueden editarse por separado y el renombrado conserva la relacion. Se definieron permisos independientes de lectura, creacion y edicion para ambos recursos. |
+| Motivo | Evitar que errores tipograficos en un campo de texto creen areas implicitas y permitir delegar la administracion de areas y recursos laborales mediante roles distintos. |
+| Impacto | El flujo local rechaza puestos con areas inexistentes, evita duplicados de area y puesto, migra registros demo anteriores hacia IDs estables y prepara el contrato de production-service para persistencia multitenant posterior. |
+| Validacion | `npm.cmd run validate:labor-catalog`, paridad i18n ES/EN, validacion OpenAPI, sintaxis JavaScript y `npm.cmd run verify`. |
+| Observaciones | No se implemento aun persistencia backend de areas/puestos, no hubo migraciones, seeds, despliegues ni escrituras en QA. Los endpoints documentados son el contrato objetivo del siguiente corte backend. |
+
+### CHG-151
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-28 |
+| Cambio | Restauracion del riel vertical y limites de cambios compartidos |
+| Autor | Codex |
+| Archivos | `frontend/styles.css`, `frontend/index.html`, `tools/validators/validate-responsive-ui.js`, `docs/arquitectura/estandar_responsive_transversal.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `AGENTS.md`, `AGENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Guias de flujo, responsive, limites de alcance, agentes |
+| Descripcion | Se elimino la regla transversal que convertia toda guia abierta en una barra horizontal cuando el panel alcanzaba 1180 px. Se restauro el patron compartido de riel vertical izquierdo con estado comprimido y se formalizo que las excepciones deben usar clases especificas de pantalla. |
+| Motivo | La correccion responsive originada en Inventario altero componentes de Areas y puestos y otros submodulos que no formaban parte del problema original. |
+| Impacto | Los flujos descriptivos recuperan su distribucion estandar y futuras correcciones locales quedan impedidas de modificar globalmente el formato compartido sin delimitacion explicita. |
+| Validacion | `npm.cmd run validate:responsive`, sintaxis, trazabilidad, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | Cambio exclusivo de frontend, validadores y documentacion. No hubo despliegues, migraciones, seeds ni escrituras en QA. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

@@ -31,9 +31,11 @@ include = ["erclave_common*"]
 pythonpath = [
   "shared",
   "services/admin-service",
-  "services/production-service"
+  "services/production-service",
+  "services/inventory-service"
 ]
 testpaths = [
   "services/admin-service/tests",
-  "services/production-service/tests"
+  "services/production-service/tests",
+  "services/inventory-service/tests"
 ]

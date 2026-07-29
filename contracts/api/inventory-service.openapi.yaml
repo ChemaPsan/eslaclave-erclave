@@ -163,6 +163,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/IdPath'
       responses:
         '200':
@@ -180,6 +181,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/IdPath'
       requestBody:
         required: true
@@ -206,6 +208,7 @@ paths:
         - $ref: '#/components/parameters/CorrelationId'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Search'
         - name: inventory_item_id
           in: query
           schema:
@@ -214,6 +217,27 @@ paths:
           in: query
           schema:
             type: string
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: item_type
+          in: query
+          schema: { type: string }
+        - name: item_status
+          in: query
+          schema: { type: string, enum: [active, inactive, blocked] }
+        - name: inventory_policy
+          in: query
+          schema: { type: string }
+        - name: unit
+          in: query
+          schema: { type: string }
+        - name: stock_status
+          in: query
+          schema: { type: string, enum: [negative, out_of_stock, below_minimum, normal, above_maximum] }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [item_code, item_name, on_hand_asc, on_hand_desc], default: item_code }
       responses:
         '200':
           description: Balances.
@@ -519,6 +543,7 @@ components:
               additionalProperties: true
     Warehouse:
       type: object
+      required: [id, code, name, type, status, business_center, location, owner, inventory_policy]
       properties:
         id:
           type: string
@@ -530,6 +555,18 @@ components:
           type: string
         status:
           type: string
+          enum: [active, inactive, blocked]
+        business_center: { type: string }
+        location: { type: string }
+        owner: { type: string }
+        capacity: { type: [string, 'null'] }
+        inventory_policy: { type: string }
+        zone: { type: [string, 'null'] }
+        aisle: { type: [string, 'null'] }
+        rack: { type: [string, 'null'] }
+        level: { type: [string, 'null'] }
+        position: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
     WarehouseResponse:
       type: object
       properties:
@@ -544,7 +581,7 @@ components:
             $ref: '#/components/schemas/Warehouse'
     WarehouseCreateRequest:
       type: object
-      required: [code, name, type]
+      required: [code, name, type, business_center, location, owner]
       properties:
         code:
           type: string
@@ -552,6 +589,17 @@ components:
           type: string
         type:
           type: string
+        business_center: { type: string }
+        location: { type: string }
+        owner: { type: string }
+        capacity: { type: [string, 'null'] }
+        inventory_policy: { type: string, default: standard }
+        zone: { type: [string, 'null'] }
+        aisle: { type: [string, 'null'] }
+        rack: { type: [string, 'null'] }
+        level: { type: [string, 'null'] }
+        position: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
     WarehouseUpdateRequest:
       type: object
       properties:
@@ -561,6 +609,18 @@ components:
           type: string
         status:
           type: string
+          enum: [active, inactive, blocked]
+        business_center: { type: [string, 'null'] }
+        location: { type: [string, 'null'] }
+        owner: { type: [string, 'null'] }
+        capacity: { type: [string, 'null'] }
+        inventory_policy: { type: [string, 'null'] }
+        zone: { type: [string, 'null'] }
+        aisle: { type: [string, 'null'] }
+        rack: { type: [string, 'null'] }
+        level: { type: [string, 'null'] }
+        position: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
     LocationCreateRequest:
       type: object
       required: [code, name]
@@ -590,6 +650,13 @@ components:
           type: string
         status:
           type: string
+          enum: [active, inactive, blocked]
+        category: { type: [string, 'null'] }
+        inventory_policy: { type: string }
+        suggested_warehouse_id: { type: [string, 'null'] }
+        minimum_stock: { type: number }
+        maximum_stock: { type: [number, 'null'] }
+        description: { type: [string, 'null'] }
     ItemResponse:
       type: object
       properties:
@@ -623,17 +690,26 @@ components:
           enum: [standard, lot, serial, restricted]
         suggested_warehouse_id:
           type: string
+        minimum_stock: { type: number, minimum: 0, default: 0 }
+        maximum_stock: { type: [number, 'null'], minimum: 0 }
+        description: { type: [string, 'null'] }
     ItemUpdateRequest:
       type: object
       properties:
         name:
           type: string
+        type: { type: string }
         category:
           type: string
+        base_unit: { type: string }
         suggested_warehouse_id:
           type: string
+        minimum_stock: { type: [number, 'null'], minimum: 0 }
+        maximum_stock: { type: [number, 'null'], minimum: 0 }
         status:
           type: string
+          enum: [active, inactive, blocked]
+        description: { type: [string, 'null'] }
     Movement:
       type: object
       properties:
@@ -647,6 +723,8 @@ components:
           type: string
         warehouse_id:
           type: string
+        destination_warehouse_id:
+          type: [string, 'null']
         direction:
           type: string
           enum: [in, out, neutral]
@@ -673,7 +751,7 @@ components:
           $ref: '#/components/schemas/Page'
     MovementCreateRequest:
       type: object
-      required: [movement_type, inventory_item_id, warehouse_id, quantity, unit, reason, source]
+      required: [movement_type, inventory_item_id, warehouse_id, quantity, unit, reason, source, occurred_at]
       properties:
         movement_type:
           type: string
@@ -691,6 +769,9 @@ components:
           type: number
         reason:
           type: string
+        occurred_at:
+          type: string
+          format: date-time
         source:
           $ref: '#/components/schemas/SourceRef'
     ExternalMovementRequest:
@@ -722,7 +803,24 @@ components:
             properties:
               inventory_item_id:
                 type: string
+              item_code:
+                type: string
+              item_name:
+                type: string
+              item_type:
+                type: string
+              category:
+                type: [string, 'null']
+              item_status:
+                type: string
+                enum: [active, inactive, blocked]
+              inventory_policy:
+                type: string
               warehouse_id:
+                type: string
+              warehouse_code:
+                type: string
+              warehouse_name:
                 type: string
               on_hand_quantity:
                 type: number
@@ -732,6 +830,16 @@ components:
                 type: number
               unit:
                 type: string
+              minimum_stock:
+                type: number
+              maximum_stock:
+                type: [number, 'null']
+              stock_status:
+                type: string
+                enum: [negative, out_of_stock, below_minimum, normal, above_maximum]
+              last_movement_at:
+                type: [string, 'null']
+                format: date-time
         page:
           $ref: '#/components/schemas/Page'
     AvailabilityCheckRequest:

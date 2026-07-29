@@ -514,9 +514,9 @@ paths:
     get:
       tags: [Labor]
       operationId: listLaborAreas
-      summary: List labor areas and roles.
+      summary: List labor areas.
       x-required-module: production
-      x-permissions: [production.labor.read]
+      x-permissions: [production.labor_area.read]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/Search'
@@ -533,7 +533,7 @@ paths:
       operationId: createLaborArea
       summary: Create labor area.
       x-required-module: production
-      x-permissions: [production.labor.create]
+      x-permissions: [production.labor_area.create]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -551,13 +551,63 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LaborAreaResponse'
+  /v1/production/labor-areas/{area_id}:
+    patch:
+      tags: [Labor]
+      operationId: updateLaborArea
+      summary: Update a labor area independently from its roles.
+      x-required-module: production
+      x-permissions: [production.labor_area.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: area_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LaborAreaUpdateRequest'
+      responses:
+        '200':
+          description: Labor area updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborAreaResponse'
   /v1/production/labor-areas/{area_id}/roles:
+    get:
+      tags: [Labor]
+      operationId: listLaborRoles
+      summary: List roles belonging to an existing labor area.
+      x-required-module: production
+      x-permissions: [production.labor_role.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: area_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Labor roles for the area.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRoleListResponse'
     post:
       tags: [Labor]
       operationId: createLaborRole
       summary: Create role/resource within labor area.
       x-required-module: production
-      x-permissions: [production.labor.update]
+      x-permissions: [production.labor_role.create]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -586,7 +636,7 @@ paths:
       operationId: updateLaborRole
       summary: Update labor role/resource.
       x-required-module: production
-      x-permissions: [production.labor.update]
+      x-permissions: [production.labor_role.update]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -1092,6 +1142,22 @@ components:
           type: string
         description:
           type: string
+        status:
+          type: string
+          enum: [active, inactive]
+    LaborAreaUpdateRequest:
+      type: object
+      minProperties: 1
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
     LaborAreaResponse:
       type: object
       properties:
@@ -1143,6 +1209,14 @@ components:
         data:
           type: object
           additionalProperties: true
+    LaborRoleListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
     MachineCreateRequest:
       type: object
       required: [code, name, cost_per_hour]

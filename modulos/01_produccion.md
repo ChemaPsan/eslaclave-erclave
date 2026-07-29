@@ -93,6 +93,8 @@ Regla clave:
 
 - Si el producto/servicio ya tiene receta vigente, la accion debe ser **Editar receta**.
 - Si no tiene receta vigente, la accion debe ser **Generar receta**.
+- La vista inicial debe priorizar el catalogo y la ficha maestra; no debe incrustar el detalle de ordenes dentro de cada tarjeta.
+- Cada producto/servicio debe ofrecer **Ver ordenes** para abrir el apartado de Ordenes filtrado por ese registro, con opcion de volver al catalogo o quitar el filtro.
 
 ---
 
@@ -249,11 +251,13 @@ Funciones actuales:
 
 - consultar listado de areas;
 - buscar por area, puesto o rol;
+- crear un area mediante un formulario independiente con codigo, nombre, descripcion y estatus;
+- editar un area sin capturar ni duplicar puestos;
 - entrar al detalle de un area;
 - ver roles/puestos dentro del area;
-- crear nuevo rol/recurso dentro del area;
-- editar rol existente;
-- bloquear el campo Area cuando se crea o edita desde el detalle del area;
+- crear un puesto mediante un formulario independiente;
+- seleccionar el area desde el catalogo previamente creado; el puesto nunca crea areas por texto libre;
+- editar un puesto existente y actualizar su cantidad, capacidad, costo y estatus;
 - capturar cantidad de recursos;
 - capturar minutos disponibles por recurso;
 - calcular capacidad total;
@@ -265,6 +269,8 @@ Campos principales:
 | Campo | Descripcion |
 |---|---|
 | Area | Area operativa. |
+| Codigo de area | Identificador unico del area dentro del tenant. |
+| Descripcion de area | Alcance operativo del area. |
 | Puesto o rol | Rol requerido por la operacion. |
 | Nombre para receta | Nombre visible al asignar el recurso en receta. |
 | Cantidad de recursos | Numero de personas o recursos del mismo rol. |
@@ -272,6 +278,19 @@ Campos principales:
 | Capacidad total | Cantidad por minutos disponibles. |
 | Costo por minuto | Costo unitario de mano de obra. |
 | Estatus | Activo o Inactivo. |
+
+Permisos independientes:
+
+| Operacion | Permiso |
+|---|---|
+| Consultar areas | `production.labor_area.read` |
+| Crear area | `production.labor_area.create` |
+| Editar area | `production.labor_area.update` |
+| Consultar puestos | `production.labor_role.read` |
+| Crear puesto | `production.labor_role.create` |
+| Editar puesto y recursos | `production.labor_role.update` |
+
+La API debe rechazar un `area_id` inexistente o perteneciente a otro tenant. Renombrar un area conserva sus puestos mediante `labor_area_id`; el nombre mostrado no funciona como relacion ni crea registros implicitos.
 
 ---
 

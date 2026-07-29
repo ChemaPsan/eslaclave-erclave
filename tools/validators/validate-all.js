@@ -4,8 +4,11 @@ const { fail, ok } = require("./shared");
 
 const validators = [
   "validate-codex-tooling.js",
+  "validate-session-context.js",
   "validate-i18n.js",
   "validate-active-module-localization.js",
+  "validate-responsive-ui.js",
+  "validate-labor-catalog.js",
   "validate-agents.js",
   "validate-architecture.js",
   "validate-backend-scaffold.js",

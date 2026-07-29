@@ -301,10 +301,12 @@ Administra productos/servicios, recetas, versiones, recursos productivos, maquin
 | `GET` | `/v1/production/orders/{id}` | `production.order.read` | No | Consultar orden. |
 | `PATCH` | `/v1/production/orders/{id}/status` | `production.order.status.update` | Si | Cambiar estatus de orden. |
 | `PATCH` | `/v1/production/order-stages/{stage_id}` | `production.order_stage.update` | Si | Actualizar etapa. |
-| `GET` | `/v1/production/labor-areas` | `production.labor.read` | No | Listar areas. |
-| `POST` | `/v1/production/labor-areas` | `production.labor.create` | Si | Crear area. |
-| `POST` | `/v1/production/labor-areas/{area_id}/roles` | `production.labor.update` | Si | Crear rol dentro de area. |
-| `PATCH` | `/v1/production/labor-roles/{role_id}` | `production.labor.update` | No | Editar rol/recurso. |
+| `GET` | `/v1/production/labor-areas` | `production.labor_area.read` | No | Listar areas sin deducirlas desde puestos. |
+| `POST` | `/v1/production/labor-areas` | `production.labor_area.create` | Si | Crear area independiente. |
+| `PATCH` | `/v1/production/labor-areas/{area_id}` | `production.labor_area.update` | No | Editar area independiente. |
+| `GET` | `/v1/production/labor-areas/{area_id}/roles` | `production.labor_role.read` | No | Listar puestos de un area existente. |
+| `POST` | `/v1/production/labor-areas/{area_id}/roles` | `production.labor_role.create` | Si | Crear puesto dentro de un area existente. |
+| `PATCH` | `/v1/production/labor-roles/{role_id}` | `production.labor_role.update` | No | Editar puesto y sus recursos. |
 | `GET` | `/v1/production/machines` | `production.machine.read` | No | Listar maquinaria. |
 | `POST` | `/v1/production/machines` | `production.machine.create` | Si | Crear maquinaria. |
 | `PATCH` | `/v1/production/machines/{machine_id}` | `production.machine.update` | No | Editar maquinaria. |

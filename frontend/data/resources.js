@@ -8,9 +8,15 @@ export const resourceCatalog = [
 ];
 
 export const defaultLaborRoles = [
-  { id: "operador_corte", name: "Operador de corte", area: "Corte", position: "Operador", quantity: 2, minutesPerResource: 420, unit: "min", available: 840, cost: 1.9, type: "Mano de obra", source: "Areas y puestos", status: "Activo" },
-  { id: "costurero", name: "Costurero", area: "Costura", position: "Costurero", quantity: 20, minutesPerResource: 480, unit: "min", available: 9600, cost: 2.2, type: "Mano de obra", source: "Areas y puestos", status: "Activo" },
-  { id: "supervisor", name: "Supervisor", area: "Calidad", position: "Supervisor", quantity: 1, minutesPerResource: 240, unit: "min", available: 240, cost: 3.4, type: "Mano de obra", source: "Areas y puestos", status: "Activo" }
+  { id: "operador_corte", name: "Operador de corte", areaId: "area_corte", area: "Corte", position: "Operador", quantity: 2, minutesPerResource: 420, unit: "min", available: 840, cost: 1.9, type: "Mano de obra", source: "Areas y puestos", status: "Activo" },
+  { id: "costurero", name: "Costurero", areaId: "area_costura", area: "Costura", position: "Costurero", quantity: 20, minutesPerResource: 480, unit: "min", available: 9600, cost: 2.2, type: "Mano de obra", source: "Areas y puestos", status: "Activo" },
+  { id: "supervisor", name: "Supervisor", areaId: "area_calidad", area: "Calidad", position: "Supervisor", quantity: 1, minutesPerResource: 240, unit: "min", available: 240, cost: 3.4, type: "Mano de obra", source: "Areas y puestos", status: "Activo" }
+];
+
+export const defaultLaborAreas = [
+  { id: "area_corte", code: "CORTE", name: "Corte", description: "Preparacion y corte de materiales.", status: "Activo" },
+  { id: "area_costura", code: "COSTURA", name: "Costura", description: "Ensamble y operaciones de costura.", status: "Activo" },
+  { id: "area_calidad", code: "CALIDAD", name: "Calidad", description: "Inspeccion y liberacion de producto.", status: "Activo" }
 ];
 
 export const defaultMachines = [

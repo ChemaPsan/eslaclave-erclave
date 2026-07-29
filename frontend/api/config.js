@@ -23,6 +23,10 @@ export function setApiMode(mode) {
   localStorage.setItem("erclave-api-mode", mode === "api" ? "api" : "mock");
 }
 
+export function isInventoryApiEnabled() {
+  return (localStorage.getItem("erclave-inventory-api-mode") || getRuntimeConfigValue("inventoryApiMode") || "mock") === "api";
+}
+
 
 export function getApiBaseUrl() {
   const runtimeBaseUrl = getRuntimeConfigValue("apiBaseUrl");
@@ -46,6 +50,16 @@ export function getProductionApiBaseUrl() {
     return (localOverride || localRuntimeBaseUrl || runtimeBaseUrl).replace("localhost", "127.0.0.1");
   }
   return localStorage.getItem("erclave-production-api-base-url") || runtimeBaseUrl;
+}
+
+export function getInventoryApiBaseUrl() {
+  const runtimeBaseUrl = getRuntimeConfigValue("inventoryApiBaseUrl") || "http://127.0.0.1:8004";
+  if (isLocalPreviewHost()) {
+    const override = localStorage.getItem("erclave-inventory-api-base-url") || "";
+    const localBaseUrl = getRuntimeConfigValue("localInventoryApiBaseUrl");
+    return (override || localBaseUrl || runtimeBaseUrl).replace("localhost", "127.0.0.1");
+  }
+  return localStorage.getItem("erclave-inventory-api-base-url") || runtimeBaseUrl;
 }
 
 

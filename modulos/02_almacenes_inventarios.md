@@ -291,3 +291,20 @@ Cuando Producción solicite validar una receta u orden, Almacenes deberá respon
 - Definir proceso de conteo físico.
 - Definir permisos para ajustes y cancelaciones.
 - Definir transferencias con origen y destino completos para afectar saldos por almacen.
+
+---
+
+## 13. Nombre visible y consulta escalable
+
+El modulo conserva el nombre visible **Almacenes** y el identificador tecnico `almacenes`. El submodulo visible **Existencias** se renombra a **Inventario**, conservando `existencias` como su id tecnico. **Almacenes** sigue nombrando el catalogo de espacios fisicos e **Inventario** la consulta calculada de saldos.
+
+Existencias debe buscar parcialmente por codigo o nombre de articulo y almacen. Los filtros de almacen, articulo, unidad, estado del saldo, tipo, categoria, politica y estado del articulo deben ejecutarse en servidor y combinarse con semantica AND. La lista usara paginacion por cursor, orden estable, `limit` default 50 y maximo 200; no se cargara el catalogo completo para filtrarlo en el navegador.
+
+Los indicadores bajo minimo y sobre maximo se calculan usando los campos guardados del articulo. No se persistiran como estados independientes.
+
+Hasta implementar Reservas, `available_quantity` sera igual a `on_hand_quantity`. La interfaz debera explicar esta limitacion y no comunicar inventario reservado o comprometido como real.
+
+El criterio inicial de volumen es consultar correctamente un tenant sintetico con al menos 10,000 articulos, sin duplicados u omisiones al paginar y sin acceder a QA. La especificacion tecnica y el procedimiento reproducible viven en:
+
+- `docs/arquitectura/inventario_consulta_escalable.md`;
+- `docs/operaciones/validacion_volumen_inventario_local.md`.

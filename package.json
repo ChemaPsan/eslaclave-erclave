@@ -2,9 +2,12 @@
   "scripts": {
     "validate": "node tools/validators/validate-all.js",
     "validate:codex-tooling": "node tools/validators/validate-codex-tooling.js",
+    "validate:session-context": "node tools/validators/validate-session-context.js",
     "validate:agents": "node tools/validators/validate-agents.js",
     "validate:i18n": "node tools/validators/validate-i18n.js",
     "validate:active-localization": "node tools/validators/validate-active-module-localization.js",
+    "validate:responsive": "node tools/validators/validate-responsive-ui.js",
+    "validate:labor-catalog": "node tools/validators/validate-labor-catalog.js",
     "validate:architecture": "node tools/validators/validate-architecture.js",
     "validate:backend-scaffold": "node tools/validators/validate-backend-scaffold.js",
     "validate:cross-platform": "node tools/validators/validate-cross-platform.js",
@@ -14,6 +17,7 @@
     "validate:syntax": "node tools/validators/validate-syntax.js",
     "verify": "node tools/verify.js",
     "traceability:draft": "node tools/traceability-draft.js",
+    "session:context": "node tools/session-context.js",
     "qa:document": "python tools/generate-qa-document.py"
   }
 }

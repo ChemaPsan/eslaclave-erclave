@@ -10,7 +10,9 @@ const requiredFiles = [
   ".agents/skills/erclave-db-migration/SKILL.md",
   ".agents/skills/erclave-db-migration/agents/openai.yaml",
   "tools/verify.js",
-  "tools/traceability-draft.js"
+  "tools/traceability-draft.js",
+  "tools/session-context.js",
+  "docs/contexto/INICIO_SESION.md"
 ];
 
 for (const file of requiredFiles) {
@@ -35,7 +37,7 @@ if (!errors.length) {
   }
 
   const packageJson = JSON.parse(readText("package.json"));
-  for (const script of ["validate:codex-tooling", "verify", "traceability:draft"]) {
+  for (const script of ["validate:codex-tooling", "validate:session-context", "verify", "traceability:draft", "session:context"]) {
     if (!packageJson.scripts?.[script]) errors.push(`package.json is missing script ${script}.`);
   }
 }

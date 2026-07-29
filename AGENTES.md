@@ -1499,6 +1499,25 @@ Antes de hacer una modificacion funcional o tecnica:
 11. Ejecutar validaciones tecnicas disponibles.
 12. Registrar el cambio en `TRAZABILIDAD.md`.
 
+## Estandar responsive obligatorio para todos los agentes
+
+Todo agente que cree o modifique una interfaz debe leer `docs/arquitectura/estandar_responsive_transversal.md` y tratar responsive, accesibilidad y localizacion como criterios de aceptacion, no como limpieza posterior.
+
+Antes de aprobar un cambio visual debe comprobar:
+
+1. componentes dentro de paneles adaptados con container queries; media queries reservadas para el shell global;
+2. estrategia explicita de tabla: tarjetas accesibles, scroll interno controlado o vista reducida justificada;
+3. textos largos ES/EN, identificadores y mensajes de error sin truncamiento destructivo;
+4. formularios, modales, lookups y acciones operables al pasar a una columna;
+5. guias de flujo, filtros, chips y alertas sin robar ni cubrir el area de trabajo;
+6. estados carga, vacio, error, permisos y datos reales en paneles amplio, intermedio y estrecho;
+7. foco visible, orden de teclado y targets tactiles adecuados;
+8. evidencia segun el checklist QA responsive.
+
+No debe aprobarse una solucion que solo funcione al redimensionar el viewport si el componente se rompe por el ancho que le dejan sidebar, flujo o alertas.
+
+La guia descriptiva de flujo conserva por defecto el riel vertical izquierdo y su compresion. Ningun agente debe convertirla globalmente a formato horizontal para resolver una pantalla particular; toda excepcion usa una clase propia, alcance limitado, evidencia y trazabilidad.
+
 ## Fuentes de referencia
 
 Estas referencias sirven como base conceptual para entrenar a los agentes. No sustituyen la documentacion propia de ERClave; ayudan a mantener criterios profesionales y consistentes.

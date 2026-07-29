@@ -225,6 +225,13 @@ input {
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: var(--shadow);
+  container-type: inline-size;
+  container-name: tenant-admin-panel;
+}
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid rgba(92, 22, 165, 0.46);
+  outline-offset: 2px;
 }
 
 .result-panel {
@@ -536,6 +543,82 @@ input {
 .result-card small {
   color: var(--muted);
   overflow-wrap: anywhere;
+}
+
+@container tenant-admin-panel (max-width: 900px) {
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .module-grid,
+  .usage-summary-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+  }
+
+  .tenant-searchbar,
+  .usage-filterbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tenant-searchbar label,
+  .usage-filterbar label {
+    min-width: 0;
+  }
+
+  .tenant-table-head,
+  .usage-table-head {
+    display: none;
+  }
+
+  .tenant-row,
+  .usage-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .tenant-row > div::before,
+  .usage-row > div::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .tenant-actions {
+    justify-content: flex-start;
+  }
+}
+
+@container tenant-admin-panel (max-width: 560px) {
+  .form-grid,
+  .module-grid,
+  .tenant-searchbar,
+  .usage-filterbar,
+  .usage-summary-grid,
+  .tenant-row,
+  .usage-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .section-header,
+  .form-actions,
+  .tenant-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .primary-button,
+  .secondary-button,
+  .tenant-actions button {
+    width: 100%;
+  }
+
+  .api-pill {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 
 code {
