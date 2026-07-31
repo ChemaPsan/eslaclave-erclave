@@ -87,6 +87,7 @@ Campos base sugeridos:
 | Almacen sugerido | Almacen usual para recepcion o consumo. |
 | Estatus | Activo, inactivo o bloqueado. |
 | Descripcion | Uso, restricciones, equivalencias o notas. |
+| Usar en receta | Autoriza que Produccion ofrezca el articulo como recurso de receta. No modifica existencias. |
 
 Cuando se implemente usuarios y permisos, la creacion y edicion de articulos debera protegerse con permisos como:
 
@@ -177,6 +178,8 @@ En el MVP, Existencias debera permitir:
 ## 8. Reglas de negocio
 
 - Los articulos deberan darse de alta antes de usarse en movimientos cuando el catalogo ya exista.
+- Un articulo sin movimientos aparece en Inventario con saldo cero cuando tiene almacen sugerido; el alta del articulo no genera existencias.
+- Produccion solo consulta articulos activos con `use_in_recipe=true` y calcula su disponibilidad desde movimientos de cualquier almacen del tenant.
 - La creacion y edicion de articulos debera estar restringida a roles autorizados.
 - Todo movimiento deberá tener usuario, fecha, motivo y referencia.
 - Todo movimiento deberá conservar `documento_origen`.

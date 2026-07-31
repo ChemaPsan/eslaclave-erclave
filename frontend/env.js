@@ -8,6 +8,8 @@ window.ERCLAVE_CONFIG = {
   localProductionApiBaseUrl: "http://127.0.0.1:8002",
   inventoryApiBaseUrl: "http://127.0.0.1:8004",
   localInventoryApiBaseUrl: "http://127.0.0.1:8004",
+  hrApiBaseUrl: "http://127.0.0.1:8006",
+  localHrApiBaseUrl: "http://127.0.0.1:8006",
   tenantId: "ten_739ee59d765d5e14818674800d",
   actorId: "usr_595f3cd6d4325901a8dbd028e1",
   firebaseConfig: {

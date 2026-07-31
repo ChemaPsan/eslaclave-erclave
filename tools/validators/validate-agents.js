@@ -15,6 +15,7 @@ const requiredModules = [
   "Sinergia modular",
   "Diseno, experiencia y localizacion",
   "Produccion",
+  "Recursos Humanos",
   "Almacenes e inventarios",
   "Compras y abastecimiento",
   "Ventas y clientes",

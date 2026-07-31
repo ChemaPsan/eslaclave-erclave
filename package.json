@@ -7,6 +7,7 @@
     "validate:i18n": "node tools/validators/validate-i18n.js",
     "validate:active-localization": "node tools/validators/validate-active-module-localization.js",
     "validate:responsive": "node tools/validators/validate-responsive-ui.js",
+    "validate:permission-editor": "node tools/validators/validate-permission-editor.js",
     "validate:labor-catalog": "node tools/validators/validate-labor-catalog.js",
     "validate:architecture": "node tools/validators/validate-architecture.js",
     "validate:backend-scaffold": "node tools/validators/validate-backend-scaffold.js",

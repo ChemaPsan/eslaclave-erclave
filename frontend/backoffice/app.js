@@ -7,6 +7,7 @@ const app = document.getElementById("backofficeApp");
 const moduleOptions = [
   { code: "admin", label: "Administracion", required: true },
   { code: "production", label: "Produccion" },
+  { code: "hr", label: "Recursos Humanos" },
   { code: "inventory", label: "Almacenes" },
   { code: "sales", label: "Ventas" },
   { code: "integrations", label: "Integraciones" }

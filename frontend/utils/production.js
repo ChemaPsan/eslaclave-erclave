@@ -1,9 +1,15 @@
 import { resourceCatalog, defaultRecipes } from "../data/resources.js";
 import { mockDb } from "../data/mockDb.js";
-import { getApiMode, getConfiguredTenantId, getDemoTenantId } from "../api/config.js";
+import { getApiMode } from "../api/config.js";
 
 function shouldUseSeedData() {
-  return getApiMode() !== "api" || getDemoTenantId() === getConfiguredTenantId();
+  return getApiMode() !== "api";
+}
+
+let inventoryRecipeResources = [];
+
+export function setInventoryRecipeResources(resources) {
+  inventoryRecipeResources = Array.isArray(resources) ? resources : [];
 }
 
 export function getResource(id) {
@@ -11,10 +17,11 @@ export function getResource(id) {
 }
 
 export function getRecipeResourceCatalog() {
+  const inventoryResources = shouldUseSeedData() ? resourceCatalog : inventoryRecipeResources;
   return [
-    ...resourceCatalog,
-    ...mockDb.loadLaborRoles(),
-    ...mockDb.loadMachines()
+    ...inventoryResources,
+    ...mockDb.loadLaborRoles().filter((item) => item.status === "Activo" && item.intervenesInProduction !== false),
+    ...mockDb.loadMachines().filter((item) => item.status === "Activo")
   ];
 }
 

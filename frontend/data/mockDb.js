@@ -1,8 +1,8 @@
 import { defaultProductsServices, defaultLaborAreas, defaultLaborRoles, defaultMachines, defaultRecipes, defaultOrders } from "./resources.js";
-import { getApiMode, getConfiguredTenantId, getDemoTenantId } from "../api/config.js";
+import { getApiMode, getDemoTenantId } from "../api/config.js";
 
 function shouldUseSeedData() {
-  return getApiMode() !== "api" || getDemoTenantId() === getConfiguredTenantId();
+  return getApiMode() !== "api";
 }
 
 function storageKey(baseKey) {

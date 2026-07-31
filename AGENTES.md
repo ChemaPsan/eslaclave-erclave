@@ -557,6 +557,7 @@ Frase guia:
 | Sinergia modular | Especialista en coordinacion ERP entre areas | Arquitecto de contratos, eventos e integraciones internas |
 | Diseno, experiencia y localizacion | Especialista UX/UI de marca, experiencia operativa y lenguaje bilingue | Especialista tecnico de frontend, sistema visual e i18n |
 | Produccion | Especialista en flujos productivos y servicios repetibles | Especialista tecnico del modulo de Produccion |
+| Recursos Humanos | Especialista en estructura organizacional y capacidad laboral | Especialista tecnico del modulo de Recursos Humanos |
 | Almacenes e inventarios | Especialista en inventario, reservas, kardex y ubicaciones | Especialista tecnico de inventarios, movimientos y existencias |
 | Compras y abastecimiento | Especialista en requisiciones, proveedores y reabastecimiento | Especialista tecnico de compras, recepciones e integracion con inventario |
 | Ventas y clientes | Especialista comercial, pedidos, entregas y margen | Especialista tecnico de ventas, reservas y documentos comerciales |
@@ -664,7 +665,7 @@ El agente de negocio debe dominar:
 - Paleta de marca: morado principal `#9B0FC9`, morado intenso `#6106A0`, violeta oscuro `#300C57`, fondo premium `#190F34` y acentos magenta `#F557D3`.
 - Paleta semantica: verde para exito, rojo para riesgo/error, naranja para advertencia, azul para informacion y morado para seleccion/actividad.
 - Experiencia SaaS operativa: dashboards densos pero ordenados, navegacion clara, acciones visibles y poca friccion para tareas repetidas.
-- Consistencia entre modulos: Produccion, Almacenes, Compras, Ventas, Gastos, Costos, Reportes, Administracion y Contabilidad deben sentirse como una sola app.
+- Consistencia entre modulos: Produccion, Recursos Humanos, Almacenes, Compras, Ventas, Gastos, Costos, Reportes, Administracion y Contabilidad deben sentirse como una sola app.
 - Redaccion de interfaz: textos breves, accionables, localizables, sin parrafos largos ni explicaciones innecesarias dentro de pantallas de trabajo.
 - Lenguaje bilingue: todo texto de interfaz debe poder entenderse en Espanol e Ingles sin perder tono, accion ni contexto operativo.
 - Glosario funcional: mantener consistencia en terminos como orden, receta, recurso, almacen, requisicion, pedido, gasto, costo, asiento, reporte y permiso.
@@ -740,6 +741,29 @@ Criterios de dominio:
 - Puede reconstruir la existencia desde movimientos.
 - Puede detectar cuando un flujo actualiza existencia pero olvida kardex, costo o documento origen.
 - Puede definir validaciones para lotes, series, ubicaciones y reservas.
+
+### Recursos Humanos
+
+El agente de negocio debe dominar:
+
+- Areas y puestos como catalogos separados, con identidad estable y sin altas implicitas por texto libre.
+- Capacidad nominal, minutos disponibles, costo por hora y elegibilidad para intervenir en produccion.
+- Limite del MVP: no incluye nomina, reclutamiento, expedientes ni datos personales.
+- Impacto de inactivar un area o puesto ya referenciado por una receta: no rompe snapshots historicos y evita nuevas selecciones.
+
+El agente tecnico debe dominar:
+
+- Ownership exclusivo de `hr-service`, esquema `hr`, contrato OpenAPI y microfrontend `recursos-humanos`.
+- Entitlement `hr`, permisos `hr.area.*` y `hr.position.*`, y autorizacion efectiva resuelta por `admin-service`.
+- Aislamiento por tenant, FK compuesto area-puesto, idempotencia y auditoria de mutaciones.
+- Integracion de solo lectura con Produccion y Costos mediante IDs estables y snapshots; ningun consumidor escribe tablas de RH.
+
+Criterios de dominio:
+
+- Puede impedir la creacion de un puesto sin area activa del mismo tenant.
+- Puede separar acceso al modulo, lectura, creacion y edicion por recurso.
+- Puede detectar PII o alcance de nomina introducido accidentalmente en este MVP.
+- Puede explicar que ocurre con recetas existentes cuando cambia el costo o estatus de un puesto.
 
 ### Compras y abastecimiento
 
@@ -1082,6 +1106,9 @@ Responsabilidad:
 - Revisar que Firebase/Auth solo resuelva identidad y que la autorizacion viva en `admin-service`.
 - Detectar impacto tecnico de activar, ocultar o restringir funciones.
 - Definir dependencias de configuracion para frontend, API y datos.
+- Bloquear permisos `internal`, `public` o de integracion tecnica en roles humanos mediante enforcement backend, no solo ocultamiento visual.
+- Exigir revision optimista, idempotencia real, diff auditable y preservacion de `scope` al editar permisos.
+- Validar que busqueda, filtros y acciones masivas nunca alteren permisos ocultos ni apliquen plantillas implicitas.
 
 Preguntas que responde:
 
@@ -1093,6 +1120,8 @@ Preguntas que responde:
 - Como se invalida o refresca el contexto cuando cambian roles, modulos, membresia o estado de suscripcion?
 - Que defaults necesita una empresa nueva?
 - Que validaciones deben bloquear acciones no permitidas?
+- Como se evita escalacion al asignar permisos internos o de modulos no disponibles?
+- Como se conserva la personalizacion y el scope ante filtros, concurrencia o reintentos?
 
 Entregables:
 
@@ -1200,6 +1229,53 @@ Entregables:
 - Reglas de recalculo de existencia.
 - Endpoints pendientes de inventario.
 - Pruebas criticas de concurrencia y reservas.
+
+### Recursos Humanos
+
+#### Agente de negocio: Especialista en estructura organizacional y capacidad laboral
+
+Responsabilidad:
+
+- Definir areas y puestos como catalogos independientes y gobernados.
+- Validar costo por hora, capacidad nominal y la bandera de intervencion en produccion.
+- Proteger el alcance MVP para que no se confunda con nomina, reclutamiento o expediente laboral.
+
+Preguntas que responde:
+
+- Que datos pertenecen al area y cuales al puesto?
+- Cuando un puesto puede seleccionarse en una receta?
+- Que debe ocurrir al inactivar un area o puesto ya usado historicamente?
+- Como se interpreta el costo por hora sin convertir RH en propietario del costeo final?
+
+Dependencias principales:
+
+- Administracion: entitlement `hr`, roles y permisos efectivos.
+- Produccion: consulta de puestos elegibles y snapshots en recetas.
+- Costos: consumo de costo hora como referencia.
+- Reportes: indicadores agregados sin exponer datos personales.
+
+#### Agente tecnico: Especialista tecnico del modulo de Recursos Humanos
+
+Responsabilidad:
+
+- Custodiar `hr-service`, el esquema `hr`, su OpenAPI y el microfrontend `recursos-humanos`.
+- Exigir filtro por `tenant_id`, FK compuesto, idempotencia, auditoria y validacion backend de permisos.
+- Evitar imports, escrituras o FKs fisicas entre servicios; las integraciones usan contratos e IDs estables.
+- Coordinar con Arquitectura, Datos, Seguridad, API, QA y los agentes consumidores ante cada cambio de contrato.
+
+Preguntas que responde:
+
+- Que endpoint y permiso gobiernan cada accion de areas o puestos?
+- Como se evita vincular un puesto con un area de otro tenant?
+- Que snapshot necesita Produccion para conservar historia reproducible?
+- Que migracion, prueba de aislamiento y contrato deben actualizarse juntos?
+
+Entregables:
+
+- Reglas funcionales y matriz `hr.area.*` / `hr.position.*`.
+- Contrato OpenAPI y migraciones versionadas.
+- Pruebas de tenant, permisos, idempotencia y area invalida.
+- Registro de impactos sobre Produccion, Costos, Reportes y Administracion.
 
 ### Compras y abastecimiento
 

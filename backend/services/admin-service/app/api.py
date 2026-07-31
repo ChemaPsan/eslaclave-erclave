@@ -16,7 +16,15 @@ from .auth import (
     require_permission_for_header_tenant,
     require_permission_for_path_tenant,
 )
-from .repositories import AdminRepository, get_admin_repository
+from .repositories import (
+    AdminRepository,
+    IdempotencyConflictError,
+    RolePermissionConflictError,
+    RolePermissionForbiddenError,
+    RolePermissionValidationError,
+    get_admin_repository,
+)
+from .seeds.catalog import get_module_seed
 from .schemas import (
     BackofficeTenantDeleteResponse,
     BackofficeTenantListResponse,
@@ -282,6 +290,8 @@ def upsert_tenant_entitlement(
     _authorization: None = Depends(require_permission_for_path_tenant("admin.entitlement.manage")),
     repository: AdminRepository = Depends(get_admin_repository),
 ) -> EntitlementResponse:
+    if get_module_seed(module_code) is None:
+        raise ErclaveError("module_not_found", "Module is not part of the ERClave catalog.", status_code=404, details={"module_code": module_code})
     if repository.get_tenant(tenant_id) is None:
         raise ErclaveError("tenant_not_found", "Tenant not found.", status_code=404, details={"tenant_id": tenant_id})
     entitlement = repository.upsert_entitlement(
@@ -737,15 +747,18 @@ def update_role(
 ) -> RoleResponse:
     if not x_tenant_id:
         raise ErclaveError("tenant_required", "X-Tenant-Id header is required.", status_code=400)
-    role = repository.update_role(
-        tenant_id=x_tenant_id,
-        role_id=role_id,
-        name=payload.name,
-        description=payload.description,
-        status=payload.status,
-        idempotency_key=require_idempotency_key(idempotency_key),
-        correlation_id=resolve_correlation_id(x_correlation_id),
-    )
+    try:
+        role = repository.update_role(
+            tenant_id=x_tenant_id,
+            role_id=role_id,
+            name=payload.name,
+            description=payload.description,
+            status=payload.status,
+            idempotency_key=require_idempotency_key(idempotency_key),
+            correlation_id=resolve_correlation_id(x_correlation_id),
+        )
+    except RolePermissionForbiddenError as exc:
+        raise ErclaveError(str(exc), "The system role cannot be inactivated.", status_code=403) from exc
     if role is None:
         raise ErclaveError("role_not_found", "Role not found for tenant.", status_code=404, details={"role_id": role_id})
     return RoleResponse(data=role)
@@ -758,19 +771,54 @@ def replace_role_permissions(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
-    _authorization: None = Depends(require_permission_for_header_tenant("admin.role.update")),
+    authorization_actor: AuthenticatedActor | None = Depends(require_permission_for_header_tenant("admin.role.permissions.manage")),
     repository: AdminRepository = Depends(get_admin_repository),
 ) -> RoleResponse:
     if not x_tenant_id:
         raise ErclaveError("tenant_required", "X-Tenant-Id header is required.", status_code=400)
-    role = repository.replace_role_permissions(
-        tenant_id=x_tenant_id,
-        role_id=role_id,
-        permission_ids=payload.permission_ids,
-        scope=payload.scope,
-        idempotency_key=require_idempotency_key(idempotency_key),
-        correlation_id=resolve_correlation_id(x_correlation_id),
-    )
+    if payload.assignments is not None and payload.permission_ids is not None:
+        raise ErclaveError(
+            "permission_assignments_required",
+            "assignments and legacy permission_ids cannot be combined.",
+            status_code=422,
+        )
+    current_role = None
+    if payload.assignments is None and payload.permission_ids is None:
+        raise ErclaveError("permission_assignments_required", "assignments are required.", status_code=422)
+    if payload.assignments is not None and payload.expected_revision is None:
+        raise ErclaveError(
+            "permission_revision_required",
+            "expected_revision is required.",
+            status_code=422,
+        )
+    if payload.assignments is not None:
+        assignments = [assignment.model_dump() for assignment in payload.assignments]
+        expected_revision = payload.expected_revision
+    else:
+        current_role = repository.get_role(x_tenant_id, role_id)
+        if current_role is None:
+            raise ErclaveError("role_not_found", "Role not found for tenant.", status_code=404, details={"role_id": role_id})
+        assignments = [
+            {"permission_id": permission_id, "scope": payload.scope}
+            for permission_id in (payload.permission_ids or [])
+        ]
+        expected_revision = payload.expected_revision or current_role.permission_revision
+    try:
+        role = repository.replace_role_permissions(
+            tenant_id=x_tenant_id,
+            role_id=role_id,
+            assignments=assignments,
+            expected_revision=expected_revision,
+            idempotency_key=require_idempotency_key(idempotency_key),
+            correlation_id=resolve_correlation_id(x_correlation_id),
+            actor_email=authorization_actor.email if authorization_actor else None,
+        )
+    except (RolePermissionConflictError, IdempotencyConflictError) as exc:
+        raise ErclaveError(str(exc), "The role permissions changed; reload before retrying.", status_code=409) from exc
+    except RolePermissionValidationError as exc:
+        raise ErclaveError(str(exc), "The permission assignment is invalid.", status_code=422) from exc
+    except RolePermissionForbiddenError as exc:
+        raise ErclaveError(str(exc), "The permission assignment is not allowed.", status_code=403) from exc
     if role is None:
         raise ErclaveError(
             "role_permissions_not_updated",
@@ -783,7 +831,11 @@ def replace_role_permissions(
 
 @router.get("/permissions", response_model=PermissionListResponse)
 def list_permissions(
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
     limit: int = Query(default=200, ge=1, le=500),
+    _authorization: None = Depends(require_permission_for_header_tenant("admin.role.read")),
     repository: AdminRepository = Depends(get_admin_repository),
 ) -> PermissionListResponse:
-    return PermissionListResponse(data=repository.list_permissions(limit=limit))
+    if not x_tenant_id:
+        raise ErclaveError("tenant_required", "X-Tenant-Id header is required.", status_code=400)
+    return PermissionListResponse(data=repository.list_permissions(x_tenant_id, limit=limit))

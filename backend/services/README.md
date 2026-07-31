@@ -13,6 +13,7 @@ Cada microservicio debe ser dueno de su dominio, datos, reglas y API.
 - `reporting-service`
 - `admin-service`
 - `accounting-service`
+- `hr-service`
 
 ## Regla de oro
 

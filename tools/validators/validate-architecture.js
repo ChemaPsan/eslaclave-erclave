@@ -15,7 +15,8 @@ const expectedMicrofrontends = [
   "costos",
   "reportes",
   "administracion",
-  "contabilidad"
+  "contabilidad",
+  "recursos-humanos"
 ];
 
 const expectedServices = [
@@ -27,7 +28,8 @@ const expectedServices = [
   "costing-service",
   "reporting-service",
   "admin-service",
-  "accounting-service"
+  "accounting-service",
+  "hr-service"
 ];
 
 for (const id of expectedMicrofrontends) {

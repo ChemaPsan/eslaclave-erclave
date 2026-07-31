@@ -78,9 +78,10 @@ async function main() {
 
   const services = await Promise.all([
     probe("Frontend", 4173),
-    probe("Admin API", 8010),
+    probe("Admin API", 8000),
     probe("Production API", 8002),
     probe("Inventory API", 8004),
+    probe("HR API", 8006),
     probe("PostgreSQL local", 5434)
   ]);
   section("SERVICIOS LOCALES", services.join("\n"));

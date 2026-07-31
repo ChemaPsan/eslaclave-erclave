@@ -51,7 +51,9 @@ def test_balance_search_normalizes_prefix_middle_suffix_and_accents(query):
     assert data == []
     assert page.limit == 25
     statement, params = engine.calls[0]
-    assert "m.tenant_id=:t" in statement
+    assert "from inventory.movements where tenant_id=:t" in statement
+    assert "from inventory.items where tenant_id=:t" in statement
+    assert "c.tenant_id=:t" in statement
     assert "inventory.search_normalize(i.code||' '||i.name" in statement
     assert "inventory.search_normalize(w.code||' '||w.name)" in statement
     assert "like '%'||inventory.search_normalize(:q)||'%'" in statement

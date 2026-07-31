@@ -14,7 +14,10 @@ class FakeRepo:
     def list_warehouses(self,t,q=None): return [] if t!=TENANT else [schemas.WarehouseRead(id="whs_1",code="mp",name="Materias primas",type="raw_materials",status="active",business_center="Matriz",location="Nave 1",owner="Almacenes")]
     def create_warehouse(self,t,p,k,h,a): return schemas.WarehouseRead(id="whs_1",status="active",**p.model_dump()) if t==TENANT else None
     def update_warehouse(self,t,i,p,k,h,a): return None
-    def list_items(self,t,q=None): return []
+    def list_items(self,t,q=None,use_in_recipe=None,status=None):
+        if t!=TENANT: return []
+        item=schemas.ItemRead(id="itm_1",code="har",name="Harina",type="rawMaterial",base_unit="kg",inventory_policy="standard",use_in_recipe=True,status="active")
+        return [item] if use_in_recipe in (None,True) and status in (None,"active") else []
     def create_item(self,t,p,k,h,a): return schemas.ItemRead(id="itm_1",status="active",**p.model_dump())
     def update_item(self,t,i,p,k,h,a):
         if p.suggested_warehouse_id=="whs_other": raise ValueError("suggested_warehouse_invalid")
@@ -39,7 +42,10 @@ def test_list_is_tenant_scoped():
 def test_commands_require_idempotency_key():
     response=client().post("/v1/inventory/warehouses",headers=headers(),json={"code":"MP","name":"Materias primas","type":"raw_materials","business_center":"Matriz","location":"Nave 1","owner":"Almacenes"}); assert response.status_code==400
 def test_create_item():
-    response=client().post("/v1/inventory/items",headers=headers(True),json={"code":"HAR","name":"Harina","type":"rawMaterial","base_unit":"kg","inventory_policy":"standard"}); assert response.status_code==201; assert response.json()["data"]["code"]=="HAR"
+    response=client().post("/v1/inventory/items",headers=headers(True),json={"code":"HAR","name":"Harina","type":"rawMaterial","base_unit":"kg","inventory_policy":"standard","use_in_recipe":True}); assert response.status_code==201; assert response.json()["data"]["code"]=="HAR"; assert response.json()["data"]["use_in_recipe"] is True
+def test_recipe_item_filter_is_tenant_scoped():
+    response=client().get("/v1/inventory/items?use_in_recipe=true&status=active",headers=headers()); assert response.status_code==200; assert response.json()["data"][0]["use_in_recipe"] is True
+    assert client().get("/v1/inventory/items?use_in_recipe=true",headers=headers(tenant="ten_other")).json()["data"]==[]
 def test_negative_stock_is_rejected():
     response=client().post("/v1/inventory/movements",headers=headers(True),json={"movement_type":"exit","inventory_item_id":"itm_1","warehouse_id":"whs_1","quantity":10,"unit":"kg","reason":"Consumo manual","source":{"type":"manual","id":"DOC-1"},"occurred_at":datetime.now(timezone.utc).isoformat()}); assert response.status_code==409; assert response.json()["error"]["code"]=="insufficient_stock"
 def test_balances_are_read_only_calculations():

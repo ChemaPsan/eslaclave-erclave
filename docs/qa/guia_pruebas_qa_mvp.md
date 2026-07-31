@@ -269,6 +269,30 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** la UI ayuda, pero el backend debe impedir acciones sin permiso.
 
+### QA-ADM-07 — Editor matricial de permisos
+
+**Prioridad/tipo:** P0 · LOCAL antes de promover a QA
+
+1. Abrir un rol personalizado y entrar a **Editar permisos**.
+2. Buscar por nombre humano y codigo tecnico en ES y EN.
+3. Filtrar por asignados/no asignados/cambios y seleccionar/quitar solo resultados visibles.
+4. Confirmar que cambiar filtros o idioma conserva el draft completo.
+5. Revisar agregados/retirados y guardar una sola vez.
+6. Abrir dos sesiones, guardar en la primera y verificar conflicto de revision en la segunda.
+
+**Esperado:** sin plantillas ni autoasignaciones; scopes no modificados se conservan; filtros no borran permisos ocultos; conflicto no pierde el draft.
+
+### QA-SEC-03 — Seguridad al delegar permisos
+
+**Prioridad/tipo:** P0 · AUTOMATICA y REAL QA autorizado
+
+- Sin token, tenant o `admin.role.read`, el catalogo se rechaza.
+- Un rol tenant no puede recibir `internal.*`, `public.*`, `external.*` ni permisos no asignables.
+- No se pueden agregar permisos de modulos inactivos/suspendidos; asignaciones historicas se conservan sin ser efectivas.
+- Mezclar un ID valido y uno prohibido rechaza todo sin cambios.
+- `admin.role.update` sin `admin.role.permissions.manage` no permite modificar grants.
+- Reintento con misma clave/payload reproduce resultado; misma clave con otro payload devuelve conflicto.
+
 ## 8. Producción
 
 **Contexto del módulo:** define qué producto o servicio ofrece la empresa y estandariza recursos y etapas mediante recetas versionadas. Hoy son reales únicamente Productos y servicios y Recetas.
@@ -353,7 +377,18 @@ Para **Áreas y puestos** validar además:
 - [ ] Código y nombre de área no se duplican ignorando mayúsculas/minúsculas.
 - [ ] Renombrar un área conserva sus puestos vinculados por ID.
 - [ ] Editar un puesto actualiza cantidad de recursos, minutos, capacidad total, costo y estatus sin crear otra área.
-- [ ] Un rol con `production.labor_area.update` puede editar áreas sin obtener `production.labor_role.update`, y viceversa.
+- [ ] Un rol con `hr.area.update` puede editar áreas sin obtener `hr.position.update`, y viceversa.
+- [ ] Areas y puestos aparece dentro de Recursos Humanos y ya no en la navegacion de Produccion.
+- [ ] Sin entitlement `hr` activo, la navegacion se oculta y `hr-service` rechaza la llamada directa.
+- [ ] Un puesto no puede vincularse a un area inexistente, inactiva o de otro tenant.
+- [ ] Repetir una mutacion con la misma `Idempotency-Key` no duplica datos; cambiar el payload con esa clave devuelve conflicto.
+- [ ] El catalogo de Permisos muestra una seccion Recursos Humanos con exactamente seis permisos `hr.area.*` y `hr.position.*`.
+- [ ] El selector de permisos de cada rol agrupa RH por separado y no ofrece codigos heredados con prefijo `production.labor`.
+- [ ] Tras ejecutar el seed autorizado, `production.labor.*`, `production.labor_area.*` y `production.labor_role.*` quedan inactivos y no forman parte de permisos efectivos.
+- [ ] El puesto captura costo por hora e indica si interviene en produccion.
+- [ ] Solo puestos activos marcados para produccion aparecen como recursos de receta.
+- [ ] Un articulo sin movimientos y con almacen sugerido aparece en Inventario con saldo cero.
+- [ ] Solo articulos activos con Usar en receta aparecen en el selector de recursos; su disponibilidad suma almacenes del tenant.
 - [ ] Alta de área, alta de puesto, edición de área y edición de puesto producen auditoría e idempotencia cuando el backend sea implementado.
 
 **Esperado:** experiencia coherente en el mismo navegador. No exigir sincronización entre dispositivos ni persistencia PostgreSQL.
@@ -480,7 +515,15 @@ node tools/benchmarks/inventory-volume.js
 
 El guardrail usa 10,000 articulos sinteticos por tenant y no requiere red ni credenciales. Debe pasar busqueda parcial, filtros combinados, aislamiento, paginacion sin duplicados y la regla temporal `available_quantity = on_hand_quantity` mientras Reservas no exista.
 
-No ejecutar cargas de volumen, seeds, migraciones ni benchmarks en Cloud SQL QA. Cuando el corte funcional se implemente y se autorice su promocion, agregar casos QA separados para el API real y actualizar el mapa de alcance; hasta entonces esta validacion es exclusivamente local.
+No ejecutar nuevas cargas de volumen, seeds, migraciones ni benchmarks en Cloud SQL QA sin autorizacion explicita. Cada promocion autorizada debe agregar casos QA separados para el API real y actualizar el mapa de alcance; el benchmark sintetico de 10,000 articulos permanece exclusivamente local.
+
+### Promocion autorizada del 2026-07-31
+
+La autorizacion cubrio las migraciones acumuladas hasta `20260730_0011`, el seed administrativo idempotente y el reinicio de la Admin API local conectada a QA. Antes de migrar se genero el respaldo `C:\tmp\erclave_qa_pre_permission_20260731_093634.dump` y se valido su indice con `pg_restore --list`.
+
+Las postcondiciones obligatorias quedaron aprobadas: tenant ERClave Demo QA y modulo admin activos, 99 permisos activos sin codigos duplicados, el owner objetivo con `admin.role.permissions.manage`, ningun owner del sistema por debajo del piso administrativo y cero registros en almacenes, articulos, movimientos, areas y puestos. No se autorizo ni ejecuto carga dummy, benchmark remoto, despliegue o activacion adicional de modulos.
+
+Para la prueba funcional del editor, renovar primero la sesion del navegador con recarga forzada o `Actualizar`; despues verificar que `Ver permisos` cambie a `Editar permisos`, que el guardado requiera cambios pendientes y que una recarga conserve las asignaciones.
 
 ## 17. Checklist responsive transversal
 

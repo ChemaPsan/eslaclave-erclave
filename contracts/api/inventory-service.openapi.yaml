@@ -119,6 +119,11 @@ paths:
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Search'
         - $ref: '#/components/parameters/Status'
+        - name: use_in_recipe
+          in: query
+          description: Return only items explicitly eligible or ineligible for production recipes.
+          schema:
+            type: boolean
         - name: type
           in: query
           schema:
@@ -656,6 +661,7 @@ components:
         suggested_warehouse_id: { type: [string, 'null'] }
         minimum_stock: { type: number }
         maximum_stock: { type: [number, 'null'] }
+        use_in_recipe: { type: boolean, default: false }
         description: { type: [string, 'null'] }
     ItemResponse:
       type: object
@@ -692,6 +698,7 @@ components:
           type: string
         minimum_stock: { type: number, minimum: 0, default: 0 }
         maximum_stock: { type: [number, 'null'], minimum: 0 }
+        use_in_recipe: { type: boolean, default: false }
         description: { type: [string, 'null'] }
     ItemUpdateRequest:
       type: object
@@ -706,6 +713,7 @@ components:
           type: string
         minimum_stock: { type: [number, 'null'], minimum: 0 }
         maximum_stock: { type: [number, 'null'], minimum: 0 }
+        use_in_recipe: { type: boolean }
         status:
           type: string
           enum: [active, inactive, blocked]

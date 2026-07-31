@@ -30,7 +30,8 @@ import {
   updateProductionRecipeVersion
 } from "./api/production.js";
 import { createInventoryItem, createInventoryMovement, createInventoryWarehouse, getInventoryBalances, getInventoryCatalog, getInventoryItems, getInventoryMovements, updateInventoryItem, updateInventoryWarehouse } from "./api/inventory.js";
-import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId, getDemoTenantId, getConfiguredTenantId, setActiveTenantId, isInventoryApiEnabled } from "./api/config.js";
+import { createHrArea, createHrPosition, getHrCatalog, updateHrArea, updateHrPosition } from "./api/hr.js";
+import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId, getDemoTenantId, setActiveTenantId, isInventoryApiEnabled } from "./api/config.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "./auth.js";
 import {
   calculateRecipe,
@@ -40,6 +41,7 @@ import {
   getRecipeApprovalStatus,
   getRecipeStandardCost,
   getRecipeResourceCatalog,
+  setInventoryRecipeResources,
   getReleaseReview,
   getResource,
   isRecipeApproved
@@ -64,9 +66,11 @@ const state = {
   },
   productionApi: { status: "idle", error: "" },
   inventoryApi: { status: "idle", error: "" },
+  permissionEditor: null,
   inventoryMovements: { status: "idle", error: "" },
   inventoryItems: { status: "idle", error: "" },
   inventoryBalances: { status: "idle", data: [], page: {}, error: "", queryKey: "", cursor: "", previousCursors: [] },
+  hrApi: { status: "idle", error: "" },
   tenantResolution: {
     status: "idle",
     tenants: [],
@@ -83,14 +87,25 @@ const state = {
 };
 
 const orderStatusCatalog = ["Liberada", "En espera de recursos", "En produccion", "Pausada", "En validacion", "Terminada", "Cancelada"];
-const mvpModuleIds = ["produccion", "almacenes", "ventas"];
+const mvpModuleIds = ["produccion", "almacenes", "recursos-humanos", "ventas"];
 const backendModuleByUiModule = {
   administracion: "admin",
   produccion: "production",
   almacenes: "inventory",
+  "recursos-humanos": "hr",
   ventas: "sales"
 };
 const uiModuleByBackendModule = Object.fromEntries(Object.entries(backendModuleByUiModule).map(([ui, backend]) => [backend, ui]));
+const adminPermissionModuleCatalog = Object.freeze({
+  admin: { es: "Administracion", en: "Administration", order: 10 },
+  production: { es: "Produccion", en: "Production", order: 20 },
+  hr: { es: "Recursos Humanos", en: "Human Resources", order: 25 },
+  inventory: { es: "Almacenes", en: "Inventory", order: 30 },
+  sales: { es: "Ventas", en: "Sales", order: 40 },
+  billing: { es: "Billing", en: "Billing", order: 50 },
+  provisioning: { es: "Provisioning", en: "Provisioning", order: 60 },
+  integrations: { es: "Integraciones", en: "Integrations", order: 70 }
+});
 
 const shell = document.querySelector(".app-shell");
 const moduleNav = document.getElementById("moduleNav");
@@ -191,6 +206,30 @@ function getNavigationModules() {
   });
 }
 
+function getAdminPermissionModuleLabel(moduleCode) {
+  return adminPermissionModuleCatalog[moduleCode]?.[state.lang] || moduleCode;
+}
+
+function groupAdminPermissions(permissions = []) {
+  const grouped = permissions.reduce((groups, permission) => {
+    const moduleCode = permission.module_code || "admin";
+    groups[moduleCode] = groups[moduleCode] || [];
+    groups[moduleCode].push(permission);
+    return groups;
+  }, {});
+  return Object.entries(grouped)
+    .sort(([left], [right]) => {
+      const leftOrder = adminPermissionModuleCatalog[left]?.order ?? 999;
+      const rightOrder = adminPermissionModuleCatalog[right]?.order ?? 999;
+      return leftOrder - rightOrder || left.localeCompare(right);
+    })
+    .map(([moduleCode, modulePermissions]) => ({
+      moduleCode,
+      label: getAdminPermissionModuleLabel(moduleCode),
+      permissions: modulePermissions.slice().sort((left, right) => left.code.localeCompare(right.code))
+    }));
+}
+
 function getSessionContextData() {
   return getApiMode() === "api" ? state.sessionApi.data : null;
 }
@@ -222,7 +261,7 @@ function isApiContextLoading() {
 }
 
 function shouldUseSeedModuleData() {
-  return getApiMode() !== "api" || getDemoTenantId() === getConfiguredTenantId();
+  return getApiMode() !== "api";
 }
 
 function getActiveUiModuleIds() {
@@ -350,6 +389,15 @@ function renderPanel() {
       renderProductionSubmodulePanel(module);
       return;
     }
+  } else if (module.id === "recursos-humanos") {
+    if (getApiMode() === "api" && state.sessionApi.status === "ready" && state.hrApi.status === "idle") loadHrApiData();
+    if (state.hrApi.status === "loading" && !mockDb.loadLaborAreas().length) { renderAdminLoadingPanel(module, "Cargando Recursos Humanos"); return; }
+    if (state.hrApi.status === "error") { modulePanel.innerHTML=`<section class="section-card"><strong>No se pudo cargar Recursos Humanos</strong><p>${state.hrApi.error}</p><button class="secondary-action" data-action="retry-hr-api">Reintentar</button></section>`;modulePanel.querySelector("[data-action='retry-hr-api']")?.addEventListener("click",()=>{state.hrApi.status="idle";render();});return; }
+    const areas = mockDb.loadLaborAreas();
+    const roles = mockDb.loadLaborRoles();
+    module.kpis = [["Areas", String(areas.length), "positive"], ["Puestos", String(roles.length), "positive"], ["Productivos", String(roles.filter((role) => role.intervenesInProduction !== false).length), "positive"]];
+    module.kpisEn = [["Areas", String(areas.length), "positive"], ["Positions", String(roles.length), "positive"], ["Production", String(roles.filter((role) => role.intervenesInProduction !== false).length), "positive"]];
+    if (state.activeSubmodule) { renderProductionSubmodulePanel(module); return; }
   } else if (module.id === "administracion") {
     renderAdminApiPanel(module);
     return;
@@ -406,7 +454,7 @@ function renderPanel() {
       <div class="module-hero">
         <h1>${label}</h1>
         <p>${moduleSummary}</p>
-        <button class="primary-action hero-action" type="button" data-action="${module.id === "produccion" ? "open-order" : "module-primary"}">
+        <button class="primary-action hero-action" type="button" data-action="${module.id === "produccion" ? "open-order" : module.id === "recursos-humanos" ? "open-labor-area-form" : "module-primary"}">
           <span>＋</span>
           <span>${modulePrimary}</span>
         </button>
@@ -515,7 +563,7 @@ function renderPanel() {
             `
           )
           .join("")}
-        <button class="secondary-action full" type="button" data-action="${module.id === "produccion" ? "open-recipe" : "module-primary"}">${module.id === "produccion" ? t("newRecipe") : t("openForm")}</button>
+        <button class="secondary-action full" type="button" data-action="${module.id === "produccion" ? "open-recipe" : module.id === "recursos-humanos" ? "open-labor-area-form" : "module-primary"}">${module.id === "produccion" ? t("newRecipe") : module.id === "recursos-humanos" ? t("newLaborArea") : t("openForm")}</button>
       </section>
     </div>
 
@@ -651,8 +699,11 @@ function getMockAdminDashboard() {
 }
 
 function getAdminPanelData() {
-  if (getApiMode() === "api") return state.adminApi.data;
-  return getMockAdminDashboard();
+  const data = getApiMode() === "api" ? state.adminApi.data : getMockAdminDashboard();
+  if (!data) return data;
+  const entitlements = [...(data.entitlements || [])];
+  if (!entitlements.some((item) => item.module_code === "hr")) entitlements.push({ module_code: "hr", status: "inactive", limits: {} });
+  return { ...data, entitlements: entitlements.sort((a, b) => a.module_code.localeCompare(b.module_code)) };
 }
 
 function loadAdminApiDashboard() {
@@ -663,11 +714,13 @@ function loadAdminApiDashboard() {
   render();
   getAdminDashboard()
     .then((data) => {
+      if (state.permissionEditor) rebasePermissionEditor(data);
       state.adminApi = { status: "ready", data, error: "" };
       render();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: null, error: error.message || "API unavailable" };
+      if (state.permissionEditor) state.permissionEditor.status = "editing";
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
       render();
     });
 }
@@ -902,9 +955,10 @@ function renderAdminRoleForm(apiMode, apiStatus) {
 
 function renderAdminRoleCard(role, data, apiMode, apiStatus) {
   const isApiReady = apiMode === "api" && apiStatus === "ready";
-  const assigned = new Set(role.permissions || []);
+  const canManagePermissions = isApiReady && hasPermission("admin.role.permissions.manage");
+  const canViewPermissions = isApiReady && hasPermission("admin.role.read");
+  const canUpdateRole = isApiReady && hasPermission("admin.role.update");
   const nextStatus = role.status === "active" ? "inactive" : "active";
-  const availablePermissions = data.permissions.filter((permission) => !assigned.has(permission.code));
   return `
     <article class="admin-record admin-role-record">
       <div class="admin-record-main">
@@ -916,21 +970,209 @@ function renderAdminRoleCard(role, data, apiMode, apiStatus) {
         <span>${(role.permissions || []).length} permisos</span>
       </div>
       <div class="admin-actions">
-        <button class="secondary-action small-action" type="button" data-action="admin-toggle-role" data-role-id="${role.id}" data-next-status="${nextStatus}" ${isApiReady ? "" : "disabled"}>
+        <button class="${canManagePermissions ? "primary-action" : "secondary-action"} small-action" type="button" data-action="admin-edit-role-permissions" data-role-id="${role.id}" ${canViewPermissions ? "" : "disabled"} title="${canManagePermissions ? t("editRolePermissions") : t("permissionReadOnlyTitle")}">
+          ${canManagePermissions ? t("editRolePermissions") : t("viewRolePermissions")}
+        </button>
+        <button class="secondary-action small-action" type="button" data-action="admin-toggle-role" data-role-id="${role.id}" data-next-status="${nextStatus}" ${canUpdateRole ? "" : "disabled"}>
           ${role.status === "active" ? "Inactivar" : "Activar"}
         </button>
       </div>
-      <form class="admin-permission-form" data-form="admin-role-permission" data-role-id="${role.id}">
-        <label>
-          <span>Permiso</span>
-          <select name="permission_id" ${isApiReady && availablePermissions.length ? "" : "disabled"}>
-            ${availablePermissions.map((permission) => `<option value="${permission.id}">${permission.code}</option>`).join("")}
-          </select>
-        </label>
-        <button class="secondary-action small-action" type="submit" ${isApiReady && availablePermissions.length ? "" : "disabled"}>Asignar</button>
-      </form>
     </article>
   `;
+}
+
+function getRoleAssignments(role, permissions) {
+  if (Array.isArray(role.permission_assignments)) return role.permission_assignments;
+  const codes = new Set(role.permissions || []);
+  return permissions.filter((permission) => codes.has(permission.code)).map((permission) => ({
+    permission_id: permission.id,
+    code: permission.code,
+    scope: {}
+  }));
+}
+
+function openPermissionEditor(roleId) {
+  if (!hasPermission("admin.role.read")) return;
+  const data = getAdminPanelData();
+  const role = data.roles.find((item) => item.id === roleId);
+  if (!role) return;
+  const assignments = getRoleAssignments(role, data.permissions);
+  state.permissionEditor = {
+    roleId,
+    original: new Map(assignments.map((item) => [item.permission_id, { ...item, scope: item.scope || {} }])),
+    draft: new Map(assignments.map((item) => [item.permission_id, { ...item, scope: item.scope || {} }])),
+    expectedRevision: role.permission_revision ?? 0,
+    search: "",
+    filter: "all",
+    collapsed: new Set(),
+    status: "editing",
+    error: "",
+    conflict: false
+  };
+  render();
+}
+
+function rebasePermissionEditor(data) {
+  const editor = state.permissionEditor;
+  if (!editor) return;
+  const role = data.roles.find((item) => item.id === editor.roleId);
+  if (!role) {
+    editor.status = "editing";
+    editor.error = t("roleNoLongerAvailable");
+    return;
+  }
+  const serverAssignments = getRoleAssignments(role, data.permissions);
+  const nextOriginal = new Map(serverAssignments.map((item) => [item.permission_id, { ...item, scope: item.scope || {} }]));
+  const nextDraft = new Map(nextOriginal);
+  const touchedIds = new Set([...editor.original.keys(), ...editor.draft.keys()]);
+  touchedIds.forEach((permissionId) => {
+    const wasSelected = editor.original.has(permissionId);
+    const isSelected = editor.draft.has(permissionId);
+    if (wasSelected === isSelected) return;
+    if (isSelected) nextDraft.set(permissionId, editor.draft.get(permissionId));
+    else nextDraft.delete(permissionId);
+  });
+  editor.original = nextOriginal;
+  editor.draft = nextDraft;
+  editor.expectedRevision = role.permission_revision;
+  editor.status = "editing";
+  editor.error = "";
+  editor.conflict = false;
+}
+
+function getPermissionCopy(permission) {
+  const name = state.lang === "en" ? permission.display_name_en : permission.display_name_es;
+  const description = state.lang === "en" ? permission.description_en : permission.description_es;
+  return { name: name || permission.code, description: description || "" };
+}
+
+function permissionChanged(editor, permissionId) {
+  return editor.original.has(permissionId) !== editor.draft.has(permissionId);
+}
+
+function getPermissionEditorDiff(editor) {
+  return {
+    added: [...editor.draft.keys()].filter((id) => !editor.original.has(id)),
+    removed: [...editor.original.keys()].filter((id) => !editor.draft.has(id))
+  };
+}
+
+function closePermissionEditorForNavigation() {
+  const editor = state.permissionEditor;
+  if (!editor) return true;
+  const diff = getPermissionEditorDiff(editor);
+  if ((diff.added.length || diff.removed.length) && !window.confirm(t("discardPermissionPrompt"))) return false;
+  state.permissionEditor = null;
+  return true;
+}
+
+function getVisibleEditorPermissions(editor, permissions) {
+  const query = editor.search.trim().toLocaleLowerCase(state.lang === "en" ? "en-US" : "es-MX");
+  return permissions.filter((permission) => {
+    const assigned = editor.draft.has(permission.id);
+    const changed = permissionChanged(editor, permission.id);
+    if (editor.filter === "assigned" && !assigned) return false;
+    if (editor.filter === "unassigned" && assigned) return false;
+    if (editor.filter === "changes" && !changed) return false;
+    const copy = getPermissionCopy(permission);
+    return !query || [copy.name, copy.description, permission.code, permission.module_code, permission.resource, permission.action]
+      .join(" ").toLocaleLowerCase(state.lang === "en" ? "en-US" : "es-MX").includes(query);
+  });
+}
+
+function isPermissionAssignable(permission) {
+  return permission.available === true && permission.assignable_to_tenant_role === true && permission.status === "active";
+}
+
+function renderPermissionEditor(data, apiStatus) {
+  const editor = state.permissionEditor;
+  const role = data.roles.find((item) => item.id === editor?.roleId);
+  if (!editor) return "";
+  if (!role) return `<section class="permission-editor recovery-state" role="alert"><p>${t("roleNoLongerAvailable")}</p><button class="secondary-action" type="button" data-action="permission-editor-close">${t("backToRoles")}</button></section>`;
+  const visible = getVisibleEditorPermissions(editor, data.permissions);
+  const groups = groupAdminPermissions(visible);
+  const diff = getPermissionEditorDiff(editor);
+  const canManagePermissions = hasPermission("admin.role.permissions.manage");
+  const busy = editor.status !== "editing" || apiStatus !== "ready" || !canManagePermissions;
+  const permissionById = new Map(data.permissions.map((permission) => [permission.id, permission]));
+  const visibleAssignedCount = [...editor.draft.keys()].filter((id) => permissionById.has(id)).length;
+  const hiddenAssignedCount = editor.draft.size - visibleAssignedCount;
+  const diffNames = (ids) => ids.map((id) => getPermissionCopy(permissionById.get(id) || { code: id }).name);
+  return `
+    <section class="permission-editor" aria-labelledby="permissionEditorTitle">
+      <header class="permission-editor-head">
+        <div>
+          <button class="secondary-action small-action" type="button" data-action="permission-editor-close">${t("backToRoles")}</button>
+          <p class="eyebrow">${t("rolePermissions")}</p>
+          <h3 id="permissionEditorTitle">${escapeHtml(role.name)}</h3>
+          <p>${t("permissionEditorHelp")}</p>
+          ${role.system_role ? `<span class="chip warning">${t("systemRole")}</span>` : ""}
+        </div>
+        <div class="permission-editor-actions">
+          <span class="chip active" aria-live="polite">${t("permissionSelectionCount", { selected: visibleAssignedCount, total: data.permissions.length })}</span>
+          ${hiddenAssignedCount ? `<span class="chip warning">${t("hiddenAssignments", { count: hiddenAssignedCount })}</span>` : ""}
+          <button class="secondary-action" type="button" data-action="permission-editor-discard" ${diff.added.length || diff.removed.length ? "" : "disabled"}>${t("discardChanges")}</button>
+          <button class="primary-action" type="button" data-action="permission-editor-save" ${!busy && (diff.added.length || diff.removed.length) ? "" : "disabled"}>${editor.status === "saving" ? t("saving") : t("saveChanges")}</button>
+        </div>
+      </header>
+      ${editor.error ? `<div class="form-errors permission-editor-error" role="alert"><span>${escapeHtml(editor.error)}</span>${editor.conflict ? `<button class="secondary-action small-action" type="button" data-action="permission-editor-reload">${t("reloadAndCompare")}</button>` : ""}</div>` : ""}
+      ${canManagePermissions ? "" : `<div class="validation-card warning permission-readonly-notice" role="status"><strong>${t("permissionReadOnlyTitle")}</strong><p>${t("permissionReadOnlyDetail")}</p></div>`}
+      <div class="permission-editor-toolbar">
+        <label class="search-field"><span aria-hidden="true">S</span><input type="search" data-permission-search value="${escapeAttribute(editor.search)}" placeholder="${t("searchPermissions")}" aria-label="${t("searchPermissions")}" /></label>
+        <label class="preview-field"><span>${t("showPermissions")}</span><select data-permission-filter>
+          ${[["all", "allPermissions"], ["assigned", "assignedPermissions"], ["unassigned", "unassignedPermissions"], ["changes", "changedPermissions"]].map(([value, key]) => `<option value="${value}" ${editor.filter === value ? "selected" : ""}>${t(key)}</option>`).join("")}
+        </select></label>
+        <span>${t("permissionResults", { count: visible.length })}</span>
+      </div>
+      <div class="permission-editor-bulk" aria-label="${t("visibleBulkActions")}">
+        <button class="secondary-action small-action" type="button" data-action="permission-select-visible" ${canManagePermissions ? "" : "disabled"}>${t("selectVisible")}</button>
+        <button class="secondary-action small-action" type="button" data-action="permission-clear-visible" ${canManagePermissions ? "" : "disabled"}>${t("clearVisible")}</button>
+      </div>
+      <div class="permission-editor-modules">
+        ${groups.map((group) => renderPermissionModule(group, editor)).join("") || `<p class="empty-state">${t("noPermissionMatches")}</p>`}
+      </div>
+      <aside class="permission-diff" aria-live="polite" aria-label="${t("pendingChanges")}">
+        <strong>${t("pendingChanges")}: ${diff.added.length + diff.removed.length}</strong>
+        <span>${t("permissionsAdded", { count: diff.added.length })}: ${escapeHtml(diffNames(diff.added).join(", ") || "-")}</span>
+        <span>${t("permissionsRemoved", { count: diff.removed.length })}: ${escapeHtml(diffNames(diff.removed).join(", ") || "-")}</span>
+      </aside>
+    </section>`;
+}
+
+function renderPermissionModule(group, editor) {
+  const canManagePermissions = hasPermission("admin.role.permissions.manage");
+  const collapsed = editor.collapsed.has(group.moduleCode);
+  const assignable = group.permissions.filter(isPermissionAssignable);
+  const selected = assignable.filter((permission) => editor.draft.has(permission.id)).length;
+  const checked = selected === assignable.length && assignable.length > 0;
+  const mixed = selected > 0 && selected < assignable.length;
+  const panelId = `permission-module-${String(group.moduleCode).replace(/[^a-z0-9_-]/gi, "-")}`;
+  const resources = Object.entries(group.permissions.reduce((map, permission) => {
+    const key = permission.resource || t("otherPermissions");
+    map[key] = map[key] || [];
+    map[key].push(permission);
+    return map;
+  }, {}));
+  return `<section class="permission-module" data-permission-module="${group.moduleCode}">
+    <header>
+      <button class="permission-module-toggle" type="button" data-action="permission-toggle-module" data-module="${group.moduleCode}" aria-expanded="${!collapsed}" aria-controls="${panelId}">
+        <strong>${group.label}</strong><span>${group.permissions.length}</span>
+      </button>
+      <label class="permission-module-check"><input type="checkbox" data-permission-module-check="${group.moduleCode}" ${checked ? "checked" : ""} data-mixed="${mixed}" ${assignable.length && canManagePermissions ? "" : "disabled"} /><span>${t("selectModuleNamed", { module: group.label })}</span></label>
+    </header>
+    <div class="permission-resource-list" id="${panelId}" ${collapsed ? "hidden" : ""}>
+      ${resources.map(([resource, permissions]) => `<section class="permission-resource"><h4>${escapeHtml(resource)}</h4><div class="permission-action-grid">${permissions.map((permission) => renderPermissionChoice(permission, editor)).join("")}</div></section>`).join("")}
+    </div>
+  </section>`;
+}
+
+function renderPermissionChoice(permission, editor) {
+  const copy = getPermissionCopy(permission);
+  const disabled = !isPermissionAssignable(permission) || !hasPermission("admin.role.permissions.manage");
+  return `<label class="permission-choice ${disabled ? "unavailable" : ""}">
+    <input type="checkbox" data-permission-id="${permission.id}" ${editor.draft.has(permission.id) ? "checked" : ""} ${disabled ? "disabled" : ""} />
+    <span><strong>${escapeHtml(copy.name)}</strong>${copy.description ? `<small>${escapeHtml(copy.description)}</small>` : ""}<small>${escapeHtml([permission.classification, permission.risk_level].filter(Boolean).join(" · "))}</small><code>${escapeHtml(permission.code)}</code></span>
+  </label>`;
 }
 
 function createAdminRole(form) {
@@ -970,29 +1212,88 @@ function toggleAdminRole(roleId, status) {
     });
 }
 
-function assignAdminRolePermission(form) {
-  if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
-  const roleId = form.dataset.roleId;
-  const role = getAdminPanelData().roles.find((item) => item.id === roleId);
-  if (!role) return;
-  const formData = new FormData(form);
-  const permissionId = String(formData.get("permission_id") || "");
-  const currentPermissionIds = getAdminPanelData()
-    .permissions.filter((permission) => (role.permissions || []).includes(permission.code))
-    .map((permission) => permission.id);
-  const nextPermissionIds = [...new Set([...currentPermissionIds, permissionId].filter(Boolean))];
-  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+function updatePermissionDraft(permissionIds, selected) {
+  const editor = state.permissionEditor;
+  if (!editor || !hasPermission("admin.role.permissions.manage")) return;
+  const permissions = new Map(getAdminPanelData().permissions.map((permission) => [permission.id, permission]));
+  permissionIds.forEach((permissionId) => {
+    const permission = permissions.get(permissionId);
+    if (!permission || !isPermissionAssignable(permission)) return;
+    if (selected) {
+      const original = editor.original.get(permissionId);
+      editor.draft.set(permissionId, original || { permission_id: permissionId, code: permission.code, scope: {} });
+    } else {
+      editor.draft.delete(permissionId);
+    }
+  });
+}
+
+function savePermissionEditor() {
+  const editor = state.permissionEditor;
+  if (!editor || editor.status === "saving" || !hasPermission("admin.role.permissions.manage")) return;
+  editor.status = "saving";
+  editor.error = "";
   render();
-  replaceTenantRolePermissions(roleId, nextPermissionIds)
-    .then((updatedRole) => {
-      showToast(`Permisos de ${updatedRole.code} actualizados.`);
+  replaceTenantRolePermissions(editor.roleId, [...editor.draft.values()].map((assignment) => ({
+    permission_id: assignment.permission_id,
+    scope: assignment.scope || {}
+  })), editor.expectedRevision)
+    .then((role) => {
+      const assignments = getRoleAssignments(role, getAdminPanelData().permissions);
+      editor.original = new Map(assignments.map((item) => [item.permission_id, { ...item, scope: item.scope || {} }]));
+      editor.draft = new Map(editor.original);
+      editor.expectedRevision = role.permission_revision ?? editor.expectedRevision + 1;
+      editor.status = "editing";
+      editor.conflict = false;
+      showToast(t("rolePermissionsSaved", { role: role.name || role.code }));
       state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      editor.status = "editing";
+      editor.conflict = error.status === 409;
+      editor.error = editor.conflict ? t("permissionConflict") : (error.message || t("permissionSaveError"));
       render();
     });
+}
+
+function bindPermissionEditorActions() {
+  const editor = state.permissionEditor;
+  if (!editor) return;
+  modulePanel.querySelector("[data-permission-search]")?.addEventListener("input", (event) => {
+    editor.search = event.target.value;
+    render();
+    const next = modulePanel.querySelector("[data-permission-search]");
+    next?.focus();
+    next?.setSelectionRange(next.value.length, next.value.length);
+  });
+  modulePanel.querySelector("[data-permission-filter]")?.addEventListener("change", (event) => { editor.filter = event.target.value; render(); });
+  modulePanel.querySelectorAll("[data-permission-id]").forEach((input) => input.addEventListener("change", () => { updatePermissionDraft([input.dataset.permissionId], input.checked); render(); }));
+  modulePanel.querySelectorAll("[data-mixed='true']").forEach((input) => { input.indeterminate = true; input.setAttribute("aria-checked", "mixed"); });
+  modulePanel.querySelectorAll("[data-permission-module-check]").forEach((input) => input.addEventListener("change", () => {
+    const ids = getVisibleEditorPermissions(editor, getAdminPanelData().permissions).filter((permission) => permission.module_code === input.dataset.permissionModuleCheck).map((permission) => permission.id);
+    updatePermissionDraft(ids, input.checked); render();
+  }));
+  modulePanel.querySelectorAll("[data-action='permission-toggle-module']").forEach((button) => button.addEventListener("click", () => {
+    const moduleCode = button.dataset.module;
+    editor.collapsed.has(moduleCode) ? editor.collapsed.delete(moduleCode) : editor.collapsed.add(moduleCode);
+    render();
+  }));
+  modulePanel.querySelector("[data-action='permission-select-visible']")?.addEventListener("click", () => { updatePermissionDraft(getVisibleEditorPermissions(editor, getAdminPanelData().permissions).map((item) => item.id), true); render(); });
+  modulePanel.querySelector("[data-action='permission-clear-visible']")?.addEventListener("click", () => { updatePermissionDraft(getVisibleEditorPermissions(editor, getAdminPanelData().permissions).map((item) => item.id), false); render(); });
+  modulePanel.querySelector("[data-action='permission-editor-discard']")?.addEventListener("click", () => { editor.draft = new Map(editor.original); editor.error = ""; render(); });
+  modulePanel.querySelector("[data-action='permission-editor-save']")?.addEventListener("click", savePermissionEditor);
+  modulePanel.querySelector("[data-action='permission-editor-reload']")?.addEventListener("click", () => {
+    editor.status = "reloading";
+    editor.error = "";
+    render();
+    loadAdminApiDashboard();
+  });
+  modulePanel.querySelector("[data-action='permission-editor-close']")?.addEventListener("click", () => {
+    const diff = getPermissionEditorDiff(editor);
+    if ((diff.added.length || diff.removed.length) && !window.confirm(t("discardPermissionPrompt"))) return;
+    state.permissionEditor = null; render();
+  });
 }
 
 function createLocalId(prefix) {
@@ -1336,6 +1637,7 @@ function renderAdminUsersPanel(data, apiMode, apiStatus) {
 }
 
 function renderAdminRolesPanel(data, apiMode, apiStatus) {
+  if (state.permissionEditor) return `<section class="admin-section admin-section-roles admin-detail-panel">${renderPermissionEditor(data, apiStatus)}</section>`;
   return `
     <section class="admin-section admin-section-roles admin-detail-panel">
       <div class="admin-section-head">
@@ -1354,12 +1656,7 @@ function renderAdminRolesPanel(data, apiMode, apiStatus) {
 }
 
 function renderAdminPermissionsPanel(data) {
-  const grouped = data.permissions.reduce((groups, permission) => {
-    const moduleCode = permission.module_code || "admin";
-    groups[moduleCode] = groups[moduleCode] || [];
-    groups[moduleCode].push(permission);
-    return groups;
-  }, {});
+  const grouped = groupAdminPermissions(data.permissions);
   return `
     <section class="admin-section admin-detail-panel">
       <div class="admin-section-head">
@@ -1370,10 +1667,11 @@ function renderAdminPermissionsPanel(data) {
         <span class="chip active">${data.permissions.length}</span>
       </div>
       <div class="admin-permission-grid">
-        ${Object.entries(grouped).map(([moduleCode, permissions]) => `
-          <article class="admin-record">
+        ${grouped.map(({ moduleCode, label, permissions }) => `
+          <article class="admin-record admin-permission-module" data-permission-module="${moduleCode}">
             <div class="admin-record-main">
-              <strong>${moduleCode}</strong>
+              <strong>${label}</strong>
+              <span>${moduleCode}</span>
               <span>${permissions.length} permisos</span>
             </div>
             <div class="admin-pill-list">
@@ -1702,6 +2000,7 @@ function renderAdminApiPanel(module) {
   `;
 
   modulePanel.querySelector("[data-action='admin-toggle-api']").addEventListener("click", () => {
+    if (!closePermissionEditorForNavigation()) return;
     setApiMode(apiMode === "api" ? "mock" : "api");
     state.adminApi = { status: "idle", data: null, error: "" };
     if (getApiMode() === "api") {
@@ -1718,6 +2017,7 @@ function renderAdminApiPanel(module) {
 
   modulePanel.querySelectorAll("[data-action='admin-open-panel']").forEach((button) => {
     button.addEventListener("click", () => {
+      if (button.dataset.panelId !== "roles" && !closePermissionEditorForNavigation()) return;
       state.adminPanel = button.dataset.panelId;
       render();
     });
@@ -1796,12 +2096,11 @@ function renderAdminApiPanel(module) {
     });
   });
 
-  modulePanel.querySelectorAll("[data-form='admin-role-permission']").forEach((form) => {
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      assignAdminRolePermission(event.currentTarget);
-    });
+  modulePanel.querySelectorAll("[data-action='admin-edit-role-permissions']").forEach((button) => {
+    button.addEventListener("click", () => openPermissionEditor(button.dataset.roleId));
   });
+
+  bindPermissionEditorActions();
 
   if (apiMode === "api" && apiStatus === "idle") {
     loadAdminApiDashboard();
@@ -1951,7 +2250,7 @@ function loadInventoryItemData() {
     const records=mockDb.loadModuleRecords("almacenes");
     const warehouses=records.filter((record)=>record.recordType==="warehouse");
     const warehouseById=Object.fromEntries(warehouses.map((item)=>[item.id,item]));
-    const items=(response.data||[]).map((item)=>({id:item.id,code:item.code,moduleId:"almacenes",submoduleId:"articulos",recordType:"inventoryItem",title:item.name,detail:`${item.type} - ${item.base_unit}`,status:mapInventoryStatus(item.status),owner:warehouseById[item.suggested_warehouse_id]?.title||"",fields:{type:item.type,category:item.category||"",unit:item.base_unit,minStock:item.minimum_stock,maxStock:item.maximum_stock||"",policy:item.inventory_policy,defaultWarehouseId:item.suggested_warehouse_id||"",defaultWarehouseName:warehouseById[item.suggested_warehouse_id]?.title||"",description:item.description||""}}));
+    const items=(response.data||[]).map((item)=>({id:item.id,code:item.code,moduleId:"almacenes",submoduleId:"articulos",recordType:"inventoryItem",title:item.name,detail:`${item.type} - ${item.base_unit}`,status:mapInventoryStatus(item.status),owner:warehouseById[item.suggested_warehouse_id]?.title||"",fields:{type:item.type,category:item.category||"",unit:item.base_unit,minStock:item.minimum_stock,maxStock:item.maximum_stock||"",policy:item.inventory_policy,useInRecipe:Boolean(item.use_in_recipe),defaultWarehouseId:item.suggested_warehouse_id||"",defaultWarehouseName:warehouseById[item.suggested_warehouse_id]?.title||"",description:item.description||""}}));
     mockDb.saveModuleRecords("almacenes",[...records.filter((record)=>record.recordType!=="inventoryItem"),...items]);
     state.inventoryItems={status:"ready",error:""};render();
   }).catch((error)=>{state.inventoryItems={status:"error",error:error.message||"Inventory items unavailable"};render();});
@@ -1970,6 +2269,16 @@ function loadInventoryMovementData() {
     mockDb.saveModuleRecords("almacenes", [...records.filter((record) => record.recordType !== "inventoryMovement"),...movements]);
     state.inventoryMovements={status:"ready",error:""}; render();
   }).catch((error) => { state.inventoryMovements={status:"error",error:error.message||"Inventory movements unavailable"}; render(); });
+}
+
+function loadHrApiData() {
+  if (getApiMode() !== "api" || state.hrApi.status === "loading") return Promise.resolve();
+  state.hrApi={status:"loading",error:""};
+  return getHrCatalog().then(({areas,positions})=>{
+    mockDb.saveLaborAreas((areas||[]).map((area)=>({id:area.id,code:area.code,name:area.name,description:area.description||"",status:area.status==="active"?"Activo":"Inactivo"})));
+    mockDb.saveLaborRoles((positions||[]).map((position)=>({id:position.id,areaId:position.labor_area_id,area:(areas||[]).find((area)=>area.id===position.labor_area_id)?.name||"",position:position.position,name:position.recipe_name,quantity:position.resource_quantity,minutesPerResource:position.minutes_per_resource,available:position.resource_quantity*position.minutes_per_resource,hourlyCost:Number(position.hourly_cost),cost:Number(position.hourly_cost)/60,unit:"min",type:"Mano de obra",source:"Recursos Humanos",intervenesInProduction:Boolean(position.intervenes_in_production),status:position.status==="active"?"Activo":"Inactivo"})));
+    state.hrApi={status:"ready",error:""};render();
+  }).catch((error)=>{state.hrApi={status:"error",error:error.message||"HR API unavailable"};render();});
 }
 
 function chooseSessionTenant(tenants) {
@@ -2414,6 +2723,7 @@ function renderInventoryItemCard(record) {
         <span class="muted-label">${t("defaultWarehouse")}: ${record.fields?.defaultWarehouseName || t("notDefined")}</span>
         <span class="muted-label">${t("stockRange")}: ${record.fields?.minStock || "0"} / ${record.fields?.maxStock || t("notDefined")}</span>
         <span class="muted-label">${t("inventoryPolicy")}: ${translateInventoryPolicy(record.fields?.policy)}</span>
+        <span class="muted-label">${record.fields?.useInRecipe ? t("usedInRecipe") : t("notUsedInRecipe")}</span>
         ${record.fields?.description ? `<p>${record.fields.description}</p>` : ""}
       </div>
       <div class="catalog-card-actions">
@@ -4039,8 +4349,8 @@ function renderProductionSubmoduleAction(id) {
   }
   if (id === "areas-puestos") {
     return `<div class="row-actions">
-      ${hasPermission("production.labor_area.create") ? `<button class="primary-action" type="button" data-action="open-labor-area-form"><span>+</span><span>${t("newLaborArea")}</span></button>` : ""}
-      ${hasPermission("production.labor_role.create") ? `<button class="secondary-action" type="button" data-action="open-labor-role"><span>+</span><span>${t("newLaborRole")}</span></button>` : ""}
+      ${hasPermission("hr.area.create") ? `<button class="primary-action" type="button" data-action="open-labor-area-form"><span>+</span><span>${t("newLaborArea")}</span></button>` : ""}
+      ${hasPermission("hr.position.create") ? `<button class="secondary-action" type="button" data-action="open-labor-role"><span>+</span><span>${t("newLaborRole")}</span></button>` : ""}
     </div>`;
   }
   if (id === "maquinaria") {
@@ -4330,7 +4640,7 @@ function renderLaborRolesScreen() {
                 <p>${areaRoles.length} puestos/roles - ${totalPeople} recursos - ${formatNumber(totalMinutes)} min/dia</p>
               </div>
               <div class="catalog-card-actions">
-                ${hasPermission("production.labor_area.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-labor-area" data-area-id="${area.id}">${t("editLaborArea")}</button>` : ""}
+                ${hasPermission("hr.area.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-labor-area" data-area-id="${area.id}">${t("editLaborArea")}</button>` : ""}
                 <button class="secondary-action small-action" type="button" data-action="open-labor-area" data-area-id="${area.id}">${t("viewLaborRoles")}</button>
               </div>
             </article>
@@ -4361,8 +4671,8 @@ function renderLaborAreaDetailScreen(areaId, roles = mockDb.loadLaborRoles(), ar
           <p>${area.code} - ${area.description || "Sin descripcion."}</p>
         </div>
         <div class="row-actions">
-          ${hasPermission("production.labor_role.create") ? `<button class="primary-action" type="button" data-action="open-labor-role-area" data-area-id="${area.id}"><span>+</span><span>${t("newLaborRole")}</span></button>` : ""}
-          ${hasPermission("production.labor_area.update") ? `<button class="secondary-action" type="button" data-action="edit-labor-area" data-area-id="${area.id}">${t("editLaborArea")}</button>` : ""}
+          ${hasPermission("hr.position.create") ? `<button class="primary-action" type="button" data-action="open-labor-role-area" data-area-id="${area.id}"><span>+</span><span>${t("newLaborRole")}</span></button>` : ""}
+          ${hasPermission("hr.area.update") ? `<button class="secondary-action" type="button" data-action="edit-labor-area" data-area-id="${area.id}">${t("editLaborArea")}</button>` : ""}
           <button class="secondary-action" type="button" data-action="back-labor-areas">${t("allLaborAreas")}</button>
         </div>
       </div>
@@ -4379,11 +4689,12 @@ function renderLaborAreaDetailScreen(areaId, roles = mockDb.loadLaborRoles(), ar
               <strong>${role.name}</strong>
               <p>${role.position} - ${formatNumber(role.quantity || 1)} personas/recurso.</p>
               <span class="muted-label">${formatNumber(role.minutesPerResource || role.available)} ${role.unit} por recurso - ${formatNumber(role.available)} ${role.unit} totales por dia</span>
-              <span class="muted-label">Costo: ${formatCurrency(role.cost)} por ${role.unit}</span>
+              <span class="muted-label">${t("laborRoleHourlyCost")}: ${formatCurrency(role.hourlyCost ?? Number(role.cost || 0) * 60)}</span>
+              <span class="muted-label">${role.intervenesInProduction !== false ? t("intervenesInProduction") : t("doesNotInterveneInProduction")}</span>
             </div>
             <div class="catalog-card-actions">
               <span class="chip ${role.status === "Activo" ? "active" : ""}">${role.status}</span>
-              ${hasPermission("production.labor_role.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-labor-role" data-role-id="${role.id}">${t("editLaborRole")}</button>` : ""}
+              ${hasPermission("hr.position.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-labor-role" data-role-id="${role.id}">${t("editLaborRole")}</button>` : ""}
             </div>
           </article>
         `).join("")}
@@ -5554,6 +5865,10 @@ function openInventoryItemModal(module, submodule, recordId = null) {
             </select>
           ` : `<input name="defaultWarehouseName" type="text" value="${fields.defaultWarehouseName || ""}" placeholder="${t("warehouseNamePlaceholder")}" />`}
         </label>
+        <label class="preview-field checkbox-field">
+          <input name="useInRecipe" type="checkbox" value="true" ${fields.useInRecipe ? "checked" : ""} />
+          <span>${t("useInRecipe")}</span>
+        </label>
         <label class="preview-field wide-field">
           <span>${t("description")}</span>
           <textarea name="description" rows="3" placeholder="${t("inventoryItemDescriptionPlaceholder")}">${fields.description || ""}</textarea>
@@ -5594,7 +5909,7 @@ async function saveInventoryItemForm(event, module, submodule) {
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
   const defaultWarehouseName = warehouse ? `${warehouse.code} - ${warehouse.title}` : data.defaultWarehouseName?.trim() || "";
   if (getApiMode() === "api" && isInventoryApiEnabled()) {
-    const payload={name:data.name.trim(),type:data.type,category:data.category?.trim()||null,base_unit:data.unit.trim(),suggested_warehouse_id:data.defaultWarehouseId||null,minimum_stock:Number(data.minStock||0),maximum_stock:data.maxStock?Number(data.maxStock):null,status:(data.status||"Activo")==="Activo"?"active":(data.status==="Bloqueado"?"blocked":"inactive"),description:data.description?.trim()||null};
+    const payload={name:data.name.trim(),type:data.type,category:data.category?.trim()||null,base_unit:data.unit.trim(),suggested_warehouse_id:data.defaultWarehouseId||null,minimum_stock:Number(data.minStock||0),maximum_stock:data.maxStock?Number(data.maxStock):null,use_in_recipe:data.useInRecipe==="true",status:(data.status||"Activo")==="Activo"?"active":(data.status==="Bloqueado"?"blocked":"inactive"),description:data.description?.trim()||null};
     try {
       if (existingRecord) await updateInventoryItem(existingRecord.id,payload);
       else await createInventoryItem({code,inventory_policy:data.policy==="batch"?"lot":data.policy,...payload});
@@ -5619,6 +5934,7 @@ async function saveInventoryItemForm(event, module, submodule) {
       minStock: data.minStock || "",
       maxStock: data.maxStock || "",
       policy: data.policy,
+      useInRecipe: data.useInRecipe === "true",
       defaultWarehouseId: data.defaultWarehouseId || "",
       defaultWarehouseName,
       description: data.description?.trim() || ""
@@ -7149,7 +7465,7 @@ function syncRecipesForProductService(item) {
 function openLaborAreaModal(areaId = null) {
   const existingArea = areaId ? mockDb.findLaborArea(areaId) : null;
   const isEditing = Boolean(existingArea);
-  const requiredPermission = isEditing ? "production.labor_area.update" : "production.labor_area.create";
+  const requiredPermission = isEditing ? "hr.area.update" : "hr.area.create";
   if (!hasPermission(requiredPermission)) {
     showToast("No tienes permiso para realizar esta operacion sobre areas.");
     return;
@@ -7183,11 +7499,11 @@ function openLaborAreaModal(areaId = null) {
   modalContent.querySelector("#laborAreaForm").addEventListener("submit", saveLaborAreaForm);
 }
 
-function saveLaborAreaForm(event) {
+async function saveLaborAreaForm(event) {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
   const areaId = String(data.get("areaId") || "").trim();
-  const requiredPermission = areaId ? "production.labor_area.update" : "production.labor_area.create";
+  const requiredPermission = areaId ? "hr.area.update" : "hr.area.create";
   if (!hasPermission(requiredPermission)) {
     renderFormErrors(["No tienes permiso para guardar esta area."]);
     return;
@@ -7212,17 +7528,26 @@ function saveLaborAreaForm(event) {
     description: String(data.get("description") || "").trim(),
     status: String(data.get("status") || "Activo")
   };
+  if (getApiMode() === "api") {
+    try {
+      const payload={name:item.name,description:item.description||null,status:item.status==="Activo"?"active":"inactive"};
+      if (areaId) await updateHrArea(areaId,payload);
+      else await createHrArea({code:item.code,name:item.name,description:item.description||null});
+      closeModal();await loadHrApiData();navigateTo({active:"recursos-humanos",activeSubmodule:"areas-puestos",laborArea:areaId||""});showToast(`Area ${item.name} ${areaId?"actualizada":"guardada"}.`);
+    } catch(error) { renderFormErrors([error.message]); }
+    return;
+  }
   if (areaId) mockDb.updateLaborArea(item);
   else mockDb.addLaborArea(item);
   closeModal();
-  navigateTo({ active: "produccion", activeSubmodule: "areas-puestos", laborArea: areaId ? item.id : "" });
+  navigateTo({ active: "recursos-humanos", activeSubmodule: "areas-puestos", laborArea: areaId ? item.id : "" });
   showToast(`Area ${item.name} ${areaId ? "actualizada" : "guardada"}.`);
 }
 
 function openLaborRoleModal(roleId = null, defaultAreaId = "") {
   const existingRole = roleId ? mockDb.findLaborRole(roleId) : null;
   const isEditing = Boolean(existingRole);
-  const requiredPermission = isEditing ? "production.labor_role.update" : "production.labor_role.create";
+  const requiredPermission = isEditing ? "hr.position.update" : "hr.position.create";
   if (!hasPermission(requiredPermission)) {
     showToast("No tienes permiso para realizar esta operacion sobre puestos.");
     return;
@@ -7240,7 +7565,7 @@ function openLaborRoleModal(roleId = null, defaultAreaId = "") {
       <input type="hidden" name="roleId" value="${existingRole?.id || ""}" />
       <div class="modal-head">
         <div>
-          <p class="eyebrow">Produccion</p>
+          <p class="eyebrow">${t("humanResources")}</p>
           <h2 id="modalTitle">${isEditing ? t("editLaborRole") : t("newLaborRole")}</h2>
         </div>
         <button class="icon-button modal-close" type="button" aria-label="Cerrar">x</button>
@@ -7251,7 +7576,8 @@ function openLaborRoleModal(roleId = null, defaultAreaId = "") {
         <label class="preview-field"><span>${t("laborRoleName")}</span><input name="name" type="text" value="${existingRole?.name || ""}" placeholder="Ej. Costurero senior" required /></label>
         <label class="preview-field"><span>${t("laborRoleQuantity")}</span><input name="quantity" type="number" min="1" value="${existingRole?.quantity || 1}" required /></label>
         <label class="preview-field"><span>${t("laborRoleMinutes")}</span><input name="minutesPerResource" type="number" min="1" value="${existingRole?.minutesPerResource || existingRole?.available || 480}" required /></label>
-        <label class="preview-field"><span>${t("laborRoleCost")}</span><input name="cost" type="number" min="0" step="0.01" value="${existingRole?.cost || "2.00"}" required /></label>
+        <label class="preview-field"><span>${t("laborRoleHourlyCost")}</span><input name="hourlyCost" type="number" min="0" step="0.01" value="${existingRole?.hourlyCost ?? Number(existingRole?.cost || 0) * 60}" required /></label>
+        <label class="preview-field checkbox-field"><input name="intervenesInProduction" type="checkbox" value="true" ${existingRole?.intervenesInProduction !== false ? "checked" : ""} /><span>${t("intervenesInProductionQuestion")}</span></label>
         <label class="preview-field"><span>Estatus</span><select name="status"><option ${existingRole?.status === "Activo" ? "selected" : ""}>Activo</option><option ${existingRole?.status === "Inactivo" ? "selected" : ""}>Inactivo</option></select></label>
       </div>
       <div class="form-errors" id="formErrors" hidden></div>
@@ -7267,11 +7593,11 @@ function openLaborRoleModal(roleId = null, defaultAreaId = "") {
   modalContent.querySelector("#laborRoleForm").addEventListener("submit", saveLaborRoleForm);
 }
 
-function saveLaborRoleForm(event) {
+async function saveLaborRoleForm(event) {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
   const roleId = String(data.get("roleId") || "").trim();
-  const requiredPermission = roleId ? "production.labor_role.update" : "production.labor_role.create";
+  const requiredPermission = roleId ? "hr.position.update" : "hr.position.create";
   if (!hasPermission(requiredPermission)) {
     renderFormErrors(["No tienes permiso para guardar este puesto."]);
     return;
@@ -7306,18 +7632,29 @@ function saveLaborRoleForm(event) {
     minutesPerResource,
     unit: "min",
     available: quantity * minutesPerResource,
-    cost: Number(data.get("cost") || 0),
+    hourlyCost: Number(data.get("hourlyCost") || 0),
+    cost: Number(data.get("hourlyCost") || 0) / 60,
     type: "Mano de obra",
-    source: "Areas y puestos",
+    source: "Recursos Humanos",
+    intervenesInProduction: data.get("intervenesInProduction") === "true",
     status: String(data.get("status") || "Activo")
   };
+  if (getApiMode() === "api") {
+    try {
+      const payload={labor_area_id:item.areaId,position:item.position,recipe_name:item.name,resource_quantity:item.quantity,minutes_per_resource:item.minutesPerResource,hourly_cost:item.hourlyCost,intervenes_in_production:item.intervenesInProduction,status:item.status==="Activo"?"active":"inactive"};
+      if (roleId) await updateHrPosition(roleId,payload);
+      else { const {status,...createPayload}=payload;await createHrPosition(createPayload); }
+      closeModal();await loadHrApiData();navigateTo({active:"recursos-humanos",activeSubmodule:"areas-puestos",laborArea:item.areaId});showToast(`Puesto ${item.name} ${roleId?"actualizado":"guardado"}.`);
+    } catch(error) { renderFormErrors([error.message]); }
+    return;
+  }
   if (roleId) {
     mockDb.updateLaborRole(item);
   } else {
     mockDb.addLaborRole(item);
   }
   closeModal();
-  navigateTo({ active: "produccion", activeSubmodule: "areas-puestos", laborArea: item.areaId });
+  navigateTo({ active: "recursos-humanos", activeSubmodule: "areas-puestos", laborArea: item.areaId });
   showToast(`Puesto ${item.name} ${roleId ? "actualizado" : "guardado"}.`);
 }
 
@@ -7391,7 +7728,41 @@ function saveMachineForm(event) {
   showToast(`Maquina ${item.name} ${machineId ? "actualizada" : "guardada"}.`);
 }
 
-function openRecipeModal(recipeId = null) {
+async function prepareRecipeResourceCatalog() {
+  if (getApiMode() !== "api" || !isInventoryApiEnabled()) return;
+  if (isModuleAccessible("recursos-humanos") && hasPermission("hr.position.read")) await loadHrApiData();
+  const [itemsResponse, balancesResponse] = await Promise.all([
+    getInventoryItems({ use_in_recipe: true, status: "active" }),
+    getInventoryBalances({ limit: 200 })
+  ]);
+  const balancesByItem = new Map();
+  (balancesResponse.data || []).forEach((balance) => {
+    const current = balancesByItem.get(balance.inventory_item_id) || { available: 0, warehouses: new Set() };
+    current.available += Number(balance.available_quantity || 0);
+    if (Number(balance.available_quantity || 0) !== 0) current.warehouses.add(balance.warehouse_name);
+    balancesByItem.set(balance.inventory_item_id, current);
+  });
+  setInventoryRecipeResources((itemsResponse.data || []).map((item) => {
+    const balance = balancesByItem.get(item.id) || { available: 0, warehouses: new Set() };
+    return {
+      id: item.id,
+      name: item.name,
+      unit: item.base_unit,
+      available: balance.available,
+      cost: 0,
+      type: translateInventoryItemType(item.type),
+      source: balance.warehouses.size ? `Almacenes: ${[...balance.warehouses].join(", ")}` : "Almacenes"
+    };
+  }));
+}
+
+async function openRecipeModal(recipeId = null) {
+  try {
+    await prepareRecipeResourceCatalog();
+  } catch (error) {
+    showToast(error.message || t("recipeResourcesLoadError"));
+    return;
+  }
   const existingRecipe = recipeId ? mockDb.findRecipe(recipeId) : null;
   const isEditing = Boolean(existingRecipe);
   const selectedProductId = localStorage.getItem("erclave-recipe-product");
@@ -8318,12 +8689,17 @@ function renderAuthControls() {
   authButton.title = state.auth.user ? `Cerrar sesion de ${state.auth.user.email}` : "Cerrar sesion";
 }
 
-function escapeAttribute(value) {
+function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
-    .replaceAll("\"", "&quot;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value)
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function getAuthErrorMessage(error, fallback) {

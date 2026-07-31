@@ -168,6 +168,19 @@ for (const fragment of antiLeakFragments) {
   }
 }
 
+const hrAuthorization = readText("backend/services/hr-service/app/authorization.py");
+const hrRepository = readText("backend/services/hr-service/app/repositories.py");
+const hrTests = readText("backend/services/hr-service/tests/test_hr_api.py");
+for (const fragment of ["/v1/session/context", '"hr" not in context.get("active_modules",[])', "permission_denied", "tenant_access_denied"]) {
+  if (!hrAuthorization.includes(fragment)) errors.push(`hr-service authorization is missing required fragment: ${fragment}`);
+}
+for (const fragment of ["hr.idempotency_records", "request_hash", "idempotency_key_reused", "for update", "tenant_id=:t"]) {
+  if (!hrRepository.toLowerCase().includes(fragment.toLowerCase())) errors.push(`hr-service isolation/idempotency is missing required fragment: ${fragment}`);
+}
+for (const fragment of ["ten_other", "idempotency", "labor_area_invalid", "permission_denied"]) {
+  if (!hrTests.includes(fragment)) errors.push(`hr-service tests must include guardrail fragment: ${fragment}`);
+}
+
 if (errors.length) {
   fail("tenant isolation validation failed", errors);
 } else {

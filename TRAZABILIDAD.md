@@ -2302,3 +2302,152 @@ Cada cambio relevante debe quedar registrado aqui con:
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
+### CHG-152
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Inventario cero, recursos reales de receta y modulo RH |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260730_0009_inventory_recipe_flag.py`, `backend/services/inventory-service`, `contracts/api/inventory-service.openapi.yaml`, `frontend`, `modulos`, `docs/contexto`, `docs/qa` |
+| Secciones | Inventario, Articulos, Recetas, Recursos Humanos |
+| Descripcion | Inventario incluye articulos sin movimientos con saldo cero; Articulos incorpora Usar en receta; Recetas consume candidatos reales de Almacenes; Areas y puestos se mueve a RH con costo por hora y bandera productiva. |
+| Motivo | El alta de articulos no era visible sin movimientos y Produccion seguia usando recursos fijos del frontend. |
+| Impacto | Integracion local coherente entre inventario, receta y mano de obra sin escribir en QA. |
+| Validacion | Migracion local aislada `0009`, pruebas inventory-service, validadores, consulta directa de balances y `npm.cmd run verify`. |
+| Observaciones | No hubo despliegue, seed ni migracion sobre QA. RH conserva persistencia local y permisos transitorios `production.labor_*`. |
+
+### CHG-153
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Desacoplamiento integral del modulo Recursos Humanos |
+| Autor | Codex |
+| Archivos | `backend/services/hr-service`, `backend/alembic/versions/20260730_0010_hr_service_initial.py`, `contracts/api/hr-service.openapi.yaml`, `frontend/api/hr.js`, `frontend/microfrontends/recursos-humanos`, `frontend/app.js`, `frontend/backoffice/app.js`, `AGENTES.md`, `modulos`, `docs`, `tools/validators` |
+| Secciones | Entitlement SaaS, permisos, areas, puestos, idempotencia, auditoria, aislamiento tenant, agentes |
+| Descripcion | RH se convirtio en modulo y servicio propietarios: se registro el entitlement `hr`, se agregaron permisos `hr.area.*` y `hr.position.*`, API y esquema propios, validacion de sesion/tenant/modulo/permiso, FK compuesta, idempotencia, auditoria y consumo de puestos elegibles desde Produccion. |
+| Motivo | Permitir activar o suspender RH y delegar sus funciones sin depender de Produccion ni de controles exclusivamente visuales. |
+| Impacto | Produccion deja de ser dueno del catalogo laboral; Administracion puede contratar el modulo por tenant y asignar permisos independientes; agentes transversales y especialistas cuentan con ownership y controles documentados. |
+| Validacion | Pruebas unitarias de `hr-service`, validadores de arquitectura/agentes/OpenAPI, migracion local aislada y suite `npm.cmd run verify`. |
+| Observaciones | Trabajo local. No se desplego ni se ejecuto migracion, seed, activacion o escritura sobre QA. |
+
+### CHG-154
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Grupo de permisos de Recursos Humanos en Administracion |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `backend/services/admin-service/tests/test_permission_seeds.py`, `tools/validators/validate-labor-catalog.js`, `modulos/10_recursos_humanos.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, Permisos, Roles, Recursos Humanos |
+| Descripcion | El catalogo de permisos muestra RH como Recursos Humanos y el selector de permisos de roles agrupa sus seis acciones por separado. Una prueba extrae los contratos completos y evita reintroducir permisos `production.labor_*`. |
+| Motivo | Hacer visible y asignable el nuevo modulo con la misma estructura administrativa del resto de ERClave. |
+| Impacto | Los administradores pueden identificar y asignar permisos de areas y puestos sin confundirlos con Produccion; activar el entitlement sigue sin conceder permisos implicitamente. |
+| Validacion | Prueba de seeds OpenAPI, validador de catalogos laborales, sintaxis frontend y `npm.cmd run verify`. |
+| Observaciones | Cambio local; QA no recibio seeds, migraciones, activaciones ni escrituras. |
+
+### CHG-155
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Reconciliacion de permisos laborales heredados |
+| Autor | Codex |
+| Archivos | `backend/scripts/seed_admin_mvp.py`, `backend/services/admin-service/tests/test_permission_seeds.py`, `tools/validators/validate-labor-catalog.js`, `tools/validators/validate-db-guardrails.js`, `modulos/10_recursos_humanos.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, permisos, seeds, Recursos Humanos |
+| Descripcion | El seed idempotente desactiva nueve permisos laborales heredados de Produccion y mantiene como vigentes exclusivamente los seis permisos `hr.area.*` y `hr.position.*`. La prueba ahora bloquea cualquier prefijo `production.labor`, incluido el formato con punto observado en QA. |
+| Motivo | Los seeds anteriores solo hacian upsert y dejaban activos permisos retirados del OpenAPI, provocando que Administracion siguiera mostrandolos bajo Produccion. |
+| Impacto | Los permisos antiguos dejan de aparecer y de ser efectivos sin borrar sus registros o relaciones historicas; RH conserva ownership independiente. |
+| Validacion | Seed aplicado dos veces en PostgreSQL local, consulta de estados, pruebas de contratos, guardrails de DB y `npm.cmd run verify`. |
+| Observaciones | La reconciliacion se aplico solo a local. Ejecutarla en QA requiere autorizacion explicita. |
+
+### CHG-156
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Sincronizacion autorizada del catalogo de permisos RH en QA |
+| Autor | Codex, con autorizacion explicita del usuario |
+| Archivos | PostgreSQL QA `admin.permissions`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, permisos, Recursos Humanos, QA |
+| Descripcion | Se ejecuto el seed idempotente contra `erclave_qa`: se activaron seis permisos `hr.area.*` y `hr.position.*`, y se inactivaron `production.labor.create/read/update`. |
+| Motivo | El catalogo de QA conservaba permisos laborales heredados bajo Produccion y no mostraba el grupo Recursos Humanos. |
+| Impacto | `GET /v1/permissions` devuelve 98 permisos activos, incluye seis bajo `module_code=hr` y no expone ningun prefijo `production.labor`. Las relaciones historicas se conservaron inactivas. |
+| Validacion | Preflight de identidad `erclave_qa`, postcondiciones SQL y lectura final de la Admin API local conectada a QA. |
+| Observaciones | No se ejecutaron migraciones, despliegues, datos dummy, cambios de entitlement ni escrituras en catalogos funcionales de RH. |
+
+### CHG-157
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Editor seguro e intuitivo de permisos por rol, sin plantillas |
+| Autor | Codex con revision transversal de arquitectura, seguridad y frontend |
+| Archivos | `frontend/app.js`, `frontend/api/admin.js`, `frontend/i18n/translations.js`, `frontend/styles.css`, `backend/services/admin-service/app/*`, `backend/services/admin-service/tests/*`, `backend/alembic/versions/20260730_0011_admin_permission_editor.py`, `backend/scripts/seed_admin_mvp.py`, `contracts/api/admin-service.openapi.yaml`, documentacion y validadores |
+| Secciones | Administracion, roles, permisos, seguridad, multitenant, frontend, PostgreSQL |
+| Descripcion | Se reemplazo la asignacion tortuosa por un editor con nombres funcionales ES/EN, busqueda, filtros, grupos, acciones masivas solo sobre resultados visibles, borrador, diff y guardado unico. El backend separa `admin.role.permissions.manage`, filtra permisos asignables por tenant y entitlement, aplica diffs, revision optimista e idempotencia persistente. |
+| Motivo | Hacer entendible y agil la personalizacion de roles sin perder granularidad ni abrir escalaciones hacia permisos internos o modulos no contratados. |
+| Impacto | Los roles siguen siendo completamente personalizables. Las asignaciones heredadas no visibles se preservan, los scopes no se sobrescriben y los conflictos concurrentes requieren recarga antes de reintentar. |
+| Validacion | `npm.cmd run verify`: 116 pruebas backend y todos los validadores aprobados; ademas, prueba PostgreSQL de integracion real, migracion/seed en `erclave_local`, smoke test del repositorio, OpenAPI offline y `git diff --check`. |
+| Observaciones | No se implementaron plantillas ni presets. No hubo despliegue, migracion, seed ni escritura en QA. |
+
+### CHG-158
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-31 |
+| Cambio | Apertura explicita del visor de permisos cuando QA aun no tiene el permiso de gestion |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/i18n/translations.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, roles, permisos, UX, seguridad |
+| Descripcion | El boton ya no aparenta estar operativo mientras permanece deshabilitado. Con `admin.role.read` abre el detalle como `Ver permisos`; si falta `admin.role.permissions.manage`, presenta un aviso visible de solo lectura y bloquea checkboxes, acciones masivas y guardado. |
+| Motivo | La API QA actual conserva 98 permisos y aun no incluye el permiso nuevo, por lo que el boton anterior no ejecutaba eventos y no explicaba la causa. |
+| Impacto | El usuario puede inspeccionar las asignaciones sin obtener capacidad de escritura por fallback. La edicion se habilitara automaticamente cuando backend, migracion y seed compatibles sean promovidos con autorizacion. |
+| Validacion | `npm.cmd run verify`: 116 pruebas backend, i18n, sintaxis, responsive, editor de permisos, contratos y guardrails aprobados; `git diff --check` sin errores. |
+| Observaciones | No hubo migracion, seed, despliegue ni escritura en QA. |
+
+### CHG-159
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-31 |
+| Cambio | Correccion del render del visor de permisos |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `tools/validators/validate-permission-editor.js`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, roles, permisos, frontend |
+| Descripcion | Se incorporo la utilidad compartida `escapeHtml` usada por el editor y formularios de RH. Su ausencia provocaba `ReferenceError` al abrir Ver permisos y detenía el render. |
+| Motivo | El validador anterior comprobaba la presencia del flujo del editor, pero no que todas sus utilidades de render estuvieran definidas. |
+| Impacto | Ver permisos abre correctamente; los textos dinamicos siguen escapados para evitar inyeccion de HTML. |
+| Validacion | Validador del editor, sintaxis JavaScript y `npm.cmd run verify`: 116 pruebas backend y todos los guardrails aprobados. |
+| Observaciones | El 404 de `favicon.ico` observado en consola es independiente y no afecta la aplicacion. No se toco QA. |
+
+### CHG-160
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-31 |
+| Cambio | Promocion autorizada de migraciones y editor de permisos a PostgreSQL QA |
+| Autor | Codex, con autorizacion explicita del usuario |
+| Archivos | PostgreSQL QA `erclave_qa`, `backend/alembic/versions/20260726_0007_inventory_mvp.py` a `20260730_0011_admin_permission_editor.py`, `backend/scripts/seed_admin_mvp.py`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | QA, PostgreSQL, Administracion, permisos, Almacenes, Recursos Humanos |
+| Descripcion | Se genero y verifico un respaldo completo, se promovio Alembic desde `20260721_0006` hasta `20260730_0011`, y se ejecuto dos veces el seed administrativo para comprobar idempotencia. La Admin API local fue reiniciada contra QA con el codigo compatible. |
+| Motivo | Habilitar el editor real de permisos y alinear el esquema QA con los contratos ya validados localmente. |
+| Impacto | QA expone 99 permisos activos y el owner de ERClave Demo QA conserva el piso administrativo con `admin.role.permissions.manage`. Se crearon los esquemas de Inventory y RH sin cargar registros funcionales o dummy. |
+| Validacion | Respaldo custom verificado con `pg_restore --list`; revision Alembic `20260730_0011`; tenant y modulo admin activos; un grant de gestion para el owner objetivo; cero owners del sistema sin piso, cero codigos activos duplicados, cero registros en almacenes, articulos, movimientos, areas y puestos; health/OpenAPI 200, llamada sin token 401; `npm.cmd run verify` con 116 pruebas aprobadas y todos los validadores. |
+| Observaciones | Respaldo recuperable en `C:\tmp\erclave_qa_pre_permission_20260731_093634.dump`. No se desplego frontend ni servicio alguno, no se activaron entitlements adicionales y no se ejecutaron seeds demo o cargas de volumen. |
+
+### CHG-161
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-31 |
+| Cambio | Cierre persistente de sesion y preparacion de publicacion |
+| Autor | Codex |
+| Archivos | `.gitignore`, `tools/session-context.js`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Operacion local, memoria persistente, repositorio |
+| Descripcion | El comando `session:context` verifica la Admin API en el puerto real `8000` y el repositorio ignora temporales `.$*.drawio.dtmp` para que un reinicio no confunda archivos de recuperacion del editor con cambios funcionales. |
+| Motivo | Dejar una lectura fiel y limpia del entorno al reiniciar la computadora o iniciar una nueva sesion de Codex. |
+| Impacto | La siguiente sesion recupera rama, migracion, trazabilidad, decisiones, pendientes y servicios locales sin reportar falsamente apagada la Admin API ni proponer temporales de Draw.io para commit. |
+| Validacion | `npm.cmd run session:context`, `git check-ignore`, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | No modifica datos, migraciones, seeds, despliegues ni configuracion de QA. |

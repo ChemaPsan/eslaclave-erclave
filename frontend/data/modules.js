@@ -29,7 +29,6 @@ export const modules = [
       ["Ordenes", "Programacion, estados, responsables, prioridad y cantidades.", "ordenes"],
       ["Entregables por area", "Corte, ensamble, calidad, empaque y responsables.", "entregables"],
       ["Validacion de recursos", "Disponibilidad, reservas, faltantes y compras sugeridas.", "validacion-recursos"],
-      ["Areas y puestos", "Areas operativas, roles, capacidad y costo de mano de obra.", "areas-puestos"],
       ["Maquinaria", "Equipos productivos, area, disponibilidad y costo hora maquina.", "maquinaria"]
     ],
     workflow: [
@@ -82,6 +81,31 @@ export const modules = [
     ],
     records: [],
     recordsEn: []
+  },
+  {
+    id: "recursos-humanos",
+    icon: "RH",
+    count: 0,
+    title: "Recursos Humanos",
+    titleEn: "Human Resources",
+    eyebrow: "Estructura operativa",
+    eyebrowEn: "Operating structure",
+    summary: "Areas y puestos con capacidad, costo por hora y elegibilidad para produccion.",
+    summaryEn: "Areas and positions with capacity, hourly cost, and production eligibility.",
+    primary: "Nueva area",
+    primaryEn: "New area",
+    status: "Catalogos independientes",
+    statusEn: "Independent catalogs",
+    kpis: [["Areas", "0", "positive"], ["Puestos", "0", "positive"], ["Productivos", "0", "positive"]],
+    kpisEn: [["Areas", "0", "positive"], ["Positions", "0", "positive"], ["Production", "0", "positive"]],
+    submodules: [["Areas y puestos", "Crea primero las areas y administra sus puestos desde formularios independientes.", "areas-puestos"]],
+    workflow: ["Crear area", "Abrir area", "Crear puesto", "Definir costo por hora", "Autorizar uso en produccion"],
+    workflowEn: ["Create area", "Open area", "Create position", "Set hourly cost", "Allow production use"],
+    table: { columns: ["Area", "Puestos", "Estatus"], rows: [] },
+    tableEn: { columns: ["Area", "Positions", "Status"], rows: [] },
+    validations: [["Produccion", "Solo recibe puestos activos marcados para intervenir en produccion."], ["Permisos", "Areas y puestos conservan permisos independientes."]],
+    validationsEn: [["Production", "Only receives active positions marked for production."], ["Permissions", "Areas and positions keep independent permissions."]],
+    form: [], formEn: [], records: [], recordsEn: []
   },
   {
     id: "almacenes",
@@ -648,6 +672,16 @@ export const modules = [
 ];
 
 export const erpSubmoduleCatalog = {
+  "recursos-humanos": {
+    "areas-puestos": {
+      enName: "Areas and positions",
+      enDetail: "Create areas first, then manage their positions through independent forms.",
+      focus: {
+        es: ["Area existente", "Puesto", "Costo por hora", "Interviene en produccion"],
+        en: ["Existing area", "Position", "Hourly cost", "Participates in production"]
+      }
+    }
+  },
   produccion: {
     "productos-servicios": {
       enName: "Products and services",

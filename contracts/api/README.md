@@ -22,6 +22,7 @@ Cada endpoint debe declarar:
 - `billing-service`
 - `provisioning-service`
 - `integration-service`
+- `hr-service`
 
 ## Contratos MVP iniciales
 
@@ -32,5 +33,6 @@ Cada endpoint debe declarar:
 - `billing-service.openapi.yaml`
 - `provisioning-service.openapi.yaml`
 - `integration-service.openapi.yaml`
+- `hr-service.openapi.yaml`
 
 Cada contrato debe incluir `operationId`, `x-required-module`, `x-permissions` e `Idempotency-Key` en operaciones de comando.

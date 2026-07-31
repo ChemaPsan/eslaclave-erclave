@@ -142,6 +142,10 @@ for (const fragment of requiredQaDemoFragments) {
 }
 
 const permissionSeed = readText("backend/services/admin-service/app/seeds/permissions.py");
+const permissionSeedScript = readText("backend/scripts/seed_admin_mvp.py");
+for (const fragment of ["DEPRECATED_PERMISSION_CODES", '"production.labor.read"', "set status = 'inactive'", "code = any(:deprecated_codes)"]) {
+  if (!permissionSeedScript.includes(fragment)) errors.push(`backend/scripts/seed_admin_mvp.py must reconcile deprecated labor permissions: ${fragment}`);
+}
 if (!permissionSeed.includes("extract_permission_seeds")) {
   errors.push("Permission seed extractor must expose extract_permission_seeds.");
 }

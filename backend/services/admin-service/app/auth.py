@@ -228,7 +228,7 @@ def require_permission_for_header_tenant(permission: str) -> Callable:
         settings: Settings = Depends(get_settings),
         authenticated_actor: AuthenticatedActor | None = Depends(get_authenticated_actor),
         repository: AdminRepository = Depends(get_admin_repository),
-    ) -> None:
+    ) -> AuthenticatedActor | None:
         if not x_tenant_id:
             raise ErclaveError("tenant_required", "X-Tenant-Id header is required.", status_code=400)
         _require_permission(
@@ -238,6 +238,7 @@ def require_permission_for_header_tenant(permission: str) -> Callable:
             authenticated_actor=authenticated_actor,
             repository=repository,
         )
+        return authenticated_actor
 
     return dependency
 
@@ -260,6 +261,20 @@ def _require_permission(
             "Session context not found for tenant and authenticated email.",
             status_code=404,
             details={"tenant_id": tenant_id, "email": authenticated_actor.email},
+        )
+    if context.tenant.status != "active":
+        raise ErclaveError(
+            "tenant_not_active",
+            "The tenant must be active.",
+            status_code=403,
+            details={"tenant_id": tenant_id, "status": context.tenant.status},
+        )
+    if "admin" not in context.active_modules:
+        raise ErclaveError(
+            "admin_module_not_active",
+            "The Administration module must be active.",
+            status_code=403,
+            details={"tenant_id": tenant_id},
         )
     if permission not in context.permissions:
         raise ErclaveError(

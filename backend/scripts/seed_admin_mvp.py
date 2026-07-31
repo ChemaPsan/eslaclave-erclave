@@ -19,6 +19,19 @@ sys.path.insert(0, str(ADMIN_SERVICE_DIR))
 from app.seeds.permissions import extract_permission_seeds  # noqa: E402
 
 
+DEPRECATED_PERMISSION_CODES = (
+    "production.labor.create",
+    "production.labor.read",
+    "production.labor.update",
+    "production.labor_area.create",
+    "production.labor_area.read",
+    "production.labor_area.update",
+    "production.labor_role.create",
+    "production.labor_role.read",
+    "production.labor_role.update",
+)
+
+
 def stable_permission_id(code: str) -> str:
     return f"per_{uuid5(NAMESPACE_URL, f'erclave.permission:{code}').hex[:26]}"
 
@@ -34,6 +47,14 @@ def upsert_permissions(database_url: str, permissions: tuple[object, ...]) -> in
             resource,
             action,
             description,
+            display_name_es,
+            display_name_en,
+            description_es,
+            description_en,
+            classification,
+            assignable_to_tenant_role,
+            risk_level,
+            sort_order,
             status
         )
         values (
@@ -43,6 +64,14 @@ def upsert_permissions(database_url: str, permissions: tuple[object, ...]) -> in
             :resource,
             :action,
             :description,
+            :display_name_es,
+            :display_name_en,
+            :description_es,
+            :description_en,
+            :classification,
+            :assignable_to_tenant_role,
+            :risk_level,
+            :sort_order,
             :status
         )
         on conflict (code) do update set
@@ -50,6 +79,14 @@ def upsert_permissions(database_url: str, permissions: tuple[object, ...]) -> in
             resource = excluded.resource,
             action = excluded.action,
             description = excluded.description,
+            display_name_es = excluded.display_name_es,
+            display_name_en = excluded.display_name_en,
+            description_es = excluded.description_es,
+            description_en = excluded.description_en,
+            classification = excluded.classification,
+            assignable_to_tenant_role = excluded.assignable_to_tenant_role,
+            risk_level = excluded.risk_level,
+            sort_order = excluded.sort_order,
             status = excluded.status,
             updated_at = now()
         """
@@ -63,6 +100,14 @@ def upsert_permissions(database_url: str, permissions: tuple[object, ...]) -> in
             "resource": permission.resource,
             "action": permission.action,
             "description": permission.description,
+            "display_name_es": permission.display_name_es,
+            "display_name_en": permission.display_name_en,
+            "classification": permission.classification,
+            "description_es": permission.description_es,
+            "description_en": permission.description_en,
+            "assignable_to_tenant_role": permission.assignable_to_tenant_role,
+            "risk_level": permission.risk_level,
+            "sort_order": permission.sort_order,
             "status": permission.status,
         }
         for permission in permissions
@@ -70,6 +115,38 @@ def upsert_permissions(database_url: str, permissions: tuple[object, ...]) -> in
 
     with engine.begin() as connection:
         connection.execute(statement, rows)
+        connection.execute(
+            text(
+                """
+                update admin.permissions
+                set status = 'inactive', updated_at = now()
+                where code = any(:deprecated_codes)
+                  and status <> 'inactive'
+                """
+            ),
+            {"deprecated_codes": list(DEPRECATED_PERMISSION_CODES)},
+        )
+        connection.execute(
+            text(
+                """
+                insert into admin.role_permissions (id, tenant_id, role_id, permission_id, scope)
+                select
+                    'rpe_' || substr(md5(roles.tenant_id || ':' || roles.id || ':' || permissions.id), 1, 26),
+                    roles.tenant_id,
+                    roles.id,
+                    permissions.id,
+                    '{}'::jsonb
+                from admin.roles roles
+                join admin.permissions permissions
+                    on permissions.code = 'admin.role.permissions.manage'
+                    and permissions.status = 'active'
+                where roles.code = 'owner'
+                    and roles.system_role = true
+                    and roles.status = 'active'
+                on conflict (tenant_id, role_id, permission_id) do nothing
+                """
+            )
+        )
 
     return len(rows)
 
@@ -103,7 +180,7 @@ def main() -> int:
         raise RuntimeError("ERCLAVE_DATABASE_URL is required to apply admin MVP seeds.")
 
     count = upsert_permissions(database_url, permissions)
-    print(f"Applied {count} permission seeds to admin.permissions.")
+    print(f"Applied {count} permission seeds and reconciled deprecated permissions in admin.permissions.")
     return 0
 
 

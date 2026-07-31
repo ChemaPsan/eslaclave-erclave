@@ -7,22 +7,31 @@ const checks = [
   ["frontend/app.js", [
     'name="areaId"',
     "mockDb.findLaborArea(areaId)",
-    'production.labor_area.create',
-    'production.labor_area.update',
-    'production.labor_role.create',
-    'production.labor_role.update'
+    'hr.area.create',
+    'hr.area.update',
+    'hr.position.create',
+    'hr.position.update',
+    'hr: { es: "Recursos Humanos", en: "Human Resources", order: 25 }',
+    "groupAdminPermissions(permissions = [])",
+    'data-permission-module="${moduleCode}"',
+    '<strong>${group.label}</strong>'
   ]],
-  ["contracts/api/production-service.openapi.yaml", [
-    "/v1/production/labor-areas/{area_id}:",
-    "production.labor_area.read",
-    "production.labor_area.create",
-    "production.labor_area.update",
-    "production.labor_role.read",
-    "production.labor_role.create",
-    "production.labor_role.update",
-    "LaborAreaUpdateRequest"
+  ["backend/services/admin-service/tests/test_permission_seeds.py", [
+    "test_hr_contract_seeds_its_own_permission_group_without_production_legacy_codes",
+    '"hr.area.read"',
+    'startswith("production.labor")'
   ]],
-  ["modulos/01_produccion.md", ["nunca crea areas por texto libre", "Permisos independientes"]]
+  ["contracts/api/hr-service.openapi.yaml", [
+    "/v1/hr/areas/{id}:",
+    "hr.area.read",
+    "hr.area.create",
+    "hr.area.update",
+    "hr.position.read",
+    "hr.position.create",
+    "hr.position.update",
+    "AreaUpdate"
+  ]],
+  ["modulos/10_recursos_humanos.md", ["No se crean áreas desde texto libre", "permisos"]]
 ];
 
 const errors = [];

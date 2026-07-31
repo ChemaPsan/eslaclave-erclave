@@ -237,6 +237,7 @@ Roles por tenant.
 | `name` | `varchar(160)` | Nombre visible. |
 | `description` | `text` | Nullable. |
 | `status` | `varchar(40)` | `active`, `inactive`. |
+| `permission_revision` | `integer` | Revision monotona del conjunto de permisos; inicia en 1. |
 | `created_at` | `timestamptz` | Obligatorio. |
 | `updated_at` | `timestamptz` | Obligatorio. |
 
@@ -258,6 +259,14 @@ Catalogo global de permisos.
 | `action` | `varchar(80)` | Accion. |
 | `description` | `text` | Nullable. |
 | `status` | `varchar(40)` | `active`, `inactive`. |
+| `classification` | `varchar(20)` | `tenant`, `internal`, `public` o `integration`. |
+| `assignable_to_tenant_role` | `boolean` | Solo `true` para capacidades humanas delegables. |
+| `risk_level` | `varchar(20)` | `low`, `standard`, `high` o `critical`. |
+| `display_name_es` | `varchar(200)` | Nombre humano en Espanol. |
+| `display_name_en` | `varchar(200)` | Nombre humano en Ingles. |
+| `description_es` | `text` | Explicacion operativa en Espanol. |
+| `description_en` | `text` | Explicacion operativa en Ingles. |
+| `sort_order` | `integer` | Orden estable de presentacion. |
 
 Indices:
 
@@ -280,6 +289,8 @@ Relacion rol-permiso.
 Indices:
 
 - `unique(tenant_id, role_id, permission_id)`.
+
+Las asignaciones se modifican por diferencia; no se eliminan y recrean las filas que no cambiaron. Esto conserva fecha y `scope` por permiso.
 
 ### 5.6 `admin.user_roles`
 
@@ -507,7 +518,7 @@ Recursos requeridos por version de receta.
 Reglas:
 
 - Si `resource_type = material`, `resource_ref_id` apunta a `inventory.inventory_items.id` sin FK cruzada.
-- Si `resource_type = labor`, apunta a `production.labor_roles.id`.
+- Si `resource_type = labor`, `resource_ref` conserva el ID externo de `hr.labor_roles`; no existe FK fisica entre servicios y la version guarda el snapshot necesario.
 - Si `resource_type = machine`, apunta a `production.machines.id`.
 
 Indices:
@@ -593,7 +604,7 @@ Indices:
 - `index(tenant_id, production_order_id, sort_order)`;
 - `index(tenant_id, status)`.
 
-### 6.8 `production.labor_areas`
+### 6.8 `hr.labor_areas`
 
 Areas operativas para mano de obra.
 
@@ -611,7 +622,7 @@ Indices:
 - `unique(tenant_id, code)`;
 - `index(tenant_id, name)`.
 
-### 6.9 `production.labor_roles`
+### 6.9 `hr.labor_roles`
 
 Roles/puestos y cantidad de recursos disponibles.
 
@@ -620,18 +631,20 @@ Roles/puestos y cantidad de recursos disponibles.
 | `id` | `varchar(40)` | PK. |
 | `tenant_id` | `varchar(40)` | Obligatorio. |
 | `labor_area_id` | `varchar(40)` | FK interna. |
-| `code` | `varchar(80)` | Unico por tenant y area. |
-| `name` | `varchar(200)` | Puesto/rol. |
-| `recipe_display_name` | `varchar(200)` | Nombre para recetas. |
-| `resource_count` | `integer` | Cantidad de personas/recursos. |
-| `cost_per_minute` | `numeric(18,6)` | Costo. |
-| `standard_minutes` | `numeric(18,6)` | Minutos base sugeridos. |
+| `position` | `varchar(160)` | Nombre del puesto, unico dentro del area y tenant. |
+| `recipe_name` | `varchar(160)` | Nombre visible en recetas. |
+| `resource_quantity` | `integer` | Cantidad nominal de recursos; mayor a cero. |
+| `minutes_per_resource` | `integer` | Minutos disponibles por recurso; mayor a cero. |
+| `hourly_cost` | `numeric(18,6)` | Costo por hora no negativo. |
+| `intervenes_in_production` | `boolean` | Habilita la seleccion en nuevas recetas. |
 | `status` | `varchar(40)` | `active`, `inactive`. |
 
 Indices:
 
-- `unique(tenant_id, labor_area_id, code)`;
-- `index(tenant_id, labor_area_id, status)`.
+- `unique(tenant_id, labor_area_id, position)`;
+- FK compuesto `(tenant_id, labor_area_id)` hacia `hr.labor_areas`;
+- `index(tenant_id, labor_area_id, status)`;
+- `index(tenant_id, intervenes_in_production, status)`.
 
 ### 6.10 `production.machines`
 

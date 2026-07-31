@@ -245,6 +245,8 @@ Estados sugeridos por etapa:
 
 ### 4.6 Areas y puestos
 
+> El catalogo fue trasladado al modulo independiente **Recursos Humanos**, cuyo propietario es `hr-service`. Produccion no crea ni modifica areas o puestos: solo consume puestos activos marcados para intervenir en produccion y conserva snapshots en sus recetas.
+
 Este apartado configura la mano de obra. No debe tratarse como almacen.
 
 Funciones actuales:
@@ -283,14 +285,14 @@ Permisos independientes:
 
 | Operacion | Permiso |
 |---|---|
-| Consultar areas | `production.labor_area.read` |
-| Crear area | `production.labor_area.create` |
-| Editar area | `production.labor_area.update` |
-| Consultar puestos | `production.labor_role.read` |
-| Crear puesto | `production.labor_role.create` |
-| Editar puesto y recursos | `production.labor_role.update` |
+| Consultar areas | `hr.area.read` |
+| Crear area | `hr.area.create` |
+| Editar area | `hr.area.update` |
+| Consultar puestos | `hr.position.read` |
+| Crear puesto | `hr.position.create` |
+| Editar puesto y recursos | `hr.position.update` |
 
-La API debe rechazar un `area_id` inexistente o perteneciente a otro tenant. Renombrar un area conserva sus puestos mediante `labor_area_id`; el nombre mostrado no funciona como relacion ni crea registros implicitos.
+`hr-service` debe rechazar un `area_id` inexistente o perteneciente a otro tenant. Renombrar un area conserva sus puestos mediante `labor_area_id`; el nombre mostrado no funciona como relacion ni crea registros implicitos.
 
 ---
 

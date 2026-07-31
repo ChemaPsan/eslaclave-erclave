@@ -511,7 +511,7 @@ paths:
       operationId: replaceRolePermissions
       summary: Replace permissions for a role.
       x-required-module: admin
-      x-permissions: [admin.role.update]
+      x-permissions: [admin.role.permissions.manage]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - name: role_id
@@ -534,6 +534,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RoleResponse'
+        '403':
+          description: Permission, module entitlement or owner invariant forbids the assignment.
+        '409':
+          description: Revision conflict or Idempotency-Key reused with another payload.
+        '422':
+          description: Invalid assignment, duplicate permission or unsupported scope change.
   /v1/permissions:
     get:
       tags: [Roles]
@@ -542,6 +548,7 @@ paths:
       x-required-module: admin
       x-permissions: [admin.role.read]
       parameters:
+        - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -1416,6 +1423,15 @@ components:
           type: array
           items:
             type: string
+        permission_assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionAssignment'
+        system_role:
+          type: boolean
+        permission_revision:
+          type: integer
+          minimum: 1
     RoleResponse:
       type: object
       properties:
@@ -1451,15 +1467,44 @@ components:
           type: string
     RolePermissionsReplaceRequest:
       type: object
-      required: [permission_ids]
       properties:
+        assignments:
+          type: array
+          description: Preferred representation. Requires expected_revision.
+          items:
+            $ref: '#/components/schemas/PermissionAssignmentInput'
+        expected_revision:
+          type: integer
+          minimum: 1
         permission_ids:
           type: array
+          deprecated: true
+          description: Legacy representation retained for compatible clients; cannot be combined with assignments.
           items:
             type: string
         scope:
           type: object
+          deprecated: true
+          description: Legacy shared scope used only with permission_ids.
           additionalProperties: true
+    PermissionAssignmentInput:
+      type: object
+      required: [permission_id]
+      properties:
+        permission_id:
+          type: string
+        scope:
+          type: object
+          description: Opaque existing scope must be sent unchanged; new assignments currently require an empty object.
+          additionalProperties: true
+    PermissionAssignment:
+      allOf:
+        - $ref: '#/components/schemas/PermissionAssignmentInput'
+        - type: object
+          required: [code]
+          properties:
+            code:
+              type: string
     Permission:
       type: object
       properties:
@@ -1475,6 +1520,30 @@ components:
           type: string
         status:
           type: string
+        display_name_es:
+          type: string
+        display_name_en:
+          type: string
+        description_es:
+          type: string
+        description_en:
+          type: string
+        classification:
+          type: string
+          enum: [tenant, internal, public, integration]
+        assignable_to_tenant_role:
+          type: boolean
+        risk_level:
+          type: string
+          enum: [low, standard, high, critical]
+        sort_order:
+          type: integer
+        entitlement_status:
+          type: string
+          nullable: true
+          enum: [active, inactive, suspended]
+        available:
+          type: boolean
     PermissionListResponse:
       type: object
       properties:

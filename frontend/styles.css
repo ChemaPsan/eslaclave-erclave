@@ -1004,6 +1004,28 @@ h3 {
   gap: 6px;
 }
 
+.preview-field.checkbox-field {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--field);
+}
+
+.preview-field.checkbox-field input[type="checkbox"] {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
+  flex: 0 0 18px;
+}
+
+.preview-field.checkbox-field span {
+  color: var(--text);
+}
+
 .preview-field span {
   color: var(--muted);
   font-size: 0.76rem;
@@ -2495,6 +2517,182 @@ h3 {
   gap: 10px;
   align-items: end;
   margin-bottom: 12px;
+}
+
+.admin-section-roles {
+  container: permission-editor / inline-size;
+}
+
+.permission-editor {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.permission-editor-head,
+.permission-editor-toolbar,
+.permission-editor-actions,
+.permission-editor-bulk,
+.permission-module > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.permission-editor-head > div:first-child {
+  min-width: min(100%, 320px);
+  flex: 1;
+}
+
+.permission-editor-toolbar .search-field {
+  flex: 1 1 320px;
+}
+
+.permission-editor-toolbar .preview-field {
+  min-width: min(220px, 100%);
+}
+
+.permission-editor-modules,
+.permission-resource-list,
+.permission-diff {
+  display: grid;
+  gap: 10px;
+}
+
+.permission-module,
+.permission-diff {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  padding: 10px;
+  min-width: 0;
+}
+
+.permission-module-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.permission-module-check,
+.permission-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.permission-module-check input,
+.permission-choice input {
+  inline-size: 20px;
+  block-size: 20px;
+  margin-top: 2px;
+  flex: none;
+}
+
+.permission-resource {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.permission-resource h4 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.permission-action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+  gap: 8px;
+}
+
+.permission-choice {
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.permission-choice > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.permission-choice small {
+  color: var(--muted);
+}
+
+.permission-choice code {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.permission-choice.unavailable {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.permission-readonly-notice {
+  margin: 0;
+}
+
+.admin-role-record button:disabled,
+.permission-editor button:disabled,
+.permission-editor input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.permission-diff span,
+.permission-editor-error {
+  overflow-wrap: anywhere;
+}
+
+@container permission-editor (max-width: 820px) {
+  .permission-editor-head,
+  .permission-editor-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .permission-editor-actions,
+  .permission-editor-toolbar > *,
+  .permission-editor-bulk {
+    width: 100%;
+  }
+}
+
+@container permission-editor (max-width: 560px) {
+  .permission-editor-actions,
+  .permission-editor-bulk,
+  .permission-module > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .permission-editor-actions button,
+  .permission-editor-bulk button,
+  .permission-module-toggle,
+  .permission-module-check {
+    width: 100%;
+  }
+
+  .permission-action-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admin-form {

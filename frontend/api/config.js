@@ -62,6 +62,16 @@ export function getInventoryApiBaseUrl() {
   return localStorage.getItem("erclave-inventory-api-base-url") || runtimeBaseUrl;
 }
 
+export function getHrApiBaseUrl() {
+  const runtimeBaseUrl = getRuntimeConfigValue("hrApiBaseUrl") || "http://127.0.0.1:8006";
+  if (isLocalPreviewHost()) {
+    const override = localStorage.getItem("erclave-hr-api-base-url") || "";
+    const localBaseUrl = getRuntimeConfigValue("localHrApiBaseUrl");
+    return (override || localBaseUrl || runtimeBaseUrl).replace("localhost", "127.0.0.1");
+  }
+  return localStorage.getItem("erclave-hr-api-base-url") || runtimeBaseUrl;
+}
+
 
 export function getDemoTenantId() {
   return localStorage.getItem("erclave-api-tenant-id") || getRuntimeConfigValue("tenantId") || DEFAULT_TENANT_ID;

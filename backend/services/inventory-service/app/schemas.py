@@ -14,11 +14,11 @@ class WarehouseResponse(BaseModel): data: WarehouseRead
 class WarehouseListResponse(BaseModel): data: list[WarehouseRead]
 
 class ItemRead(BaseModel):
-    id: str; code: str; name: str; type: str; category: str | None = None; base_unit: str; inventory_policy: str; suggested_warehouse_id: str | None = None; minimum_stock: float = 0; maximum_stock: float | None = None; status: Status; description: str | None = None
+    id: str; code: str; name: str; type: str; category: str | None = None; base_unit: str; inventory_policy: str; suggested_warehouse_id: str | None = None; minimum_stock: float = 0; maximum_stock: float | None = None; use_in_recipe: bool = False; status: Status; description: str | None = None
 class ItemCreate(BaseModel):
-    code: str = Field(min_length=1, max_length=80); name: str = Field(min_length=1, max_length=240); type: str; category: str | None = None; base_unit: str; inventory_policy: Literal["standard","lot","serial","restricted"] = "standard"; suggested_warehouse_id: str | None = None; minimum_stock: float = Field(default=0, ge=0); maximum_stock: float | None = Field(default=None, ge=0); description: str | None = None
+    code: str = Field(min_length=1, max_length=80); name: str = Field(min_length=1, max_length=240); type: str; category: str | None = None; base_unit: str; inventory_policy: Literal["standard","lot","serial","restricted"] = "standard"; suggested_warehouse_id: str | None = None; minimum_stock: float = Field(default=0, ge=0); maximum_stock: float | None = Field(default=None, ge=0); use_in_recipe: bool = False; description: str | None = None
 class ItemUpdate(BaseModel):
-    name: str | None = None; type: str | None = None; category: str | None = None; base_unit: str | None = None; suggested_warehouse_id: str | None = None; minimum_stock: float | None = Field(default=None, ge=0); maximum_stock: float | None = Field(default=None, ge=0); status: Status | None = None; description: str | None = None
+    name: str | None = None; type: str | None = None; category: str | None = None; base_unit: str | None = None; suggested_warehouse_id: str | None = None; minimum_stock: float | None = Field(default=None, ge=0); maximum_stock: float | None = Field(default=None, ge=0); use_in_recipe: bool | None = None; status: Status | None = None; description: str | None = None
 class ItemResponse(BaseModel): data: ItemRead
 class ItemListResponse(BaseModel): data: list[ItemRead]
 

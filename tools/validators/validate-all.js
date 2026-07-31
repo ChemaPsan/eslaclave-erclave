@@ -8,6 +8,7 @@ const validators = [
   "validate-i18n.js",
   "validate-active-module-localization.js",
   "validate-responsive-ui.js",
+  "validate-permission-editor.js",
   "validate-labor-catalog.js",
   "validate-agents.js",
   "validate-architecture.js",

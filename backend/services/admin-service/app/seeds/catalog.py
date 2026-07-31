@@ -32,6 +32,15 @@ MVP_MODULE_SEEDS: tuple[ModuleSeed, ...] = (
         sort_order=20,
     ),
     ModuleSeed(
+        code="hr",
+        name="Recursos Humanos",
+        description="Areas, puestos, capacidad nominal, costo hora y elegibilidad productiva.",
+        status="active",
+        owner_service="hr-service",
+        public_feature=True,
+        sort_order=25,
+    ),
+    ModuleSeed(
         code="inventory",
         name="Almacenes e inventarios",
         description="Almacenes, articulos, existencias, movimientos, lotes, reservas y kardex.",

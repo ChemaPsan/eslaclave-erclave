@@ -39,13 +39,15 @@ class InventoryRepository:
             if data:
                 sets=", ".join(f"{name}=:{name}" for name in data); c.execute(text(f"update inventory.warehouses set {sets},updated_at=now() where tenant_id=:t and id=:i"),{"t":t,"i":i,**data})
             value=self._warehouse(c,t,i); self._audit(c,t,a,"warehouse.update","warehouse",i,data); self._done(c,t,"warehouse.update",k,value); return value
-    def list_items(self,t,q=None):
+    def list_items(self,t,q=None,use_in_recipe=None,status=None):
         params={"t":t}; where="tenant_id=:t"
         if q: where+=" and (code ilike :q or name ilike :q or category ilike :q)"; params["q"]=f"%{q}%"
-        with self.engine.connect() as c: rows=c.execute(text(f"select id,code,name,type,category,base_unit,inventory_policy,suggested_warehouse_id,minimum_stock,maximum_stock,status,description from inventory.items where {where} order by code"),params).mappings()
+        if use_in_recipe is not None: where+=" and use_in_recipe=:use_in_recipe"; params["use_in_recipe"]=use_in_recipe
+        if status is not None: where+=" and status=:status"; params["status"]=status
+        with self.engine.connect() as c: rows=c.execute(text(f"select id,code,name,type,category,base_unit,inventory_policy,suggested_warehouse_id,minimum_stock,maximum_stock,use_in_recipe,status,description from inventory.items where {where} order by code"),params).mappings()
         return [ItemRead.model_validate(dict(x)) for x in rows]
     def _item(self,c,t,i):
-        row=c.execute(text("select id,code,name,type,category,base_unit,inventory_policy,suggested_warehouse_id,minimum_stock,maximum_stock,status,description from inventory.items where tenant_id=:t and id=:i"),{"t":t,"i":i}).mappings().first(); return ItemRead.model_validate(dict(row)) if row else None
+        row=c.execute(text("select id,code,name,type,category,base_unit,inventory_policy,suggested_warehouse_id,minimum_stock,maximum_stock,use_in_recipe,status,description from inventory.items where tenant_id=:t and id=:i"),{"t":t,"i":i}).mappings().first(); return ItemRead.model_validate(dict(row)) if row else None
     def get_item(self,t,i):
         with self.engine.connect() as c: return self._item(c,t,i)
     def create_item(self,t,p,k,h,a):
@@ -53,7 +55,7 @@ class InventoryRepository:
             replay=self._claim(c,t,"item.create",k,h)
             if replay:return ItemRead.model_validate(replay)
             if p.suggested_warehouse_id and not self._warehouse(c,t,p.suggested_warehouse_id):self._release(c,t,"item.create",k);return None
-            i=f"itm_{uuid4().hex[:26]}"; row=c.execute(text("insert into inventory.items(id,tenant_id,code,name,type,category,base_unit,inventory_policy,suggested_warehouse_id,minimum_stock,maximum_stock,description) values(:i,:t,lower(:code),:name,:type,:category,:base_unit,:inventory_policy,:suggested_warehouse_id,:minimum_stock,:maximum_stock,:description) on conflict(tenant_id,code) do nothing returning id"),{"i":i,"t":t,**p.model_dump()}).first()
+            i=f"itm_{uuid4().hex[:26]}"; row=c.execute(text("insert into inventory.items(id,tenant_id,code,name,type,category,base_unit,inventory_policy,suggested_warehouse_id,minimum_stock,maximum_stock,use_in_recipe,description) values(:i,:t,lower(:code),:name,:type,:category,:base_unit,:inventory_policy,:suggested_warehouse_id,:minimum_stock,:maximum_stock,:use_in_recipe,:description) on conflict(tenant_id,code) do nothing returning id"),{"i":i,"t":t,**p.model_dump()}).first()
             if not row:self._release(c,t,"item.create",k);return None
             value=self._item(c,t,i); self._audit(c,t,a,"item.create","item",i,p.model_dump()); self._done(c,t,"item.create",k,value); return value
     def update_item(self,t,i,p,k,h,a):
@@ -96,8 +98,8 @@ class InventoryRepository:
         limit=options.get("limit",50); order=options.get("sort","item_code")
         order_columns={"item_code":"lower(item_code)","item_name":"lower(item_name)","on_hand_asc":"on_hand_quantity","on_hand_desc":"on_hand_quantity"}
         direction="desc" if order=="on_hand_desc" else "asc"; primary=order_columns[order]
-        params={"t":t,"limit":limit+1}; filters=[]; base_filters=["m.tenant_id=:t","m.status='recorded'"]
-        for option,column in (("inventory_item_id","m.inventory_item_id"),("warehouse_id","m.warehouse_id"),("category","i.category"),("item_type","i.type"),("item_status","i.status"),("inventory_policy","i.inventory_policy"),("unit","m.unit")):
+        params={"t":t,"limit":limit+1}; filters=[]; base_filters=["c.tenant_id=:t"]
+        for option,column in (("inventory_item_id","c.inventory_item_id"),("warehouse_id","c.warehouse_id"),("category","i.category"),("item_type","i.type"),("item_status","i.status"),("inventory_policy","i.inventory_policy"),("unit","c.unit")):
             value=options.get(option)
             if value is not None: base_filters.append(f"{column}=:{option}"); params[option]=value
         if options.get("stock_status") is not None:
@@ -114,16 +116,23 @@ class InventoryRepository:
             comparator="<" if direction=="desc" else ">"
             filters.append(f"({primary},inventory_item_id,warehouse_id,unit) {comparator} (:cv,:ci,:cw,:cu)")
         where=(" where "+" and ".join(filters)) if filters else ""
-        sql=f"""with balance_rows as (
-          select m.inventory_item_id,i.code item_code,i.name item_name,i.type item_type,i.category,i.status item_status,i.inventory_policy,
-                 m.warehouse_id,w.code warehouse_code,w.name warehouse_name,m.unit,
-                 sum(case when m.direction='in' then m.quantity else -m.quantity end) on_hand_quantity,
+        sql=f"""with item_locations as (
+          select tenant_id,inventory_item_id,warehouse_id,unit
+          from inventory.movements where tenant_id=:t and status='recorded'
+          union
+          select tenant_id,id,suggested_warehouse_id,base_unit
+          from inventory.items where tenant_id=:t and suggested_warehouse_id is not null
+        ), balance_rows as (
+          select c.inventory_item_id,i.code item_code,i.name item_name,i.type item_type,i.category,i.status item_status,i.inventory_policy,
+                 c.warehouse_id,w.code warehouse_code,w.name warehouse_name,c.unit,
+                 coalesce(sum(case when m.direction='in' then m.quantity when m.direction='out' then -m.quantity else 0 end),0) on_hand_quantity,
                  i.minimum_stock,i.maximum_stock,max(m.occurred_at) last_movement_at
-          from inventory.movements m
-          join inventory.items i on i.tenant_id=m.tenant_id and i.id=m.inventory_item_id
-          join inventory.warehouses w on w.tenant_id=m.tenant_id and w.id=m.warehouse_id
+          from item_locations c
+          join inventory.items i on i.tenant_id=c.tenant_id and i.id=c.inventory_item_id
+          join inventory.warehouses w on w.tenant_id=c.tenant_id and w.id=c.warehouse_id
+          left join inventory.movements m on m.tenant_id=c.tenant_id and m.inventory_item_id=c.inventory_item_id and m.warehouse_id=c.warehouse_id and m.unit=c.unit and m.status='recorded'
           where {" and ".join(base_filters)}
-          group by m.inventory_item_id,i.code,i.name,i.type,i.category,i.status,i.inventory_policy,m.warehouse_id,w.code,w.name,m.unit,i.minimum_stock,i.maximum_stock
+          group by c.inventory_item_id,i.code,i.name,i.type,i.category,i.status,i.inventory_policy,c.warehouse_id,w.code,w.name,c.unit,i.minimum_stock,i.maximum_stock
         ), enriched as (
           select *,0::numeric reserved_quantity,on_hand_quantity available_quantity,
             case when on_hand_quantity<0 then 'negative' when on_hand_quantity=0 then 'out_of_stock'

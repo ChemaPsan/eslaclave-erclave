@@ -119,6 +119,7 @@ class Role(TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="active")
     system_role: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    permission_revision: Mapped[int] = mapped_column(nullable=False, default=1)
 
     tenant: Mapped[Tenant] = relationship(back_populates="roles")
     permissions: Mapped[list["RolePermission"]] = relationship(back_populates="role")
@@ -140,6 +141,14 @@ class Permission(TimestampMixin, Base):
     action: Mapped[str] = mapped_column(String(80), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="active")
+    display_name_es: Mapped[str] = mapped_column(String(200), nullable=False)
+    display_name_en: Mapped[str] = mapped_column(String(200), nullable=False)
+    description_es: Mapped[str] = mapped_column(Text, nullable=False)
+    description_en: Mapped[str] = mapped_column(Text, nullable=False)
+    classification: Mapped[str] = mapped_column(String(40), nullable=False, default="tenant")
+    assignable_to_tenant_role: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    risk_level: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")
+    sort_order: Mapped[int] = mapped_column(nullable=False, default=1000)
 
     roles: Mapped[list["RolePermission"]] = relationship(back_populates="permission")
 

@@ -298,6 +298,18 @@ def apply_demo_seed(
                     '{"seed": "qa-demo"}'::jsonb
                 from admin.permissions permissions
                 where permissions.status = 'active'
+                    and permissions.classification = 'tenant'
+                    and permissions.assignable_to_tenant_role = true
+                    and (
+                        permissions.module_code = 'admin'
+                        or exists (
+                            select 1
+                            from admin.tenant_modules tenant_modules
+                            where tenant_modules.tenant_id = :tenant_id
+                                and tenant_modules.module_code = permissions.module_code
+                                and tenant_modules.status = 'active'
+                        )
+                    )
                 on conflict (tenant_id, role_id, permission_id) do nothing
                 """
             ),

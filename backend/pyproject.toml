@@ -32,10 +32,12 @@ pythonpath = [
   "shared",
   "services/admin-service",
   "services/production-service",
-  "services/inventory-service"
+  "services/inventory-service",
+  "services/hr-service"
 ]
 testpaths = [
   "services/admin-service/tests",
   "services/production-service/tests",
-  "services/inventory-service/tests"
+  "services/inventory-service/tests",
+  "services/hr-service/tests"
 ]

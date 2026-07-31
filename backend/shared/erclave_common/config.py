@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     backoffice_admin_emails: str = ""
     database_url: str | None = None
     inventory_database_url: str | None = None
+    hr_database_url: str | None = None
     log_level: str = Field(default="INFO")
 
     @model_validator(mode="after")

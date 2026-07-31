@@ -30,7 +30,7 @@ def update_warehouse(warehouse_id:str,payload:WarehouseUpdate,x_tenant_id:str|No
     return WarehouseResponse(data=result)
 
 @router.get("/items",response_model=ItemListResponse)
-def items(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),q:str|None=None,repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access("inventory.item.read"))): return ItemListResponse(data=repository.list_items(tenant(x_tenant_id),q))
+def items(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),q:str|None=None,use_in_recipe:bool|None=None,status:Status|None=None,repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access("inventory.item.read"))): return ItemListResponse(data=repository.list_items(tenant(x_tenant_id),q,use_in_recipe,status))
 @router.post("/items",response_model=ItemResponse,status_code=201)
 def create_item(payload:ItemCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access("inventory.item.create"))):
     result=repository.create_item(tenant(x_tenant_id),payload,key(idempotency_key),digest(payload),access.actor_id)
