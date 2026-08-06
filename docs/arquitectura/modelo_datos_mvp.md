@@ -528,13 +528,15 @@ Indices:
 
 ### 6.5 `production.recipe_stages`
 
-Etapas genericas de receta.
+Etapas operativas vinculadas a areas activas de Recursos Humanos al crear la version. Produccion conserva referencia externa y snapshot; no escribe el schema `hr`.
 
 | Columna | Tipo | Reglas |
 |---|---|---|
 | `id` | `varchar(40)` | PK. |
 | `tenant_id` | `varchar(40)` | Obligatorio. |
 | `recipe_version_id` | `varchar(40)` | FK interna. |
+| `labor_area_ref_id` | `varchar(40)` | ID externo de `hr.labor_areas`, sin FK cruzada; nullable solo para historia anterior. |
+| `labor_area_name` | `varchar(200)` | Snapshot del nombre del area. |
 | `name` | `varchar(200)` | Obligatorio. |
 | `description` | `text` | Nullable. |
 | `expected_minutes` | `numeric(18,6)` | Nullable. |
@@ -544,6 +546,7 @@ Etapas genericas de receta.
 Indices:
 
 - `index(tenant_id, recipe_version_id, sort_order)`.
+- `index(tenant_id, labor_area_ref_id)`.
 
 ### 6.6 `production.production_orders`
 
@@ -560,6 +563,9 @@ Orden operativa generada desde receta aprobada o solicitud externa.
 | `quantity` | `numeric(18,6)` | Cantidad a producir/ejecutar. |
 | `unit` | `varchar(40)` | Unidad. |
 | `status` | `varchar(40)` | `released`, `waiting_resources`, `in_progress`, `paused`, `in_validation`, `completed`, `cancelled`. |
+| `priority` | `varchar(40)` | `low`, `normal`, `high`, `urgent`. |
+| `required_at` | `timestamptz` | Fecha requerida, nullable. |
+| `responsible_name` | `varchar(200)` | Snapshot del responsable, nullable. |
 | `planned_start_at` | `timestamptz` | Nullable. |
 | `planned_end_at` | `timestamptz` | Nullable. |
 | `actual_start_at` | `timestamptz` | Nullable. |
@@ -570,6 +576,10 @@ Orden operativa generada desde receta aprobada o solicitud externa.
 | `planned_cost` | `numeric(18,6)` | Estimado. |
 | `actual_cost` | `numeric(18,6)` | Nullable. |
 | `recipe_snapshot` | `jsonb` | Obligatorio al liberar. |
+| `resource_validation_snapshot` | `jsonb` | Disponibilidad y costos observados al liberar. |
+| `validated_at` | `timestamptz` | Momento de la validacion backend. |
+| `created_by` | `varchar(160)` | Actor autenticado que libero la orden. |
+| `metadata` | `jsonb` | Contexto extensible, nullable. |
 | `created_at` | `timestamptz` | Obligatorio. |
 | `updated_at` | `timestamptz` | Obligatorio. |
 
@@ -591,13 +601,19 @@ Etapas reales copiadas desde la receta al generar orden.
 | `production_order_id` | `varchar(40)` | FK interna. |
 | `recipe_stage_id` | `varchar(40)` | Referencia interna original. |
 | `name` | `varchar(200)` | Snapshot de nombre. |
+| `description` | `text` | Snapshot de descripcion, nullable. |
 | `sort_order` | `integer` | Obligatorio. |
 | `status` | `varchar(40)` | `pending`, `in_progress`, `completed`, `skipped`, `blocked`. |
 | `planned_minutes` | `numeric(18,6)` | Nullable. |
 | `actual_minutes` | `numeric(18,6)` | Nullable. |
+| `responsible_name` | `varchar(200)` | Responsable asignado, nullable. |
+| `progress_percentage` | `numeric(5,2)` | Avance entre 0 y 100. |
 | `started_at` | `timestamptz` | Nullable. |
 | `completed_at` | `timestamptz` | Nullable. |
 | `notes` | `text` | Nullable. |
+| `metadata` | `jsonb` | Contexto extensible, nullable. |
+| `created_at` | `timestamptz` | Obligatorio. |
+| `updated_at` | `timestamptz` | Obligatorio. |
 
 Indices:
 
@@ -656,11 +672,14 @@ Maquinaria o recursos tecnicos.
 | `tenant_id` | `varchar(40)` | Obligatorio. |
 | `code` | `varchar(80)` | Unico por tenant. |
 | `name` | `varchar(200)` | Obligatorio. |
+| `machine_type` | `varchar(120)` | Tipo de maquinaria, nullable. |
 | `area_name` | `varchar(200)` | Area donde opera. |
-| `capacity_per_hour` | `numeric(18,6)` | Nullable. |
-| `cost_per_hour` | `numeric(18,6)` | Costo maquina. |
+| `available_minutes_per_day` | `numeric(18,6)` | Capacidad diaria disponible. |
+| `cost_per_minute` | `numeric(18,6)` | Costo no negativo por minuto. |
 | `status` | `varchar(40)` | `active`, `inactive`, `maintenance`. |
 | `metadata` | `jsonb` | Nullable. |
+| `created_at` | `timestamptz` | Obligatorio. |
+| `updated_at` | `timestamptz` | Obligatorio. |
 
 Indices:
 

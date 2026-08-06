@@ -106,9 +106,14 @@ Funciones actuales:
 
 - crear receta desde el apartado de Recetas;
 - seleccionar producto/servicio desde catalogo buscable;
+- mostrar en el buscador el nombre seguido del codigo de producto, manteniendo el ID tecnico oculto para relaciones internas;
+- mostrar recetas guardadas, selectores y documentos con nombre/codigo del producto y version; el ID tecnico de receta permanece oculto;
 - buscar dentro del catalogo por clave, nombre o tipo;
 - mostrar resultados con scroll para no empujar la pantalla;
 - agregar recursos dados de alta previamente;
+- separar la captura en materiales, mano de obra y maquinaria;
+- capturar materiales en su unidad base de Almacenes, mano de obra en horas-persona y maquinaria en horas-maquina;
+- aceptar fracciones decimales de hora sin restringirlas a bloques de 15 minutos; `0.5` horas equivale a 30 minutos;
 - definir cantidad base;
 - definir unidad;
 - definir centro de costos;
@@ -303,6 +308,7 @@ Este apartado configura maquinaria o recursos tecnicos. Tampoco debe tratarse co
 Funciones actuales:
 
 - crear maquina;
+- seleccionar un area activa previamente registrada en Recursos Humanos; Maquinaria no permite crear ni capturar areas libres;
 - consultar maquinaria existente;
 - editar maquina;
 - capturar area;
@@ -352,6 +358,8 @@ Campos principales:
 - Si un producto/servicio tiene receta vigente, debe abrirse la edicion de receta.
 - Si no tiene receta vigente, debe permitir generar receta.
 - Mano de obra y maquinaria no pertenecen a almacenes.
+- El area de una maquina se selecciona del catalogo activo de Recursos Humanos; si no existe, debe darse de alta primero en RH.
+- La interfaz expresa los tiempos de receta en horas-persona y horas-maquina; el contrato vigente los conserva en minutos para validar capacidad y costo sin perder precision.
 - Almacenes queda para materias primas, consumibles y herramientas.
 - Una orden solo debe liberarse con receta aprobada.
 - Una orden debe validar disponibilidad de recursos antes de liberarse.

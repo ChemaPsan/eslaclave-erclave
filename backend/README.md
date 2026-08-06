@@ -84,6 +84,25 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
+## Arranque local aislado
+
+En Windows, el comando canonico levanta PostgreSQL local, Firebase Auth Emulator, frontend y las APIs de Administracion, Produccion, Inventario y RH:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_local.ps1
+```
+
+El preflight rechaza una base distinta de `127.0.0.1:5434/erclave_local` y puertos ocupados por procesos anteriores. Firebase usa el proyecto sintetico `demo-erclave`; no consume Firebase QA. Si Java no esta instalado globalmente, el script admite Microsoft OpenJDK 21 portatil bajo `C:\tmp\microsoft-jdk-21`.
+
+Credenciales locales del Emulator:
+
+```text
+admin.qa@erclave.local
+LocalDemo123!
+```
+
+Estas credenciales son exclusivamente locales y no conceden acceso a QA.
+
 ## Ejecutar admin-service
 
 Desde `backend`:

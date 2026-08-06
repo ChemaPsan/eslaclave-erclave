@@ -1,14 +1,18 @@
 # Estado actual de ERClave
 
-Ultima actualizacion: 2026-07-31.
+Ultima actualizacion: 2026-08-04.
 
 ## Ambiente local
 
+- El arranque canonico Local aislado opera mediante `backend/scripts/start_local.ps1`: PostgreSQL `erclave_local`, Firebase Auth Emulator `demo-erclave`, frontend y APIs locales.
+- Una ejecucion local conectada a cualquier recurso QA debe identificarse como `local conectado a QA` y requiere autorizacion explicita.
+
 - Frontend estatico local esperado en `http://127.0.0.1:4173`.
-- Admin API local conectada a QA en `http://127.0.0.1:8000` para la validacion funcional autorizada.
+- Admin API local esperada en `http://127.0.0.1:8000` contra PostgreSQL local. La conexion local a QA usada en una validacion autorizada anterior es evidencia historica, no el modo local canonico.
 - Production API local esperada en `http://127.0.0.1:8002`.
 - Inventory API local esperada en `http://127.0.0.1:8004`.
 - PostgreSQL portatil aislado para Inventory escucha en `127.0.0.1:5434`, base `erclave_local`.
+- Firebase Auth Emulator escucha en `127.0.0.1:9099` y su UI en `127.0.0.1:4000`; el usuario local `admin.qa@erclave.local` resuelve el tenant demo sin consumir Firebase QA.
 - Firebase autentica; `admin-service /v1/session/context` resuelve tenant, membresia, modulos, permisos y alcance.
 
 ## Cortes funcionales relevantes
@@ -27,17 +31,27 @@ Ultima actualizacion: 2026-07-31.
 ### Produccion
 
 - Productos y servicios se presentan como catalogo maestro antes de consultar ordenes relacionadas.
-- Recetas y ordenes cuentan con integracion local/API documentada en trazabilidad.
+- En Local, Productos/Servicios, Recetas/versiones, Maquinaria, validacion observada, Ordenes y etapas persisten mediante `production-service`; la UI recarga PostgreSQL y no degrada silenciosamente a `localStorage` cuando `apiMode=api`.
+- La version vigente aprobada y el borrador/pendiente mas reciente se distinguen. Las ordenes siempre usan `current_version_id`, guardan snapshots de receta y disponibilidad/costo observados y conservan sus etapas aunque la receta cambie.
+- El editor API de Recetas consume materiales activos con `use_in_recipe=true` desde Inventory y puestos productivos/areas activas desde HR. No carga seeds; las etapas nuevas conservan ID externo y nombre snapshot del area mediante la revision Local `20260805_0013`.
+- El editor de Recetas separa materiales, mano de obra y maquinaria. Los materiales usan la unidad base de Almacenes; mano de obra y maquinaria se capturan como horas-persona y horas-maquina, con conversion transparente a minutos para el contrato vigente.
+- Las horas-persona y horas-maquina aceptan cualquier fraccion decimal, sin saltos obligatorios de 15 minutos; la UI aclara que `0.5 h = 30 min`.
+- El buscador de producto/servicio en Recetas presenta nombre y codigo comercial; los IDs tecnicos `prs_*` permanecen ocultos y se usan solo para la relacion interna.
+- Las listas, selectores, mensajes y documentos de Recetas ocultan IDs `rec_*`; muestran nombre, codigo del producto y version mientras conservan el ID en relaciones y atributos internos.
+- El alta y edicion de Maquinaria consulta areas activas de `hr-service`; no permite capturar areas libres y dirige a Areas y puestos cuando el catalogo esta vacio.
+- Las transiciones de orden y etapa se validan en backend, son idempotentes y auditadas. Una etapa terminal no vuelve a pendiente; completar todas las etapas lleva la orden a validacion y el cierre es explicito.
+- La validacion de recursos y costos es backend y se repite al liberar. Es una fotografia observada, no una reserva: todavia no consume ni aparta Inventario.
 - Areas y puestos pertenecen al modulo independiente Recursos Humanos, con microfrontend y `hr-service` propios.
 - El entitlement `hr` controla la disponibilidad por tenant; alta y edicion usan permisos separados `hr.area.*` y `hr.position.*`.
 - El esquema `hr` incorpora aislamiento por tenant, FK compuesto area-puesto, idempotencia y auditoria. El 2026-07-31 se creo vacio en QA mediante la promocion autorizada de migraciones; no se desplego `hr-service` ni se activaron entitlements adicionales.
 - PostgreSQL QA conserva seis permisos `hr.*` activos y los permisos `production.labor.*` heredados inactivos. Los catalogos `hr.labor_areas` y `hr.labor_roles` quedaron en cero registros.
-- El contrato de production-service esta preparado, pero la persistencia API de areas y puestos sigue pendiente de implementacion backend; no se presenta como remota.
+- Produccion consume areas y puestos desde `hr-service`; no los persiste ni escribe su schema.
 - Las recetas en modo API ya no usan el catalogo fijo de materiales: consumen articulos activos marcados `use_in_recipe` y balances reales de Almacenes.
 
 ### Almacenes e inventarios
 
 - `inventory-service` es propietario de almacenes, articulos, movimientos, balances y Kardex.
+- En modo API, el formulario de Movimientos persiste exclusivamente mediante `inventory-service`; al completar el comando invalida y recarga movimientos y balances. `localStorage` queda solo como fallback del modo maqueta y nunca representa un movimiento remoto registrado.
 - El submodulo visible `Inventario` conserva el identificador tecnico `existencias`.
 - Inventario consume balances enriquecidos con busqueda, filtros, orden y paginacion server-side.
 - La vista usa container queries: colapsa el flujo por defecto, transforma la tabla en tarjetas cuando el panel central se estrecha y mueve Alertas debajo del contenido en viewports intermedios.
@@ -58,8 +72,11 @@ Ultima actualizacion: 2026-07-31.
 
 ## Calidad
 
+- La fuente normativa de ambientes es `docs/arquitectura/fronteras_ambientes_local_qa_produccion.md`; la skill `$erclave-environment-boundaries` aplica su preflight.
+
 - La fuente de verdad del resultado automatizado es la ultima ejecucion de `npm.cmd run verify`.
-- En el corte CHG-161: 116 pruebas backend aprobadas, una integracion PostgreSQL condicionada omitida en la suite estandar y validada previamente por separado; todos los validadores pasaron.
+- En el corte CHG-164: `npm.cmd run verify` aprobo todos los validadores, compilacion y `121 passed, 1 skipped`; el smoke autenticado del stack local canonico con Firebase Emulator respondio correctamente en los seis modulos activos.
+- En el corte CHG-166: `npm.cmd run verify` aprobo contratos, validadores, sintaxis y `126 passed, 1 skipped`; el smoke local creo y recargo producto, maquinaria, receta vigente, orden con snapshots y su ciclo completo de etapas.
 - El repositorio puede contener cambios locales no confirmados; `session:context` debe mostrar el estado Git real de cada sesion.
 - `npm.cmd run session:context` reconstruye la memoria operativa sin mostrar secretos: Git, trazabilidad, migraciones, estado, decisiones, tenants, pendientes y puertos locales.
 - `validate-session-context.js` protege la presencia de los documentos y guardrails obligatorios.

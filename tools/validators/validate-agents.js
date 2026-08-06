@@ -34,6 +34,25 @@ const requiredCustodianFragments = [
   "validar que seeds sean idempotentes"
 ];
 
+const requiredCurrentStateFragments = [
+  "### Estado operativo vigente",
+  "local conectado a QA",
+  "Firebase Emulator",
+  "`admin-service` y `production-service` desplegados",
+  "schema vacio en QA, sin despliegue confirmado del servicio",
+  "schema vacio en QA, servicio y entitlement aun no desplegados",
+  "backend y persistencia QA siguen pendientes",
+  "No existe aun infraestructura productiva autorizada",
+  "Administracion, Backoffice, Produccion, Almacenes/Inventario, Recursos Humanos y Ventas"
+];
+
+const staleAgentFragments = [
+  "Vigilar compatibilidad entre frontend mock, API futura y persistencia.",
+  "Detectar que falta conectar en API futura, persistencia, permisos, reportes e integraciones.",
+  "Que datos mock deben convertirse en entidades reales?",
+  "Documentacion de catalogos base, permisos, roles y configuracion transversal; implementacion UI pendiente."
+];
+
 for (const heading of requiredTransversalAgents) {
   if (!agents.includes(heading)) {
     errors.push(`Missing transversal agent heading: ${heading}`);
@@ -60,6 +79,29 @@ for (const moduleName of requiredModules) {
 for (const fragment of requiredCustodianFragments) {
   if (!agents.includes(fragment)) {
     errors.push(`Database custodian agent missing required fragment: ${fragment}`);
+  }
+}
+
+for (const fragment of requiredCurrentStateFragments) {
+  if (!agents.includes(fragment)) {
+    errors.push(`Agents are missing current operational state: ${fragment}`);
+  }
+}
+
+for (const fragment of staleAgentFragments) {
+  if (agents.includes(fragment)) {
+    errors.push(`Agents still contain stale guidance: ${fragment}`);
+  }
+}
+
+const moduleIndex = readText("modulos/README.md");
+for (const fragment of [
+  "UI y `admin-service` reales en QA",
+  "servicio y entitlement aun no desplegados",
+  "pertenecer al release no significa estar desplegada actualmente"
+]) {
+  if (!moduleIndex.includes(fragment)) {
+    errors.push(`Module index is missing current state: ${fragment}`);
   }
 }
 

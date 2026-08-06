@@ -14,6 +14,18 @@ function getRuntimeConfigValue(key) {
 }
 
 
+function getSafeLocalBaseUrl(candidate, fallback) {
+  try {
+    const parsed = new URL(candidate || fallback);
+    if (!["localhost", "127.0.0.1"].includes(parsed.hostname)) return fallback;
+    parsed.hostname = "127.0.0.1";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return fallback;
+  }
+}
+
+
 export function getApiMode() {
   return localStorage.getItem("erclave-api-mode") || getRuntimeConfigValue("apiMode") || "mock";
 }
@@ -33,10 +45,10 @@ export function getApiBaseUrl() {
   if (isLocalPreviewHost()) {
     const localOverride = localStorage.getItem("erclave-api-base-url") || "";
     const localRuntimeBaseUrl = getRuntimeConfigValue("localApiBaseUrl");
-    if (localOverride && localOverride !== LEGACY_DEFAULT_API_BASE_URL) {
-      return localOverride.replace("localhost", "127.0.0.1");
-    }
-    return (localRuntimeBaseUrl || runtimeBaseUrl || DEFAULT_API_BASE_URL).replace("localhost", "127.0.0.1");
+    const candidate = localOverride && localOverride !== LEGACY_DEFAULT_API_BASE_URL
+      ? localOverride
+      : localRuntimeBaseUrl || runtimeBaseUrl;
+    return getSafeLocalBaseUrl(candidate, DEFAULT_API_BASE_URL);
   }
   return localStorage.getItem("erclave-api-base-url") || runtimeBaseUrl || DEFAULT_API_BASE_URL;
 }
@@ -47,7 +59,7 @@ export function getProductionApiBaseUrl() {
   if (isLocalPreviewHost()) {
     const localOverride = localStorage.getItem("erclave-production-api-base-url") || "";
     const localRuntimeBaseUrl = getRuntimeConfigValue("localProductionApiBaseUrl");
-    return (localOverride || localRuntimeBaseUrl || runtimeBaseUrl).replace("localhost", "127.0.0.1");
+    return getSafeLocalBaseUrl(localOverride || localRuntimeBaseUrl || runtimeBaseUrl, "http://127.0.0.1:8002");
   }
   return localStorage.getItem("erclave-production-api-base-url") || runtimeBaseUrl;
 }
@@ -57,7 +69,7 @@ export function getInventoryApiBaseUrl() {
   if (isLocalPreviewHost()) {
     const override = localStorage.getItem("erclave-inventory-api-base-url") || "";
     const localBaseUrl = getRuntimeConfigValue("localInventoryApiBaseUrl");
-    return (override || localBaseUrl || runtimeBaseUrl).replace("localhost", "127.0.0.1");
+    return getSafeLocalBaseUrl(override || localBaseUrl || runtimeBaseUrl, "http://127.0.0.1:8004");
   }
   return localStorage.getItem("erclave-inventory-api-base-url") || runtimeBaseUrl;
 }
@@ -67,7 +79,7 @@ export function getHrApiBaseUrl() {
   if (isLocalPreviewHost()) {
     const override = localStorage.getItem("erclave-hr-api-base-url") || "";
     const localBaseUrl = getRuntimeConfigValue("localHrApiBaseUrl");
-    return (override || localBaseUrl || runtimeBaseUrl).replace("localhost", "127.0.0.1");
+    return getSafeLocalBaseUrl(override || localBaseUrl || runtimeBaseUrl, "http://127.0.0.1:8006");
   }
   return localStorage.getItem("erclave-hr-api-base-url") || runtimeBaseUrl;
 }
@@ -98,7 +110,17 @@ export function getDemoActorId() {
 
 
 export function getFirebaseConfig() {
-  const authMode = localStorage.getItem("erclave-auth-mode") || getRuntimeConfigValue("authMode") || "demo";
-  if (isLocalPreviewHost() && authMode !== "firebase-local") return null;
+  if (isLocalPreviewHost()) {
+    const authMode = getRuntimeConfigValue("authMode") || "demo";
+    if (authMode !== "firebase-emulator") return null;
+    return window.ERCLAVE_CONFIG?.localFirebaseConfig || null;
+  }
   return window.ERCLAVE_CONFIG?.firebaseConfig || null;
+}
+
+export function getFirebaseAuthEmulatorUrl() {
+  if (!isLocalPreviewHost()) return "";
+  const authMode = getRuntimeConfigValue("authMode") || "demo";
+  if (authMode !== "firebase-emulator") return "";
+  return getRuntimeConfigValue("firebaseAuthEmulatorUrl") || "http://127.0.0.1:9099";
 }

@@ -258,7 +258,7 @@ paths:
       operationId: listTenantEntitlements
       summary: List active and inactive modules for a tenant.
       x-required-module: admin
-      x-permissions: [internal.entitlement.read]
+      x-permissions: [admin.tenant.read]
       parameters:
         - $ref: '#/components/parameters/TenantIdPath'
         - $ref: '#/components/parameters/CorrelationId'

@@ -882,6 +882,22 @@ def test_list_tenant_entitlements_returns_modules():
     assert [item["module_code"] for item in response.json()["data"]] == ["admin", "production"]
 
 
+def test_list_tenant_entitlements_allows_firebase_tenant_reader():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-user",
+        email="admin.qa@erclave.local",
+        name="Admin QA",
+    )
+    client = TestClient(app)
+
+    response = client.get(f"/v1/tenants/{TENANT_ID}/entitlements")
+
+    assert response.status_code == 200
+    assert [item["module_code"] for item in response.json()["data"]] == ["admin", "production"]
+
+
 def test_upsert_tenant_entitlement_returns_updated_module():
     client = client_with_fake_repo()
 

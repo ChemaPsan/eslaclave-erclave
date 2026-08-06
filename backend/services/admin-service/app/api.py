@@ -272,7 +272,7 @@ def list_backoffice_usage(
 @router.get("/tenants/{tenant_id}/entitlements", response_model=EntitlementListResponse)
 def list_tenant_entitlements(
     tenant_id: str,
-    _authorization: None = Depends(require_permission_for_path_tenant("internal.entitlement.read")),
+    _authorization: None = Depends(require_permission_for_path_tenant("admin.tenant.read")),
     repository: AdminRepository = Depends(get_admin_repository),
 ) -> EntitlementListResponse:
     if repository.get_tenant(tenant_id) is None:

@@ -472,7 +472,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StatusChangeRequest'
+              $ref: '#/components/schemas/ProductionOrderStatusRequest'
       responses:
         '200':
           description: Status changed.
@@ -687,6 +687,14 @@ components:
           type: number
         standard_cost:
           type: number
+        responsible_area:
+          type: string
+        cost_center:
+          type: string
+        expected_margin:
+          type: number
+        description:
+          type: string
     ProductServiceResponse:
       type: object
       properties:
@@ -720,6 +728,12 @@ components:
           type: number
         responsible_area:
           type: string
+        cost_center:
+          type: string
+        expected_margin:
+          type: number
+        description:
+          type: string
     ProductServiceUpdateRequest:
       type: object
       properties:
@@ -732,6 +746,12 @@ components:
         target_price:
           type: number
         responsible_area:
+          type: string
+        cost_center:
+          type: string
+        expected_margin:
+          type: number
+        description:
           type: string
     StatusChangeRequest:
       type: object
@@ -857,8 +877,14 @@ components:
           type: number
     RecipeStageInput:
       type: object
-      required: [name, sort_order]
+      required: [labor_area_ref_id, labor_area_name, name, sort_order]
       properties:
+        labor_area_ref_id:
+          type: string
+          description: External reference to an HR area in the same tenant; no cross-schema FK.
+        labor_area_name:
+          type: string
+          description: HR area name snapshot.
         name:
           type: string
         expected_minutes:
@@ -889,6 +915,18 @@ components:
           type: number
         unit:
           type: string
+        observed_resources:
+          type: array
+          items:
+            type: object
+            required: [resource_ref_id, resource_type, available_quantity, unit, source]
+            properties:
+              resource_ref_id: {type: string}
+              resource_type: {type: string, enum: [material, labor, machine, other]}
+              available_quantity: {type: number}
+              unit: {type: string}
+              unit_cost: {type: number}
+              source: {type: string}
     ResourceValidationResponse:
       type: object
       properties:
@@ -901,6 +939,13 @@ components:
               type: array
               items:
                 type: string
+            planned_cost: {type: number}
+            validated_at: {type: string, format: date-time}
+            rows:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
     ProductionOrder:
       type: object
       properties:
@@ -923,6 +968,17 @@ components:
           type: string
         source_id:
           type: string
+        recipe_id: {type: string}
+        priority: {type: string, enum: [low, medium, high]}
+        required_at: {type: string, format: date-time}
+        responsible_name: {type: string}
+        planned_cost: {type: number}
+        actual_cost: {type: number}
+        recipe_snapshot: {type: object, additionalProperties: true}
+        resource_validation_snapshot: {type: object, additionalProperties: true}
+        stages:
+          type: array
+          items: {type: object, additionalProperties: true}
     ProductionOrderResponse:
       type: object
       properties:
@@ -950,6 +1006,24 @@ components:
         planned_start_at:
           type: string
           format: date-time
+        required_at: {type: string, format: date-time}
+        priority: {type: string, enum: [low, medium, high]}
+        responsible_name: {type: string}
+        observed_resources:
+          type: array
+          items: {type: object, additionalProperties: true}
+        stage_assignments:
+          type: array
+          items: {type: object, additionalProperties: true}
+    ProductionOrderStatusRequest:
+      type: object
+      required: [status, reason]
+      properties:
+        status:
+          type: string
+          enum: [released, waiting_resources, in_progress, paused, in_validation, completed, cancelled]
+        reason: {type: string}
+        actual_cost: {type: number}
     ProductionOrderRequest:
       type: object
       required: [sales_order_id, sales_order_line_id, product_service_id, quantity, unit]
@@ -1070,7 +1144,7 @@ components:
             additionalProperties: true
     MachineCreateRequest:
       type: object
-      required: [code, name, cost_per_hour]
+      required: [code, name, machine_type, available_minutes_per_day, cost_per_minute]
       properties:
         code:
           type: string
@@ -1078,9 +1152,11 @@ components:
           type: string
         area_name:
           type: string
-        capacity_per_hour:
+        machine_type:
+          type: string
+        available_minutes_per_day:
           type: number
-        cost_per_hour:
+        cost_per_minute:
           type: number
     MachineUpdateRequest:
       type: object
@@ -1089,9 +1165,11 @@ components:
           type: string
         area_name:
           type: string
-        capacity_per_hour:
+        machine_type:
+          type: string
+        available_minutes_per_day:
           type: number
-        cost_per_hour:
+        cost_per_minute:
           type: number
         status:
           type: string

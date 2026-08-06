@@ -35,6 +35,14 @@ if (!api.includes("assignments") || !api.includes("expected_revision")) {
   errors.push("Role permission PUT must send assignments and expected_revision.");
 }
 
+if (api.includes('apiRequest("/v1/policy/evaluate"')) {
+  errors.push("The tenant frontend must use session/context permissions and must not call the internal policy evaluator.");
+}
+
+if (!api.includes('(session?.permissions || []).includes("admin.tenant.read")')) {
+  errors.push("The Administration dashboard must derive its read indicator from session/context.");
+}
+
 if (!css.includes("container: permission-editor / inline-size") || !css.includes("@container permission-editor")) {
   errors.push("Permission editor must use a named container and container queries.");
 }

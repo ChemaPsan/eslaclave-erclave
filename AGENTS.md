@@ -13,6 +13,11 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 
 ## Reglas obligatorias
 
+- Antes de levantar servicios, conectar recursos, probar en QA, migrar, ejecutar seeds o desplegar, usar `$erclave-environment-boundaries` y leer `docs/arquitectura/fronteras_ambientes_local_qa_produccion.md`.
+- "Levantar en local" significa Local aislado: PostgreSQL local, APIs locales y Firebase Emulator. No permite Cloud SQL, APIs, Firebase, secretos ni integraciones QA/Produccion.
+- "Local conectado a QA" requiere autorizacion explicita por recurso y alcance; migraciones, seeds, cargas, mutaciones y deploys requieren autorizaciones independientes.
+- El usuario propietario es el aprobador de releases y del autodeploy del frontend; ninguna promocion ocurre antes de pruebas locales y su aprobacion directa.
+
 - Mantener aislamiento por `tenant_id` en tablas, repositorios, APIs, índices y pruebas.
 - Firebase autentica; ERClave resuelve membresías, permisos, entitlements y alcance mediante `admin-service`.
 - No escribir datos pertenecientes a otro servicio ni crear FKs entre schemas de servicios.
@@ -35,12 +40,13 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 5. Agregar una entrada correlativa a `TRAZABILIDAD.md`. Usar `npm run traceability:draft -- --title "..."` para preparar el borrador.
 6. Actualizar `docs/contexto/ESTADO_ACTUAL.md` y `docs/contexto/PENDIENTES.md` cuando cambie el estado real.
 7. Ejecutar `npm run verify`.
+8. Entregar una seccion `APIs afectadas` que enumere cada metodo y ruta involucrados. Separar: contratos modificados, endpoints consumidos sin cambio y APIs no tocadas. Para cada contrato modificado indicar servicio, permiso y cambio de request/response; si no hubo APIs, escribir explicitamente `Ninguna`.
 
 Para funcionalidades completas usar la skill `$erclave-feature`. Para modelos o migraciones usar además `$erclave-db-migration`.
 
 ## Criterio de terminado
 
-Un cambio termina sólo cuando cumple los criterios documentados, conserva ownership y aislamiento multitenant, alinea contratos/código/pruebas/documentación, supera `npm run verify` y queda registrado en `TRAZABILIDAD.md`.
+Un cambio termina sólo cuando cumple los criterios documentados, conserva ownership y aislamiento multitenant, alinea contratos/código/pruebas/documentación, supera `npm run verify`, queda registrado en `TRAZABILIDAD.md` y la entrega incluye `APIs afectadas`.
 
 ## Comandos
 

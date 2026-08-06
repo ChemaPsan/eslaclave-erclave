@@ -1,10 +1,11 @@
-import { getFirebaseConfig } from "./api/config.js";
+import { getFirebaseAuthEmulatorUrl, getFirebaseConfig } from "./api/config.js";
 
 const FIREBASE_APP_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 const FIREBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
 let firebaseModulesPromise = null;
 let authInstance = null;
+let authEmulatorConnected = false;
 
 function withTimeout(promise, timeoutMs, message) {
   let timeoutId;
@@ -29,9 +30,14 @@ async function loadFirebaseModules() {
 export async function getFirebaseAuth() {
   if (!isFirebaseAuthConfigured()) return null;
   if (authInstance) return authInstance;
-  const [{ initializeApp, getApps }, { getAuth }] = await loadFirebaseModules();
+  const [{ initializeApp, getApps }, { connectAuthEmulator, getAuth }] = await loadFirebaseModules();
   const app = getApps().length ? getApps()[0] : initializeApp(getFirebaseConfig());
   authInstance = getAuth(app);
+  const emulatorUrl = getFirebaseAuthEmulatorUrl();
+  if (emulatorUrl && !authEmulatorConnected) {
+    connectAuthEmulator(authInstance, emulatorUrl, { disableWarnings: true });
+    authEmulatorConnected = true;
+  }
   return authInstance;
 }
 

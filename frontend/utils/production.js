@@ -7,9 +7,19 @@ function shouldUseSeedData() {
 }
 
 let inventoryRecipeResources = [];
+let laborRecipeResources = [];
+let machineRecipeResources = [];
 
 export function setInventoryRecipeResources(resources) {
   inventoryRecipeResources = Array.isArray(resources) ? resources : [];
+}
+
+export function setLaborRecipeResources(resources) {
+  laborRecipeResources = Array.isArray(resources) ? resources : [];
+}
+
+export function setMachineRecipeResources(resources) {
+  machineRecipeResources = Array.isArray(resources) ? resources : [];
 }
 
 export function getResource(id) {
@@ -18,6 +28,7 @@ export function getResource(id) {
 
 export function getRecipeResourceCatalog() {
   const inventoryResources = shouldUseSeedData() ? resourceCatalog : inventoryRecipeResources;
+  if (!shouldUseSeedData()) return [...inventoryResources, ...laborRecipeResources, ...machineRecipeResources];
   return [
     ...inventoryResources,
     ...mockDb.loadLaborRoles().filter((item) => item.status === "Activo" && item.intervenesInProduction !== false),
@@ -26,9 +37,11 @@ export function getRecipeResourceCatalog() {
 }
 
 export function calculateRecipe(recipe, batchQuantity = 100) {
-  const baseQuantity = Math.max(1, Number(recipe.quantityBase || 1));
+  const safeRecipe = recipe && typeof recipe === "object" ? recipe : {};
+  const resources = Array.isArray(safeRecipe.resources) ? safeRecipe.resources : [];
+  const baseQuantity = Math.max(1, Number(safeRecipe.quantityBase || 1));
   const multiplier = Number(batchQuantity || 1) / baseQuantity;
-  const rows = recipe.resources.map((item) => {
+  const rows = resources.map((item) => {
     const resource = getResource(item.resourceId);
     const required = Number(item.quantity) * multiplier;
     const available = resource?.available || 0;

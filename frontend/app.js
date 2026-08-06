@@ -28,9 +28,12 @@ import {
   getProductionCatalog,
   submitProductionRecipeVersion,
   updateProductionRecipeVersion
+  ,createProductionProductService, updateProductionProductService, updateProductionProductServiceStatus,
+  createProductionMachine, updateProductionMachine, validateProductionResources,
+  createProductionOrder, updateProductionOrderStatus, updateProductionOrderStage
 } from "./api/production.js";
 import { createInventoryItem, createInventoryMovement, createInventoryWarehouse, getInventoryBalances, getInventoryCatalog, getInventoryItems, getInventoryMovements, updateInventoryItem, updateInventoryWarehouse } from "./api/inventory.js";
-import { createHrArea, createHrPosition, getHrCatalog, updateHrArea, updateHrPosition } from "./api/hr.js";
+import { createHrArea, createHrPosition, getHrAreas, getHrCatalog, updateHrArea, updateHrPosition } from "./api/hr.js";
 import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId, getDemoTenantId, setActiveTenantId, isInventoryApiEnabled } from "./api/config.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "./auth.js";
 import {
@@ -42,6 +45,8 @@ import {
   getRecipeStandardCost,
   getRecipeResourceCatalog,
   setInventoryRecipeResources,
+  setLaborRecipeResources,
+  setMachineRecipeResources,
   getReleaseReview,
   getResource,
   isRecipeApproved
@@ -1975,7 +1980,7 @@ function renderAdminApiPanel(module) {
         <h2>${label}</h2>
       </div>
       <div class="admin-toolbar">
-        <span class="chip ${apiMode === "api" && apiStatus !== "error" ? "active" : "warning"}">${apiMode === "api" ? "API QA" : "Mock"}</span>
+        <span class="chip ${apiMode === "api" && apiStatus !== "error" ? "active" : "warning"}">${apiMode === "api" ? (getApiBaseUrl().includes("127.0.0.1") || getApiBaseUrl().includes("localhost") ? "API Local" : "API QA") : "Mock"}</span>
         <button class="secondary-action small-action" type="button" data-action="admin-refresh-api">Actualizar</button>
         <button class="secondary-action small-action" type="button" data-action="admin-toggle-api">${apiMode === "api" ? "Mock" : "API"}</button>
       </div>
@@ -1989,7 +1994,7 @@ function renderAdminApiPanel(module) {
       </div>
     </div>
 
-    ${state.adminApi.error ? `<div class="validation-card danger"><strong>API QA</strong><p>${state.adminApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
+    ${state.adminApi.error ? `<div class="validation-card danger"><strong>${getApiBaseUrl().includes("127.0.0.1") || getApiBaseUrl().includes("localhost") ? "API Local" : "API QA"}</strong><p>${state.adminApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
     ${state.sessionApi.error ? `<div class="validation-card danger"><strong>Session Context</strong><p>${state.sessionApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
 
     ${renderAdminHubCards(safeData)}
@@ -2175,14 +2180,18 @@ function mapApiProduct(item) {
     status: item.status === "active" ? "Activo" : item.status === "inactive" ? "Inactivo" : "En espera de aprobacion",
     targetPrice: Number(item.target_price || 0),
     standardCost: Number(item.standard_cost || 0),
-    center: item.responsible_area || "Produccion",
+    center: item.cost_center || "Produccion",
     owner: item.responsible_area || "Sin asignar",
-    description: "Catalogo conectado a Production API"
+    expectedMargin: Number(item.expected_margin || 0),
+    description: item.description || ""
   };
 }
 
 function mapApiRecipe(item, products) {
-  const version = [...(item.versions || [])].sort((a, b) => Number(b.version_number) - Number(a.version_number))[0];
+  const versions = [...(item.versions || [])].sort((a, b) => Number(b.version_number) - Number(a.version_number));
+  const currentVersion = versions.find((version) => version.id === item.current_version_id) || null;
+  const draftVersion = versions.find((version) => ["draft","pending_approval"].includes(version.status)) || null;
+  const version = draftVersion || currentVersion || versions[0];
   const product = products.find((entry) => entry.id === item.product_service_id);
   const approval = { draft: "Borrador", pending_approval: "Pendiente de aprobacion", approved: "Aprobada", obsolete: "Obsoleta" };
   return {
@@ -2192,6 +2201,10 @@ function mapApiRecipe(item, products) {
     version: version?.version_number || 1,
     versionId: version?.id || "",
     versionStatus: version?.status || "draft",
+    currentVersionId: currentVersion?.id || "",
+    currentVersion: currentVersion?.version_number || null,
+    currentVersionData: currentVersion,
+    draftVersionId: draftVersion?.id || "",
     quantityBase: Number(version?.base_quantity || 1),
     unit: version?.base_unit || product?.unit || "pieza",
     status: item.status === "active" ? "Activa" : "Borrador",
@@ -2210,18 +2223,58 @@ function mapApiRecipe(item, products) {
       unitCost: Number(resource.unit_cost || 0)
     })),
     steps: (version?.stages || []).filter((stage) => stage.status === "active").map((stage) => stage.name),
+    stageDefinitions: (version?.stages || []).filter((stage) => stage.status === "active").map((stage) => ({
+      laborAreaId: stage.labor_area_ref_id || "",
+      laborAreaName: stage.labor_area_name || stage.name,
+      name: stage.name,
+      expectedMinutes: stage.expected_minutes
+    })),
     createdAt: new Date().toISOString().slice(0, 10)
   };
 }
+
+function mapApiMachine(item){return {id:item.id,code:item.code,name:item.name,area:item.area_name||"",machineType:item.machine_type,unit:"min",available:Number(item.available_minutes_per_day||0),cost:Number(item.cost_per_minute||0),type:"Maquinaria",source:"Maquinaria",status:item.status==="active"?"Activo":item.status==="maintenance"?"Mantenimiento":"Inactivo"};}
+function mapApiOrderStatus(status){return ({released:"Liberada",waiting_resources:"En espera de recursos",in_progress:"En produccion",paused:"Pausada",in_validation:"En validacion",completed:"Terminada",cancelled:"Cancelada"})[status]||status;}
+function toApiOrderStatus(status){return ({Liberada:"released","En espera de recursos":"waiting_resources","En produccion":"in_progress",Pausada:"paused","En validacion":"in_validation",Terminada:"completed",Cancelada:"cancelled"})[status]||status;}
+function mapApiStageStatus(status){return ({pending:"Pendiente",in_progress:"En proceso",completed:"Terminada",skipped:"Omitida",blocked:"Bloqueada"})[status]||status;}
+function mapApiOrderRecipeSnapshot(item, fallbackRecipe) {
+  const snapshot = item.recipe_snapshot || {};
+  const version = (snapshot.versions || []).find((entry) => entry.id === item.recipe_version_id);
+  if (!version) return fallbackRecipe || { resources: [], steps: [], quantityBase: 1, unit: item.unit };
+  return {
+    ...(fallbackRecipe || {}),
+    id: snapshot.id || item.recipe_id,
+    productServiceId: snapshot.product_service_id || item.product_service_id,
+    product: fallbackRecipe?.product || snapshot.name || item.product_service_id,
+    version: Number(version.version_number || 1),
+    versionId: version.id,
+    quantityBase: Number(version.base_quantity || 1),
+    unit: version.base_unit || item.unit,
+    resources: (version.resources || []).map((resource) => ({
+      resourceId: resource.resource_ref_id || resource.resource_code,
+      resourceCode: resource.resource_code,
+      resourceName: resource.resource_name,
+      resourceType: resource.resource_type,
+      quantity: Number(resource.quantity || 0),
+      unit: resource.unit,
+      unitCost: Number(resource.unit_cost || 0)
+    })),
+    steps: (version.stages || []).filter((stage) => stage.status === "active").map((stage) => stage.name)
+  };
+}
+function mapApiOrder(item, recipes){const recipe=recipes.find((entry)=>entry.id===item.recipe_id);const recipeSnapshot=mapApiOrderRecipeSnapshot(item,recipe);return {id:item.id,code:item.code,recipeId:item.recipe_id,recipeVersion:recipeSnapshot.version||1,recipeSnapshot,recipeName:recipeSnapshot.product||item.product_service_id,quantity:Number(item.quantity),unit:item.unit,status:mapApiOrderStatus(item.status),priority:({high:"Alta",medium:"Media",low:"Baja"})[item.priority]||item.priority,dueDate:item.required_at?.slice(0,10)||"",center:recipeSnapshot.center||"Produccion",responsible:item.responsible_name,plannedCost:Number(item.planned_cost||0),actualCost:item.actual_cost===null?Number(item.planned_cost||0):Number(item.actual_cost),releaseStatus:"Liberada",areas:(item.stages||[]).map((stage)=>({id:stage.id,recipeStageId:stage.recipe_stage_id,area:stage.name,responsible:stage.responsible_name||"",status:mapApiStageStatus(stage.status),progress:Number(stage.progress_percent||0),actualMinutes:stage.actual_minutes,actualCostFactor:1})),createdAt:item.created_at?.slice(0,10)||""};}
 
 function loadProductionApiData() {
   if (getApiMode() !== "api" || state.productionApi.status === "loading") return Promise.resolve();
   state.productionApi = { status: "loading", error: "" };
   return getProductionCatalog()
-    .then(({ products, recipes }) => {
+    .then(({ products, recipes, machines, orders }) => {
       const mappedProducts = products.map(mapApiProduct);
+      const mappedRecipes = recipes.map((recipe) => mapApiRecipe(recipe, mappedProducts));
       mockDb.saveProductsServices(mappedProducts);
-      mockDb.saveRecipes(recipes.map((recipe) => mapApiRecipe(recipe, mappedProducts)));
+      mockDb.saveRecipes(mappedRecipes);
+      mockDb.saveMachines((machines||[]).map(mapApiMachine));
+      mockDb.saveOrders((orders||[]).map((order)=>mapApiOrder(order,mappedRecipes)));
       state.productionApi = { status: "ready", error: "" };
       render();
     })
@@ -2257,9 +2310,9 @@ function loadInventoryItemData() {
 }
 
 function loadInventoryMovementData() {
-  if (getApiMode() !== "api" || !isInventoryApiEnabled() || state.inventoryMovements.status === "loading") return;
+  if (getApiMode() !== "api" || !isInventoryApiEnabled() || state.inventoryMovements.status === "loading") return Promise.resolve();
   state.inventoryMovements = { status: "loading", error: "" };
-  getInventoryMovements().then((response) => {
+  return getInventoryMovements().then((response) => {
     const records = mockDb.loadModuleRecords("almacenes");
     const items = records.filter((record) => record.recordType === "inventoryItem");
     const warehouses = records.filter((record) => record.recordType === "warehouse");
@@ -3892,6 +3945,12 @@ function getOrderRecipe(order) {
   return order.recipeSnapshot || mockDb.findRecipe(order.recipeId) || defaultRecipes[0];
 }
 
+function formatRecipeDisplayLabel(recipe) {
+  const product = recipe?.productServiceId ? mockDb.findProductService(recipe.productServiceId) : null;
+  const name = product?.name || recipe?.product || t("recipeProductUnavailable");
+  return product?.sku ? `${name} - ${product.sku}` : name;
+}
+
 function createRecipeSnapshot(recipe) {
   return {
     id: recipe.id,
@@ -4466,8 +4525,8 @@ function renderProductsServicesCatalogScreen() {
           <div class="product-recipe-summary">
             <div>
               <span class="muted-label">${t("currentRecipe")}</span>
-              <strong>${currentRecipe ? `${currentRecipe.id} · v${currentRecipe.version}` : t("noRecipe")}</strong>
-              <p>${currentRecipe ? `${getRecipeApprovalStatus(currentRecipe)} · ${currentRecipe.steps.length} etapas operativas` : "Debe generarse antes de liberar produccion."}</p>
+              <strong>${currentRecipe ? `${currentRecipe.id} · vigente v${currentRecipe.currentVersion || "sin aprobar"}` : t("noRecipe")}</strong>
+              <p>${currentRecipe ? `${currentRecipe.draftVersionId ? `Edicion v${currentRecipe.version} · ` : ""}${getRecipeApprovalStatus(currentRecipe)} · ${currentRecipe.steps.length} etapas operativas` : "Debe generarse antes de liberar produccion."}</p>
             </div>
             <span class="chip ${currentRecipe ? "active" : "warning"}">${currentRecipe ? getRecipeApprovalStatus(currentRecipe) : t("noRecipe")}</span>
           </div>
@@ -5005,9 +5064,18 @@ function bindProductionPanelActions() {
     });
   });
   modulePanel.querySelectorAll("[data-action='change-product-service-status']").forEach((select) => {
-    select.addEventListener("change", () => {
+    select.addEventListener("change", async () => {
       const item = mockDb.findProductService(select.dataset.productId);
       if (!item) return;
+      if (getApiMode() === "api") {
+        try {
+          const statuses={Activo:"active",Inactivo:"inactive","En espera de aprobacion":"pending_approval"};
+          await updateProductionProductServiceStatus(item.id,{status:statuses[select.value]||select.value,reason:"Actualizacion desde catalogo"});
+          await loadProductionApiData();
+          showToast(`${item.id} actualizado a ${select.value}.`);
+        } catch(error) { showToast(error.message||"No se pudo actualizar el estatus."); }
+        return;
+      }
       mockDb.updateProductService({ ...item, status: select.value });
       render();
       showToast(`${item.id} actualizado a ${select.value}.`);
@@ -5086,7 +5154,7 @@ function renderRecipeValidationOnly(recipes = mockDb.loadRecipes()) {
               .map(
                 (item) => `
                   <option value="${item.id}" ${item.id === recipe.id ? "selected" : ""}>
-                    ${item.id} · ${item.product}
+                    ${formatRecipeDisplayLabel(item)}
                   </option>
                 `
               )
@@ -5196,8 +5264,8 @@ function renderRecipeList(recipes) {
             return `
               <article class="recipe-list-row">
                 <div>
-                  <strong>${recipe.id} · ${recipe.product}</strong>
-                  <span>v${recipe.version} · ${approvalStatus} · ${recipe.resources.length} recursos · ${recipe.steps.length} etapas genericas · costo estandar ${formatCurrency(standardCost)}</span>
+                  <strong>${formatRecipeDisplayLabel(recipe)}</strong>
+                  <span>${recipe.currentVersion ? `Vigente v${recipe.currentVersion}` : "Sin version vigente"}${recipe.draftVersionId ? ` · Edicion v${recipe.version} (${approvalStatus})` : ` · ${approvalStatus}`} · ${recipe.resources.length} recursos · ${recipe.steps.length} etapas genericas · costo estandar ${formatCurrency(standardCost)}</span>
                 </div>
                 <span class="chip ${validation.missing.length || !isRecipeApproved(recipe) ? "warning" : "active"}">
                   ${!isRecipeApproved(recipe) ? approvalStatus : validation.missing.length ? `${validation.missing.length} faltantes` : "Lista"}
@@ -5735,7 +5803,7 @@ async function saveWarehouseForm(event, module, submodule) {
 
   const code = data.code.trim().toUpperCase();
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
-  if (getApiMode() === "api" && isInventoryApiEnabled()) {
+  if (getApiMode() === "api") {
     const payload = {name:data.name.trim(),type:data.type,business_center:data.businessCenter.trim(),location:data.location.trim(),owner:data.owner.trim(),capacity:data.capacity?.trim()||null,inventory_policy:data.policy,zone:data.zone?.trim()||null,aisle:data.aisle?.trim()||null,rack:data.rack?.trim()||null,level:data.level?.trim()||null,position:data.position?.trim()||null,description:data.description?.trim()||null,status:(data.status||"Activo")==="Activo"?"active":(data.status==="Bloqueado"?"blocked":"inactive")};
     try {
       if (existingRecord) await updateInventoryWarehouse(existingRecord.id,payload);
@@ -6144,6 +6212,10 @@ async function saveInventoryMovementForm(event, module, submodule) {
   const warehouseName = warehouse ? `${warehouse.code} - ${warehouse.title}` : data.warehouseName.trim();
   const itemName = item ? `${item.code} - ${item.title}` : data.item.trim();
   const movementQuantity = Number(data.quantity || 0);
+  if (data.movementType === "transfer" && (!data.destinationWarehouseId || data.destinationWarehouseId === data.warehouseId)) {
+    renderFormErrors([t("transferDestinationRequired")]);
+    return;
+  }
   if (["exit", "negativeAdjustment"].includes(data.movementType)) {
     const itemKey = data.itemId || itemName;
     const warehouseKey = data.warehouseId || warehouseName;
@@ -6152,6 +6224,30 @@ async function saveInventoryMovementForm(event, module, submodule) {
       renderFormErrors([t("insufficientStock", { available: formatNumber(available), unit: data.unit.trim() })]);
       return;
     }
+  }
+  if (getApiMode() === "api" && isInventoryApiEnabled()) {
+    const types = { positiveAdjustment: "positive_adjustment", negativeAdjustment: "negative_adjustment" };
+    try {
+      const savedMovement = await createInventoryMovement({
+        movement_type: types[data.movementType] || data.movementType,
+        inventory_item_id: data.itemId,
+        warehouse_id: data.warehouseId,
+        destination_warehouse_id: data.destinationWarehouseId || null,
+        quantity: movementQuantity,
+        unit: data.unit.trim(),
+        reason: data.reason?.trim() || "Movimiento manual",
+        source: { type: "manual", id: data.sourceDocument.trim() },
+        occurred_at: `${data.movementDate}T12:00:00Z`
+      });
+      state.inventoryMovements = { status: "idle", error: "" };
+      state.inventoryBalances = { status: "idle", data: [], page: {}, error: "", queryKey: "", cursor: "", previousCursors: [] };
+      closeModal();
+      await loadInventoryMovementData();
+      showToast(t("movementSaved", { code: savedMovement.movement_code }));
+    } catch (error) {
+      renderFormErrors([error.message || t("inventoryLoadError")]);
+    }
+    return;
   }
   const record = {
     id: `${module.id}-movement-${Date.now()}`,
@@ -6677,7 +6773,7 @@ function renderQuoteProductLookup(event) {
         .map((item) => `
           <button class="lookup-option" type="button" data-product-id="${item.id}">
             <strong>${item.name}</strong>
-            <span>${item.id} - ${item.kind} - ${item.unit}</span>
+            <span>${item.sku} · ${item.kind} · ${item.unit}</span>
           </button>
         `)
         .join("")
@@ -7429,13 +7525,43 @@ function validateProductService(item) {
   return errors;
 }
 
-function saveProductServiceForm(event) {
+async function saveProductServiceForm(event) {
   event.preventDefault();
   const item = buildProductServiceFromForm(event.currentTarget);
   const exists = Boolean(mockDb.findProductService(item.id));
   const errors = validateProductService(item);
   renderFormErrors(errors);
   if (errors.length) return;
+
+  if (getApiMode() === "api") {
+    try {
+      const payload = {
+        name: item.name,
+        category: item.category,
+        base_unit: item.unit,
+        target_price: item.targetPrice,
+        responsible_area: item.owner,
+        cost_center: item.center,
+        expected_margin: item.expectedMargin,
+        description: item.description
+      };
+      const saved = exists
+        ? await updateProductionProductService(item.id, payload)
+        : await createProductionProductService({ ...payload, code: item.sku, type: item.kind === "Servicio" ? "service" : "product" });
+      const statuses = { Activo: "active", Inactivo: "inactive", "En espera de aprobacion": "pending_approval" };
+      if (statuses[item.status] && saved.status !== statuses[item.status]) {
+        await updateProductionProductServiceStatus(saved.id, { status: statuses[item.status], reason: "Estatus inicial del catalogo" });
+      }
+      localStorage.setItem("erclave-product-service-search", "");
+      closeModal();
+      await loadProductionApiData();
+      navigateTo({ active: "produccion", activeSubmodule: "productos-servicios", laborArea: "" });
+      showToast(`${item.kind} ${saved.code} ${exists ? "actualizado" : "guardado"} en Production API.`);
+    } catch (error) {
+      renderFormErrors([error.message || "No se pudo guardar en Production API."]);
+    }
+    return;
+  }
 
   if (exists) {
     mockDb.updateProductService(item);
@@ -7521,6 +7647,7 @@ async function saveLaborAreaForm(event) {
   if (duplicate) errors.push(t("laborAreaDuplicate"));
   renderFormErrors(errors);
   if (errors.length) return;
+
   const item = {
     id: areaId || `area_${slugify(code)}_${Date.now().toString().slice(-4)}`,
     code,
@@ -7658,9 +7785,20 @@ async function saveLaborRoleForm(event) {
   showToast(`Puesto ${item.name} ${roleId ? "actualizado" : "guardado"}.`);
 }
 
-function openMachineModal(machineId = null) {
+async function openMachineModal(machineId = null) {
   const existingMachine = machineId ? mockDb.findMachine(machineId) : null;
   const isEditing = Boolean(existingMachine);
+  let activeAreas;
+  try {
+    activeAreas = getApiMode() === "api"
+      ? (await getHrAreas()).filter((area) => area.status === "active")
+      : mockDb.loadLaborAreas().filter((area) => area.status === "Activo");
+  } catch (error) {
+    showToast(error.message || t("machineAreasLoadError"));
+    return;
+  }
+  const selectedArea = activeAreas.find((area) => area.name === existingMachine?.area);
+  const hasActiveAreas = activeAreas.length > 0;
   modalContent.innerHTML = `
     <form class="recipe-form" id="machineForm">
       <input type="hidden" name="machineId" value="${existingMachine?.id || ""}" />
@@ -7671,36 +7809,47 @@ function openMachineModal(machineId = null) {
         </div>
         <button class="icon-button modal-close" type="button" aria-label="Cerrar">x</button>
       </div>
+      <p class="helper-copy">${t("machineAreaCatalogHelp")}</p>
       <div class="form-grid">
-        <label class="preview-field"><span>Area</span><input name="area" type="text" value="${existingMachine?.area || "Costura"}" required /></label>
+        <label class="preview-field"><span>${t("laborAreaExisting")}</span><select name="area" required ${hasActiveAreas ? "" : "disabled"}>
+          <option value="">${t("machineAreaPlaceholder")}</option>
+          ${activeAreas.map((area) => `<option value="${escapeAttribute(area.name)}" data-area-id="${area.id}" ${selectedArea?.id === area.id ? "selected" : ""}>${escapeHtml(area.code)} - ${escapeHtml(area.name)}</option>`).join("")}
+        </select></label>
         <label class="preview-field"><span>Tipo de maquina</span><input name="machineType" type="text" value="${existingMachine?.machineType || ""}" placeholder="Ej. Costura" required /></label>
         <label class="preview-field"><span>Nombre de maquina</span><input name="name" type="text" value="${existingMachine?.name || ""}" placeholder="Ej. Maquina recta 02" required /></label>
         <label class="preview-field"><span>Minutos disponibles por dia</span><input name="available" type="number" min="1" value="${existingMachine?.available || 480}" required /></label>
         <label class="preview-field"><span>Costo hora/minuto maquina</span><input name="cost" type="number" min="0" step="0.01" value="${existingMachine?.cost || "1.80"}" required /></label>
         <label class="preview-field"><span>Estatus</span><select name="status"><option ${existingMachine?.status === "Activo" ? "selected" : ""}>Activo</option><option ${existingMachine?.status === "Inactivo" ? "selected" : ""}>Inactivo</option><option ${existingMachine?.status === "Mantenimiento" ? "selected" : ""}>Mantenimiento</option></select></label>
       </div>
+      ${hasActiveAreas ? "" : `<div class="validation-card warning machine-area-empty"><strong>${t("machineAreaRequiredFirst")}</strong><span>${t("machineAreaRequiredFirstHelp")}</span><button class="secondary-action" type="button" data-action="open-hr-areas">${t("machineGoToHrAreas")}</button></div>`}
       <div class="form-errors" id="formErrors" hidden></div>
       <div class="modal-actions">
         <button class="secondary-action" type="button" data-action="close-machine">Cancelar</button>
-        <button class="primary-action" type="submit">${isEditing ? "Actualizar maquina" : "Guardar maquina"}</button>
+        <button class="primary-action" type="submit" ${hasActiveAreas ? "" : "disabled"}>${isEditing ? "Actualizar maquina" : "Guardar maquina"}</button>
       </div>
     </form>
   `;
   modalBackdrop.hidden = false;
   modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
   modalContent.querySelector("[data-action='close-machine']").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='open-hr-areas']")?.addEventListener("click", () => {
+    closeModal();
+    navigateTo({ active: "recursos-humanos", activeSubmodule: "areas-puestos", laborArea: "" });
+  });
   modalContent.querySelector("#machineForm").addEventListener("submit", saveMachineForm);
 }
 
-function saveMachineForm(event) {
+async function saveMachineForm(event) {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
   const machineId = String(data.get("machineId") || "").trim();
   const name = String(data.get("name") || "").trim();
   const area = String(data.get("area") || "").trim();
+  const selectedAreaOption = event.currentTarget.querySelector('select[name="area"] option:checked');
+  const areaId = selectedAreaOption?.dataset.areaId || "";
   const machineType = String(data.get("machineType") || "").trim();
   const errors = [];
-  if (!area) errors.push("Captura el area.");
+  if (!area || !areaId) errors.push(t("machineAreaInvalid"));
   if (!machineType) errors.push("Captura el tipo de maquina.");
   if (!name) errors.push("Captura el nombre de maquina.");
   renderFormErrors(errors);
@@ -7718,6 +7867,16 @@ function saveMachineForm(event) {
     source: "Maquinaria",
     status: String(data.get("status") || "Activo")
   };
+  if (getApiMode() === "api") {
+    try {
+      const status={Activo:"active",Inactivo:"inactive",Mantenimiento:"maintenance"}[item.status];
+      const payload={name:item.name,machine_type:item.machineType,area_name:item.area,available_minutes_per_day:item.available,cost_per_minute:item.cost,status};
+      if (machineId) await updateProductionMachine(machineId,payload);
+      else { const {status:ignored,...createPayload}=payload;await createProductionMachine({...createPayload,code:slugify(item.name)}); }
+      closeModal();await loadProductionApiData();navigateTo({active:"produccion",activeSubmodule:"maquinaria",laborArea:""});showToast(`Maquina ${item.name} ${machineId?"actualizada":"guardada"} en Production API.`);
+    } catch(error) { renderFormErrors([error.message||"No se pudo guardar la maquina."]); }
+    return;
+  }
   if (machineId) {
     mockDb.updateMachine(item);
   } else {
@@ -7729,8 +7888,40 @@ function saveMachineForm(event) {
 }
 
 async function prepareRecipeResourceCatalog() {
-  if (getApiMode() !== "api" || !isInventoryApiEnabled()) return;
-  if (isModuleAccessible("recursos-humanos") && hasPermission("hr.position.read")) await loadHrApiData();
+  if (getApiMode() !== "api") return { areas: [] };
+  setMachineRecipeResources(mockDb.loadMachines()
+    .filter((machine) => machine.status === "Activo")
+    .map((machine) => ({
+      ...machine,
+      unit: "min",
+      resourceType: "machine",
+      type: "Maquinaria",
+      source: machine.area ? `Maquinaria: ${machine.area}` : "Maquinaria"
+    })));
+  const hrCatalog = isModuleAccessible("recursos-humanos") && hasPermission("hr.position.read")
+    ? await getHrCatalog({ production_only: true })
+    : { areas: [], positions: [] };
+  const activeAreas = (hrCatalog.areas || []).filter((area) => area.status === "active");
+  const areaById = new Map(activeAreas.map((area) => [area.id, area]));
+  const eligiblePositions = (hrCatalog.positions || [])
+    .filter((position) => position.status === "active" && position.intervenes_in_production && areaById.has(position.labor_area_id));
+  const productiveAreaIds = new Set(eligiblePositions.map((position) => position.labor_area_id));
+  const selectableAreas = activeAreas.filter((area) => productiveAreaIds.has(area.id));
+  setLaborRecipeResources(eligiblePositions
+    .map((position) => ({
+      id: position.id,
+      name: position.recipe_name,
+      unit: "min",
+      available: Number(position.resource_quantity) * Number(position.minutes_per_resource),
+      cost: Number(position.hourly_cost) / 60,
+      type: "Mano de obra",
+      resourceType: "labor",
+      source: `Recursos Humanos: ${areaById.get(position.labor_area_id).name}`
+    })));
+  if (!isInventoryApiEnabled()) {
+    setInventoryRecipeResources([]);
+    return { areas: selectableAreas, positions: eligiblePositions };
+  }
   const [itemsResponse, balancesResponse] = await Promise.all([
     getInventoryItems({ use_in_recipe: true, status: "active" }),
     getInventoryBalances({ limit: 200 })
@@ -7751,14 +7942,17 @@ async function prepareRecipeResourceCatalog() {
       available: balance.available,
       cost: 0,
       type: translateInventoryItemType(item.type),
+      resourceType: "material",
       source: balance.warehouses.size ? `Almacenes: ${[...balance.warehouses].join(", ")}` : "Almacenes"
     };
   }));
+  return { areas: selectableAreas, positions: eligiblePositions };
 }
 
 async function openRecipeModal(recipeId = null) {
+  let recipeCatalog;
   try {
-    await prepareRecipeResourceCatalog();
+    recipeCatalog = await prepareRecipeResourceCatalog();
   } catch (error) {
     showToast(error.message || t("recipeResourcesLoadError"));
     return;
@@ -7776,12 +7970,18 @@ async function openRecipeModal(recipeId = null) {
   const activeProductLabel = activeProductService
     ? formatProductServiceOption(activeProductService)
     : "";
+  const availableResourceIds = new Set(getRecipeResourceCatalog().map((resource) => resource.id));
   const recipeResources = existingRecipe?.resources?.length
-    ? existingRecipe.resources
-    : ["tela_algodon", "hilo_morado", "etiqueta", "maquina_recta", "costurero"].map((id) => ({
+    ? existingRecipe.resources.filter((resource) => getApiMode() !== "api" || availableResourceIds.has(resource.resourceId))
+    : getApiMode() === "api" ? [] : ["tela_algodon", "hilo_morado", "etiqueta", "maquina_recta", "costurero"].map((id) => ({
         resourceId: id,
         quantity: suggestedQuantity(id)
       }));
+  const activeAreas = getApiMode() === "api"
+    ? (recipeCatalog?.areas || [])
+    : mockDb.loadLaborAreas().filter((area) => area.status === "Activo");
+  const selectedStageIds = new Set((existingRecipe?.stageDefinitions || []).map((stage) => stage.laborAreaId).filter(Boolean));
+  const selectedStageNames = new Set(existingRecipe?.steps || []);
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="recipeForm">
@@ -7840,33 +8040,27 @@ async function openRecipeModal(recipeId = null) {
         <strong>Recursos por unidad</strong>
       </div>
 
-      <p class="helper-copy">Solo puedes agregar recursos dados de alta previamente en Almacenes o Recursos Humanos. Este mock simula esos catalogos.</p>
+      <p class="helper-copy">${t("recipeEligibleResourcesHelp")}</p>
 
-      <div class="resource-picker">
-        <select id="resourceSelect" aria-label="Seleccionar recurso">
-          ${getRecipeResourceCatalog()
-            .map(
-              (resource) => `
-                <option value="${resource.id}">
-                  ${resource.name} · ${resource.type} · ${resource.source}
-                </option>
-              `
-            )
-            .join("")}
-        </select>
-        <button class="secondary-action" type="button" data-action="add-resource">Agregar recurso</button>
+      <div class="recipe-resource-groups">
+        ${renderRecipeResourceGroup("material", recipeResources)}
+        ${renderRecipeResourceGroup("labor", recipeResources)}
+        ${renderRecipeResourceGroup("machine", recipeResources)}
       </div>
 
-      <div class="selected-resource-list" id="selectedResourceList">
-        ${recipeResources
-          .map((item) => renderSelectedResourceRow(item.resourceId, item.quantity, item))
-          .join("")}
-      </div>
-
-      <label class="preview-field">
-        <span>Etapas operativas genericas</span>
-        <input name="steps" type="text" value="${existingRecipe?.steps?.join(", ") || "Preparacion, Ejecucion, Validacion, Entrega"}" />
-      </label>
+      <fieldset class="recipe-area-stages">
+        <legend>${t("recipeAreasLegend")}</legend>
+        <p class="helper-copy">${t("recipeAreasHelp")}</p>
+        ${activeAreas.length ? `<div class="recipe-area-grid">${activeAreas.map((area) => `
+          <label class="recipe-area-option">
+            <input type="checkbox" name="stageAreaId" value="${area.id}" data-area-name="${escapeAttribute(area.name)}" ${selectedStageIds.has(area.id) || selectedStageNames.has(area.name) ? "checked" : ""} />
+            <span class="recipe-area-card">
+              <span class="recipe-area-check" aria-hidden="true">✓</span>
+              <span><strong>${escapeHtml(area.name)}</strong><small>${escapeHtml(area.code || area.id)}</small></span>
+            </span>
+          </label>
+        `).join("")}</div>` : `<p class="validation-card warning">${t("recipeAreasEmpty")}</p>`}
+      </fieldset>
 
       <div class="form-errors" id="formErrors" hidden></div>
 
@@ -7884,14 +8078,14 @@ async function openRecipeModal(recipeId = null) {
   modalContent.querySelector("#recipeProductSearch").addEventListener("focus", renderRecipeProductLookup);
   modalContent.querySelector("#recipeProductSearch").addEventListener("input", syncRecipeProductFields);
   modalContent.querySelector("#recipeProductResults").addEventListener("click", selectRecipeProductFromLookup);
-  modalContent.querySelector("[data-action='add-resource']").addEventListener("click", addResourceRow);
+  modalContent.querySelectorAll("[data-action='add-resource']").forEach((button) => button.addEventListener("click", addResourceRow));
   modalContent.querySelector("[data-action='preview-recipe']").addEventListener("click", previewRecipeForm);
   modalContent.querySelector("#recipeForm").addEventListener("submit", saveRecipeForm);
   bindResourceRowActions();
 }
 
 function formatProductServiceOption(item) {
-  return `${item.id} - ${item.name} - ${item.kind}`;
+  return `${item.name} - ${item.sku}`;
 }
 
 function findProductServiceByOption(value) {
@@ -7907,7 +8101,7 @@ function getProductServiceMatches(value) {
   const items = mockDb.loadProductsServices();
   if (!normalized) return items;
   return items.filter((item) =>
-    [item.id, item.name, item.kind, item.category, item.center]
+    [item.id, item.sku, item.name, item.kind, item.category, item.center]
       .join(" ")
       .toLowerCase()
       .includes(normalized)
@@ -7924,7 +8118,7 @@ function renderRecipeProductLookup(event) {
         .map((item) => `
           <button class="lookup-option" type="button" data-product-id="${item.id}">
             <strong>${item.name}</strong>
-            <span>${item.id} - ${item.kind} - ${item.unit}</span>
+            <span>${item.sku} · ${item.kind} · ${item.unit}</span>
           </button>
         `)
         .join("")
@@ -7954,6 +8148,37 @@ function syncRecipeProductFields(event) {
   form.querySelector("[name='center']").value = item.center;
 }
 
+function getRecipeResourceType(item) {
+  const catalogItem = getResource(item.resourceId || item.id);
+  return catalogItem?.resourceType || item.resourceType || (catalogItem?.type === "Maquinaria" ? "machine" : catalogItem?.type === "Mano de obra" ? "labor" : "material");
+}
+
+function renderRecipeResourceGroup(resourceType, recipeResources) {
+  const config = {
+    material: { icon: "MP", title: t("recipeMaterialsTitle"), help: t("recipeMaterialsHelp"), add: t("recipeAddMaterial"), empty: t("recipeMaterialsEmpty") },
+    labor: { icon: "HH", title: t("recipeLaborTitle"), help: t("recipeLaborHelp"), add: t("recipeAddLabor"), empty: t("recipeLaborEmpty") },
+    machine: { icon: "HM", title: t("recipeMachinesTitle"), help: t("recipeMachinesHelp"), add: t("recipeAddMachine"), empty: t("recipeMachinesEmpty") }
+  }[resourceType];
+  const catalog = getRecipeResourceCatalog().filter((resource) => getRecipeResourceType(resource) === resourceType);
+  const selected = recipeResources.filter((resource) => getRecipeResourceType(resource) === resourceType);
+  return `
+    <section class="recipe-resource-group recipe-resource-group-${resourceType}" aria-labelledby="recipe-resource-${resourceType}-title">
+      <div class="recipe-resource-group-head">
+        <span class="recipe-resource-type-icon" aria-hidden="true">${config.icon}</span>
+        <div><strong id="recipe-resource-${resourceType}-title">${config.title}</strong><p>${config.help}</p></div>
+      </div>
+      <div class="resource-picker">
+        <select id="resourceSelect-${resourceType}" aria-label="${config.title}" ${catalog.length ? "" : "disabled"}>
+          ${catalog.map((resource) => `<option value="${resource.id}">${resource.name} · ${resource.source}</option>`).join("")}
+        </select>
+        <button class="secondary-action" type="button" data-action="add-resource" data-resource-type="${resourceType}" ${catalog.length ? "" : "disabled"}>${config.add}</button>
+      </div>
+      <div class="selected-resource-list" id="selectedResourceList-${resourceType}">
+        ${selected.length ? selected.map((item) => renderSelectedResourceRow(item.resourceId, item.quantity, item)).join("") : `<p class="recipe-resource-empty">${config.empty}</p>`}
+      </div>
+    </section>`;
+}
+
 function renderSelectedResourceRow(resourceId, quantity = 0, fallback = {}) {
   const resource = getResource(resourceId) || {
     id: resourceId,
@@ -7962,17 +8187,26 @@ function renderSelectedResourceRow(resourceId, quantity = 0, fallback = {}) {
     source: "Production API",
     available: 0,
     unit: fallback.unit || "",
-    cost: Number(fallback.unitCost || 0)
+    cost: Number(fallback.unitCost || 0),
+    resourceType: fallback.resourceType || "material"
   };
+  const resourceType = getRecipeResourceType(resource);
+  const isTimed = resourceType === "labor" || resourceType === "machine";
+  const storageFactor = isTimed ? 60 : 1;
+  const displayQuantity = Number(quantity || 0) / storageFactor;
+  const displayAvailable = Number(resource.available || 0) / storageFactor;
+  const displayUnit = resourceType === "labor" ? t("recipeLaborUnit") : resourceType === "machine" ? t("recipeMachineUnit") : resource.unit;
+  const quantityLabel = resourceType === "labor" ? t("recipeLaborQuantity") : resourceType === "machine" ? t("recipeMachineQuantity") : `${t("recipeMaterialQuantity")} (${resource.unit})`;
   return `
-    <div class="selected-resource-row" data-resource-row="${resource.id}">
+    <div class="selected-resource-row" data-resource-row="${resource.id}" data-resource-type="${resourceType}" data-storage-factor="${storageFactor}">
       <div>
         <strong>${resource.name}</strong>
-        <span>${resource.type} · ${resource.source} · disponible ${formatNumber(resource.available)} ${resource.unit}</span>
+        <span>${resource.type} · ${resource.source} · ${t("recipeAvailable")} ${formatNumber(displayAvailable)} ${displayUnit}</span>
       </div>
       <label>
-        <span>Cantidad</span>
-        <input name="resource_${resource.id}" type="number" min="0" step="0.01" value="${quantity}" />
+        <span>${quantityLabel}</span>
+        <input name="resource_${resource.id}" type="number" min="0" step="${isTimed ? "any" : "0.01"}" value="${displayQuantity}" />
+        ${isTimed ? `<small class="recipe-time-hint">${t("recipeTimeDecimalHelp")}</small>` : ""}
       </label>
       <button class="icon-button remove-resource" type="button" data-action="remove-resource" aria-label="Quitar recurso">×</button>
     </div>
@@ -7980,14 +8214,16 @@ function renderSelectedResourceRow(resourceId, quantity = 0, fallback = {}) {
 }
 
 function addResourceRow() {
-  const select = modalContent.querySelector("#resourceSelect");
-  const list = modalContent.querySelector("#selectedResourceList");
+  const resourceType = this.dataset.resourceType;
+  const select = modalContent.querySelector(`#resourceSelect-${resourceType}`);
+  const list = modalContent.querySelector(`#selectedResourceList-${resourceType}`);
   const resourceId = select.value;
   if (list.querySelector(`[data-resource-row="${resourceId}"]`)) {
     showToast("Ese recurso ya esta en la receta.");
     return;
   }
-  list.insertAdjacentHTML("beforeend", renderSelectedResourceRow(resourceId, 1));
+  list.querySelector(".recipe-resource-empty")?.remove();
+  list.insertAdjacentHTML("beforeend", renderSelectedResourceRow(resourceId, resourceType === "material" ? 1 : 60));
   bindResourceRowActions();
 }
 
@@ -8018,13 +8254,18 @@ function buildRecipeFromForm(form) {
   const productService = mockDb.findProductService(productServiceId);
   const selectedRows = [...form.querySelectorAll("[data-resource-row]")];
   const existingRecipe = recipeId ? mockDb.findRecipe(recipeId) : null;
+  const stageDefinitions = [...form.querySelectorAll('input[name="stageAreaId"]:checked')].map((input) => ({
+    laborAreaId: input.value,
+    laborAreaName: input.dataset.areaName,
+    name: input.dataset.areaName
+  }));
   const resources = selectedRows
     .map((row) => {
       const resourceId = row.dataset.resourceRow;
       const existingResource = existingRecipe?.resources?.find((item) => item.resourceId === resourceId);
       return {
         resourceId,
-        quantity: Number(data.get(`resource_${resourceId}`) || 0),
+        quantity: Number(data.get(`resource_${resourceId}`) || 0) * Number(row.dataset.storageFactor || 1),
         resourceCode: existingResource?.resourceCode,
         resourceName: existingResource?.resourceName,
         resourceType: existingResource?.resourceType,
@@ -8048,10 +8289,8 @@ function buildRecipeFromForm(form) {
     changeReason: String(data.get("changeReason") || "").trim(),
     center: String(data.get("center") || "").trim(),
     resources,
-    steps: String(data.get("steps") || "")
-      .split(",")
-      .map((step) => step.trim())
-      .filter(Boolean),
+    steps: stageDefinitions.map((stage) => stage.name),
+    stageDefinitions,
     createdAt: recipeId ? (mockDb.findRecipe(recipeId)?.createdAt || new Date().toISOString().slice(0, 10)) : new Date().toISOString().slice(0, 10)
   };
 }
@@ -8064,7 +8303,7 @@ function toApiRecipeVersionPayload(recipe) {
     resources: recipe.resources.map((item, index) => {
       const catalogItem = getResource(item.resourceId);
       return {
-        resource_type: item.resourceType || (catalogItem?.type === "Maquinaria" ? "machine" : catalogItem?.type === "Mano de obra" ? "labor" : "other"),
+        resource_type: item.resourceType || catalogItem?.resourceType || (catalogItem?.type === "Maquinaria" ? "machine" : catalogItem?.type === "Mano de obra" ? "labor" : "other"),
         resource_ref_id: item.resourceId || null,
         resource_code: item.resourceCode || catalogItem?.id || item.resourceId,
         resource_name: item.resourceName || catalogItem?.name || item.resourceId,
@@ -8074,7 +8313,14 @@ function toApiRecipeVersionPayload(recipe) {
         sort_order: index + 1
       };
     }),
-    stages: recipe.steps.map((name, index) => ({ name, sort_order: index + 1, status: "active" }))
+    stages: recipe.stageDefinitions.map((stage, index) => ({
+      labor_area_ref_id: stage.laborAreaId,
+      labor_area_name: stage.laborAreaName,
+      name: stage.name,
+      expected_minutes: stage.expectedMinutes || null,
+      sort_order: index + 1,
+      status: "active"
+    }))
   };
 }
 
@@ -8128,7 +8374,7 @@ function previewRecipeForm() {
                 <strong>${row.name}</strong>
                 <span>${row.type}</span>
               </div>
-              <p>${formatNumber(row.required)} / ${formatNumber(row.available)} ${row.unit}</p>
+              <p>${formatRecipeValidationQuantity(row.required, row.type)} / ${formatRecipeValidationQuantity(row.available, row.type)} ${row.type === "Mano de obra" ? t("recipeLaborUnit") : row.type === "Maquinaria" ? t("recipeMachineUnit") : row.unit}</p>
             </article>
           `
         )
@@ -8146,7 +8392,7 @@ async function saveRecipeForm(event) {
 
   const currentRecipe = mockDb.findRecipe(recipe.id);
   const exists = Boolean(currentRecipe);
-  if (getApiMode() === "api" && isInventoryApiEnabled()) {
+  if (getApiMode() === "api") {
     try {
       const versionPayload = toApiRecipeVersionPayload(recipe);
       let savedVersion;
@@ -8180,25 +8426,12 @@ async function saveRecipeForm(event) {
       closeModal();
       await loadProductionApiData();
       navigateTo({ active: "produccion", activeSubmodule: "recetas", laborArea: "" });
-      showToast(`Receta ${recipe.id} ${exists ? "actualizada" : "guardada"} en QA.`);
+      showToast(`${formatRecipeDisplayLabel(recipe)}: receta ${exists ? "actualizada" : "guardada"} en Production API.`);
     } catch (error) {
       renderFormErrors([error.message || "No se pudo guardar la receta en Production API."]);
     }
     return;
   }
-  if (data.movementType === "transfer" && (!data.destinationWarehouseId || data.destinationWarehouseId === data.warehouseId)) {
-    renderFormErrors(["La transferencia requiere un almacen destino diferente."]);
-    return;
-  }
-  if (getApiMode() === "api") {
-    const types={positiveAdjustment:"positive_adjustment",negativeAdjustment:"negative_adjustment"};
-    try {
-      await createInventoryMovement({movement_type:types[data.movementType]||data.movementType,inventory_item_id:data.itemId,warehouse_id:data.warehouseId,destination_warehouse_id:data.destinationWarehouseId||null,quantity:movementQuantity,unit:data.unit.trim(),reason:data.reason?.trim()||"Movimiento manual",source:{type:"manual",id:data.sourceDocument.trim()},occurred_at:`${data.movementDate}T12:00:00Z`});
-      closeModal(); await loadInventoryApiData(); showToast(t("movementSaved", { code: data.sourceDocument.trim() }));
-    } catch (error) { renderFormErrors([error.message]); }
-    return;
-  }
-
   if (exists) {
     mockDb.updateRecipe(recipe);
   } else {
@@ -8215,7 +8448,7 @@ async function saveRecipeForm(event) {
   localStorage.removeItem("erclave-recipe-product");
   closeModal();
   navigateTo({ active: "produccion", activeSubmodule: "recetas", laborArea: "" });
-  showToast(`Receta ${recipe.id} ${exists ? "actualizada" : "guardada"} y validada contra almacen.`);
+  showToast(`${formatRecipeDisplayLabel(recipe)}: receta ${exists ? "actualizada" : "guardada"} y validada contra almacen.`);
 }
 
 async function approveRecipe(recipeId) {
@@ -8231,7 +8464,7 @@ async function approveRecipe(recipeId) {
         await approveProductionRecipeVersion(recipe.versionId, { approval_notes: "Aprobada desde frontend" });
       }
       await loadProductionApiData();
-      showToast(`Receta ${recipe.id} aprobada para produccion.`);
+      showToast(`${formatRecipeDisplayLabel(recipe)}: receta aprobada para produccion.`);
     } catch (error) {
       showToast(error.message || "No se pudo aprobar la receta en Production API.");
     }
@@ -8245,7 +8478,7 @@ async function approveRecipe(recipeId) {
     approvedAt: new Date().toISOString().slice(0, 10)
   });
   render();
-  showToast(`Receta ${recipe.id} aprobada para produccion.`);
+  showToast(`${formatRecipeDisplayLabel(recipe)}: receta aprobada para produccion.`);
 }
 
 function deleteRecipe(recipeId) {
@@ -8257,17 +8490,17 @@ function deleteRecipe(recipeId) {
   }
   const hasOrders = mockDb.loadOrders().some((order) => order.recipeId === recipeId);
   if (hasOrders) {
-    showToast(`Receta ${recipe.id} tiene ordenes relacionadas; no se puede eliminar.`);
+    showToast(`${formatRecipeDisplayLabel(recipe)} tiene ordenes relacionadas; no se puede eliminar la receta.`);
     return;
   }
-  const confirmed = window.confirm(`Eliminar la receta ${recipe.id} · ${recipe.product}?`);
+  const confirmed = window.confirm(`Eliminar la receta de ${formatRecipeDisplayLabel(recipe)}?`);
   if (!confirmed) return;
   const recipes = mockDb.deleteRecipe(recipeId);
   if (localStorage.getItem("erclave-selected-recipe") === recipeId) {
     localStorage.setItem("erclave-selected-recipe", recipes[0]?.id || (shouldUseSeedModuleData() ? defaultRecipes[0].id : ""));
   }
   render();
-  showToast(`Receta ${recipe.id} eliminada.`);
+  showToast(`${formatRecipeDisplayLabel(recipe)}: receta eliminada.`);
 }
 
 function openOrderModal() {
@@ -8298,7 +8531,7 @@ function openOrderModal() {
               .map(
                 (item) => `
                   <option value="${item.id}" ${item.id === recipe.id ? "selected" : ""}>
-                    ${item.id} · ${item.product} · v${item.version} · ${getRecipeApprovalStatus(item)}
+                    ${formatRecipeDisplayLabel(item)} · v${item.version} · ${getRecipeApprovalStatus(item)}
                   </option>
                 `
               )
@@ -8428,13 +8661,21 @@ function validateOrder(order) {
   return errors;
 }
 
-function previewOrderForm() {
+async function previewOrderForm() {
   const form = modalContent.querySelector("#orderForm");
   const order = buildOrderFromForm(form);
   const errors = validateOrder(order);
   renderFormErrors(errors);
   if (errors.length) return;
   const recipe = getOrderRecipe(order);
+  if (getApiMode() === "api") {
+    if (!recipe?.currentVersionId) { renderFormErrors(["La validacion requiere una receta aprobada vigente."]);return; }
+    try {
+      const remote=await validateProductionResources({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,observed_resources:buildObservedProductionResources(recipe)});
+      modalContent.querySelector("#orderPreview").innerHTML=`<div class="validator-head"><div><span class="muted-label">Validacion backend observada</span><strong>${order.quantity} ${order.unit} Â· ${formatCurrency(remote.planned_cost)}</strong></div><span class="chip ${remote.can_release?"active":"warning"}">${remote.can_release?"Lista para liberar":"Bloqueada"}</span></div>${remote.blockers?.length?`<p class="helper-copy">Pendientes: ${remote.blockers.join(", ")}.</p>`:""}<div class="resource-check-grid compact">${(remote.rows||[]).map((row)=>`<article class="resource-check ${row.ok?"ok":"risk"}"><div><strong>${row.resource_name}</strong><span>${row.resource_type} Â· ${row.source}</span></div><p>${formatNumber(row.required_quantity)} / ${formatNumber(row.available_quantity)} ${row.unit}</p></article>`).join("")}</div>`;
+    } catch(error) { renderFormErrors([error.message||"No se pudo validar recursos."]); }
+    return;
+  }
   const release = getReleaseReview(recipe, order.quantity);
   const validation = release.validation;
   modalContent.querySelector("#orderPreview").innerHTML = `
@@ -8464,12 +8705,42 @@ function previewOrderForm() {
   `;
 }
 
-function saveOrderForm(event) {
+function buildObservedProductionResources(recipe) {
+  const versionResources = recipe.currentVersionData?.resources || recipe.resources || [];
+  return versionResources.map((resource) => {
+    const resourceId = resource.resource_ref_id || resource.resourceId || resource.resource_code;
+    const catalog = getResource(resourceId);
+    return {
+      resource_ref_id: resourceId,
+      resource_type: resource.resource_type || resource.resourceType || "other",
+      available_quantity: Number(catalog?.available || 0),
+      unit: resource.unit,
+      unit_cost: Number(catalog?.cost ?? resource.unit_cost ?? resource.unitCost ?? 0),
+      source: catalog?.source || "catalogo no disponible"
+    };
+  });
+}
+
+function formatRecipeValidationQuantity(quantity, resourceType) {
+  return formatNumber(resourceType === "Mano de obra" || resourceType === "Maquinaria" ? Number(quantity) / 60 : quantity);
+}
+
+async function saveOrderForm(event) {
   event.preventDefault();
   const order = buildOrderFromForm(event.currentTarget);
   const errors = validateOrder(order);
   renderFormErrors(errors);
   if (errors.length) return;
+  if (getApiMode() === "api") {
+    const recipe=mockDb.findRecipe(order.recipeId);
+    if (!recipe?.currentVersionId) { renderFormErrors(["La orden requiere una version de receta aprobada vigente."]);return; }
+    const currentStages=recipe.currentVersionData?.stages?.filter((stage)=>stage.status==="active")||[];
+    try {
+      const saved=await createProductionOrder({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,observed_resources:buildObservedProductionResources(recipe),required_at:order.dueDate?`${order.dueDate}T23:59:59Z`:null,priority:({Alta:"high",Media:"medium",Baja:"low"})[order.priority]||"medium",responsible_name:order.responsible,stage_assignments:currentStages.map((stage,index)=>({recipe_stage_id:stage.id,responsible_name:order.areas[index]?.responsible||null})),source_type:"manual"});
+      localStorage.setItem("erclave-selected-recipe",order.recipeId);localStorage.setItem("erclave-validation-qty",order.quantity);closeModal();await loadProductionApiData();showToast(`Orden ${saved.code} generada en Production API.`);openOrderPrintModal(saved.id);
+    } catch(error) { renderFormErrors([error.message||"No se pudo generar la orden."]); }
+    return;
+  }
   mockDb.addOrder(order);
   localStorage.setItem("erclave-selected-recipe", order.recipeId);
   localStorage.setItem("erclave-validation-qty", order.quantity);
@@ -8488,17 +8759,30 @@ function advanceOrderStatus(orderId) {
   showToast(`Orden ${order.id} ahora esta en ${next}.`);
 }
 
-function changeOrderStatus(orderId, status) {
+async function changeOrderStatus(orderId, status) {
   const order = mockDb.findOrder(orderId);
   if (!order || !orderStatusCatalog.includes(status)) return;
+  if (getApiMode() === "api") {
+    try { await updateProductionOrderStatus(orderId,{status:toApiOrderStatus(status),reason:"Cambio operativo desde la orden"});await loadProductionApiData();showToast(`Orden ${order.id} ahora esta en ${status}.`); }
+    catch(error){showToast(error.message||"La transicion de orden no es valida.");}
+    return;
+  }
   mockDb.updateOrder({ ...order, status });
   render();
   showToast(`Orden ${order.id} ahora esta en ${status}.`);
 }
 
-function advanceOrderStage(orderId, stageIndex) {
+async function advanceOrderStage(orderId, stageIndex) {
   const order = mockDb.findOrder(orderId);
   if (!order || !order.areas?.[stageIndex]) return;
+  if (getApiMode() === "api") {
+    const stage=order.areas[stageIndex];
+    const next=stage.status==="Pendiente"?"in_progress":stage.status==="En proceso"?"completed":stage.status==="Bloqueada"?"in_progress":null;
+    if (!next) { showToast("La etapa ya es terminal y no puede reiniciarse.");return; }
+    try { await updateProductionOrderStage(stage.id,{status:next,notes:"Avance registrado desde Produccion"});await loadProductionApiData();showToast(`${order.id} actualizo la etapa ${stage.area}.`); }
+    catch(error){showToast(error.message||"La transicion de etapa no es valida.");}
+    return;
+  }
   const stages = order.areas.map((stage, index) => {
     if (index !== stageIndex) return stage;
     const nextStatus = stage.status === "Pendiente" ? "En proceso" : stage.status === "En proceso" ? "Terminada" : "Pendiente";
@@ -8547,7 +8831,7 @@ function openOrderPrintModal(orderId) {
         </div>
         <div class="print-grid">
           <p><strong>Producto:</strong> ${order.recipeName}</p>
-          <p><strong>Receta:</strong> ${recipe.id} · v${recipe.version}</p>
+          <p><strong>Receta:</strong> ${formatRecipeDisplayLabel(recipe)} · v${recipe.version}</p>
           <p><strong>Cantidad:</strong> ${order.quantity} ${order.unit}</p>
           <p><strong>Estado:</strong> ${order.status}</p>
           <p><strong>Prioridad:</strong> ${order.priority}</p>

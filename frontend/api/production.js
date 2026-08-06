@@ -14,12 +14,18 @@ function productionRequest(path, options = {}) {
 }
 
 export async function getProductionCatalog() {
-  const [products, recipes] = await Promise.all([
+  const [products, recipes, machines, orders] = await Promise.all([
     productionRequest("/v1/production/product-services?limit=200"),
-    productionRequest("/v1/production/recipes?limit=200")
+    productionRequest("/v1/production/recipes?limit=200"),
+    productionRequest("/v1/production/machines"),
+    productionRequest("/v1/production/orders?limit=200")
   ]);
-  return { products: products.data, recipes: recipes.data };
+  return { products: products.data, recipes: recipes.data, machines: machines.data, orders: orders.data };
 }
+
+export async function createProductionProductService(payload){return (await productionRequest("/v1/production/product-services",{method:"POST",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
+export async function updateProductionProductService(id,payload){return (await productionRequest(`/v1/production/product-services/${id}`,{method:"PATCH",body:JSON.stringify(payload)})).data;}
+export async function updateProductionProductServiceStatus(id,payload){return (await productionRequest(`/v1/production/product-services/${id}/status`,{method:"PATCH",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
 
 export async function createProductionRecipe(payload) {
   return (await productionRequest("/v1/production/recipes", { method: "POST", headers: commandHeaders(), body: JSON.stringify(payload) })).data;
@@ -40,3 +46,10 @@ export async function submitProductionRecipeVersion(versionId) {
 export async function approveProductionRecipeVersion(versionId, payload = {}) {
   return (await productionRequest(`/v1/production/recipe-versions/${versionId}/approve`, { method: "POST", headers: commandHeaders(), body: JSON.stringify(payload) })).data;
 }
+
+export async function createProductionMachine(payload){return (await productionRequest("/v1/production/machines",{method:"POST",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
+export async function updateProductionMachine(id,payload){return (await productionRequest(`/v1/production/machines/${id}`,{method:"PATCH",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
+export async function validateProductionResources(payload){return (await productionRequest("/v1/production/resource-validations",{method:"POST",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
+export async function createProductionOrder(payload){return (await productionRequest("/v1/production/orders",{method:"POST",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
+export async function updateProductionOrderStatus(id,payload){return (await productionRequest(`/v1/production/orders/${id}/status`,{method:"PATCH",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
+export async function updateProductionOrderStage(id,payload){return (await productionRequest(`/v1/production/order-stages/${id}`,{method:"PATCH",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}

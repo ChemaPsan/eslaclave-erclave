@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import json
+import os
 from urllib import request
 from urllib.error import HTTPError, URLError
 from typing import Callable
@@ -40,8 +41,19 @@ def _ensure_firebase_app(settings: Settings) -> None:
         _firebase_app_initialized = True
         return
 
+    emulator_host = os.getenv("FIREBASE_AUTH_EMULATOR_HOST", "").strip()
+    if emulator_host and settings.environment != "local":
+        raise ErclaveError(
+            "firebase_emulator_forbidden",
+            "Firebase Auth Emulator is allowed only in the local environment.",
+            status_code=500,
+        )
+
     options = {"projectId": settings.firebase_project_id} if settings.firebase_project_id else None
-    firebase_admin.initialize_app(credentials.ApplicationDefault(), options)
+    if emulator_host:
+        firebase_admin.initialize_app(options=options)
+    else:
+        firebase_admin.initialize_app(credentials.ApplicationDefault(), options)
     _firebase_app_initialized = True
 
 

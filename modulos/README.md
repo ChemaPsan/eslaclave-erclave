@@ -43,11 +43,11 @@ Cada módulo deberá documentarse con una estructura similar:
 | Produccion | Modulo de referencia funcional para catalogo de productos/servicios, recetas, ordenes con snapshot de receta/version, validacion de recursos, areas/puestos y maquinaria. |
 | Almacenes | Alta, busqueda y edicion de almacenes; catalogo de articulos; movimientos manuales con validacion de salida; existencias calculadas; Kardex como consulta; Reservas queda deshabilitado para una fase posterior. |
 | Ventas | Alta, busqueda y edicion de clientes con perfil comercial y fiscal; cotizaciones multipartida ligadas a clientes y productos/servicios dados de alta; pedidos desde cotizaciones aprobadas con costo/margen estimado y bitacora de ajustes; entregas con estatus, notas y seguimiento; PDF generico imprimible. |
-| Administracion | Documentacion de catalogos base, permisos, roles y configuracion transversal; implementacion UI pendiente. |
-| Recursos Humanos | Modulo independiente con entitlement por tenant, permisos propios, areas y puestos persistidos por `hr-service`. |
+| Administracion | UI y `admin-service` reales en QA para organizacion, usuarios, roles, permisos, entitlements, sesion y backoffice. |
+| Recursos Humanos | Servicio, schema, contrato y UI implementados en Local; schema vacio en QA, pero servicio y entitlement aun no desplegados. |
 | Resto de modulos | Mantienen MVP generico para especializarse progresivamente. |
 
-En la navegacion del prototipo MVP, solo Produccion, Almacenes y Ventas quedan activos y se muestran primero en ese orden. Los demas modulos se muestran sombreados como Proximamente para mantener foco en un MVP funcional y escalable sin eliminar su documentacion ni su estructura objetivo.
+La navegacion efectiva depende de `session/context`, entitlements y permisos. Produccion, Almacenes, Recursos Humanos, Administracion y Ventas pertenecen al alcance del primer release, pero cada capacidad debe identificarse como QA, Local, mock o futura conforme a `docs/contexto/ESTADO_ACTUAL.md`; pertenecer al release no significa estar desplegada actualmente.
 
 ## Principio rector
 

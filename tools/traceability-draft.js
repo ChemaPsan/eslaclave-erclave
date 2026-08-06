@@ -55,6 +55,7 @@ const draft = `### CHG-${nextId}
 | Descripcion | Por completar con el comportamiento implementado. |
 | Motivo | Por completar con el problema resuelto. |
 | Impacto | Por completar con consumidores, compatibilidad y riesgos. |
+| APIs afectadas | Separar contratos modificados, endpoints consumidos sin cambio y APIs no tocadas; indicar metodo, ruta, servicio y permiso. Escribir Ninguna cuando no aplique. |
 | Validacion | \`npm.cmd run verify\`. |
 | Observaciones | Por completar con pendientes reales o indicar que no hay pendientes conocidos. |
 `;

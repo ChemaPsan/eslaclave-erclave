@@ -18,7 +18,6 @@ function commandHeaders(extraHeaders = {}) {
 export async function getAdminDashboard() {
   const tenantId = getDemoTenantId();
   const session = await getSessionContext();
-  const actorId = session?.user?.id || getDemoActorId();
 
   const tenant = await apiRequest(`/v1/tenants/${tenantId}`);
   const entitlements = await apiRequest(`/v1/tenants/${tenantId}/entitlements`);
@@ -26,17 +25,7 @@ export async function getAdminDashboard() {
   const users = await apiRequest("/v1/users", { headers: { "X-Tenant-Id": tenantId } });
   const roles = await apiRequest("/v1/roles", { headers: { "X-Tenant-Id": tenantId } });
   const permissions = await apiRequest("/v1/permissions", { headers: { "X-Tenant-Id": tenantId } });
-  const policy = await apiRequest("/v1/policy/evaluate", {
-    method: "POST",
-    body: JSON.stringify({
-      tenant_id: tenantId,
-      actor_id: actorId,
-      module: "admin",
-      resource: "tenant",
-      action: "read",
-      scope: {}
-    })
-  });
+  const canReadTenant = (session?.permissions || []).includes("admin.tenant.read");
 
   return {
     tenant: tenant.data,
@@ -47,7 +36,11 @@ export async function getAdminDashboard() {
     users: users.data,
     roles: roles.data,
     permissions: permissions.data,
-    policy: policy.data
+    policy: {
+      allowed: canReadTenant,
+      reason: canReadTenant ? "session_permission" : "permission_not_granted",
+      matched_permissions: canReadTenant ? ["admin.tenant.read"] : []
+    }
   };
 }
 

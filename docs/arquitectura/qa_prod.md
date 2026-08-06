@@ -10,6 +10,10 @@ Diagrama editable:
 
 Documento relacionado:
 
+- `docs/arquitectura/fronteras_ambientes_local_qa_produccion.md` como fuente normativa de fronteras, preflight y promocion.
+
+La definicion vigente establece Local completamente aislado con Firebase Emulator. Cualquier consumo de QA desde un proceso local se denomina `local conectado a QA` y requiere autorizacion explicita. QA permanece en `erclave.web.app`; Produccion usara otro dominio y un proyecto GCP separado.
+
 - `docs/arquitectura/onboarding_comercial_saas.md`
 
 ---

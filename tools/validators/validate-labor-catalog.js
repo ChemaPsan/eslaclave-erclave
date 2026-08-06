@@ -47,6 +47,14 @@ if (/name=["']area["']/.test(roleModal)) {
   errors.push("frontend/app.js: labor role form must not accept a free-text area.");
 }
 
+const areaSaveFlow = readText("frontend/app.js").split("async function saveLaborAreaForm", 2)[1]?.split("function openLaborRoleModal", 1)[0] || "";
+if (areaSaveFlow.includes("createProductionProductService") || areaSaveFlow.includes("updateProductionProductService")) {
+  errors.push("frontend/app.js: labor area save flow must not call Production product APIs.");
+}
+if (areaSaveFlow.indexOf("const item =") > areaSaveFlow.indexOf("await createHrArea")) {
+  errors.push("frontend/app.js: labor area item must be initialized before the HR API flow.");
+}
+
 try {
   const resourcesSource = `${readText("frontend/data/resources.js").replaceAll("export const ", "const ")}\n({ defaultLaborAreas, defaultLaborRoles, defaultProductsServices, defaultMachines, defaultRecipes, defaultOrders });`;
   const defaults = vm.runInNewContext(resourcesSource, {});

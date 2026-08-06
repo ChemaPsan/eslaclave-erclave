@@ -223,7 +223,7 @@ Administra tenants, usuarios, roles, permisos, modulos activos, unidades de nego
 | `PATCH` | `/v1/tenants/{tenant_id}` | `admin.tenant.update` | No | Editar datos generales del tenant. |
 | `POST` | `/v1/tenants/{tenant_id}/suspend` | `admin.tenant.suspend` | Si | Suspender tenant. |
 | `POST` | `/v1/tenants/{tenant_id}/reactivate` | `admin.tenant.reactivate` | Si | Reactivar tenant. |
-| `GET` | `/v1/tenants/{tenant_id}/entitlements` | interno | No | Consultar modulos y limites. |
+| `GET` | `/v1/tenants/{tenant_id}/entitlements` | `admin.tenant.read` | No | Consultar modulos y limites del tenant seleccionado. |
 | `PUT` | `/v1/tenants/{tenant_id}/entitlements/{module_code}` | interno o `admin.entitlement.manage` | Si | Activar/desactivar modulo. |
 | `POST` | `/v1/policy/evaluate` | interno | No | Evaluar permiso y alcance. |
 | `GET` | `/v1/users` | `admin.user.read` | No | Listar usuarios del tenant. |

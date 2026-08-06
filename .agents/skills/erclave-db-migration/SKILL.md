@@ -7,6 +7,8 @@ description: Diseñar, implementar y revisar cambios persistentes seguros de ERC
 
 ## Reunir evidencia
 
+0. Usar `$erclave-environment-boundaries`; mostrar host, puerto, base, ambiente y tenant sin secretos.
+
 1. Leer `AGENTS.md` y las secciones de datos en `AGENTES.md`.
 2. Leer `docs/arquitectura/ownership_datos_mvp.md`, `docs/arquitectura/modelo_datos_mvp.md`, el contrato afectado y migraciones vecinas.
 3. Identificar fuente de verdad, schema, servicio dueño, datos existentes, volumen esperado y consumidores.

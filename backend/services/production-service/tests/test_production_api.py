@@ -1,5 +1,6 @@
 import importlib
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -22,6 +23,10 @@ get_production_repository = repositories_module.get_production_repository
 ProductServiceRead = schemas_module.ProductServiceRead
 RecipeRead = schemas_module.RecipeRead
 RecipeVersionRead = schemas_module.RecipeVersionRead
+MachineRead = schemas_module.MachineRead
+ProductionOrderRead = schemas_module.ProductionOrderRead
+ProductionOrderStageRead = schemas_module.ProductionOrderStageRead
+ResourceValidationRead = schemas_module.ResourceValidationRead
 
 
 TENANT_ID = "ten_demo"
@@ -71,6 +76,9 @@ class FakeProductionRepository:
         base_unit: str,
         target_price: float | None,
         responsible_area: str | None,
+        cost_center: str | None,
+        expected_margin: float | None,
+        description: str | None,
         idempotency_key: str,
         request_hash: str,
         actor_id: str,
@@ -98,6 +106,9 @@ class FakeProductionRepository:
         base_unit: str | None,
         target_price: float | None,
         responsible_area: str | None,
+        cost_center: str | None,
+        expected_margin: float | None,
+        description: str | None,
     ):
         if tenant_id != TENANT_ID or product_service_id != PRODUCT_SERVICE_ID:
             return None
@@ -155,6 +166,27 @@ class FakeProductionRepository:
             return None
         statuses = {"submit": "pending_approval", "approve": "approved", "obsolete": "obsolete"}
         return self._version(statuses[action])
+
+    def _machine(self):
+        return MachineRead(id="maq_demo",code="recta",name="Recta",machine_type="Costura",area_name="Produccion",available_minutes_per_day=480,cost_per_minute=1.5,status="active")
+
+    def list_machines(self, tenant_id, q=None, status=None): return [self._machine()] if tenant_id == TENANT_ID else []
+    def create_machine(self, tenant_id, payload, key, request_hash, actor_id): return self._machine() if tenant_id == TENANT_ID else None
+    def update_machine(self, tenant_id, machine_id, payload, key, request_hash, actor_id): return self._machine() if tenant_id == TENANT_ID and machine_id == "maq_demo" else None
+
+    def _validation(self):
+        return ResourceValidationRead(recipe_version_id="rcv_demo",quantity=2,unit="pza",can_release=True,planned_cost=4,validated_at=datetime.now(timezone.utc),rows=[],blockers=[])
+    def validate_resources(self, tenant_id, payload, key, request_hash, actor_id): return self._validation() if tenant_id == TENANT_ID else None
+
+    def _stage(self, status="pending"):
+        return ProductionOrderStageRead(id="ost_demo",recipe_stage_id="rst_demo",name="Mezclar",sort_order=1,status=status,planned_minutes=10,responsible_name="Ana",progress_percent=0)
+    def _order(self, status="released"):
+        return ProductionOrderRead(id="ord_demo",code="OP-001",product_service_id=PRODUCT_SERVICE_ID,recipe_id="rec_demo",recipe_version_id="rcv_demo",quantity=2,unit="pza",status=status,priority="medium",responsible_name="Ana",source_type="manual",planned_cost=4,recipe_snapshot={},resource_validation_snapshot={},stages=[self._stage()],created_at=datetime.now(timezone.utc))
+    def list_orders(self, tenant_id, limit=50, status=None): return [self._order()] if tenant_id == TENANT_ID else []
+    def get_order(self, tenant_id, order_id): return self._order() if tenant_id == TENANT_ID and order_id == "ord_demo" else None
+    def create_order(self, tenant_id, payload, key, request_hash, actor_id): return self._order() if tenant_id == TENANT_ID else None
+    def update_order_status(self, tenant_id, order_id, payload, key, request_hash, actor_id): return self._order(payload.status) if tenant_id == TENANT_ID and order_id == "ord_demo" else None
+    def update_order_stage(self, tenant_id, stage_id, payload, key, request_hash, actor_id): return self._stage(payload.status) if tenant_id == TENANT_ID and stage_id == "ost_demo" else None
 
 
 def client_with_fake_repo() -> TestClient:
@@ -220,6 +252,34 @@ def test_firebase_mode_allows_exact_permission():
         headers={"X-Tenant-Id": TENANT_ID, "Authorization": "Bearer test-token"},
     )
     assert response.status_code == 200
+
+
+def test_machine_commands_use_contract_and_tenant():
+    response=client_with_fake_repo().post("/v1/production/machines",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"machine-create-test"},json={"code":"recta","name":"Recta","machine_type":"Costura","available_minutes_per_day":480,"cost_per_minute":1.5})
+    assert response.status_code==201 and response.json()["data"]["id"]=="maq_demo"
+
+
+def test_resource_validation_returns_backend_decision():
+    response=client_with_fake_repo().post("/v1/production/resource-validations",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"resource-validation-test"},json={"recipe_version_id":"rcv_demo","quantity":2,"unit":"pza","observed_resources":[]})
+    assert response.status_code==200 and response.json()["data"]["can_release"] is True
+
+
+def test_order_create_and_state_commands_are_exposed():
+    client=client_with_fake_repo(); headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"order-create-test"}
+    created=client.post("/v1/production/orders",headers=headers,json={"recipe_version_id":"rcv_demo","quantity":2,"unit":"pza","responsible_name":"Ana"})
+    assert created.status_code==201 and created.json()["data"]["status"]=="released"
+    changed=client.patch("/v1/production/orders/ord_demo/status",headers={**headers,"Idempotency-Key":"order-status-test"},json={"status":"in_progress","reason":"Inicio autorizado"})
+    assert changed.status_code==200 and changed.json()["data"]["status"]=="in_progress"
+
+
+def test_order_stage_command_is_exposed():
+    response=client_with_fake_repo().patch("/v1/production/order-stages/ost_demo",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"stage-update-test"},json={"status":"in_progress"})
+    assert response.status_code==200 and response.json()["data"]["status"]=="in_progress"
+
+
+def test_new_production_routes_require_exact_permission_in_firebase_mode():
+    response=firebase_client([]).get("/v1/production/orders",headers={"X-Tenant-Id":TENANT_ID,"Authorization":"Bearer test-token"})
+    assert response.status_code==403 and response.json()["error"]["details"]["permission"]=="production.order.read"
 
 
 def test_list_product_services_requires_tenant_header():
@@ -355,7 +415,7 @@ RECIPE_PAYLOAD = {
     "base_quantity": 1,
     "base_unit": "pza",
     "resources": [{"resource_type": "other", "resource_code": "agua", "resource_name": "Agua", "quantity": 1, "unit": "l", "unit_cost": 2}],
-    "stages": [{"name": "Mezclar", "expected_minutes": 10}],
+    "stages": [{"labor_area_ref_id": "hra_mezclado", "labor_area_name": "Mezclado", "name": "Mezclado", "expected_minutes": 10}],
 }
 
 

@@ -20,6 +20,10 @@ from .schemas import (
     RecipeVersionResponse,
     RecipeVersionUpdateRequest,
     StatusChangeRequest,
+    MachineCreateRequest, MachineListResponse, MachineResponse, MachineUpdateRequest,
+    OrderStageResponse, OrderStageUpdateRequest, ProductionOrderCreateRequest,
+    ProductionOrderListResponse, ProductionOrderResponse, ProductionOrderStatusRequest,
+    ResourceValidationRequest, ResourceValidationResponse,
 )
 
 
@@ -89,6 +93,9 @@ def create_product_service(
         base_unit=payload.base_unit,
         target_price=payload.target_price,
         responsible_area=payload.responsible_area,
+        cost_center=payload.cost_center,
+        expected_margin=payload.expected_margin,
+        description=payload.description,
         idempotency_key=resolved_key,
         request_hash=request_fingerprint(payload),
         actor_id=access.actor_id,
@@ -129,6 +136,9 @@ def update_product_service(
         base_unit=payload.base_unit,
         target_price=payload.target_price,
         responsible_area=payload.responsible_area,
+        cost_center=payload.cost_center,
+        expected_margin=payload.expected_margin,
+        description=payload.description,
     )
     if product_service is None:
         raise ErclaveError("product_service_not_found", "Product or service not found.", status_code=404)
@@ -254,3 +264,67 @@ def approve_recipe_version(version_id: str, payload: RecipeApprovalRequest, x_te
 def obsolete_recipe_version(version_id: str, x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: ProductionRepository = Depends(get_production_repository), access: AuthorizedContext = Depends(require_production_access("production.recipe.obsolete"))) -> RecipeVersionResponse:
     key = require_idempotency_key(idempotency_key)
     return _transition_version(version_id, "obsolete", require_tenant_id(x_tenant_id), repository, key, request_fingerprint(path={"version_id": version_id, "action": "obsolete"}), access.actor_id)
+
+
+@router.get("/machines", response_model=MachineListResponse)
+def list_machines(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),q:str|None=None,status_filter:str|None=Query(None,alias="status"),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access("production.machine.read"))):
+    return MachineListResponse(data=repository.list_machines(require_tenant_id(x_tenant_id),q,status_filter))
+
+
+@router.post("/machines",response_model=MachineResponse,status_code=201)
+def create_machine(payload:MachineCreateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access("production.machine.create"))):
+    key=require_idempotency_key(idempotency_key); value=repository.create_machine(require_tenant_id(x_tenant_id),payload,key,request_fingerprint(payload),access.actor_id)
+    if value is None: raise ErclaveError("machine_conflict","Machine code already exists.",status_code=409)
+    return MachineResponse(data=value)
+
+
+@router.patch("/machines/{machine_id}",response_model=MachineResponse)
+def update_machine(machine_id:str,payload:MachineUpdateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access("production.machine.update"))):
+    key=require_idempotency_key(idempotency_key); value=repository.update_machine(require_tenant_id(x_tenant_id),machine_id,payload,key,request_fingerprint(payload,{"machine_id":machine_id}),access.actor_id)
+    if value is None: raise ErclaveError("machine_not_found","Machine not found.",status_code=404)
+    return MachineResponse(data=value)
+
+
+@router.post("/resource-validations",response_model=ResourceValidationResponse)
+def validate_resources(payload:ResourceValidationRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access("production.order.validate"))):
+    key=require_idempotency_key(idempotency_key); value=repository.validate_resources(require_tenant_id(x_tenant_id),payload,key,request_fingerprint(payload),access.actor_id)
+    if value is None: raise ErclaveError("approved_recipe_required","An approved recipe version with the requested unit is required.",status_code=422)
+    return ResourceValidationResponse(data=value)
+
+
+@router.get("/orders",response_model=ProductionOrderListResponse)
+def list_orders(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),limit:int=Query(50,ge=1,le=200),status_filter:str|None=Query(None,alias="status"),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access("production.order.read"))):
+    return ProductionOrderListResponse(data=repository.list_orders(require_tenant_id(x_tenant_id),limit,status_filter))
+
+
+@router.post("/orders",response_model=ProductionOrderResponse,status_code=201)
+def create_order(payload:ProductionOrderCreateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access("production.order.create"))):
+    key=require_idempotency_key(idempotency_key)
+    try: value=repository.create_order(require_tenant_id(x_tenant_id),payload,key,request_fingerprint(payload),access.actor_id)
+    except ValueError as exc: raise ErclaveError(str(exc),"Order cannot be released with the observed resources.",status_code=422) from exc
+    return ProductionOrderResponse(data=value)
+
+
+@router.get("/orders/{order_id}",response_model=ProductionOrderResponse)
+def get_order(order_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access("production.order.read"))):
+    value=repository.get_order(require_tenant_id(x_tenant_id),order_id)
+    if value is None: raise ErclaveError("production_order_not_found","Production order not found.",status_code=404)
+    return ProductionOrderResponse(data=value)
+
+
+@router.patch("/orders/{order_id}/status",response_model=ProductionOrderResponse)
+def update_order_status(order_id:str,payload:ProductionOrderStatusRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access("production.order.status.update"))):
+    key=require_idempotency_key(idempotency_key)
+    try: value=repository.update_order_status(require_tenant_id(x_tenant_id),order_id,payload,key,request_fingerprint(payload,{"order_id":order_id}),access.actor_id)
+    except ValueError as exc: raise ErclaveError(str(exc),"Production order status transition is invalid.",status_code=409) from exc
+    if value is None: raise ErclaveError("production_order_not_found","Production order not found.",status_code=404)
+    return ProductionOrderResponse(data=value)
+
+
+@router.patch("/order-stages/{stage_id}",response_model=OrderStageResponse)
+def update_order_stage(stage_id:str,payload:OrderStageUpdateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access("production.order_stage.update"))):
+    key=require_idempotency_key(idempotency_key)
+    try: value=repository.update_order_stage(require_tenant_id(x_tenant_id),stage_id,payload,key,request_fingerprint(payload,{"stage_id":stage_id}),access.actor_id)
+    except ValueError as exc: raise ErclaveError(str(exc),"Production order stage transition is invalid.",status_code=409) from exc
+    if value is None: raise ErclaveError("production_order_stage_not_found","Production order stage not found.",status_code=404)
+    return OrderStageResponse(data=value)

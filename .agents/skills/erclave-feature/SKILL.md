@@ -7,6 +7,8 @@ description: Implementar funcionalidades verticales completas de ERClave desde c
 
 ## Preparar
 
+0. Usar `$erclave-environment-boundaries` y confirmar ambiente, recursos y clasificacion de escritura.
+
 1. Leer `AGENTS.md`, `AGENTES.md` y `modulos/<modulo>.md`.
 2. Leer sólo los documentos de arquitectura relacionados con el cambio.
 3. Inspeccionar `git status --short`; preservar trabajo ajeno.
@@ -42,4 +44,5 @@ No acoplar microfrontends ni escribir tablas de otro servicio. No confiar en el 
 1. Ejecutar `npm run traceability:draft -- --title "Título del cambio"`.
 2. Incorporar una entrada completa y correlativa en `TRAZABILIDAD.md`.
 3. Ejecutar `npm run verify`.
-4. Informar resultado, verificaciones ejecutadas y riesgos o pendientes reales.
+4. Incluir `APIs afectadas` en trazabilidad y entrega final. Separar contratos modificados de endpoints solo consumidos; indicar metodo, ruta, servicio, permiso y cambio de request/response. Escribir `Ninguna` cuando no aplique.
+5. Informar resultado, verificaciones ejecutadas y riesgos o pendientes reales.
