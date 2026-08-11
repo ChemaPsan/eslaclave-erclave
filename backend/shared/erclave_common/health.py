@@ -21,9 +21,9 @@ def health() -> dict:
 def ready() -> dict:
     settings = get_settings()
     return {
-        "status": "ready" if settings.database_url else "degraded",
+        "status": "ready" if settings.effective_database_url else "degraded",
         "service": settings.service_name,
-        "database_configured": bool(settings.database_url),
+        "database_configured": bool(settings.effective_database_url),
     }
 
 
@@ -35,4 +35,3 @@ def version() -> dict:
         "version": settings.version,
         "api_public_base_url": settings.api_public_base_url,
     }
-

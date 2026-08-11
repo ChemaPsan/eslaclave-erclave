@@ -230,6 +230,16 @@ Reglas:
 - Cada release debe tener commit, fecha, responsable y notas.
 - El rollback debe ser posible por version de imagen o artifact.
 
+### 7.1 Pipeline QA implementado
+
+- `.github/workflows/qa-candidate.yml` es manual, exige SHA completo y construye cuatro imagenes por digest mediante identidad federada.
+- `.github/workflows/qa-release.yml` consume esos digests y separa las aprobaciones `qa-database`, `qa-services`, `qa-traffic` y `qa-frontend`.
+- Las revisiones se crean con tag `candidate` y sin trafico; el smoke comprueba ambiente, base, SHA y URL publica antes de permitir promocion.
+- El frontend QA se construye sin URLs locales, Firebase Emulator, tenant ni actor local; el mismo directorio guardado como artefacto se entrega a Firebase Hosting.
+- GitHub Pages permanece como maqueta de ejecucion manual y no publica automaticamente cambios de `main`.
+- Las cuentas runtime y el migrador son dedicados; GitHub usa Workload Identity Federation y no llaves JSON.
+- El pipeline permanece inoperante hasta aprovisionar las identidades, variables y protecciones documentadas en `infra/qa/README.md` mediante una autorizacion posterior.
+
 ---
 
 ## 8. Modulos MVP a migrar primero

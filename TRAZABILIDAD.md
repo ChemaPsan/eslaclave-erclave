@@ -2728,3 +2728,35 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consultados sin cambio:** `GET /health`, `GET /ready` y `GET /version` de Admin y Produccion. **APIs no tocadas:** endpoints funcionales de Admin, Produccion, Inventory, HR y Ventas. |
 | Validacion | `npm.cmd run session:context`, `git diff --check`, `npm.cmd run verify`, inventario GCP/Firebase sanitizado y healthchecks publicos no destructivos. |
 | Observaciones | Operacion `local-write` para documentacion y `read-only` sobre QA. No hubo migraciones, seeds, cargas, despliegues, cambios de trafico, IAM, secretos ni datos. |
+
+### CHG-180
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-07 |
+| Cambio | Prepara pipeline seguro, identidades y servicios del candidato QA |
+| Autor | Codex |
+| Archivos | `.github/workflows/qa-candidate.yml`, `.github/workflows/qa-release.yml`, `.github/workflows/pages.yml`, `backend/Dockerfile`, `backend/.dockerignore`, `backend/shared/erclave_common/config.py`, `backend/shared/erclave_common/health.py`, mains y pruebas de servicios, `backend/scripts/smoke_qa.ps1`, `tools/build-qa-frontend.js`, `tools/validators/validate-qa-release-pipeline.js`, `firebase.qa.json`, `infra/qa/*`, documentacion y `package.json` |
+| Secciones | Plataforma / QA / CI-CD / Inventory / RH / Administracion / Produccion |
+| Descripcion | Agrega construccion inmutable por SHA y digest, promocion manual con aprobaciones separadas, revisiones sin trafico, smoke, frontend sanitizado, Firebase Hosting gobernado y plan de identidades dedicadas con Workload Identity Federation. El backend rechaza configuracion local en QA/Produccion y readiness usa la base efectiva de cada servicio. |
+| Motivo | Cerrar los bloqueos de preparacion antes de solicitar autorizaciones para crear infraestructura, migrar o desplegar QA, evitando autodeploy, credenciales persistentes y configuracion localhost. |
+| Impacto | El repositorio queda preparado para construir Admin, Produccion, Inventory y RH y promoverlos de forma controlada. No crea recursos cloud ni cambia el estado operativo de QA. GitHub Pages pasa de automatico a manual. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints tecnicos con contrato sin cambio:** `GET /health`, `GET /ready`, `GET /version`; readiness ahora evalua la URL efectiva de Inventory/RH y QA/Prod valida su configuracion al arranque. **APIs no tocadas:** endpoints funcionales de Admin, Produccion, Inventory, HR y Ventas. |
+| Validacion | YAML parseable, pruebas de configuracion/CORS, build frontend QA sanitizado, validador de pipeline, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | Operacion `local-write`. No hubo migraciones, seeds, escrituras de datos, creacion IAM, publicacion de imagenes, despliegues, cambios de trafico ni modificaciones en QA/Produccion. Docker no esta instalado en el host local; el build real de imagenes queda como gate de `qa-candidate.yml`. |
+
+### CHG-181
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-08 |
+| Cambio | Aprovisiona controles previos al candidato QA |
+| Autor | Codex |
+| Archivos | Estado externo de GCP/GitHub, `infra/qa/README.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Plataforma / QA / IAM / CI-CD / Cloud SQL |
+| Descripcion | Crea Artifact Registry `erclave-qa`, seis cuentas dedicadas, WIF OIDC restringido al repositorio, bindings de minimo privilegio, cinco GitHub Environments con aprobador y variables QA. Crea un backup manual de Cloud SQL, exige cifrado y habilita PITR con siete dias de logs. |
+| Motivo | Completar exclusivamente los pasos 1, 2 y 3 previos al despliegue QA autorizado por el propietario. |
+| Impacto | El control plane de QA queda listo para construir el candidato y gobernar sus aprobaciones. No se publicaron imagenes, no se desplegaron Inventory/RH, no se modificaron revisiones ni trafico y no se publico Hosting. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** APIs administrativas de Google Cloud y GitHub para IAM, WIF, Artifact Registry, Environments, variables, backups y configuracion de Cloud SQL. **APIs no tocadas:** endpoints funcionales y tecnicos de Admin, Produccion, Inventory, HR y Ventas. |
+| Validacion | WIF `ACTIVE` y limitado a `ChemaPsan/eslaclave-erclave`; seis cuentas presentes; Artifact Registry creado; cinco environments con `ChemaPsan`; 21 variables QA presentes; backup `1786227437185` exitoso; Cloud SQL `RUNNABLE`, `ENCRYPTED_ONLY`, PITR activo y siete dias de logs. |
+| Observaciones | Operacion `qa-write` de infraestructura y configuracion. No hubo migraciones, seeds, cargas de datos, consultas SQL, builds, publicacion de imagenes, despliegues de servicios, cambios de trafico ni despliegue de frontend. |

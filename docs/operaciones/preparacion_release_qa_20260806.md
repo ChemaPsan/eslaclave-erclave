@@ -44,6 +44,17 @@
 6. Validar la revision Alembic efectiva de `erclave_qa` antes de solicitar autorizacion de migracion.
 7. Separar el workflow de GitHub Pages de la promocion gobernada a Firebase Hosting QA.
 
+## Preparacion incorporada el 2026-08-07
+
+- El codigo rechaza la URL local de Produccion y cualquier otra configuracion local al arrancar en QA/Produccion.
+- Inventory y RH quedaron incluidos en la construccion y promocion gobernada, pero siguen sin desplegarse.
+- El plan de identidades dedicadas y Workload Identity Federation esta declarado, pendiente de aprovisionamiento autorizado.
+- El pipeline manual separa imagenes, migracion, revisiones sin trafico, smoke, trafico y frontend.
+- El artefacto frontend QA se genera sin localhost, emulador ni IDs locales.
+- GitHub Pages dejo de tener trigger por `push`; esta preparacion no modifico el hosting QA.
+
+Los bloqueos de Cloud SQL, aprovisionamiento IAM, Artifact Registry, GitHub Environments y ejecucion del pipeline permanecen abiertos hasta recibir autorizaciones independientes.
+
 ## Rollback disponible
 
 - Cloud Run conserva revisiones anteriores listas para una futura estrategia de retorno de trafico.

@@ -61,6 +61,10 @@ http://localhost:4173
 
 Esto permite conectar la maqueta frontend local al backend local sin abrir la API a origenes externos.
 
+En QA y Produccion el proceso falla al iniciar si `ERCLAVE_API_PUBLIC_BASE_URL`, `ERCLAVE_ADMIN_SERVICE_URL` o `ERCLAVE_CORS_ORIGINS` contienen HTTP o hosts locales. Tambien exige Firebase real, proyecto Firebase y una URL de base obtenida por referencia desde Secret Manager. Inventory y RH pueden resolver su URL efectiva mediante `ERCLAVE_INVENTORY_DATABASE_URL` y `ERCLAVE_HR_DATABASE_URL`, respectivamente.
+
+Las imagenes se construyen desde un Dockerfile comun indicando `ERCLAVE_SERVICE_ADAPTER` como argumento de build. El pipeline QA registra y despliega el digest, nunca una etiqueta mutable. La imagen incluye Alembic para que la migracion aprobada se ejecute mediante una identidad y un Cloud Run Job separados.
+
 ## Instalacion local
 
 Desde la raiz del repo:

@@ -1,6 +1,11 @@
 # Pendientes priorizados de ERClave
 
-Ultima actualizacion: 2026-08-04.
+Ultima actualizacion: 2026-08-08.
+
+## Preparacion del release QA
+
+1. Ejecutar `qa-candidate.yml` solo despues de aprobar la escritura de imagenes en Artifact Registry y conservar sus cuatro digests.
+2. Solicitar autorizaciones independientes para migracion, revisiones Cloud Run sin trafico, movimiento de trafico y Firebase Hosting.
 
 ## Prioridad siguiente
 

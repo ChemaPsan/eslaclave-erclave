@@ -1,0 +1,57 @@
+{
+  "projectId": "erclave",
+  "region": "us-central1",
+  "principles": {
+    "deployment": "GitHub Actions authenticates with Workload Identity Federation; repository secrets must not contain service-account JSON keys.",
+    "runtime": "Each Cloud Run service uses a dedicated runtime identity.",
+    "database": "Only the migrator identity executes Alembic migrations after approval of the qa-database environment."
+  },
+  "serviceAccounts": [
+    {
+      "accountId": "erclave-admin-qa",
+      "purpose": "Runtime identity for admin-service-qa",
+      "projectRoles": ["roles/cloudsql.client"],
+      "secretAccess": ["erclave-database-url-qa"]
+    },
+    {
+      "accountId": "erclave-production-qa",
+      "purpose": "Runtime identity for production-service-qa",
+      "projectRoles": ["roles/cloudsql.client"],
+      "secretAccess": ["erclave-database-url-qa"],
+      "runInvokerOn": ["admin-service-qa"]
+    },
+    {
+      "accountId": "erclave-inventory-qa",
+      "purpose": "Runtime identity for inventory-service-qa",
+      "projectRoles": ["roles/cloudsql.client"],
+      "secretAccess": ["erclave-database-url-qa"],
+      "runInvokerOn": ["admin-service-qa"]
+    },
+    {
+      "accountId": "erclave-hr-qa",
+      "purpose": "Runtime identity for hr-service-qa",
+      "projectRoles": ["roles/cloudsql.client"],
+      "secretAccess": ["erclave-database-url-qa"],
+      "runInvokerOn": ["admin-service-qa"]
+    },
+    {
+      "accountId": "erclave-migrator-qa",
+      "purpose": "Identity for the approved Alembic Cloud Run job",
+      "projectRoles": ["roles/cloudsql.client"],
+      "secretAccess": ["erclave-database-url-qa"]
+    },
+    {
+      "accountId": "erclave-github-deployer-qa",
+      "purpose": "Federated deployment identity for the repository",
+      "projectRoles": ["roles/run.admin", "roles/artifactregistry.writer", "roles/iam.serviceAccountUser"],
+      "federatedRepository": "ChemaPsan/eslaclave-erclave"
+    }
+  ],
+  "forbidden": [
+    "Service-account JSON keys in GitHub",
+    "Default compute service account as service runtime identity",
+    "Secret Manager access at project scope when a single secret grant is sufficient",
+    "Production project roles or resources"
+  ]
+}
+
