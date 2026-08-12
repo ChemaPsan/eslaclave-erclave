@@ -157,21 +157,33 @@ jobs:
         run: |
           set -euo pipefail
           source candidate/qa-images.env
-          common=(--project "$PROJECT_ID" --region "$REGION" --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest --allow-unauthenticated --tag candidate --no-traffic --quiet)
+          common=(--project "$PROJECT_ID" --region "$REGION" --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest --allow-unauthenticated --tag candidate --quiet)
           cors="https://erclave.web.app,https://erclave.firebaseapp.com"
           admin_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=admin-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_APP_PUBLIC_BASE_URL=https://erclave.web.app@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
           inventory_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=inventory-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
           hr_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=hr-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_HR_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
           production_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=production-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
 
-          gcloud run deploy admin-service-qa --image "$ADMIN_IMAGE" --service-account "${{ vars.QA_ADMIN_RUNTIME_SERVICE_ACCOUNT }}" "${common[@]}" \
-            --set-env-vars "$admin_env"
-          gcloud run deploy inventory-service-qa --image "$INVENTORY_IMAGE" --service-account "${{ vars.QA_INVENTORY_RUNTIME_SERVICE_ACCOUNT }}" "${common[@]}" \
-            --set-env-vars "$inventory_env"
-          gcloud run deploy hr-service-qa --image "$HR_IMAGE" --service-account "${{ vars.QA_HR_RUNTIME_SERVICE_ACCOUNT }}" "${common[@]}" \
-            --set-env-vars "$hr_env"
-          gcloud run deploy production-service-qa --image "$PRODUCTION_IMAGE" --service-account "${{ vars.QA_PRODUCTION_RUNTIME_SERVICE_ACCOUNT }}" "${common[@]}" \
-            --set-env-vars "$production_env"
+          deploy_candidate() {
+            local service="$1"
+            local image="$2"
+            local service_account="$3"
+            local environment="$4"
+            local traffic_args=(--no-traffic)
+
+            if ! gcloud run services describe "$service" --project "$PROJECT_ID" --region "$REGION" >/dev/null 2>&1; then
+              echo "::notice title=Cloud Run QA bootstrap::$service does not exist; its first candidate revision must receive traffic until the qa-traffic gate normalizes the release."
+              traffic_args=()
+            fi
+
+            gcloud run deploy "$service" --image "$image" --service-account "$service_account" "${common[@]}" "${traffic_args[@]}" \
+              --set-env-vars "$environment"
+          }
+
+          deploy_candidate admin-service-qa "$ADMIN_IMAGE" "${{ vars.QA_ADMIN_RUNTIME_SERVICE_ACCOUNT }}" "$admin_env"
+          deploy_candidate inventory-service-qa "$INVENTORY_IMAGE" "${{ vars.QA_INVENTORY_RUNTIME_SERVICE_ACCOUNT }}" "$inventory_env"
+          deploy_candidate hr-service-qa "$HR_IMAGE" "${{ vars.QA_HR_RUNTIME_SERVICE_ACCOUNT }}" "$hr_env"
+          deploy_candidate production-service-qa "$PRODUCTION_IMAGE" "${{ vars.QA_PRODUCTION_RUNTIME_SERVICE_ACCOUNT }}" "$production_env"
 
       - name: Smoke candidate revision URLs
         shell: bash

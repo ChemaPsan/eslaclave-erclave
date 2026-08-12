@@ -53,6 +53,16 @@ if (!errors.length) {
     if (!release.includes(token) && !candidate.includes(token)) errors.push(`QA pipeline must include: ${token}`);
   }
   for (const token of [
+    "deploy_candidate()",
+    'gcloud run services describe "$service"',
+    "local traffic_args=(--no-traffic)",
+    "traffic_args=()",
+    '"${traffic_args[@]}"',
+    "Cloud Run QA bootstrap"
+  ]) {
+    if (!release.includes(token)) errors.push(`QA service deployment must handle first-service bootstrap: ${token}`);
+  }
+  for (const token of [
     "configure_qa_tenant:",
     'test "${{ inputs.configure_qa_tenant }}" = "true"',
     "scripts/configure_qa_tenant.py"

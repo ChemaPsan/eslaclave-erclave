@@ -16,7 +16,7 @@ Cada environment debe requerir aprobacion directa del propietario:
 
 - `qa-build`: publica imagenes candidatas en Artifact Registry.
 - `qa-database`: ejecuta la migracion aprobada y, con una confirmacion independiente, reconcilia permisos y entitlements estructurales del tenant demo.
-- `qa-services`: crea revisiones sin trafico.
+- `qa-services`: crea revisiones candidatas. En servicios existentes conserva el trafico vigente; el bootstrap de un servicio inexistente recibe trafico inicial porque Cloud Run no admite `--no-traffic` durante la creacion.
 - `qa-traffic`: mueve el trafico despues del smoke.
 - `qa-frontend`: publica el artefacto exacto en Firebase Hosting.
 
@@ -51,9 +51,9 @@ El secreto `erclave-database-url-qa` permanece exclusivamente en Secret Manager 
 2. `qa-release.yml` exige el SHA, el run candidato, `PROMOTE_ERCLAVE_QA` y confirmaciones booleanas separadas para migracion y configuracion del tenant.
 3. `qa-database` aplica Alembic solamente tras aprobacion.
 4. El job estructural idempotente sincroniza permisos y deja activos solamente `admin`, `production`, `inventory` y `hr`; no carga almacenes, articulos, movimientos, areas, puestos, recetas ni ordenes.
-5. `qa-services` crea revisiones etiquetadas `candidate` sin trafico.
+5. `qa-services` crea revisiones etiquetadas `candidate`; usa `--no-traffic` en servicios existentes y una excepcion explicita e idempotente para el primer despliegue de un servicio inexistente. Esa primera revision recibe trafico por una restriccion de Cloud Run, antes de que exista un frontend QA promovido que la consuma.
 6. El smoke valida ambiente, readiness, SHA y URLs publicas.
-7. `qa-traffic` requiere otra aprobacion para mover trafico.
+7. `qa-traffic` requiere otra aprobacion para mover el trafico de servicios existentes y normalizar todos los servicios hacia las revisiones certificadas.
 8. `qa-frontend` construye un artefacto sin localhost/emulador, lo conserva y despliega exactamente ese directorio.
 
 GitHub Pages queda como maqueta manual y ya no se publica automaticamente al cambiar `main`.

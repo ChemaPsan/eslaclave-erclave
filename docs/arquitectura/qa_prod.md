@@ -234,7 +234,7 @@ Reglas:
 
 - `.github/workflows/qa-candidate.yml` es manual, exige SHA completo y construye cuatro imagenes por digest mediante identidad federada.
 - `.github/workflows/qa-release.yml` consume esos digests y separa las aprobaciones `qa-database`, `qa-services`, `qa-traffic` y `qa-frontend`.
-- Las revisiones se crean con tag `candidate` y sin trafico; el smoke comprueba ambiente, base, SHA y URL publica antes de permitir promocion.
+- Las revisiones se crean con tag `candidate`; los servicios existentes conservan su trafico con `--no-traffic`. Cloud Run obliga a que el bootstrap de un servicio inexistente reciba trafico inicial, por lo que el pipeline detecta esa condicion de forma idempotente, la limita a `qa-services` y ejecuta el smoke antes de permitir continuar hacia `qa-traffic` o frontend.
 - El frontend QA se construye sin URLs locales, Firebase Emulator, tenant ni actor local; el mismo directorio guardado como artefacto se entrega a Firebase Hosting.
 - GitHub Pages permanece como maqueta de ejecucion manual y no publica automaticamente cambios de `main`.
 - Las cuentas runtime y el migrador son dedicados; GitHub usa Workload Identity Federation y no llaves JSON.

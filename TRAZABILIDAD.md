@@ -2776,3 +2776,19 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** endpoints vigentes de Admin, Produccion, Inventory y HR usados por el frontend en modo API; permisos y request/response permanecen sin cambios. **APIs no tocadas:** Ventas y modulos sin backend. |
 | Validacion | `npm.cmd run validate:qa-release`, YAML parseable, build frontend QA sanitizado, pruebas dirigidas `11 passed`, `git diff --check` y `npm.cmd run verify` con `135 passed, 1 skipped`. |
 | Observaciones | Operacion `local-write` y consultas `read-only` de inventario Cloud Run/Cloud SQL QA. No hubo migraciones, seeds, cargas de datos, builds Docker, publicacion de imagenes, despliegues, cambios de trafico, entitlements ni Hosting. |
+
+### CHG-183
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-12 |
+| Cambio | Hace idempotente el bootstrap de servicios nuevos en QA |
+| Autor | Codex |
+| Archivos | `.github/workflows/qa-release.yml`, `tools/validators/validate-qa-release-pipeline.js`, `infra/qa/README.md`, `docs/arquitectura/qa_prod.md`, `docs/contexto/PENDIENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Plataforma / QA / Cloud Run / CI-CD / Inventory / RH |
+| Descripcion | El despliegue candidato detecta si cada servicio Cloud Run existe. Conserva `--no-traffic` para Admin, Produccion y cualquier servicio previamente creado; durante el bootstrap omite ese argumento porque Cloud Run exige trafico en la primera revision. Todos quedan etiquetados `candidate` y deben superar el smoke antes del siguiente gate. |
+| Motivo | El primer intento CHG-182 desplego Admin con cero trafico, pero se detuvo al crear Inventory porque Cloud Run rechaza `--no-traffic` para servicios inexistentes. |
+| Impacto | El retry puede completar Inventory y RH sin reconstruir imagenes ni alterar los digests aprobados. La excepcion de trafico se limita a servicios nuevos; `qa-traffic` y `qa-frontend` conservan aprobaciones independientes. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de Admin, Produccion, Inventory y RH durante smoke; request/response y permisos permanecen sin cambios. **APIs no tocadas:** endpoints funcionales de todos los servicios. |
+| Validacion | Validador QA ampliado para exigir deteccion de servicio, `--no-traffic` en revisiones existentes y excepcion bootstrap; YAML parseable, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | Operacion inicial `local-write`. El intento previo fue `qa-write`: migro Cloud SQL a `head`, reconcilio permisos/entitlements y creo `admin-service-qa-00014-weg` con tag `candidate` y cero trafico; Inventory/RH no se crearon, Produccion no cambio y no hubo Hosting. |
