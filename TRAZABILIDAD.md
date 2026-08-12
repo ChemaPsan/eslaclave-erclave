@@ -2792,3 +2792,19 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de Admin, Produccion, Inventory y RH durante smoke; request/response y permisos permanecen sin cambios. **APIs no tocadas:** endpoints funcionales de todos los servicios. |
 | Validacion | Validador QA ampliado para exigir deteccion de servicio, `--no-traffic` en revisiones existentes y excepcion bootstrap; YAML parseable, `git diff --check` y `npm.cmd run verify`. |
 | Observaciones | Operacion inicial `local-write`. El intento previo fue `qa-write`: migro Cloud SQL a `head`, reconcilio permisos/entitlements y creo `admin-service-qa-00014-weg` con tag `candidate` y cero trafico; Inventory/RH no se crearon, Produccion no cambio y no hubo Hosting. |
+
+### CHG-184
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-12 |
+| Cambio | Fija la fuente exacta del smoke en el job de servicios QA |
+| Autor | Codex |
+| Archivos | `.github/workflows/qa-release.yml`, `tools/validators/validate-qa-release-pipeline.js`, `TRAZABILIDAD.md` |
+| Secciones | Plataforma / QA / CI-CD |
+| Descripcion | `deploy_candidate` obtiene el repositorio en `inputs.release_sha` antes de ejecutar `backend/scripts/smoke_qa.ps1`. El validador delimita ese job y exige checkout, referencia inmutable y script de smoke dentro de la misma unidad de ejecucion. |
+| Motivo | Los jobs de GitHub Actions no comparten filesystem; el checkout de `preflight` no deja disponible el script para `deploy_candidate`. |
+| Impacto | El relanzamiento puede ejecutar los cuatro smokes con el script perteneciente al mismo commit cuyas imagenes por digest se promueven, sin reconstruir artefactos. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de Admin, Produccion, Inventory y RH. **APIs no tocadas:** endpoints funcionales de todos los servicios. |
+| Validacion | Validador QA dirigido, YAML parseable, `git diff --check` y `npm.cmd run verify` con `135 passed, 1 skipped`. |
+| Observaciones | Operacion `local-write`. No hubo migraciones, seeds, cargas de datos, despliegues, cambios de trafico ni Hosting durante este ajuste. |

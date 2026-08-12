@@ -30,6 +30,10 @@ if (!errors.length) {
   const dockerfile = readText("backend/Dockerfile");
   const identityPlan = JSON.parse(readText("infra/qa/identity-plan.json"));
   const firebaseQa = JSON.parse(readText("firebase.qa.json"));
+  const deployCandidateJob = release.slice(
+    release.indexOf("  deploy_candidate:"),
+    release.indexOf("  promote_traffic:")
+  );
 
   if (!candidate.includes("workflow_dispatch:") || /\n\s+push:/.test(candidate)) {
     errors.push("QA candidate workflow must be manual-only.");
@@ -61,6 +65,9 @@ if (!errors.length) {
     "Cloud Run QA bootstrap"
   ]) {
     if (!release.includes(token)) errors.push(`QA service deployment must handle first-service bootstrap: ${token}`);
+  }
+  for (const token of ["actions/checkout@v4", "ref: ${{ inputs.release_sha }}", "backend/scripts/smoke_qa.ps1"]) {
+    if (!deployCandidateJob.includes(token)) errors.push(`QA candidate job must check out its exact smoke source: ${token}`);
   }
   for (const token of [
     "configure_qa_tenant:",
