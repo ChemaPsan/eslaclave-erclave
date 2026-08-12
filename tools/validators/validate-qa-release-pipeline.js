@@ -7,6 +7,7 @@ const requiredFiles = [
   ".github/workflows/qa-candidate.yml",
   ".github/workflows/qa-release.yml",
   "backend/scripts/smoke_qa.ps1",
+  "backend/scripts/promote_qa_traffic.ps1",
   "firebase.qa.json",
   "infra/qa/identity-plan.json",
   "infra/qa/README.md",
@@ -27,6 +28,7 @@ if (!errors.length) {
   const frontendConfig = readText("frontend/api/config.js");
   const mockDb = readText("frontend/data/mockDb.js");
   const smokeQa = readText("backend/scripts/smoke_qa.ps1");
+  const promoteQaTraffic = readText("backend/scripts/promote_qa_traffic.ps1");
   const qaSeed = readText("backend/scripts/seed_admin_qa_demo.py");
   const dockerfile = readText("backend/Dockerfile");
   const identityPlan = JSON.parse(readText("infra/qa/identity-plan.json"));
@@ -34,6 +36,10 @@ if (!errors.length) {
   const deployCandidateJob = release.slice(
     release.indexOf("  deploy_candidate:"),
     release.indexOf("  promote_traffic:")
+  );
+  const promoteTrafficJob = release.slice(
+    release.indexOf("  promote_traffic:"),
+    release.indexOf("  frontend:")
   );
 
   if (!candidate.includes("workflow_dispatch:") || /\n\s+push:/.test(candidate)) {
@@ -55,7 +61,9 @@ if (!errors.length) {
     "firebase-tools@15.1.0",
     "ERCLAVE_API_PUBLIC_BASE_URL"
   ]) {
-    if (!release.includes(token) && !candidate.includes(token)) errors.push(`QA pipeline must include: ${token}`);
+    if (![release, candidate, promoteQaTraffic].some((content) => content.includes(token))) {
+      errors.push(`QA pipeline must include: ${token}`);
+    }
   }
   for (const token of [
     "deploy_candidate()",
@@ -72,6 +80,19 @@ if (!errors.length) {
   }
   for (const token of ["--format json", "$LASTEXITCODE -ne 0", "ConvertFrom-Json", "$_.tag -eq $RevisionTag"]) {
     if (!smokeQa.includes(token)) errors.push(`QA smoke must resolve the tagged revision from Cloud Run JSON: ${token}`);
+  }
+  for (const token of ["actions/checkout@v4", "ref: ${{ github.sha }}", "backend/scripts/promote_qa_traffic.ps1"]) {
+    if (!promoteTrafficJob.includes(token)) errors.push(`QA traffic job must use its immutable promotion source: ${token}`);
+  }
+  for (const token of [
+    "$targets = @()",
+    "$candidates.Count -ne 1",
+    "$targets.Count -ne $services.Count",
+    "services update-traffic",
+    '--to-revisions "$($target.Revision)=100"',
+    "$_.revisionName -eq $target.Revision -and $_.percent -eq 100"
+  ]) {
+    if (!promoteQaTraffic.includes(token)) errors.push(`QA traffic promotion must preflight and verify every revision: ${token}`);
   }
   for (const token of [
     "configure_qa_tenant:",

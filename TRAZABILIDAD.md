@@ -2840,3 +2840,19 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de Admin, Produccion, Inventory y RH. **APIs no tocadas:** endpoints funcionales de todos los servicios. |
 | Validacion | Guardrail del job actualizado a `github.sha`, YAML parseable, smoke `read-only` de los cuatro candidatos, `git diff --check` y `npm.cmd run verify` con `135 passed, 1 skipped`. |
 | Observaciones | Operacion `local-write`. No hubo migraciones, seeds, cargas de datos, despliegues, cambios de trafico ni Hosting durante este ajuste. |
+
+### CHG-187
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-12 |
+| Cambio | Hace atomico el preflight de promocion de trafico QA |
+| Autor | Codex |
+| Archivos | `backend/scripts/promote_qa_traffic.ps1`, `.github/workflows/qa-release.yml`, `tools/validators/validate-qa-release-pipeline.js`, `infra/qa/README.md`, `docs/arquitectura/qa_prod.md`, `TRAZABILIDAD.md` |
+| Secciones | Plataforma / QA / Cloud Run / CI-CD |
+| Descripcion | El job `qa-traffic` obtiene su script desde `github.sha`, describe los cuatro servicios en JSON, exige exactamente un tag `candidate` por servicio y completa la lista antes de modificar routing. Luego mueve cada servicio y verifica 100% en la revision certificada. |
+| Motivo | La proyeccion `gcloud value(status.traffic[?tag=candidate].revisionName)` devolvia vacio y abortaba antes del primer cambio aunque los tags existian. |
+| Impacto | Una resolucion incompleta ya no puede iniciar una promocion parcial. Los cambios de routing siguen bajo aprobacion `qa-traffic`; `qa-frontend` permanece independiente. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** APIs administrativas de Cloud Run para describir servicios y actualizar trafico. **APIs no tocadas:** endpoints tecnicos y funcionales de Admin, Produccion, Inventory y RH. |
+| Validacion | Sintaxis PowerShell, guardrail de preflight/promocion/verificacion, YAML parseable, estado QA previo sin cambios parciales, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | Operacion inicial `local-write` y consultas `read-only` de Cloud Run. El intento anterior de `qa-traffic` fallo antes de cambiar servicios; las cuatro revisiones estables conservaron 100% y `qa-frontend` fue omitido. |

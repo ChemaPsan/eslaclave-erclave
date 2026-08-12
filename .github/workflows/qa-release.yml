@@ -198,6 +198,10 @@ jobs:
     environment: qa-traffic
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.QA_WORKLOAD_IDENTITY_PROVIDER }}
@@ -205,13 +209,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Route QA traffic to certified candidate revisions
         shell: bash
-        run: |
-          set -euo pipefail
-          for service in admin-service-qa inventory-service-qa hr-service-qa production-service-qa; do
-            revision="$(gcloud run services describe "$service" --project "$PROJECT_ID" --region "$REGION" --format='value(status.traffic[?tag=candidate].revisionName)')"
-            test -n "$revision"
-            gcloud run services update-traffic "$service" --project "$PROJECT_ID" --region "$REGION" --to-revisions "$revision=100" --quiet
-          done
+        run: pwsh -File backend/scripts/promote_qa_traffic.ps1 -ProjectId "$PROJECT_ID" -Region "$REGION" -RevisionTag candidate
 
   frontend:
     needs: promote_traffic
