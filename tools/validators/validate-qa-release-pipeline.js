@@ -67,8 +67,8 @@ if (!errors.length) {
   ]) {
     if (!release.includes(token)) errors.push(`QA service deployment must handle first-service bootstrap: ${token}`);
   }
-  for (const token of ["actions/checkout@v4", "ref: ${{ inputs.release_sha }}", "backend/scripts/smoke_qa.ps1"]) {
-    if (!deployCandidateJob.includes(token)) errors.push(`QA candidate job must check out its exact smoke source: ${token}`);
+  for (const token of ["actions/checkout@v4", "ref: ${{ github.sha }}", "backend/scripts/smoke_qa.ps1"]) {
+    if (!deployCandidateJob.includes(token)) errors.push(`QA candidate job must check out its immutable workflow smoke source: ${token}`);
   }
   for (const token of ["--format json", "$LASTEXITCODE -ne 0", "ConvertFrom-Json", "$_.tag -eq $RevisionTag"]) {
     if (!smokeQa.includes(token)) errors.push(`QA smoke must resolve the tagged revision from Cloud Run JSON: ${token}`);

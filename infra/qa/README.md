@@ -52,7 +52,7 @@ El secreto `erclave-database-url-qa` permanece exclusivamente en Secret Manager 
 3. `qa-database` aplica Alembic solamente tras aprobacion.
 4. El job estructural idempotente sincroniza permisos y deja activos solamente `admin`, `production`, `inventory` y `hr`; no carga almacenes, articulos, movimientos, areas, puestos, recetas ni ordenes.
 5. `qa-services` crea revisiones etiquetadas `candidate`; usa `--no-traffic` en servicios existentes y una excepcion explicita e idempotente para el primer despliegue de un servicio inexistente. Esa primera revision recibe trafico por una restriccion de Cloud Run, antes de que exista un frontend QA promovido que la consuma.
-6. El smoke valida ambiente, readiness, SHA y URLs publicas.
+6. El smoke se obtiene del SHA inmutable que ejecuta el workflow y valida ambiente, readiness, SHA candidato y URLs publicas. Las imagenes siguen siendo exactamente los digests asociados a `release_sha`; corregir automatizacion de release no obliga a reconstruirlas.
 7. `qa-traffic` requiere otra aprobacion para mover el trafico de servicios existentes y normalizar todos los servicios hacia las revisiones certificadas.
 8. `qa-frontend` construye un artefacto sin localhost/emulador, lo conserva y despliega exactamente ese directorio.
 
