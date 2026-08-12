@@ -2856,3 +2856,19 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** APIs administrativas de Cloud Run para describir servicios y actualizar trafico. **APIs no tocadas:** endpoints tecnicos y funcionales de Admin, Produccion, Inventory y RH. |
 | Validacion | Sintaxis PowerShell, guardrail de preflight/promocion/verificacion, YAML parseable, estado QA previo sin cambios parciales, `git diff --check` y `npm.cmd run verify`. |
 | Observaciones | Operacion inicial `local-write` y consultas `read-only` de Cloud Run. El intento anterior de `qa-traffic` fallo antes de cambiar servicios; las cuatro revisiones estables conservaron 100% y `qa-frontend` fue omitido. |
+
+### CHG-188
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-12 |
+| Cambio | Promueve y verifica el trafico backend CHG-182 en QA |
+| Autor | Codex |
+| Archivos | Estado externo de GitHub Actions y Cloud Run, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Plataforma / QA / Cloud Run / Admin / Produccion / Inventory / RH |
+| Descripcion | La ejecucion `31647661435` revalido los digests CHG-182, repitio Alembic/configuracion estructural de forma idempotente, desplego candidatos a cero trafico, aprobo los cuatro smoke tests y promovio las revisiones certificadas al 100%. |
+| Motivo | Completar la autorizacion `qa-traffic` despues de corregir la resolucion del tag `candidate` y proteger el preflight de los cuatro servicios. |
+| Impacto | QA sirve Admin `00017-dih`, Inventory `00003-zus`, RH `00003-gor` y Produccion `00008-vuv`, todos con version `4e9c6881dab61239f1abd5fff688019fdd697977`. Inventory/RH usan Cloud SQL real y no contienen carga funcional o dummy. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de los cuatro servicios; APIs administrativas de Cloud Run para routing. **APIs no tocadas:** contratos funcionales de Admin, Produccion, Inventory y RH. |
+| Validacion | Jobs `preflight`, `migrate`, `deploy_candidate` y `promote_traffic` exitosos; comprobacion independiente de 100% por revision, ambiente `qa`, readiness, Cloud SQL configurado y SHA candidato en las cuatro URLs estables. |
+| Observaciones | Operacion `qa-write` limitada a migracion/configuracion idempotente, revisiones Cloud Run y routing. Tenant estructural `ten_739ee59d765d5e14818674800d`. No hubo datos funcionales, fixtures, seeds demo, Produccion real ni Firebase Hosting; `qa-frontend` permanece pendiente. Rollback: Admin `00013-xmz`, Inventory `00001-jum`, RH `00001-vin` y Produccion `00005-bmp`. |

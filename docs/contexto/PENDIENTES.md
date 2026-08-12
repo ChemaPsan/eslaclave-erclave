@@ -4,10 +4,10 @@ Ultima actualizacion: 2026-08-12.
 
 ## Preparacion del release QA
 
-1. Corregir y relanzar `qa-services` para completar el bootstrap de Inventory/RH; Admin ya conserva un candidato CHG-182 con cero trafico y Produccion mantiene su revision vigente.
-2. Confirmar que los cuatro smokes candidatos validan ambiente QA, readiness de Cloud SQL, SHA y URL publica.
-3. Solicitar autorizaciones independientes para movimiento de trafico y Firebase Hosting.
-4. Tras promover trafico y frontend, comprobar con sesion Firebase QA que Admin, Produccion, Inventory y RH recargan exclusivamente datos de Cloud SQL y que Ventas/Integraciones permanecen inactivos.
+1. Solicitar autorizacion independiente para `qa-frontend`; el backend CHG-182 ya recibe 100% del trafico en Admin, Produccion, Inventory y RH.
+2. Publicar exactamente el artefacto frontend sanitizado del mismo `release_sha`, sin reconstruir configuracion local, mocks ni datos.
+3. Tras publicar el frontend, comprobar con sesion Firebase QA que Admin, Produccion, Inventory y RH recargan exclusivamente datos de Cloud SQL y que Ventas/Integraciones permanecen inactivos.
+4. Ejecutar pruebas funcionales y negativas de permisos/aislamiento antes de considerar el candidato listo para salir de QA.
 
 ## Prioridad siguiente
 

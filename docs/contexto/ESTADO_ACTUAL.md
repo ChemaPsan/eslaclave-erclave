@@ -1,6 +1,6 @@
 # Estado actual de ERClave
 
-Ultima actualizacion: 2026-08-11.
+Ultima actualizacion: 2026-08-12.
 
 ## Ambiente local
 
@@ -26,7 +26,7 @@ Ultima actualizacion: 2026-08-11.
 - Los grants historicos internos pueden conservarse como relacion para no perder trazabilidad, pero ya no ingresan a `session/context` ni producen autorizacion efectiva. El owner conserva un piso administrativo y no puede inactivarse.
 - El payload anterior `permission_ids + scope` permanece compatible y esta deprecado; la interfaz nueva usa `assignments + expected_revision`.
 - Mientras un ambiente no tenga `admin.role.permissions.manage`, Roles permite abrir `Ver permisos` en modo de solo lectura y explica por que la edicion permanece bloqueada; no aplica fallback de escritura inseguro.
-- La revision vigente es `20260730_0011`; agrega metadata de permisos, revision por rol y registro de comandos idempotentes. El 2026-07-31 se promovio a `erclave_qa` con respaldo previo, seed idempotente ejecutado dos veces y validaciones posteriores aprobadas.
+- La revision vigente de Cloud SQL QA es `20260805_0013`; incluye metadata de permisos, revision por rol, comandos idempotentes, Inventory, RH y referencias externas de areas en Produccion. La promocion gobernada del 2026-08-12 repitio Alembic y la configuracion estructural de forma idempotente sin cargar datos funcionales.
 
 ### Produccion
 
@@ -91,7 +91,9 @@ Ultima actualizacion: 2026-08-11.
 - El 2026-08-08 se aprovisionaron en GCP QA las seis identidades dedicadas de `infra/qa/identity-plan.json`, Artifact Registry `erclave-qa` y Workload Identity Federation limitado a `ChemaPsan/eslaclave-erclave`; los accesos al secreto, Artifact Registry, Cloud SQL, Cloud Run y `actAs` quedaron delimitados por recurso o identidad.
 - Los GitHub Environments `qa-build`, `qa-database`, `qa-services`, `qa-traffic` y `qa-frontend` exigen aprobacion de `ChemaPsan`; las variables QA del pipeline quedaron configuradas sin llaves JSON ni URL de base de datos.
 - Cloud SQL QA exige conexiones cifradas (`ENCRYPTED_ONLY`), tiene PITR activo con siete dias de logs y conserva el backup manual exitoso `1786227437185`, creado antes del endurecimiento.
-- Inventory y RH continuan sin servicio desplegado en QA; preparar el pipeline no cambia su estado operativo.
-- En el corte CHG-182, `npm.cmd run verify` aprobo validadores, compilacion y `135 passed, 1 skipped`; no se construyeron imagenes ni se modifico QA.
+- El candidato CHG-182 fue construido una sola vez por digest y promovido en QA. `admin-service-qa-00017-dih`, `inventory-service-qa-00003-zus`, `hr-service-qa-00003-gor` y `production-service-qa-00008-vuv` reciben 100% del trafico; las cuatro URLs estables aprobaron health, readiness con Cloud SQL y version `4e9c6881dab61239f1abd5fff688019fdd697977`.
+- Inventory y RH ya tienen servicio real desplegado en QA y entitlements estructurales activos para `ERClave Demo QA`; sus catalogos permanecen sin carga funcional o dummy. Ventas e Integraciones permanecen inactivos.
+- El frontend sanitizado CHG-182 aun no se ha publicado en Firebase Hosting: `qa-frontend` conserva una aprobacion independiente pendiente. El Hosting existente no es evidencia de que la nueva funcionalidad sea visible todavia.
+- En los cortes CHG-182 a CHG-187, `npm.cmd run verify` aprobo validadores, compilacion y `135 passed, 1 skipped`; el release QA `31647661435` aprobo migracion, configuracion, despliegue, smoke y promocion de trafico backend.
 
 Este archivo debe describir hechos comprobados, no planes ni aspiraciones.
