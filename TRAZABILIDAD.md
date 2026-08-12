@@ -2808,3 +2808,19 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de Admin, Produccion, Inventory y RH. **APIs no tocadas:** endpoints funcionales de todos los servicios. |
 | Validacion | Validador QA dirigido, YAML parseable, `git diff --check` y `npm.cmd run verify` con `135 passed, 1 skipped`. |
 | Observaciones | Operacion `local-write`. No hubo migraciones, seeds, cargas de datos, despliegues, cambios de trafico ni Hosting durante este ajuste. |
+
+### CHG-185
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-12 |
+| Cambio | Corrige la resolucion de URLs candidatas en el smoke QA |
+| Autor | Codex |
+| Archivos | `backend/scripts/smoke_qa.ps1`, `tools/validators/validate-qa-release-pipeline.js`, `TRAZABILIDAD.md` |
+| Secciones | Plataforma / QA / Cloud Run / CI-CD |
+| Descripcion | El smoke obtiene la descripcion JSON de cada servicio, valida la salida de `gcloud` y selecciona en PowerShell la entrada de trafico cuyo tag coincide con `candidate`, en lugar de depender de una proyeccion `value()` que devolvia vacio. |
+| Motivo | El release corregido desplego las cuatro revisiones, pero el smoke no encontro la URL de Admin aunque Cloud Run si la exponia dentro de `status.traffic`. |
+| Impacto | Los checks de health, readiness, version y URL publica pueden ejecutarse contra la revision etiquetada exacta. El gate sigue bloqueando `qa-traffic` si cualquier servicio incumple. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de Admin, Produccion, Inventory y RH. **APIs no tocadas:** endpoints funcionales de todos los servicios. |
+| Validacion | Resolucion de tags protegida por el validador QA, sintaxis PowerShell, smoke `read-only` de los cuatro candidatos con health/readiness/Cloud SQL/SHA aprobados, YAML parseable, `git diff --check` y `npm.cmd run verify` con `135 passed, 1 skipped`. |
+| Observaciones | Operacion `local-write` y consultas `read-only` de Cloud Run. El intento previo fue `qa-write`: creo candidatos Admin/Produccion con cero trafico y realizo el bootstrap Inventory/RH con trafico inicial obligatorio; no hubo promocion `qa-traffic` ni Hosting. |

@@ -19,10 +19,17 @@ $services = @(
 )
 
 foreach ($service in $services) {
-    $url = gcloud run services describe $service `
+    $serviceJson = gcloud run services describe $service `
         --project $ProjectId `
         --region $Region `
-        --format "value(status.traffic[?tag=$RevisionTag].url)"
+        --format json
+    if ($LASTEXITCODE -ne 0) { throw "Cloud Run description failed for $service." }
+
+    $serviceDescription = $serviceJson | ConvertFrom-Json
+    $candidateTraffic = @($serviceDescription.status.traffic) |
+        Where-Object { $_.tag -eq $RevisionTag } |
+        Select-Object -First 1
+    $url = $candidateTraffic.url
     if (-not $url) { throw "Candidate URL was not found for $service." }
 
     $health = Invoke-RestMethod -Method Get -Uri "$url/health"
@@ -44,4 +51,3 @@ foreach ($service in $services) {
     }
     Write-Output "[OK] $service candidate health, readiness and version validated."
 }
-

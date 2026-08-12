@@ -26,6 +26,7 @@ if (!errors.length) {
   const builder = readText("tools/build-qa-frontend.js");
   const frontendConfig = readText("frontend/api/config.js");
   const mockDb = readText("frontend/data/mockDb.js");
+  const smokeQa = readText("backend/scripts/smoke_qa.ps1");
   const qaSeed = readText("backend/scripts/seed_admin_qa_demo.py");
   const dockerfile = readText("backend/Dockerfile");
   const identityPlan = JSON.parse(readText("infra/qa/identity-plan.json"));
@@ -68,6 +69,9 @@ if (!errors.length) {
   }
   for (const token of ["actions/checkout@v4", "ref: ${{ inputs.release_sha }}", "backend/scripts/smoke_qa.ps1"]) {
     if (!deployCandidateJob.includes(token)) errors.push(`QA candidate job must check out its exact smoke source: ${token}`);
+  }
+  for (const token of ["--format json", "$LASTEXITCODE -ne 0", "ConvertFrom-Json", "$_.tag -eq $RevisionTag"]) {
+    if (!smokeQa.includes(token)) errors.push(`QA smoke must resolve the tagged revision from Cloud Run JSON: ${token}`);
   }
   for (const token of [
     "configure_qa_tenant:",
