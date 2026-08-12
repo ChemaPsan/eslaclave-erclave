@@ -2824,3 +2824,19 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de Admin, Produccion, Inventory y RH. **APIs no tocadas:** endpoints funcionales de todos los servicios. |
 | Validacion | Resolucion de tags protegida por el validador QA, sintaxis PowerShell, smoke `read-only` de los cuatro candidatos con health/readiness/Cloud SQL/SHA aprobados, YAML parseable, `git diff --check` y `npm.cmd run verify` con `135 passed, 1 skipped`. |
 | Observaciones | Operacion `local-write` y consultas `read-only` de Cloud Run. El intento previo fue `qa-write`: creo candidatos Admin/Produccion con cero trafico y realizo el bootstrap Inventory/RH con trafico inicial obligatorio; no hubo promocion `qa-traffic` ni Hosting. |
+
+### CHG-186
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-12 |
+| Cambio | Separa el SHA del workflow del SHA del artefacto candidato |
+| Autor | Codex |
+| Archivos | `.github/workflows/qa-release.yml`, `tools/validators/validate-qa-release-pipeline.js`, `infra/qa/README.md`, `docs/arquitectura/qa_prod.md`, `TRAZABILIDAD.md` |
+| Secciones | Plataforma / QA / CI-CD |
+| Descripcion | `deploy_candidate` obtiene el smoke desde `github.sha`, que identifica inmutablemente la revision del workflow despachado. Los contenedores, la version esperada y el manifest siguen ligados a `inputs.release_sha` y a sus digests aprobados. |
+| Motivo | Usar `inputs.release_sha` para el checkout tambien fijaba una version anterior de la automatizacion y evitaba que una correccion del smoke validara el mismo candidato ya construido. |
+| Impacto | Las correcciones al pipeline pueden revalidar artefactos inmutables sin reconstruirlos ni alterar su identidad. El smoke continua exigiendo que `/version` coincida con el SHA candidato. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de Admin, Produccion, Inventory y RH. **APIs no tocadas:** endpoints funcionales de todos los servicios. |
+| Validacion | Guardrail del job actualizado a `github.sha`, YAML parseable, smoke `read-only` de los cuatro candidatos, `git diff --check` y `npm.cmd run verify` con `135 passed, 1 skipped`. |
+| Observaciones | Operacion `local-write`. No hubo migraciones, seeds, cargas de datos, despliegues, cambios de trafico ni Hosting durante este ajuste. |
