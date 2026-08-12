@@ -1,0 +1,21 @@
+const fs=require("fs");const path=require("path");const root=path.resolve(__dirname,"../..");const read=(file)=>fs.readFileSync(path.join(root,file),"utf8");
+const checks={
+  "frontend/api/production.js":["createProductionProductService","updateProductionProductServiceStatus","validateProductionResources","createProductionOrder","updateProductionOrderStage","createProductionMachine"],
+  "frontend/api/hr.js":["getHrAreas","/v1/hr/areas"],
+  "frontend/app.js":["currentVersionData","mapApiOrderRecipeSnapshot","setLaborRecipeResources","setMachineRecipeResources","return `${item.name} - ${item.sku}`","formatRecipeDisplayLabel","<span>${item.sku} · ${item.kind} · ${item.unit}</span>","step=\"${isTimed ? \"any\" : \"0.01\"}\"","recipeTimeDecimalHelp","await getHrAreas()","<select name=\"area\"","data-area-id","machineAreaRequiredFirst","production_only: true","productiveAreaIds","renderRecipeResourceGroup(\"material\"","renderRecipeResourceGroup(\"labor\"","renderRecipeResourceGroup(\"machine\"","data-storage-factor","recipe-area-option","name=\"stageAreaId\"","labor_area_ref_id","await createProductionProductService","await createProductionMachine","await createProductionOrder","await updateProductionOrderStatus","await updateProductionOrderStage"],
+  "frontend/styles.css":[".machine-area-empty",".recipe-resource-groups",".recipe-resource-group",".recipe-resource-type-icon",".recipe-area-grid",".recipe-area-option input:checked + .recipe-area-card",".recipe-area-option input:focus-visible + .recipe-area-card"],
+  "frontend/utils/production.js":["Array.isArray(safeRecipe.resources)","if (!shouldUseSeedData()) return [...inventoryResources, ...laborRecipeResources, ...machineRecipeResources]"],
+  "backend/services/production-service/app/api.py":["/resource-validations","/orders","/order-stages/{stage_id}","/machines"],
+  "backend/services/production-service/app/repositories.py":["def validate_resources","def create_order","invalid_order_transition","invalid_stage_transition","resource_validation_snapshot","def _audit"],
+  "backend/alembic/versions/20260804_0012_production_cycle.py":["production_orders","production_order_stages","machines","audit_events","down_revision: str | None = \"20260730_0011\""],
+  "backend/alembic/versions/20260805_0013_recipe_hr_areas.py":["labor_area_ref_id","labor_area_name","down_revision: str | None = \"20260804_0012\""],
+  "contracts/api/production-service.openapi.yaml":["ProductionOrderStatusRequest","observed_resources","available_minutes_per_day","resource_validation_snapshot"]
+};
+const errors=[];for(const [file,tokens] of Object.entries(checks)){const source=read(file);for(const token of tokens)if(!source.includes(token))errors.push(`${file} is missing ${token}`);}
+const app=read("frontend/app.js");const productFlow=app.split("async function saveProductServiceForm",2)[1]?.split("function syncRecipesForProductService",1)[0]||"";const orderFlow=app.split("async function saveOrderForm",2)[1]?.split("function advanceOrderStatus",1)[0]||"";
+const machineModal=app.split("async function openMachineModal",2)[1]?.split("async function saveMachineForm",1)[0]||"";if(machineModal.includes('input name="area"'))errors.push("Machine area must be selected from HR, not entered as free text.");
+const recipeLookup=app.split("function renderRecipeProductLookup",2)[1]?.split("function selectRecipeProductFromLookup",1)[0]||"";if(recipeLookup.includes("<span>${item.id}"))errors.push("Recipe product lookup must not expose internal product IDs as visible copy.");
+const recipeList=app.split("function renderRecipeList",2)[1]?.split("function renderFlow",1)[0]||"";if(recipeList.includes("<strong>${recipe.id}"))errors.push("Recipe list must not expose internal recipe IDs as its visible title.");
+if(productFlow.indexOf("await createProductionProductService")>productFlow.indexOf("mockDb.addProductService"))errors.push("Product API flow must precede mock fallback.");
+if(orderFlow.indexOf("await createProductionOrder")>orderFlow.indexOf("mockDb.addOrder"))errors.push("Order API flow must precede mock fallback.");
+if(errors.length){console.error(errors.map(x=>`[ERROR] ${x}`).join("\n"));process.exit(1);}console.log("[OK] Production products, recipes, validation, machines, orders and stages use the real API cycle.");

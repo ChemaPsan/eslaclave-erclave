@@ -1,0 +1,4 @@
+interface:
+  display_name: "ERClave Environment Boundaries"
+  short_description: "Protege las fronteras entre Local, QA y Produccion"
+  default_prompt: "Usa $erclave-environment-boundaries para verificar el ambiente y sus dependencias antes de ejecutar esta operacion."

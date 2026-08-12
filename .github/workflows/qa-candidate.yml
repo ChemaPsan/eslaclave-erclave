@@ -1,0 +1,110 @@
+name: Build immutable QA candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full 40-character commit SHA to build
+        required: true
+        type: string
+      confirmation:
+        description: Type BUILD_ERCLAVE_QA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: erclave-qa-candidate
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate explicit QA build authorization
+        shell: bash
+        run: |
+          test "${{ inputs.confirmation }}" = "BUILD_ERCLAVE_QA"
+          [[ "${{ inputs.release_sha }}" =~ ^[0-9a-f]{40}$ ]]
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Verify exact source
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ inputs.release_sha }}"
+          python -m pip install -e "./backend[dev]"
+          npm run verify
+
+  build:
+    needs: validate
+    environment: qa-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - name: Validate QA target
+        shell: bash
+        run: |
+          test "${{ vars.QA_GCP_PROJECT_ID }}" = "erclave"
+          test -n "${{ vars.QA_GCP_REGION }}"
+          test -n "${{ vars.QA_ARTIFACT_REPOSITORY }}"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.QA_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.QA_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Authenticate Docker to Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.QA_GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build and publish immutable service images
+        shell: bash
+        env:
+          PROJECT_ID: ${{ vars.QA_GCP_PROJECT_ID }}
+          REGION: ${{ vars.QA_GCP_REGION }}
+          REPOSITORY: ${{ vars.QA_ARTIFACT_REPOSITORY }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          : > qa-images.env
+          for entry in \
+            "admin:admin_service_adapter" \
+            "production:production_service_adapter" \
+            "inventory:inventory_service_adapter" \
+            "hr:hr_service_adapter"; do
+            service="${entry%%:*}"
+            adapter="${entry##*:}"
+            image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$service-service:$RELEASE_SHA"
+            docker build --file backend/Dockerfile --build-arg "ERCLAVE_SERVICE_ADAPTER=$adapter" --tag "$image" .
+            docker push "$image"
+            digest="$(gcloud artifacts docker images describe "$image" --format='value(image_summary.digest)')"
+            test -n "$digest"
+            printf '%s_IMAGE=%s@%s\n' "${service^^}" "${image%:*}" "$digest" >> qa-images.env
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qa-images-${{ inputs.release_sha }}
+          path: qa-images.env
+          retention-days: 30
+          if-no-files-found: error

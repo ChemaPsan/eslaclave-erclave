@@ -21,7 +21,20 @@ import {
   updateTenantRole,
   updateTenantSetting
 } from "./api/admin.js";
-import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId, getDemoTenantId, getConfiguredTenantId, setActiveTenantId } from "./api/config.js";
+import {
+  approveProductionRecipeVersion,
+  createProductionRecipe,
+  createProductionRecipeVersion,
+  getProductionCatalog,
+  submitProductionRecipeVersion,
+  updateProductionRecipeVersion
+  ,createProductionProductService, updateProductionProductService, updateProductionProductServiceStatus,
+  createProductionMachine, updateProductionMachine, validateProductionResources,
+  createProductionOrder, updateProductionOrderStatus, updateProductionOrderStage
+} from "./api/production.js";
+import { createInventoryItem, createInventoryMovement, createInventoryWarehouse, getInventoryBalances, getInventoryCatalog, getInventoryItems, getInventoryMovements, updateInventoryItem, updateInventoryWarehouse } from "./api/inventory.js";
+import { createHrArea, createHrPosition, getHrAreas, getHrCatalog, updateHrArea, updateHrPosition } from "./api/hr.js";
+import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId, getDemoTenantId, setActiveTenantId, isInventoryApiEnabled } from "./api/config.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "./auth.js";
 import {
   calculateRecipe,
@@ -31,6 +44,9 @@ import {
   getRecipeApprovalStatus,
   getRecipeStandardCost,
   getRecipeResourceCatalog,
+  setInventoryRecipeResources,
+  setLaborRecipeResources,
+  setMachineRecipeResources,
   getReleaseReview,
   getResource,
   isRecipeApproved
@@ -53,6 +69,13 @@ const state = {
     data: null,
     error: ""
   },
+  productionApi: { status: "idle", error: "" },
+  inventoryApi: { status: "idle", error: "" },
+  permissionEditor: null,
+  inventoryMovements: { status: "idle", error: "" },
+  inventoryItems: { status: "idle", error: "" },
+  inventoryBalances: { status: "idle", data: [], page: {}, error: "", queryKey: "", cursor: "", previousCursors: [] },
+  hrApi: { status: "idle", error: "" },
   tenantResolution: {
     status: "idle",
     tenants: [],
@@ -69,14 +92,25 @@ const state = {
 };
 
 const orderStatusCatalog = ["Liberada", "En espera de recursos", "En produccion", "Pausada", "En validacion", "Terminada", "Cancelada"];
-const mvpModuleIds = ["produccion", "almacenes", "ventas"];
+const mvpModuleIds = ["produccion", "almacenes", "recursos-humanos", "ventas"];
 const backendModuleByUiModule = {
   administracion: "admin",
   produccion: "production",
   almacenes: "inventory",
+  "recursos-humanos": "hr",
   ventas: "sales"
 };
 const uiModuleByBackendModule = Object.fromEntries(Object.entries(backendModuleByUiModule).map(([ui, backend]) => [backend, ui]));
+const adminPermissionModuleCatalog = Object.freeze({
+  admin: { es: "Administracion", en: "Administration", order: 10 },
+  production: { es: "Produccion", en: "Production", order: 20 },
+  hr: { es: "Recursos Humanos", en: "Human Resources", order: 25 },
+  inventory: { es: "Almacenes", en: "Inventory", order: 30 },
+  sales: { es: "Ventas", en: "Sales", order: 40 },
+  billing: { es: "Billing", en: "Billing", order: 50 },
+  provisioning: { es: "Provisioning", en: "Provisioning", order: 60 },
+  integrations: { es: "Integraciones", en: "Integrations", order: 70 }
+});
 
 const shell = document.querySelector(".app-shell");
 const moduleNav = document.getElementById("moduleNav");
@@ -177,8 +211,37 @@ function getNavigationModules() {
   });
 }
 
+function getAdminPermissionModuleLabel(moduleCode) {
+  return adminPermissionModuleCatalog[moduleCode]?.[state.lang] || moduleCode;
+}
+
+function groupAdminPermissions(permissions = []) {
+  const grouped = permissions.reduce((groups, permission) => {
+    const moduleCode = permission.module_code || "admin";
+    groups[moduleCode] = groups[moduleCode] || [];
+    groups[moduleCode].push(permission);
+    return groups;
+  }, {});
+  return Object.entries(grouped)
+    .sort(([left], [right]) => {
+      const leftOrder = adminPermissionModuleCatalog[left]?.order ?? 999;
+      const rightOrder = adminPermissionModuleCatalog[right]?.order ?? 999;
+      return leftOrder - rightOrder || left.localeCompare(right);
+    })
+    .map(([moduleCode, modulePermissions]) => ({
+      moduleCode,
+      label: getAdminPermissionModuleLabel(moduleCode),
+      permissions: modulePermissions.slice().sort((left, right) => left.code.localeCompare(right.code))
+    }));
+}
+
 function getSessionContextData() {
   return getApiMode() === "api" ? state.sessionApi.data : null;
+}
+
+function hasPermission(permission) {
+  if (getApiMode() !== "api") return true;
+  return (getSessionContextData()?.permissions || []).includes(permission);
 }
 
 function isAuthRequired() {
@@ -203,7 +266,7 @@ function isApiContextLoading() {
 }
 
 function shouldUseSeedModuleData() {
-  return getApiMode() !== "api" || getDemoTenantId() === getConfiguredTenantId();
+  return getApiMode() !== "api";
 }
 
 function getActiveUiModuleIds() {
@@ -258,6 +321,9 @@ function renderNav() {
   moduleNav.querySelectorAll("[data-submodule-nav]").forEach((button) => {
     button.addEventListener("click", () => {
       if (!isModuleAccessible(button.dataset.module)) return;
+      if (button.dataset.module === "produccion" && button.dataset.submoduleNav === "ordenes") {
+        localStorage.removeItem("erclave-production-orders-product");
+      }
       navigateTo({ active: button.dataset.module, activeSubmodule: button.dataset.submoduleNav, laborArea: "" });
     });
   });
@@ -294,6 +360,18 @@ function renderPanel() {
     return;
   }
   if (module.id === "produccion") {
+    if (getApiMode() === "api" && state.sessionApi.status === "ready") {
+      if (state.productionApi.status === "idle") loadProductionApiData();
+      if (state.productionApi.status === "loading" && !mockDb.loadRecipes().length) {
+        renderAdminLoadingPanel(module, "Cargando Produccion");
+        return;
+      }
+      if (state.productionApi.status === "error") {
+        modulePanel.innerHTML = `<section class="section-card"><strong>No se pudo cargar Produccion</strong><p>${state.productionApi.error}</p><button class="secondary-action" data-action="retry-production-api">Reintentar</button></section>`;
+        modulePanel.querySelector("[data-action='retry-production-api']")?.addEventListener("click", () => { state.productionApi.status = "idle"; render(); });
+        return;
+      }
+    }
     const production = getProductionModuleData();
     module.table = { ...module.table, rows: production.rows };
     if (module.tableEn) module.tableEn = { ...module.tableEn, rows: production.rows };
@@ -316,9 +394,30 @@ function renderPanel() {
       renderProductionSubmodulePanel(module);
       return;
     }
+  } else if (module.id === "recursos-humanos") {
+    if (getApiMode() === "api" && state.sessionApi.status === "ready" && state.hrApi.status === "idle") loadHrApiData();
+    if (state.hrApi.status === "loading" && !mockDb.loadLaborAreas().length) { renderAdminLoadingPanel(module, "Cargando Recursos Humanos"); return; }
+    if (state.hrApi.status === "error") { modulePanel.innerHTML=`<section class="section-card"><strong>No se pudo cargar Recursos Humanos</strong><p>${state.hrApi.error}</p><button class="secondary-action" data-action="retry-hr-api">Reintentar</button></section>`;modulePanel.querySelector("[data-action='retry-hr-api']")?.addEventListener("click",()=>{state.hrApi.status="idle";render();});return; }
+    const areas = mockDb.loadLaborAreas();
+    const roles = mockDb.loadLaborRoles();
+    module.kpis = [["Areas", String(areas.length), "positive"], ["Puestos", String(roles.length), "positive"], ["Productivos", String(roles.filter((role) => role.intervenesInProduction !== false).length), "positive"]];
+    module.kpisEn = [["Areas", String(areas.length), "positive"], ["Positions", String(roles.length), "positive"], ["Production", String(roles.filter((role) => role.intervenesInProduction !== false).length), "positive"]];
+    if (state.activeSubmodule) { renderProductionSubmodulePanel(module); return; }
   } else if (module.id === "administracion") {
     renderAdminApiPanel(module);
     return;
+  } else if (module.id === "almacenes" && getApiMode() === "api" && isInventoryApiEnabled() && state.sessionApi.status === "ready") {
+    if (state.inventoryApi.status === "idle") loadInventoryApiData();
+    if (state.inventoryApi.status === "loading" && !mockDb.loadModuleRecords("almacenes").length) {
+      renderAdminLoadingPanel(module, "Cargando Almacenes");
+      return;
+    }
+    if (state.inventoryApi.status === "error") {
+      modulePanel.innerHTML = `<section class="section-card"><strong>No se pudo cargar Almacenes</strong><p>${state.inventoryApi.error}</p><button class="secondary-action" data-action="retry-inventory-api">Reintentar</button></section>`;
+      modulePanel.querySelector("[data-action='retry-inventory-api']")?.addEventListener("click", () => { state.inventoryApi.status = "idle"; render(); });
+      return;
+    }
+    if (state.activeSubmodule) { renderGenericSubmodulePanel(module); return; }
   } else if (state.activeSubmodule) {
     renderGenericSubmodulePanel(module);
     return;
@@ -360,7 +459,7 @@ function renderPanel() {
       <div class="module-hero">
         <h1>${label}</h1>
         <p>${moduleSummary}</p>
-        <button class="primary-action hero-action" type="button" data-action="${module.id === "produccion" ? "open-order" : "module-primary"}">
+        <button class="primary-action hero-action" type="button" data-action="${module.id === "produccion" ? "open-order" : module.id === "recursos-humanos" ? "open-labor-area-form" : "module-primary"}">
           <span>＋</span>
           <span>${modulePrimary}</span>
         </button>
@@ -469,7 +568,7 @@ function renderPanel() {
             `
           )
           .join("")}
-        <button class="secondary-action full" type="button" data-action="${module.id === "produccion" ? "open-recipe" : "module-primary"}">${module.id === "produccion" ? t("newRecipe") : t("openForm")}</button>
+        <button class="secondary-action full" type="button" data-action="${module.id === "produccion" ? "open-recipe" : module.id === "recursos-humanos" ? "open-labor-area-form" : "module-primary"}">${module.id === "produccion" ? t("newRecipe") : module.id === "recursos-humanos" ? t("newLaborArea") : t("openForm")}</button>
       </section>
     </div>
 
@@ -605,8 +704,11 @@ function getMockAdminDashboard() {
 }
 
 function getAdminPanelData() {
-  if (getApiMode() === "api") return state.adminApi.data;
-  return getMockAdminDashboard();
+  const data = getApiMode() === "api" ? state.adminApi.data : getMockAdminDashboard();
+  if (!data) return data;
+  const entitlements = [...(data.entitlements || [])];
+  if (!entitlements.some((item) => item.module_code === "hr")) entitlements.push({ module_code: "hr", status: "inactive", limits: {} });
+  return { ...data, entitlements: entitlements.sort((a, b) => a.module_code.localeCompare(b.module_code)) };
 }
 
 function loadAdminApiDashboard() {
@@ -617,11 +719,13 @@ function loadAdminApiDashboard() {
   render();
   getAdminDashboard()
     .then((data) => {
+      if (state.permissionEditor) rebasePermissionEditor(data);
       state.adminApi = { status: "ready", data, error: "" };
       render();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: null, error: error.message || "API unavailable" };
+      if (state.permissionEditor) state.permissionEditor.status = "editing";
+      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
       render();
     });
 }
@@ -856,9 +960,10 @@ function renderAdminRoleForm(apiMode, apiStatus) {
 
 function renderAdminRoleCard(role, data, apiMode, apiStatus) {
   const isApiReady = apiMode === "api" && apiStatus === "ready";
-  const assigned = new Set(role.permissions || []);
+  const canManagePermissions = isApiReady && hasPermission("admin.role.permissions.manage");
+  const canViewPermissions = isApiReady && hasPermission("admin.role.read");
+  const canUpdateRole = isApiReady && hasPermission("admin.role.update");
   const nextStatus = role.status === "active" ? "inactive" : "active";
-  const availablePermissions = data.permissions.filter((permission) => !assigned.has(permission.code));
   return `
     <article class="admin-record admin-role-record">
       <div class="admin-record-main">
@@ -870,21 +975,209 @@ function renderAdminRoleCard(role, data, apiMode, apiStatus) {
         <span>${(role.permissions || []).length} permisos</span>
       </div>
       <div class="admin-actions">
-        <button class="secondary-action small-action" type="button" data-action="admin-toggle-role" data-role-id="${role.id}" data-next-status="${nextStatus}" ${isApiReady ? "" : "disabled"}>
+        <button class="${canManagePermissions ? "primary-action" : "secondary-action"} small-action" type="button" data-action="admin-edit-role-permissions" data-role-id="${role.id}" ${canViewPermissions ? "" : "disabled"} title="${canManagePermissions ? t("editRolePermissions") : t("permissionReadOnlyTitle")}">
+          ${canManagePermissions ? t("editRolePermissions") : t("viewRolePermissions")}
+        </button>
+        <button class="secondary-action small-action" type="button" data-action="admin-toggle-role" data-role-id="${role.id}" data-next-status="${nextStatus}" ${canUpdateRole ? "" : "disabled"}>
           ${role.status === "active" ? "Inactivar" : "Activar"}
         </button>
       </div>
-      <form class="admin-permission-form" data-form="admin-role-permission" data-role-id="${role.id}">
-        <label>
-          <span>Permiso</span>
-          <select name="permission_id" ${isApiReady && availablePermissions.length ? "" : "disabled"}>
-            ${availablePermissions.map((permission) => `<option value="${permission.id}">${permission.code}</option>`).join("")}
-          </select>
-        </label>
-        <button class="secondary-action small-action" type="submit" ${isApiReady && availablePermissions.length ? "" : "disabled"}>Asignar</button>
-      </form>
     </article>
   `;
+}
+
+function getRoleAssignments(role, permissions) {
+  if (Array.isArray(role.permission_assignments)) return role.permission_assignments;
+  const codes = new Set(role.permissions || []);
+  return permissions.filter((permission) => codes.has(permission.code)).map((permission) => ({
+    permission_id: permission.id,
+    code: permission.code,
+    scope: {}
+  }));
+}
+
+function openPermissionEditor(roleId) {
+  if (!hasPermission("admin.role.read")) return;
+  const data = getAdminPanelData();
+  const role = data.roles.find((item) => item.id === roleId);
+  if (!role) return;
+  const assignments = getRoleAssignments(role, data.permissions);
+  state.permissionEditor = {
+    roleId,
+    original: new Map(assignments.map((item) => [item.permission_id, { ...item, scope: item.scope || {} }])),
+    draft: new Map(assignments.map((item) => [item.permission_id, { ...item, scope: item.scope || {} }])),
+    expectedRevision: role.permission_revision ?? 0,
+    search: "",
+    filter: "all",
+    collapsed: new Set(),
+    status: "editing",
+    error: "",
+    conflict: false
+  };
+  render();
+}
+
+function rebasePermissionEditor(data) {
+  const editor = state.permissionEditor;
+  if (!editor) return;
+  const role = data.roles.find((item) => item.id === editor.roleId);
+  if (!role) {
+    editor.status = "editing";
+    editor.error = t("roleNoLongerAvailable");
+    return;
+  }
+  const serverAssignments = getRoleAssignments(role, data.permissions);
+  const nextOriginal = new Map(serverAssignments.map((item) => [item.permission_id, { ...item, scope: item.scope || {} }]));
+  const nextDraft = new Map(nextOriginal);
+  const touchedIds = new Set([...editor.original.keys(), ...editor.draft.keys()]);
+  touchedIds.forEach((permissionId) => {
+    const wasSelected = editor.original.has(permissionId);
+    const isSelected = editor.draft.has(permissionId);
+    if (wasSelected === isSelected) return;
+    if (isSelected) nextDraft.set(permissionId, editor.draft.get(permissionId));
+    else nextDraft.delete(permissionId);
+  });
+  editor.original = nextOriginal;
+  editor.draft = nextDraft;
+  editor.expectedRevision = role.permission_revision;
+  editor.status = "editing";
+  editor.error = "";
+  editor.conflict = false;
+}
+
+function getPermissionCopy(permission) {
+  const name = state.lang === "en" ? permission.display_name_en : permission.display_name_es;
+  const description = state.lang === "en" ? permission.description_en : permission.description_es;
+  return { name: name || permission.code, description: description || "" };
+}
+
+function permissionChanged(editor, permissionId) {
+  return editor.original.has(permissionId) !== editor.draft.has(permissionId);
+}
+
+function getPermissionEditorDiff(editor) {
+  return {
+    added: [...editor.draft.keys()].filter((id) => !editor.original.has(id)),
+    removed: [...editor.original.keys()].filter((id) => !editor.draft.has(id))
+  };
+}
+
+function closePermissionEditorForNavigation() {
+  const editor = state.permissionEditor;
+  if (!editor) return true;
+  const diff = getPermissionEditorDiff(editor);
+  if ((diff.added.length || diff.removed.length) && !window.confirm(t("discardPermissionPrompt"))) return false;
+  state.permissionEditor = null;
+  return true;
+}
+
+function getVisibleEditorPermissions(editor, permissions) {
+  const query = editor.search.trim().toLocaleLowerCase(state.lang === "en" ? "en-US" : "es-MX");
+  return permissions.filter((permission) => {
+    const assigned = editor.draft.has(permission.id);
+    const changed = permissionChanged(editor, permission.id);
+    if (editor.filter === "assigned" && !assigned) return false;
+    if (editor.filter === "unassigned" && assigned) return false;
+    if (editor.filter === "changes" && !changed) return false;
+    const copy = getPermissionCopy(permission);
+    return !query || [copy.name, copy.description, permission.code, permission.module_code, permission.resource, permission.action]
+      .join(" ").toLocaleLowerCase(state.lang === "en" ? "en-US" : "es-MX").includes(query);
+  });
+}
+
+function isPermissionAssignable(permission) {
+  return permission.available === true && permission.assignable_to_tenant_role === true && permission.status === "active";
+}
+
+function renderPermissionEditor(data, apiStatus) {
+  const editor = state.permissionEditor;
+  const role = data.roles.find((item) => item.id === editor?.roleId);
+  if (!editor) return "";
+  if (!role) return `<section class="permission-editor recovery-state" role="alert"><p>${t("roleNoLongerAvailable")}</p><button class="secondary-action" type="button" data-action="permission-editor-close">${t("backToRoles")}</button></section>`;
+  const visible = getVisibleEditorPermissions(editor, data.permissions);
+  const groups = groupAdminPermissions(visible);
+  const diff = getPermissionEditorDiff(editor);
+  const canManagePermissions = hasPermission("admin.role.permissions.manage");
+  const busy = editor.status !== "editing" || apiStatus !== "ready" || !canManagePermissions;
+  const permissionById = new Map(data.permissions.map((permission) => [permission.id, permission]));
+  const visibleAssignedCount = [...editor.draft.keys()].filter((id) => permissionById.has(id)).length;
+  const hiddenAssignedCount = editor.draft.size - visibleAssignedCount;
+  const diffNames = (ids) => ids.map((id) => getPermissionCopy(permissionById.get(id) || { code: id }).name);
+  return `
+    <section class="permission-editor" aria-labelledby="permissionEditorTitle">
+      <header class="permission-editor-head">
+        <div>
+          <button class="secondary-action small-action" type="button" data-action="permission-editor-close">${t("backToRoles")}</button>
+          <p class="eyebrow">${t("rolePermissions")}</p>
+          <h3 id="permissionEditorTitle">${escapeHtml(role.name)}</h3>
+          <p>${t("permissionEditorHelp")}</p>
+          ${role.system_role ? `<span class="chip warning">${t("systemRole")}</span>` : ""}
+        </div>
+        <div class="permission-editor-actions">
+          <span class="chip active" aria-live="polite">${t("permissionSelectionCount", { selected: visibleAssignedCount, total: data.permissions.length })}</span>
+          ${hiddenAssignedCount ? `<span class="chip warning">${t("hiddenAssignments", { count: hiddenAssignedCount })}</span>` : ""}
+          <button class="secondary-action" type="button" data-action="permission-editor-discard" ${diff.added.length || diff.removed.length ? "" : "disabled"}>${t("discardChanges")}</button>
+          <button class="primary-action" type="button" data-action="permission-editor-save" ${!busy && (diff.added.length || diff.removed.length) ? "" : "disabled"}>${editor.status === "saving" ? t("saving") : t("saveChanges")}</button>
+        </div>
+      </header>
+      ${editor.error ? `<div class="form-errors permission-editor-error" role="alert"><span>${escapeHtml(editor.error)}</span>${editor.conflict ? `<button class="secondary-action small-action" type="button" data-action="permission-editor-reload">${t("reloadAndCompare")}</button>` : ""}</div>` : ""}
+      ${canManagePermissions ? "" : `<div class="validation-card warning permission-readonly-notice" role="status"><strong>${t("permissionReadOnlyTitle")}</strong><p>${t("permissionReadOnlyDetail")}</p></div>`}
+      <div class="permission-editor-toolbar">
+        <label class="search-field"><span aria-hidden="true">S</span><input type="search" data-permission-search value="${escapeAttribute(editor.search)}" placeholder="${t("searchPermissions")}" aria-label="${t("searchPermissions")}" /></label>
+        <label class="preview-field"><span>${t("showPermissions")}</span><select data-permission-filter>
+          ${[["all", "allPermissions"], ["assigned", "assignedPermissions"], ["unassigned", "unassignedPermissions"], ["changes", "changedPermissions"]].map(([value, key]) => `<option value="${value}" ${editor.filter === value ? "selected" : ""}>${t(key)}</option>`).join("")}
+        </select></label>
+        <span>${t("permissionResults", { count: visible.length })}</span>
+      </div>
+      <div class="permission-editor-bulk" aria-label="${t("visibleBulkActions")}">
+        <button class="secondary-action small-action" type="button" data-action="permission-select-visible" ${canManagePermissions ? "" : "disabled"}>${t("selectVisible")}</button>
+        <button class="secondary-action small-action" type="button" data-action="permission-clear-visible" ${canManagePermissions ? "" : "disabled"}>${t("clearVisible")}</button>
+      </div>
+      <div class="permission-editor-modules">
+        ${groups.map((group) => renderPermissionModule(group, editor)).join("") || `<p class="empty-state">${t("noPermissionMatches")}</p>`}
+      </div>
+      <aside class="permission-diff" aria-live="polite" aria-label="${t("pendingChanges")}">
+        <strong>${t("pendingChanges")}: ${diff.added.length + diff.removed.length}</strong>
+        <span>${t("permissionsAdded", { count: diff.added.length })}: ${escapeHtml(diffNames(diff.added).join(", ") || "-")}</span>
+        <span>${t("permissionsRemoved", { count: diff.removed.length })}: ${escapeHtml(diffNames(diff.removed).join(", ") || "-")}</span>
+      </aside>
+    </section>`;
+}
+
+function renderPermissionModule(group, editor) {
+  const canManagePermissions = hasPermission("admin.role.permissions.manage");
+  const collapsed = editor.collapsed.has(group.moduleCode);
+  const assignable = group.permissions.filter(isPermissionAssignable);
+  const selected = assignable.filter((permission) => editor.draft.has(permission.id)).length;
+  const checked = selected === assignable.length && assignable.length > 0;
+  const mixed = selected > 0 && selected < assignable.length;
+  const panelId = `permission-module-${String(group.moduleCode).replace(/[^a-z0-9_-]/gi, "-")}`;
+  const resources = Object.entries(group.permissions.reduce((map, permission) => {
+    const key = permission.resource || t("otherPermissions");
+    map[key] = map[key] || [];
+    map[key].push(permission);
+    return map;
+  }, {}));
+  return `<section class="permission-module" data-permission-module="${group.moduleCode}">
+    <header>
+      <button class="permission-module-toggle" type="button" data-action="permission-toggle-module" data-module="${group.moduleCode}" aria-expanded="${!collapsed}" aria-controls="${panelId}">
+        <strong>${group.label}</strong><span>${group.permissions.length}</span>
+      </button>
+      <label class="permission-module-check"><input type="checkbox" data-permission-module-check="${group.moduleCode}" ${checked ? "checked" : ""} data-mixed="${mixed}" ${assignable.length && canManagePermissions ? "" : "disabled"} /><span>${t("selectModuleNamed", { module: group.label })}</span></label>
+    </header>
+    <div class="permission-resource-list" id="${panelId}" ${collapsed ? "hidden" : ""}>
+      ${resources.map(([resource, permissions]) => `<section class="permission-resource"><h4>${escapeHtml(resource)}</h4><div class="permission-action-grid">${permissions.map((permission) => renderPermissionChoice(permission, editor)).join("")}</div></section>`).join("")}
+    </div>
+  </section>`;
+}
+
+function renderPermissionChoice(permission, editor) {
+  const copy = getPermissionCopy(permission);
+  const disabled = !isPermissionAssignable(permission) || !hasPermission("admin.role.permissions.manage");
+  return `<label class="permission-choice ${disabled ? "unavailable" : ""}">
+    <input type="checkbox" data-permission-id="${permission.id}" ${editor.draft.has(permission.id) ? "checked" : ""} ${disabled ? "disabled" : ""} />
+    <span><strong>${escapeHtml(copy.name)}</strong>${copy.description ? `<small>${escapeHtml(copy.description)}</small>` : ""}<small>${escapeHtml([permission.classification, permission.risk_level].filter(Boolean).join(" · "))}</small><code>${escapeHtml(permission.code)}</code></span>
+  </label>`;
 }
 
 function createAdminRole(form) {
@@ -924,29 +1217,88 @@ function toggleAdminRole(roleId, status) {
     });
 }
 
-function assignAdminRolePermission(form) {
-  if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
-  const roleId = form.dataset.roleId;
-  const role = getAdminPanelData().roles.find((item) => item.id === roleId);
-  if (!role) return;
-  const formData = new FormData(form);
-  const permissionId = String(formData.get("permission_id") || "");
-  const currentPermissionIds = getAdminPanelData()
-    .permissions.filter((permission) => (role.permissions || []).includes(permission.code))
-    .map((permission) => permission.id);
-  const nextPermissionIds = [...new Set([...currentPermissionIds, permissionId].filter(Boolean))];
-  state.adminApi = { ...state.adminApi, status: "loading", error: "" };
+function updatePermissionDraft(permissionIds, selected) {
+  const editor = state.permissionEditor;
+  if (!editor || !hasPermission("admin.role.permissions.manage")) return;
+  const permissions = new Map(getAdminPanelData().permissions.map((permission) => [permission.id, permission]));
+  permissionIds.forEach((permissionId) => {
+    const permission = permissions.get(permissionId);
+    if (!permission || !isPermissionAssignable(permission)) return;
+    if (selected) {
+      const original = editor.original.get(permissionId);
+      editor.draft.set(permissionId, original || { permission_id: permissionId, code: permission.code, scope: {} });
+    } else {
+      editor.draft.delete(permissionId);
+    }
+  });
+}
+
+function savePermissionEditor() {
+  const editor = state.permissionEditor;
+  if (!editor || editor.status === "saving" || !hasPermission("admin.role.permissions.manage")) return;
+  editor.status = "saving";
+  editor.error = "";
   render();
-  replaceTenantRolePermissions(roleId, nextPermissionIds)
-    .then((updatedRole) => {
-      showToast(`Permisos de ${updatedRole.code} actualizados.`);
+  replaceTenantRolePermissions(editor.roleId, [...editor.draft.values()].map((assignment) => ({
+    permission_id: assignment.permission_id,
+    scope: assignment.scope || {}
+  })), editor.expectedRevision)
+    .then((role) => {
+      const assignments = getRoleAssignments(role, getAdminPanelData().permissions);
+      editor.original = new Map(assignments.map((item) => [item.permission_id, { ...item, scope: item.scope || {} }]));
+      editor.draft = new Map(editor.original);
+      editor.expectedRevision = role.permission_revision ?? editor.expectedRevision + 1;
+      editor.status = "editing";
+      editor.conflict = false;
+      showToast(t("rolePermissionsSaved", { role: role.name || role.code }));
       state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      editor.status = "editing";
+      editor.conflict = error.status === 409;
+      editor.error = editor.conflict ? t("permissionConflict") : (error.message || t("permissionSaveError"));
       render();
     });
+}
+
+function bindPermissionEditorActions() {
+  const editor = state.permissionEditor;
+  if (!editor) return;
+  modulePanel.querySelector("[data-permission-search]")?.addEventListener("input", (event) => {
+    editor.search = event.target.value;
+    render();
+    const next = modulePanel.querySelector("[data-permission-search]");
+    next?.focus();
+    next?.setSelectionRange(next.value.length, next.value.length);
+  });
+  modulePanel.querySelector("[data-permission-filter]")?.addEventListener("change", (event) => { editor.filter = event.target.value; render(); });
+  modulePanel.querySelectorAll("[data-permission-id]").forEach((input) => input.addEventListener("change", () => { updatePermissionDraft([input.dataset.permissionId], input.checked); render(); }));
+  modulePanel.querySelectorAll("[data-mixed='true']").forEach((input) => { input.indeterminate = true; input.setAttribute("aria-checked", "mixed"); });
+  modulePanel.querySelectorAll("[data-permission-module-check]").forEach((input) => input.addEventListener("change", () => {
+    const ids = getVisibleEditorPermissions(editor, getAdminPanelData().permissions).filter((permission) => permission.module_code === input.dataset.permissionModuleCheck).map((permission) => permission.id);
+    updatePermissionDraft(ids, input.checked); render();
+  }));
+  modulePanel.querySelectorAll("[data-action='permission-toggle-module']").forEach((button) => button.addEventListener("click", () => {
+    const moduleCode = button.dataset.module;
+    editor.collapsed.has(moduleCode) ? editor.collapsed.delete(moduleCode) : editor.collapsed.add(moduleCode);
+    render();
+  }));
+  modulePanel.querySelector("[data-action='permission-select-visible']")?.addEventListener("click", () => { updatePermissionDraft(getVisibleEditorPermissions(editor, getAdminPanelData().permissions).map((item) => item.id), true); render(); });
+  modulePanel.querySelector("[data-action='permission-clear-visible']")?.addEventListener("click", () => { updatePermissionDraft(getVisibleEditorPermissions(editor, getAdminPanelData().permissions).map((item) => item.id), false); render(); });
+  modulePanel.querySelector("[data-action='permission-editor-discard']")?.addEventListener("click", () => { editor.draft = new Map(editor.original); editor.error = ""; render(); });
+  modulePanel.querySelector("[data-action='permission-editor-save']")?.addEventListener("click", savePermissionEditor);
+  modulePanel.querySelector("[data-action='permission-editor-reload']")?.addEventListener("click", () => {
+    editor.status = "reloading";
+    editor.error = "";
+    render();
+    loadAdminApiDashboard();
+  });
+  modulePanel.querySelector("[data-action='permission-editor-close']")?.addEventListener("click", () => {
+    const diff = getPermissionEditorDiff(editor);
+    if ((diff.added.length || diff.removed.length) && !window.confirm(t("discardPermissionPrompt"))) return;
+    state.permissionEditor = null; render();
+  });
 }
 
 function createLocalId(prefix) {
@@ -1290,6 +1642,7 @@ function renderAdminUsersPanel(data, apiMode, apiStatus) {
 }
 
 function renderAdminRolesPanel(data, apiMode, apiStatus) {
+  if (state.permissionEditor) return `<section class="admin-section admin-section-roles admin-detail-panel">${renderPermissionEditor(data, apiStatus)}</section>`;
   return `
     <section class="admin-section admin-section-roles admin-detail-panel">
       <div class="admin-section-head">
@@ -1308,12 +1661,7 @@ function renderAdminRolesPanel(data, apiMode, apiStatus) {
 }
 
 function renderAdminPermissionsPanel(data) {
-  const grouped = data.permissions.reduce((groups, permission) => {
-    const moduleCode = permission.module_code || "admin";
-    groups[moduleCode] = groups[moduleCode] || [];
-    groups[moduleCode].push(permission);
-    return groups;
-  }, {});
+  const grouped = groupAdminPermissions(data.permissions);
   return `
     <section class="admin-section admin-detail-panel">
       <div class="admin-section-head">
@@ -1324,10 +1672,11 @@ function renderAdminPermissionsPanel(data) {
         <span class="chip active">${data.permissions.length}</span>
       </div>
       <div class="admin-permission-grid">
-        ${Object.entries(grouped).map(([moduleCode, permissions]) => `
-          <article class="admin-record">
+        ${grouped.map(({ moduleCode, label, permissions }) => `
+          <article class="admin-record admin-permission-module" data-permission-module="${moduleCode}">
             <div class="admin-record-main">
-              <strong>${moduleCode}</strong>
+              <strong>${label}</strong>
+              <span>${moduleCode}</span>
               <span>${permissions.length} permisos</span>
             </div>
             <div class="admin-pill-list">
@@ -1631,7 +1980,7 @@ function renderAdminApiPanel(module) {
         <h2>${label}</h2>
       </div>
       <div class="admin-toolbar">
-        <span class="chip ${apiMode === "api" && apiStatus !== "error" ? "active" : "warning"}">${apiMode === "api" ? "API QA" : "Mock"}</span>
+        <span class="chip ${apiMode === "api" && apiStatus !== "error" ? "active" : "warning"}">${apiMode === "api" ? (getApiBaseUrl().includes("127.0.0.1") || getApiBaseUrl().includes("localhost") ? "API Local" : "API QA") : "Mock"}</span>
         <button class="secondary-action small-action" type="button" data-action="admin-refresh-api">Actualizar</button>
         <button class="secondary-action small-action" type="button" data-action="admin-toggle-api">${apiMode === "api" ? "Mock" : "API"}</button>
       </div>
@@ -1645,7 +1994,7 @@ function renderAdminApiPanel(module) {
       </div>
     </div>
 
-    ${state.adminApi.error ? `<div class="validation-card danger"><strong>API QA</strong><p>${state.adminApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
+    ${state.adminApi.error ? `<div class="validation-card danger"><strong>${getApiBaseUrl().includes("127.0.0.1") || getApiBaseUrl().includes("localhost") ? "API Local" : "API QA"}</strong><p>${state.adminApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
     ${state.sessionApi.error ? `<div class="validation-card danger"><strong>Session Context</strong><p>${state.sessionApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
 
     ${renderAdminHubCards(safeData)}
@@ -1656,6 +2005,7 @@ function renderAdminApiPanel(module) {
   `;
 
   modulePanel.querySelector("[data-action='admin-toggle-api']").addEventListener("click", () => {
+    if (!closePermissionEditorForNavigation()) return;
     setApiMode(apiMode === "api" ? "mock" : "api");
     state.adminApi = { status: "idle", data: null, error: "" };
     if (getApiMode() === "api") {
@@ -1672,6 +2022,7 @@ function renderAdminApiPanel(module) {
 
   modulePanel.querySelectorAll("[data-action='admin-open-panel']").forEach((button) => {
     button.addEventListener("click", () => {
+      if (button.dataset.panelId !== "roles" && !closePermissionEditorForNavigation()) return;
       state.adminPanel = button.dataset.panelId;
       render();
     });
@@ -1750,12 +2101,11 @@ function renderAdminApiPanel(module) {
     });
   });
 
-  modulePanel.querySelectorAll("[data-form='admin-role-permission']").forEach((form) => {
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      assignAdminRolePermission(event.currentTarget);
-    });
+  modulePanel.querySelectorAll("[data-action='admin-edit-role-permissions']").forEach((button) => {
+    button.addEventListener("click", () => openPermissionEditor(button.dataset.roleId));
   });
+
+  bindPermissionEditorActions();
 
   if (apiMode === "api" && apiStatus === "idle") {
     loadAdminApiDashboard();
@@ -1805,6 +2155,8 @@ function loadSessionContext() {
   getSessionContext()
     .then((data) => {
       state.sessionApi = { status: "ready", data, error: "" };
+      state.productionApi = { status: "idle", error: "" };
+      state.inventoryApi = { status: "idle", error: "" };
       if (!isModuleAccessible(state.active)) {
         const firstModule = getActiveUiModuleIds()[0] || "administracion";
         applyScreenSnapshot({ active: firstModule, activeSubmodule: null, laborArea: "" });
@@ -1815,6 +2167,171 @@ function loadSessionContext() {
       state.sessionApi = { status: "error", data: null, error: error.message || "Session context unavailable" };
       render();
     });
+}
+
+function mapApiProduct(item) {
+  return {
+    id: item.id,
+    sku: item.code,
+    name: item.name,
+    kind: item.type === "service" ? "Servicio" : "Producto",
+    category: item.category || "Sin categoria",
+    unit: item.base_unit,
+    status: item.status === "active" ? "Activo" : item.status === "inactive" ? "Inactivo" : "En espera de aprobacion",
+    targetPrice: Number(item.target_price || 0),
+    standardCost: Number(item.standard_cost || 0),
+    center: item.cost_center || "Produccion",
+    owner: item.responsible_area || "Sin asignar",
+    expectedMargin: Number(item.expected_margin || 0),
+    description: item.description || ""
+  };
+}
+
+function mapApiRecipe(item, products) {
+  const versions = [...(item.versions || [])].sort((a, b) => Number(b.version_number) - Number(a.version_number));
+  const currentVersion = versions.find((version) => version.id === item.current_version_id) || null;
+  const draftVersion = versions.find((version) => ["draft","pending_approval"].includes(version.status)) || null;
+  const version = draftVersion || currentVersion || versions[0];
+  const product = products.find((entry) => entry.id === item.product_service_id);
+  const approval = { draft: "Borrador", pending_approval: "Pendiente de aprobacion", approved: "Aprobada", obsolete: "Obsoleta" };
+  return {
+    id: item.id,
+    productServiceId: item.product_service_id,
+    product: product?.name || item.name,
+    version: version?.version_number || 1,
+    versionId: version?.id || "",
+    versionStatus: version?.status || "draft",
+    currentVersionId: currentVersion?.id || "",
+    currentVersion: currentVersion?.version_number || null,
+    currentVersionData: currentVersion,
+    draftVersionId: draftVersion?.id || "",
+    quantityBase: Number(version?.base_quantity || 1),
+    unit: version?.base_unit || product?.unit || "pieza",
+    status: item.status === "active" ? "Activa" : "Borrador",
+    approvalStatus: approval[version?.status] || "Borrador",
+    approvedBy: version?.approved_by || "",
+    approvedAt: version?.approved_at || "",
+    changeReason: version?.change_reason || "",
+    center: product?.center || "Produccion",
+    resources: (version?.resources || []).map((resource) => ({
+      resourceId: resource.resource_ref_id || resource.resource_code,
+      resourceCode: resource.resource_code,
+      resourceName: resource.resource_name,
+      resourceType: resource.resource_type,
+      quantity: Number(resource.quantity),
+      unit: resource.unit,
+      unitCost: Number(resource.unit_cost || 0)
+    })),
+    steps: (version?.stages || []).filter((stage) => stage.status === "active").map((stage) => stage.name),
+    stageDefinitions: (version?.stages || []).filter((stage) => stage.status === "active").map((stage) => ({
+      laborAreaId: stage.labor_area_ref_id || "",
+      laborAreaName: stage.labor_area_name || stage.name,
+      name: stage.name,
+      expectedMinutes: stage.expected_minutes
+    })),
+    createdAt: new Date().toISOString().slice(0, 10)
+  };
+}
+
+function mapApiMachine(item){return {id:item.id,code:item.code,name:item.name,area:item.area_name||"",machineType:item.machine_type,unit:"min",available:Number(item.available_minutes_per_day||0),cost:Number(item.cost_per_minute||0),type:"Maquinaria",source:"Maquinaria",status:item.status==="active"?"Activo":item.status==="maintenance"?"Mantenimiento":"Inactivo"};}
+function mapApiOrderStatus(status){return ({released:"Liberada",waiting_resources:"En espera de recursos",in_progress:"En produccion",paused:"Pausada",in_validation:"En validacion",completed:"Terminada",cancelled:"Cancelada"})[status]||status;}
+function toApiOrderStatus(status){return ({Liberada:"released","En espera de recursos":"waiting_resources","En produccion":"in_progress",Pausada:"paused","En validacion":"in_validation",Terminada:"completed",Cancelada:"cancelled"})[status]||status;}
+function mapApiStageStatus(status){return ({pending:"Pendiente",in_progress:"En proceso",completed:"Terminada",skipped:"Omitida",blocked:"Bloqueada"})[status]||status;}
+function mapApiOrderRecipeSnapshot(item, fallbackRecipe) {
+  const snapshot = item.recipe_snapshot || {};
+  const version = (snapshot.versions || []).find((entry) => entry.id === item.recipe_version_id);
+  if (!version) return fallbackRecipe || { resources: [], steps: [], quantityBase: 1, unit: item.unit };
+  return {
+    ...(fallbackRecipe || {}),
+    id: snapshot.id || item.recipe_id,
+    productServiceId: snapshot.product_service_id || item.product_service_id,
+    product: fallbackRecipe?.product || snapshot.name || item.product_service_id,
+    version: Number(version.version_number || 1),
+    versionId: version.id,
+    quantityBase: Number(version.base_quantity || 1),
+    unit: version.base_unit || item.unit,
+    resources: (version.resources || []).map((resource) => ({
+      resourceId: resource.resource_ref_id || resource.resource_code,
+      resourceCode: resource.resource_code,
+      resourceName: resource.resource_name,
+      resourceType: resource.resource_type,
+      quantity: Number(resource.quantity || 0),
+      unit: resource.unit,
+      unitCost: Number(resource.unit_cost || 0)
+    })),
+    steps: (version.stages || []).filter((stage) => stage.status === "active").map((stage) => stage.name)
+  };
+}
+function mapApiOrder(item, recipes){const recipe=recipes.find((entry)=>entry.id===item.recipe_id);const recipeSnapshot=mapApiOrderRecipeSnapshot(item,recipe);return {id:item.id,code:item.code,recipeId:item.recipe_id,recipeVersion:recipeSnapshot.version||1,recipeSnapshot,recipeName:recipeSnapshot.product||item.product_service_id,quantity:Number(item.quantity),unit:item.unit,status:mapApiOrderStatus(item.status),priority:({high:"Alta",medium:"Media",low:"Baja"})[item.priority]||item.priority,dueDate:item.required_at?.slice(0,10)||"",center:recipeSnapshot.center||"Produccion",responsible:item.responsible_name,plannedCost:Number(item.planned_cost||0),actualCost:item.actual_cost===null?Number(item.planned_cost||0):Number(item.actual_cost),releaseStatus:"Liberada",areas:(item.stages||[]).map((stage)=>({id:stage.id,recipeStageId:stage.recipe_stage_id,area:stage.name,responsible:stage.responsible_name||"",status:mapApiStageStatus(stage.status),progress:Number(stage.progress_percent||0),actualMinutes:stage.actual_minutes,actualCostFactor:1})),createdAt:item.created_at?.slice(0,10)||""};}
+
+function loadProductionApiData() {
+  if (getApiMode() !== "api" || state.productionApi.status === "loading") return Promise.resolve();
+  state.productionApi = { status: "loading", error: "" };
+  return getProductionCatalog()
+    .then(({ products, recipes, machines, orders }) => {
+      const mappedProducts = products.map(mapApiProduct);
+      const mappedRecipes = recipes.map((recipe) => mapApiRecipe(recipe, mappedProducts));
+      mockDb.saveProductsServices(mappedProducts);
+      mockDb.saveRecipes(mappedRecipes);
+      mockDb.saveMachines((machines||[]).map(mapApiMachine));
+      mockDb.saveOrders((orders||[]).map((order)=>mapApiOrder(order,mappedRecipes)));
+      state.productionApi = { status: "ready", error: "" };
+      render();
+    })
+    .catch((error) => {
+      state.productionApi = { status: "error", error: error.message || "Production API unavailable" };
+      render();
+    });
+}
+
+function mapInventoryStatus(status) { return status === "active" ? "Activo" : status === "blocked" ? "Bloqueado" : "Inactivo"; }
+function loadInventoryApiData() {
+  if (getApiMode() !== "api" || !isInventoryApiEnabled() || state.inventoryApi.status === "loading") return Promise.resolve();
+  state.inventoryApi = { status: "loading", error: "" };
+  return getInventoryCatalog().then(({ warehouses }) => {
+    const records = [
+      ...warehouses.map((item) => ({id:item.id,code:item.code,moduleId:"almacenes",submoduleId:"almacenes",recordType:"warehouse",title:item.name,detail:item.type,status:mapInventoryStatus(item.status),owner:item.owner||"",fields:{type:item.type,businessCenter:item.business_center,location:item.location,capacity:item.capacity||"",policy:item.inventory_policy,zone:item.zone||"",aisle:item.aisle||"",rack:item.rack||"",level:item.level||"",position:item.position||"",description:item.description||""}}))
+    ];
+    mockDb.saveModuleRecords("almacenes", records); state.inventoryApi={status:"ready",error:""}; state.inventoryItems={status:"idle",error:""}; state.inventoryMovements={status:"idle",error:""}; state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]}; render();
+  }).catch((error)=>{state.inventoryApi={status:"error",error:error.message||"Inventory API unavailable"};render();});
+}
+
+function loadInventoryItemData() {
+  if (getApiMode() !== "api" || !isInventoryApiEnabled() || state.inventoryItems.status === "loading") return;
+  state.inventoryItems={status:"loading",error:""};
+  getInventoryItems().then((response) => {
+    const records=mockDb.loadModuleRecords("almacenes");
+    const warehouses=records.filter((record)=>record.recordType==="warehouse");
+    const warehouseById=Object.fromEntries(warehouses.map((item)=>[item.id,item]));
+    const items=(response.data||[]).map((item)=>({id:item.id,code:item.code,moduleId:"almacenes",submoduleId:"articulos",recordType:"inventoryItem",title:item.name,detail:`${item.type} - ${item.base_unit}`,status:mapInventoryStatus(item.status),owner:warehouseById[item.suggested_warehouse_id]?.title||"",fields:{type:item.type,category:item.category||"",unit:item.base_unit,minStock:item.minimum_stock,maxStock:item.maximum_stock||"",policy:item.inventory_policy,useInRecipe:Boolean(item.use_in_recipe),defaultWarehouseId:item.suggested_warehouse_id||"",defaultWarehouseName:warehouseById[item.suggested_warehouse_id]?.title||"",description:item.description||""}}));
+    mockDb.saveModuleRecords("almacenes",[...records.filter((record)=>record.recordType!=="inventoryItem"),...items]);
+    state.inventoryItems={status:"ready",error:""};render();
+  }).catch((error)=>{state.inventoryItems={status:"error",error:error.message||"Inventory items unavailable"};render();});
+}
+
+function loadInventoryMovementData() {
+  if (getApiMode() !== "api" || !isInventoryApiEnabled() || state.inventoryMovements.status === "loading") return Promise.resolve();
+  state.inventoryMovements = { status: "loading", error: "" };
+  return getInventoryMovements().then((response) => {
+    const records = mockDb.loadModuleRecords("almacenes");
+    const items = records.filter((record) => record.recordType === "inventoryItem");
+    const warehouses = records.filter((record) => record.recordType === "warehouse");
+    const itemById = Object.fromEntries(items.map((item) => [item.id,item]));
+    const warehouseById = Object.fromEntries(warehouses.map((item) => [item.id,item]));
+    const movements = (response.data || []).map((item) => ({id:item.id,code:item.movement_code,moduleId:"almacenes",submoduleId:"movimientos",recordType:"inventoryMovement",title:itemById[item.inventory_item_id]?.title||item.inventory_item_id,detail:`${item.movement_type} - ${item.quantity} ${item.unit}`,status:item.status==="recorded"?"Registrado":"Reversado",owner:warehouseById[item.warehouse_id]?.title||item.warehouse_id,fields:{movementType:item.movement_type,sourceDocument:item.source_id,itemId:item.inventory_item_id,item:itemById[item.inventory_item_id]?.title||item.inventory_item_id,quantity:item.quantity,unit:item.unit,warehouseId:item.warehouse_id,warehouseName:warehouseById[item.warehouse_id]?.title||item.warehouse_id,movementDate:item.occurred_at?.slice(0,10),reason:item.reason||""}}));
+    mockDb.saveModuleRecords("almacenes", [...records.filter((record) => record.recordType !== "inventoryMovement"),...movements]);
+    state.inventoryMovements={status:"ready",error:""}; render();
+  }).catch((error) => { state.inventoryMovements={status:"error",error:error.message||"Inventory movements unavailable"}; render(); });
+}
+
+function loadHrApiData() {
+  if (getApiMode() !== "api" || state.hrApi.status === "loading") return Promise.resolve();
+  state.hrApi={status:"loading",error:""};
+  return getHrCatalog().then(({areas,positions})=>{
+    mockDb.saveLaborAreas((areas||[]).map((area)=>({id:area.id,code:area.code,name:area.name,description:area.description||"",status:area.status==="active"?"Activo":"Inactivo"})));
+    mockDb.saveLaborRoles((positions||[]).map((position)=>({id:position.id,areaId:position.labor_area_id,area:(areas||[]).find((area)=>area.id===position.labor_area_id)?.name||"",position:position.position,name:position.recipe_name,quantity:position.resource_quantity,minutesPerResource:position.minutes_per_resource,available:position.resource_quantity*position.minutes_per_resource,hourlyCost:Number(position.hourly_cost),cost:Number(position.hourly_cost)/60,unit:"min",type:"Mano de obra",source:"Recursos Humanos",intervenesInProduction:Boolean(position.intervenes_in_production),status:position.status==="active"?"Activo":"Inactivo"})));
+    state.hrApi={status:"ready",error:""};render();
+  }).catch((error)=>{state.hrApi={status:"error",error:error.message||"HR API unavailable"};render();});
 }
 
 function chooseSessionTenant(tenants) {
@@ -2169,6 +2686,7 @@ function renderWarehouseEmptyState(hasSearch = false) {
 
 function renderInventoryItemsPanel(module, submodule) {
   const label = state.lang === "en" ? module.titleEn : module.title;
+  if (getApiMode() === "api" && isInventoryApiEnabled() && state.inventoryItems.status === "idle") loadInventoryItemData();
   const search = localStorage.getItem("erclave-inventory-item-search") || "";
   const normalizedSearch = search.trim().toLowerCase();
   const items = mockDb.loadModuleRecords(module.id, submodule.id).filter((record) => record.recordType === "inventoryItem");
@@ -2258,6 +2776,7 @@ function renderInventoryItemCard(record) {
         <span class="muted-label">${t("defaultWarehouse")}: ${record.fields?.defaultWarehouseName || t("notDefined")}</span>
         <span class="muted-label">${t("stockRange")}: ${record.fields?.minStock || "0"} / ${record.fields?.maxStock || t("notDefined")}</span>
         <span class="muted-label">${t("inventoryPolicy")}: ${translateInventoryPolicy(record.fields?.policy)}</span>
+        <span class="muted-label">${record.fields?.useInRecipe ? t("usedInRecipe") : t("notUsedInRecipe")}</span>
         ${record.fields?.description ? `<p>${record.fields.description}</p>` : ""}
       </div>
       <div class="catalog-card-actions">
@@ -2282,6 +2801,8 @@ function renderInventoryItemEmptyState(hasSearch = false) {
 
 function renderWarehouseMovementsPanel(module, submodule) {
   const label = state.lang === "en" ? module.titleEn : module.title;
+  if (getApiMode() === "api" && isInventoryApiEnabled() && state.inventoryItems.status === "idle") loadInventoryItemData();
+  if (getApiMode() === "api" && isInventoryApiEnabled() && state.inventoryItems.status === "ready" && state.inventoryMovements.status === "idle") loadInventoryMovementData();
   const movements = mockDb.loadModuleRecords(module.id, submodule.id).filter((record) => record.recordType === "inventoryMovement");
 
   modulePanel.innerHTML = `
@@ -2337,13 +2858,116 @@ function renderWarehouseMovementsPanel(module, submodule) {
   bindProductionPanelActions();
 }
 
+let inventorySearchTimer;
+
+function getInventoryViewFilters() {
+  return {
+    q: localStorage.getItem("erclave-stock-search") || "",
+    warehouse_id: localStorage.getItem("erclave-stock-warehouse") || "all",
+    category: localStorage.getItem("erclave-stock-category") || "all",
+    item_type: localStorage.getItem("erclave-stock-type") || "all",
+    item_status: localStorage.getItem("erclave-stock-item-status") || "all",
+    inventory_policy: localStorage.getItem("erclave-stock-policy") || "all",
+    unit: localStorage.getItem("erclave-stock-unit") || "all",
+    stock_status: localStorage.getItem("erclave-stock-status") || "all",
+    sort: localStorage.getItem("erclave-stock-sort") || "item_code",
+    limit: 50,
+    cursor: state.inventoryBalances.cursor || ""
+  };
+}
+
+function inventoryQueryKey(filters) {
+  return JSON.stringify(filters);
+}
+
+function loadInventoryBalances(filters = getInventoryViewFilters()) {
+  const queryKey = inventoryQueryKey(filters);
+  if (state.inventoryBalances.status === "loading" && state.inventoryBalances.queryKey === queryKey) return;
+  state.inventoryBalances = { ...state.inventoryBalances, status: "loading", error: "", queryKey };
+  getInventoryBalances(filters)
+    .then((response) => {
+      if (state.inventoryBalances.queryKey !== queryKey) return;
+      state.inventoryBalances = { ...state.inventoryBalances, status: "ready", data: response.data || [], page: response.page || {}, error: "" };
+      render();
+    })
+    .catch((error) => {
+      if (state.inventoryBalances.queryKey !== queryKey) return;
+      state.inventoryBalances = { ...state.inventoryBalances, status: "error", data: [], page: {}, error: error.message || t("inventoryLoadError") };
+      render();
+    });
+}
+
+function getInventoryStockStatus(row) {
+  if (row.stock_status) return row.stock_status;
+  const balance = Number(row.on_hand_quantity ?? row.balance ?? 0);
+  const minimum = Number(row.minimum_stock || 0);
+  const maximum = row.maximum_stock === null || row.maximum_stock === undefined || row.maximum_stock === "" ? null : Number(row.maximum_stock);
+  if (balance < 0) return "negative";
+  if (balance === 0) return "zero";
+  if (balance < minimum) return "below_minimum";
+  if (maximum !== null && balance > maximum) return "above_maximum";
+  return "normal";
+}
+
+function translateInventoryStockStatus(status) {
+  return ({ negative: t("negativeStockStatus"), zero: t("zeroStockStatus"), out_of_stock: t("zeroStockStatus"), below_minimum: t("belowMinimumStatus"), normal: t("normalStockStatus"), available: t("availableStatus"), above_maximum: t("aboveMaximumStatus") })[status] || status;
+}
+
+function normalizeInventoryBalance(row) {
+  return {
+    ...row,
+    itemCode: row.item_code || row.code || "",
+    itemName: row.item_name || row.name || row.inventory_item_id,
+    category: row.category || "",
+    itemType: row.item_type || row.type || "",
+    itemStatus: row.item_status || "active",
+    policy: row.inventory_policy || "",
+    warehouseCode: row.warehouse_code || "",
+    warehouseName: row.warehouse_name || row.warehouse_id,
+    warehouseType: row.warehouse_type || "",
+    unit: row.unit || row.base_unit || "",
+    balance: Number(row.on_hand_quantity ?? row.balance ?? 0),
+    minimum: Number(row.minimum_stock || 0),
+    maximum: row.maximum_stock === null || row.maximum_stock === undefined ? null : Number(row.maximum_stock),
+    lastMovement: row.last_movement_at || row.last_movement || "",
+    status: getInventoryStockStatus(row)
+  };
+}
+
+function applyLocalInventoryFilters(rows, filters) {
+  const normalizedQuery = filters.q.trim().toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return rows.filter((row) => {
+    const haystack = [row.itemCode,row.itemName,row.category,row.warehouseCode,row.warehouseName,row.unit].join(" ").toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return (!normalizedQuery || haystack.includes(normalizedQuery))
+      && (filters.warehouse_id === "all" || row.warehouse_id === filters.warehouse_id || row.warehouseId === filters.warehouse_id)
+      && (filters.category === "all" || row.category === filters.category)
+      && (filters.item_type === "all" || row.itemType === filters.item_type)
+      && (filters.item_status === "all" || row.itemStatus === filters.item_status)
+      && (filters.inventory_policy === "all" || row.policy === filters.inventory_policy)
+      && (filters.unit === "all" || row.unit === filters.unit)
+      && (filters.stock_status === "all" || row.status === filters.stock_status);
+  });
+}
+
 function renderWarehouseStockPanel(module, submodule) {
   const label = state.lang === "en" ? module.titleEn : module.title;
-  const warehouseFilter = localStorage.getItem("erclave-stock-warehouse") || "all";
-  const search = localStorage.getItem("erclave-stock-search") || "";
+  const filters = getInventoryViewFilters();
   const warehouses = mockDb.loadModuleRecords(module.id, "almacenes").filter((record) => record.recordType === "warehouse");
+  const items = mockDb.loadModuleRecords(module.id, "articulos").filter((record) => record.recordType === "inventoryItem");
   const movements = mockDb.loadModuleRecords(module.id, "movimientos").filter((record) => record.recordType === "inventoryMovement");
-  const stockRows = filterStockBalances(buildStockBalances(movements), warehouseFilter, search);
+  const usesApiBalances = getApiMode() === "api" && isInventoryApiEnabled();
+  const queryKey = inventoryQueryKey(filters);
+  if (usesApiBalances && state.inventoryBalances.queryKey !== queryKey) loadInventoryBalances(filters);
+  const rawStockRows = (usesApiBalances
+    ? state.inventoryBalances.data
+    : buildStockBalances(movements)
+  ).map(normalizeInventoryBalance);
+  const stockRows = usesApiBalances ? rawStockRows : applyLocalInventoryFilters(rawStockRows, filters);
+  const categories = [...new Set([...items.map((item) => item.fields?.category),...stockRows.map((row)=>row.category)].filter(Boolean))].sort();
+  const types = [...new Set(["rawMaterial","consumable","tool","finishedGood","sparePart","serviceSupply",...stockRows.map((row)=>row.itemType)].filter(Boolean))];
+  const policies = ["standard","lot","serial","restricted"];
+  const units = [...new Set([...items.map((item) => item.fields?.unit),...stockRows.map((row)=>row.unit)].filter(Boolean))].sort();
+  const activeFilters = Object.entries(filters).filter(([key, value]) => !["limit", "cursor", "sort"].includes(key) && value && value !== "all");
 
   modulePanel.innerHTML = `
     <div class="panel-head">
@@ -2367,33 +2991,45 @@ function renderWarehouseStockPanel(module, submodule) {
       </div>
 
       <section class="section-card catalog-workspace">
-        ${renderFlowGuide(getWarehouseFlowTitle(submodule), getWarehouseFlowSteps(submodule))}
+        ${renderFlowGuide(getWarehouseFlowTitle(submodule), getWarehouseFlowSteps(submodule), null, false)}
         <p class="helper-copy">${t("stockHelper")}</p>
-        <div class="catalog-toolbar kardex-toolbar">
+        <div class="catalog-toolbar inventory-toolbar">
           <label class="search-field catalog-search">
             <span>S</span>
-            <input id="stockSearch" type="search" value="${search}" placeholder="${t("searchStock")}" />
+            <input id="stockSearch" type="search" value="${filters.q}" placeholder="${t("searchStock")}" autocomplete="off" />
           </label>
           <label class="preview-field compact-filter">
             <span>${t("warehouse")}</span>
             <select id="stockWarehouseFilter">
               <option value="all">${t("allWarehouses")}</option>
-              ${warehouses.map((warehouse) => `<option value="${warehouse.id}" ${selectedOption(warehouseFilter, warehouse.id)}>${warehouse.code} - ${warehouse.title}</option>`).join("")}
+              ${warehouses.map((warehouse) => `<option value="${warehouse.id}" ${selectedOption(filters.warehouse_id, warehouse.id)}>${warehouse.code} - ${warehouse.title}</option>`).join("")}
             </select>
           </label>
+          <label class="preview-field compact-filter"><span>${t("inventoryCategory")}</span><input id="stockCategoryFilter" list="inventoryCategoryOptions" value="${filters.category === "all" ? "" : filters.category}" placeholder="${t("allCategories")}" /><datalist id="inventoryCategoryOptions">${categories.map((value) => `<option value="${value}"></option>`).join("")}</datalist></label>
+          <label class="preview-field compact-filter"><span>${t("inventoryStockStatus")}</span><select id="stockStatusFilter"><option value="all">${t("allStatuses")}</option>${["negative","out_of_stock","below_minimum","normal","above_maximum"].map((value) => `<option value="${value}" ${selectedOption(filters.stock_status,value)}>${translateInventoryStockStatus(value)}</option>`).join("")}</select></label>
+          <label class="preview-field compact-filter"><span>${t("inventorySort")}</span><select id="stockSortFilter">${[["item_code",t("sortItemCode")],["item_name",t("sortItemName")],["on_hand_asc",t("sortStockAscending")],["on_hand_desc",t("sortStockDescending")]].map(([value,text]) => `<option value="${value}" ${selectedOption(filters.sort,value)}>${text}</option>`).join("")}</select></label>
+          <details class="inventory-more-filters"><summary>${t("inventoryFilters")}</summary><div class="inventory-filter-grid">
+            <label class="preview-field compact-filter"><span>${t("inventoryType")}</span><select id="stockTypeFilter"><option value="all">${t("allTypes")}</option>${types.map((value) => `<option value="${value}" ${selectedOption(filters.item_type,value)}>${translateInventoryItemType(value)}</option>`).join("")}</select></label>
+            <label class="preview-field compact-filter"><span>${t("inventoryItemStatus")}</span><select id="stockItemStatusFilter"><option value="all">${t("allStatuses")}</option>${[["active","Activo"],["inactive","Inactivo"],["blocked","Bloqueado"]].map(([value,label]) => `<option value="${value}" ${selectedOption(filters.item_status,value)}>${translateStatus(label)}</option>`).join("")}</select></label>
+            <label class="preview-field compact-filter"><span>${t("inventoryPolicyFilter")}</span><select id="stockPolicyFilter"><option value="all">${t("allPolicies")}</option>${policies.map((value) => `<option value="${value}" ${selectedOption(filters.inventory_policy,value)}>${translateInventoryPolicy(value)}</option>`).join("")}</select></label>
+            <label class="preview-field compact-filter"><span>${t("inventoryUnitFilter")}</span><select id="stockUnitFilter"><option value="all">${t("allUnits")}</option>${units.map((value) => `<option value="${value}" ${selectedOption(filters.unit,value)}>${value}</option>`).join("")}</select></label>
+          </div></details>
         </div>
-        <div class="data-table kardex-table" role="table">
+        <div class="inventory-filter-summary"><span>${t("inventoryResults", { count: stockRows.length })}</span><div class="inventory-filter-chips">${activeFilters.map(([key,value]) => `<button type="button" class="filter-chip" data-clear-stock-filter="${key}">${value}<span aria-hidden="true">×</span></button>`).join("")}</div>${activeFilters.length ? `<button type="button" class="secondary-action small-action" data-action="clear-stock-filters">${t("clearFilters")}</button>` : ""}</div>
+        ${usesApiBalances && state.inventoryBalances.status === "loading" ? `<div class="inventory-feedback">${t("inventoryLoading")}</div>` : ""}
+        ${usesApiBalances && state.inventoryBalances.status === "error" ? `<div class="inventory-feedback error"><strong>${t("inventoryLoadError")}</strong><span>${state.inventoryBalances.error}</span><button class="secondary-action small-action" data-action="retry-stock-api">${t("inventoryRetry")}</button></div>` : ""}
+        <div class="data-table inventory-table" role="table">
           <div class="table-row table-head" role="row">
-            <span role="columnheader">${t("item")}</span>
+            <span role="columnheader">${t("inventoryItemColumn")}</span>
             <span role="columnheader">${t("warehouse")}</span>
-            <span role="columnheader">${t("entries")}</span>
-            <span role="columnheader">${t("issues")}</span>
-            <span role="columnheader">${t("balance")}</span>
+            <span role="columnheader">${t("unit")}</span>
+            <span role="columnheader">${t("physicalStock")}</span>
+            <span role="columnheader">${t("stockRange")}</span>
             <span role="columnheader">${t("lastMovement")}</span>
-            <span role="columnheader">${t("status")}</span>
           </div>
-          ${stockRows.length ? stockRows.map(renderStockRow).join("") : renderStockEmptyRow(Boolean(movements.length))}
+          ${stockRows.length ? stockRows.map(renderInventoryBalanceRow).join("") : renderStockEmptyRow(usesApiBalances || Boolean(movements.length))}
         </div>
+        ${usesApiBalances ? `<nav class="inventory-pagination" aria-label="${t("inventoryResults", {count:stockRows.length})}"><button class="secondary-action small-action" type="button" data-action="stock-previous" ${state.inventoryBalances.previousCursors.length ? "" : "disabled"}>${t("previousPage")}</button><button class="secondary-action small-action" type="button" data-action="stock-next" ${state.inventoryBalances.page?.next_cursor ? "" : "disabled"}>${t("nextPage")}</button></nav>` : ""}
       </section>
     </section>
   `;
@@ -2401,20 +3037,44 @@ function renderWarehouseStockPanel(module, submodule) {
   modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
     navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
   });
-  modulePanel.querySelector("#stockWarehouseFilter").addEventListener("change", (event) => {
-    localStorage.setItem("erclave-stock-warehouse", event.target.value);
-    render();
-  });
+  const setFilter = (key, value) => { localStorage.setItem(`erclave-stock-${key}`, value || "all"); state.inventoryBalances={...state.inventoryBalances,status:"idle",cursor:"",previousCursors:[]}; render(); };
+  modulePanel.querySelector("#stockWarehouseFilter")?.addEventListener("change", (event) => setFilter("warehouse", event.target.value));
+  modulePanel.querySelector("#stockCategoryFilter")?.addEventListener("change", (event) => setFilter("category", event.target.value.trim() || "all"));
+  modulePanel.querySelector("#stockStatusFilter")?.addEventListener("change", (event) => setFilter("status", event.target.value));
+  modulePanel.querySelector("#stockSortFilter")?.addEventListener("change", (event) => setFilter("sort", event.target.value));
+  modulePanel.querySelector("#stockTypeFilter")?.addEventListener("change", (event) => setFilter("type", event.target.value));
+  modulePanel.querySelector("#stockItemStatusFilter")?.addEventListener("change", (event) => setFilter("item-status", event.target.value));
+  modulePanel.querySelector("#stockPolicyFilter")?.addEventListener("change", (event) => setFilter("policy", event.target.value));
+  modulePanel.querySelector("#stockUnitFilter")?.addEventListener("change", (event) => setFilter("unit", event.target.value));
   const stockSearch = modulePanel.querySelector("#stockSearch");
   stockSearch.addEventListener("input", (event) => {
-    localStorage.setItem("erclave-stock-search", event.target.value);
-    render();
-    const nextSearch = modulePanel.querySelector("#stockSearch");
-    if (nextSearch) {
-      nextSearch.focus();
-      nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
-    }
+    const value = event.target.value;
+    localStorage.setItem("erclave-stock-search", value);
+    clearTimeout(inventorySearchTimer);
+    inventorySearchTimer = setTimeout(() => { state.inventoryBalances={...state.inventoryBalances,status:"idle",cursor:"",previousCursors:[]}; render(); modulePanel.querySelector("#stockSearch")?.focus(); }, 300);
   });
+  modulePanel.querySelectorAll("[data-clear-stock-filter]").forEach((button) => button.addEventListener("click", () => setFilter(({warehouse_id:"warehouse",item_type:"type",item_status:"item-status",inventory_policy:"policy",stock_status:"status"})[button.dataset.clearStockFilter] || button.dataset.clearStockFilter, "all")));
+  modulePanel.querySelector("[data-action='clear-stock-filters']")?.addEventListener("click", () => { ["search","warehouse","category","type","item-status","policy","unit","status","sort"].forEach((key) => localStorage.removeItem(`erclave-stock-${key}`)); state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]}; render(); });
+  modulePanel.querySelector("[data-action='retry-stock-api']")?.addEventListener("click", () => { state.inventoryBalances.status="idle"; state.inventoryBalances.queryKey=""; render(); });
+  modulePanel.querySelector("[data-action='stock-next']")?.addEventListener("click", () => { const next=state.inventoryBalances.page?.next_cursor;if(!next)return;state.inventoryBalances.previousCursors.push(state.inventoryBalances.cursor||"");state.inventoryBalances.cursor=next;state.inventoryBalances.queryKey="";render(); });
+  modulePanel.querySelector("[data-action='stock-previous']")?.addEventListener("click", () => { state.inventoryBalances.cursor=state.inventoryBalances.previousCursors.pop()||"";state.inventoryBalances.queryKey="";render(); });
+  modulePanel.querySelectorAll("[data-action='open-stock-kardex']").forEach((button) => button.addEventListener("click", () => {
+    localStorage.setItem("erclave-kardex-item", button.dataset.itemId || "all");
+    localStorage.setItem("erclave-kardex-warehouse", button.dataset.warehouseId || "all");
+    navigateTo({ active: module.id, activeSubmodule: "kardex", laborArea: "" });
+  }));
+}
+
+function renderInventoryBalanceRow(row) {
+  const statusClass = ["negative","zero","out_of_stock","below_minimum"].includes(row.status) ? "warning" : "active";
+  return `<div class="table-row" role="row">
+    <span role="cell" class="inventory-item-cell" data-label="${t("inventoryItemColumn")}"><strong>${row.itemCode ? `${row.itemCode} · ` : ""}${row.itemName}</strong><small>${row.category || t("notDefined")} · ${translateInventoryItemType(row.itemType)}</small></span>
+    <span role="cell" data-label="${t("warehouse")}"><strong>${row.warehouseCode ? `${row.warehouseCode} · ` : ""}${row.warehouseName}</strong></span>
+    <span role="cell" data-label="${t("unit")}">${row.unit}</span>
+    <span role="cell" data-label="${t("physicalStock")}"><strong>${formatNumber(row.balance)}</strong></span>
+    <span role="cell" data-label="${t("stockRange")}"><small>${formatNumber(row.minimum)} / ${row.maximum === null ? "—" : formatNumber(row.maximum)}</small><span class="chip ${statusClass}">${translateInventoryStockStatus(row.status)}</span></span>
+    <span role="cell" data-label="${t("lastMovement")}"><small>${formatKardexDate(row.lastMovement)}</small><button type="button" class="inline-action" data-action="open-stock-kardex" data-item-id="${row.inventory_item_id || row.itemId || ""}" data-warehouse-id="${row.warehouse_id || row.warehouseId || ""}">${t("viewKardex")}</button></span>
+  </div>`;
 }
 
 function buildStockBalances(movements) {
@@ -2490,7 +3150,6 @@ function renderStockEmptyRow(hasMovements) {
       <span role="cell">-</span>
       <span role="cell">-</span>
       <span role="cell">-</span>
-      <span role="cell">-</span>
       <span role="cell">${hasMovements ? t("stockNoMatchesDetail") : t("stockEmptyDetail")}</span>
     </div>
   `;
@@ -2563,6 +3222,8 @@ function renderWarehouseComingSoonPanel(module, submodule) {
 
 function renderWarehouseKardexPanel(module, submodule) {
   const label = state.lang === "en" ? module.titleEn : module.title;
+  if (getApiMode() === "api" && isInventoryApiEnabled() && state.inventoryItems.status === "idle") loadInventoryItemData();
+  if (getApiMode() === "api" && isInventoryApiEnabled() && state.inventoryItems.status === "ready" && state.inventoryMovements.status === "idle") loadInventoryMovementData();
   const itemFilter = localStorage.getItem("erclave-kardex-item") || "all";
   const warehouseFilter = localStorage.getItem("erclave-kardex-warehouse") || "all";
   const search = localStorage.getItem("erclave-kardex-search") || "";
@@ -3284,6 +3945,12 @@ function getOrderRecipe(order) {
   return order.recipeSnapshot || mockDb.findRecipe(order.recipeId) || defaultRecipes[0];
 }
 
+function formatRecipeDisplayLabel(recipe) {
+  const product = recipe?.productServiceId ? mockDb.findProductService(recipe.productServiceId) : null;
+  const name = product?.name || recipe?.product || t("recipeProductUnavailable");
+  return product?.sku ? `${name} - ${product.sku}` : name;
+}
+
 function createRecipeSnapshot(recipe) {
   return {
     id: recipe.id,
@@ -3459,6 +4126,7 @@ function translateInventoryPolicy(policy) {
   const policyMap = {
     standard: t("standardPolicy"),
     batch: t("batchPolicy"),
+    lot: t("batchPolicy"),
     serial: t("serialPolicy"),
     restricted: t("restrictedPolicy")
   };
@@ -3468,11 +4136,15 @@ function translateInventoryPolicy(policy) {
 function translateInventoryItemType(type) {
   const typeMap = {
     rawMaterial: t("rawMaterialItem"),
+    raw_material: t("rawMaterialItem"),
     consumable: t("consumableItem"),
     tool: t("toolItem"),
     finishedGood: t("finishedGoodItem"),
+    finished_goods: t("finishedGoodItem"),
     sparePart: t("sparePartItem"),
-    serviceSupply: t("serviceSupplyItem")
+    spare_part: t("sparePartItem"),
+    serviceSupply: t("serviceSupplyItem"),
+    supply: t("serviceSupplyItem")
   };
   return typeMap[type] || type || t("notDefined");
 }
@@ -3735,7 +4407,10 @@ function renderProductionSubmoduleAction(id) {
     return `<button class="primary-action" type="button" data-action="open-product-service"><span>+</span><span>Nuevo producto/servicio</span></button>`;
   }
   if (id === "areas-puestos") {
-    return `<button class="primary-action" type="button" data-action="open-labor-role"><span>+</span><span>Nueva area/puesto</span></button>`;
+    return `<div class="row-actions">
+      ${hasPermission("hr.area.create") ? `<button class="primary-action" type="button" data-action="open-labor-area-form"><span>+</span><span>${t("newLaborArea")}</span></button>` : ""}
+      ${hasPermission("hr.position.create") ? `<button class="secondary-action" type="button" data-action="open-labor-role"><span>+</span><span>${t("newLaborRole")}</span></button>` : ""}
+    </div>`;
   }
   if (id === "maquinaria") {
     return `<button class="primary-action" type="button" data-action="open-machine"><span>+</span><span>Nueva maquina</span></button>`;
@@ -3756,9 +4431,9 @@ function renderProductionSubmoduleBody(id) {
   return "";
 }
 
-function renderFlowGuide(title, steps, currentIndex = null) {
+function renderFlowGuide(title, steps, currentIndex = null, open = true) {
   return `
-    <details class="flow-guide-card" open>
+    <details class="flow-guide-card" ${open ? "open" : ""}>
       <summary class="flow-guide-summary">
         <span class="section-icon">↳</span>
         <strong>${title}</strong>
@@ -3789,23 +4464,30 @@ function renderProductsServicesCatalogScreen() {
           .includes(normalizedSearch)
       )
     : items;
+  const activeItems = items.filter((item) => item.status === "Activo").length;
+  const itemsWithRecipe = items.filter((item) => getProductServiceCurrentRecipe(item)).length;
 
   return `
-    <section class="section-card catalog-workspace">
-      ${renderFlowGuide("Flujo del catalogo maestro", [
-        { title: "Alta", detail: "Crear producto o servicio con ficha maestra." },
-        { title: "Revision", detail: "Validar SKU, responsable, precio y margen." },
-        { title: "Receta", detail: "Generar o editar la receta vigente." },
-        { title: "Activo", detail: "Dejar disponible para nuevas ordenes." }
-      ])}
+    <section class="section-card product-catalog-view">
+      <div class="product-catalog-overview">
+        <div>
+          <span class="eyebrow">${t("masterData")}</span>
+          <h3>${t("productCatalogTitle")}</h3>
+          <p>${t("productCatalogHelper")}</p>
+        </div>
+        <div class="product-catalog-stats" aria-label="${t("productCatalogTitle")}">
+          <span><strong>${items.length}</strong>${t("catalogRecords")}</span>
+          <span><strong>${activeItems}</strong>${t("activeCatalogRecords")}</span>
+          <span><strong>${itemsWithRecipe}</strong>${t("withRecipe")}</span>
+        </div>
+      </div>
       <div class="catalog-toolbar">
         <label class="search-field catalog-search">
           <span>S</span>
-          <input id="productServiceSearch" type="search" value="${search}" placeholder="Buscar producto o servicio" />
+          <input id="productServiceSearch" type="search" value="${search}" placeholder="${t("searchProductService")}" />
         </label>
       </div>
-      <p class="helper-copy">Este apartado solo administra el catalogo maestro. La estructura de recursos, etapas y tiempos se crea en Recetas.</p>
-      <div class="catalog-grid">
+      <div class="product-catalog-grid">
         ${filteredItems.map((item) => {
           const history = getProductServiceOrderHistory(item);
           const currentRecipe = getProductServiceCurrentRecipe(item);
@@ -3813,57 +4495,55 @@ function renderProductsServicesCatalogScreen() {
           const targetPrice = Number(item.targetPrice || 0);
           const margin = targetPrice && standardCost ? ((targetPrice - standardCost) / targetPrice) * 100 : Number(item.expectedMargin || 0);
           return `
-        <article class="catalog-card">
-          <div class="catalog-card-main">
-            <span class="muted-label">${item.id} - ${item.sku || "SKU pendiente"} - ${item.kind} - ${item.unit}</span>
-            <strong>${item.name}</strong>
-            <p>${item.description}</p>
-            <span class="muted-label">${item.category} - ${item.center} - Responsable: ${item.owner || "Sin asignar"}</span>
-            <div class="cost-summary-grid">
-              <span><strong>${formatCurrency(standardCost)}</strong>Costo estandar</span>
-              <span><strong>${targetPrice ? formatCurrency(targetPrice) : "Pendiente"}</strong>Precio objetivo</span>
-              <span><strong>${formatNumber(margin)}%</strong>Margen esperado</span>
+        <article class="product-catalog-card">
+          <div class="product-catalog-card-head">
+            <div>
+              <span class="muted-label">${item.sku || "SKU pendiente"} · ${item.kind}</span>
+              <h4>${item.name}</h4>
             </div>
-            <div class="product-history">
-              <div class="product-history-head">
-                <span class="muted-label">Receta vigente</span>
-                <strong>${currentRecipe ? `${currentRecipe.id} v${currentRecipe.version}` : "Sin receta"}</strong>
-              </div>
-              <p>${currentRecipe ? `${getRecipeApprovalStatus(currentRecipe)} - ${currentRecipe.steps.length} etapas operativas` : "Debe generarse una receta antes de liberar produccion."}</p>
-            </div>
-            <div class="product-history">
-              <div class="product-history-head">
-                <span class="muted-label">Historial de ordenes</span>
-                <strong>${history.length}</strong>
-              </div>
-              ${history.length ? `
-                <div class="product-history-list">
-                  ${history.slice(0, 3).map((order) => `
-                    <span>${order.id} - ${order.quantity} ${order.unit} - ${order.status}</span>
-                  `).join("")}
-                </div>
-              ` : `<p>Sin ordenes registradas para este ${item.kind.toLowerCase()}.</p>`}
-            </div>
-          </div>
-          <div class="catalog-card-actions">
-            <label class="status-control">
-              <span>Estatus</span>
+            <label class="status-control compact-status">
+              <span>${t("status")}</span>
               <select data-action="change-product-service-status" data-product-id="${item.id}">
                 ${["Activo", "Inactivo", "En espera de aprobacion"].map((status) => `
                   <option value="${status}" ${item.status === status ? "selected" : ""}>${status}</option>
                 `).join("")}
               </select>
             </label>
-            <button class="secondary-action small-action" type="button" data-action="edit-product-service" data-product-id="${item.id}">Editar ficha</button>
+          </div>
+          <p class="product-catalog-description">${item.description}</p>
+          <div class="product-master-data">
+            <span><small>${t("unit")}</small><strong>${item.unit}</strong></span>
+            <span><small>Categoria</small><strong>${item.category}</strong></span>
+            <span><small>Centro de costos</small><strong>${item.center}</strong></span>
+            <span><small>${t("owner")}</small><strong>${item.owner || "Sin asignar"}</strong></span>
+          </div>
+          <div class="cost-summary-grid product-cost-summary">
+            <span><strong>${formatCurrency(standardCost)}</strong>${t("standardCost")}</span>
+            <span><strong>${targetPrice ? formatCurrency(targetPrice) : "Pendiente"}</strong>${t("targetPrice")}</span>
+            <span><strong>${formatNumber(margin)}%</strong>${t("expectedMargin")}</span>
+          </div>
+          <div class="product-recipe-summary">
+            <div>
+              <span class="muted-label">${t("currentRecipe")}</span>
+              <strong>${currentRecipe ? `${currentRecipe.id} · vigente v${currentRecipe.currentVersion || "sin aprobar"}` : t("noRecipe")}</strong>
+              <p>${currentRecipe ? `${currentRecipe.draftVersionId ? `Edicion v${currentRecipe.version} · ` : ""}${getRecipeApprovalStatus(currentRecipe)} · ${currentRecipe.steps.length} etapas operativas` : "Debe generarse antes de liberar produccion."}</p>
+            </div>
+            <span class="chip ${currentRecipe ? "active" : "warning"}">${currentRecipe ? getRecipeApprovalStatus(currentRecipe) : t("noRecipe")}</span>
+          </div>
+          <div class="product-catalog-actions">
+            <button class="secondary-action small-action" type="button" data-action="edit-product-service" data-product-id="${item.id}">${t("editMasterRecord")}</button>
             ${currentRecipe
-              ? `<button class="secondary-action small-action" type="button" data-action="edit-recipe" data-recipe-id="${currentRecipe.id}">Editar receta</button>`
-              : `<button class="secondary-action small-action" type="button" data-action="go-recipes-product" data-product-id="${item.id}">Generar receta</button>`}
+              ? `<button class="secondary-action small-action" type="button" data-action="edit-recipe" data-recipe-id="${currentRecipe.id}">${t("editRecipe")}</button>`
+              : `<button class="secondary-action small-action" type="button" data-action="go-recipes-product" data-product-id="${item.id}">${t("createRecipe")}</button>`}
+            <button class="primary-action small-action product-orders-action" type="button" data-action="view-product-orders" data-product-id="${item.id}">
+              <span>${t("viewProductOrders")}</span><strong>${history.length}</strong>
+            </button>
           </div>
         </article>
       `;
         }).join("")}
       </div>
-      ${filteredItems.length ? "" : `<p class="helper-copy">No hay productos o servicios con esa busqueda.</p>`}
+      ${filteredItems.length ? "" : `<p class="helper-copy">${t("noCatalogMatches")}</p>`}
     </section>
   `;
 }
@@ -3968,17 +4648,17 @@ function renderRecipesScreen(recipes) {
 
 function renderLaborRolesScreen() {
   const roles = mockDb.loadLaborRoles();
-  const selectedArea = localStorage.getItem("erclave-labor-selected-area");
-  if (selectedArea) return renderLaborAreaDetailScreen(selectedArea, roles);
+  const areas = mockDb.loadLaborAreas();
+  const selectedAreaId = localStorage.getItem("erclave-labor-selected-area");
+  if (selectedAreaId) return renderLaborAreaDetailScreen(selectedAreaId, roles, areas);
 
   const search = localStorage.getItem("erclave-labor-area-search") || "";
   const normalizedSearch = search.trim().toLowerCase();
-  const areas = [...new Set(roles.map((role) => role.area))];
   const filteredAreas = normalizedSearch
     ? areas.filter((area) => {
-        const areaRoles = roles.filter((role) => role.area === area);
+        const areaRoles = roles.filter((role) => role.areaId === area.id);
         return (
-          area.toLowerCase().includes(normalizedSearch) ||
+          [area.code, area.name, area.description, area.status].join(" ").toLowerCase().includes(normalizedSearch) ||
           areaRoles.some((role) =>
             [role.name, role.position, role.status]
               .join(" ")
@@ -4003,31 +4683,41 @@ function renderLaborRolesScreen() {
           <input id="laborAreaSearch" type="search" value="${search}" placeholder="Buscar area, puesto o rol" />
         </label>
       </div>
-      <p class="helper-copy">Consulta areas operativas y entra a cada una para administrar sus puestos, cantidad de recursos, costos y disponibilidad.</p>
+      <p class="helper-copy">${t("laborAreaScreenHelp")}</p>
       <div class="area-summary-grid">
         ${filteredAreas.map((area) => {
-          const areaRoles = roles.filter((role) => role.area === area);
+          const areaRoles = roles.filter((role) => role.areaId === area.id);
           const totalPeople = areaRoles.reduce((sum, role) => sum + Number(role.quantity || 1), 0);
           const totalMinutes = areaRoles.reduce((sum, role) => sum + Number(role.available || 0), 0);
           return `
             <article class="area-card">
               <div>
                 <span class="muted-label">Area operativa</span>
-                <strong>${area}</strong>
+                <strong>${area.name}</strong>
+                <span class="muted-label">${area.code} - ${area.status}</span>
+                <p>${area.description || "Sin descripcion."}</p>
                 <p>${areaRoles.length} puestos/roles - ${totalPeople} recursos - ${formatNumber(totalMinutes)} min/dia</p>
               </div>
-              <button class="secondary-action small-action" type="button" data-action="open-labor-area" data-area="${area}">Ver puestos</button>
+              <div class="catalog-card-actions">
+                ${hasPermission("hr.area.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-labor-area" data-area-id="${area.id}">${t("editLaborArea")}</button>` : ""}
+                <button class="secondary-action small-action" type="button" data-action="open-labor-area" data-area-id="${area.id}">${t("viewLaborRoles")}</button>
+              </div>
             </article>
           `;
         }).join("")}
       </div>
-      ${filteredAreas.length ? "" : `<p class="helper-copy">No hay areas con esa busqueda.</p>`}
+      ${filteredAreas.length ? "" : `<p class="helper-copy">${t("laborAreaEmpty")}</p>`}
     </section>
   `;
 }
 
-function renderLaborAreaDetailScreen(area, roles = mockDb.loadLaborRoles()) {
-  const areaRoles = roles.filter((role) => role.area === area);
+function renderLaborAreaDetailScreen(areaId, roles = mockDb.loadLaborRoles(), areas = mockDb.loadLaborAreas()) {
+  const area = areas.find((item) => item.id === areaId) || areas.find((item) => item.name === areaId);
+  if (!area) {
+    localStorage.removeItem("erclave-labor-selected-area");
+    return `<section class="section-card"><strong>${t("laborAreaUnavailable")}</strong><p>${t("laborAreaUnavailableHelp")}</p></section>`;
+  }
+  const areaRoles = roles.filter((role) => role.areaId === area.id);
   const totalPeople = areaRoles.reduce((sum, role) => sum + Number(role.quantity || 1), 0);
   const totalMinutes = areaRoles.reduce((sum, role) => sum + Number(role.available || 0), 0);
 
@@ -4036,11 +4726,13 @@ function renderLaborAreaDetailScreen(area, roles = mockDb.loadLaborRoles()) {
       <div class="panel-head compact">
         <div>
           <p class="eyebrow">Area operativa</p>
-          <h3>${area}</h3>
+          <h3>${area.name}</h3>
+          <p>${area.code} - ${area.description || "Sin descripcion."}</p>
         </div>
         <div class="row-actions">
-          <button class="primary-action" type="button" data-action="open-labor-role-area" data-area="${area}"><span>+</span><span>Nuevo rol/recurso</span></button>
-          <button class="secondary-action" type="button" data-action="back-labor-areas">Todas las areas</button>
+          ${hasPermission("hr.position.create") ? `<button class="primary-action" type="button" data-action="open-labor-role-area" data-area-id="${area.id}"><span>+</span><span>${t("newLaborRole")}</span></button>` : ""}
+          ${hasPermission("hr.area.update") ? `<button class="secondary-action" type="button" data-action="edit-labor-area" data-area-id="${area.id}">${t("editLaborArea")}</button>` : ""}
+          <button class="secondary-action" type="button" data-action="back-labor-areas">${t("allLaborAreas")}</button>
         </div>
       </div>
       <div class="area-summary-grid">
@@ -4052,20 +4744,21 @@ function renderLaborAreaDetailScreen(area, roles = mockDb.loadLaborRoles()) {
         ${areaRoles.map((role) => `
           <article class="catalog-card">
             <div class="catalog-card-main">
-              <span class="muted-label">${role.id} - ${role.area}</span>
+              <span class="muted-label">${role.id} - ${area.name}</span>
               <strong>${role.name}</strong>
               <p>${role.position} - ${formatNumber(role.quantity || 1)} personas/recurso.</p>
               <span class="muted-label">${formatNumber(role.minutesPerResource || role.available)} ${role.unit} por recurso - ${formatNumber(role.available)} ${role.unit} totales por dia</span>
-              <span class="muted-label">Costo: ${formatCurrency(role.cost)} por ${role.unit}</span>
+              <span class="muted-label">${t("laborRoleHourlyCost")}: ${formatCurrency(role.hourlyCost ?? Number(role.cost || 0) * 60)}</span>
+              <span class="muted-label">${role.intervenesInProduction !== false ? t("intervenesInProduction") : t("doesNotInterveneInProduction")}</span>
             </div>
             <div class="catalog-card-actions">
               <span class="chip ${role.status === "Activo" ? "active" : ""}">${role.status}</span>
-              <button class="secondary-action small-action" type="button" data-action="edit-labor-role" data-role-id="${role.id}">Abrir rol</button>
+              ${hasPermission("hr.position.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-labor-role" data-role-id="${role.id}">${t("editLaborRole")}</button>` : ""}
             </div>
           </article>
         `).join("")}
       </div>
-      ${areaRoles.length ? "" : `<p class="helper-copy">Esta area todavia no tiene puestos registrados.</p>`}
+      ${areaRoles.length ? "" : `<p class="helper-copy">${t("laborAreaNoRoles")}</p>`}
     </section>
   `;
 }
@@ -4102,10 +4795,26 @@ function renderMachinesScreen() {
 }
 
 function renderOrdersScreen(orders) {
+  const selectedProductId = localStorage.getItem("erclave-production-orders-product") || "";
+  const selectedProduct = selectedProductId ? mockDb.findProductService(selectedProductId) : null;
+  const visibleOrders = selectedProduct ? getProductServiceOrderHistory(selectedProduct) : orders;
   return `
     <div class="submodule-layout">
       <section>
-        ${renderOrderList(orders)}
+        ${selectedProduct ? `
+          <div class="section-card product-order-filter">
+            <div>
+              <span class="eyebrow">${selectedProduct.sku || selectedProduct.kind}</span>
+              <strong>${t("productOrdersTitle", { name: selectedProduct.name })}</strong>
+              <p>${t("productOrdersHelper")}</p>
+            </div>
+            <div class="row-actions">
+              <button class="secondary-action small-action" type="button" data-action="back-products-catalog">${t("backToCatalog")}</button>
+              <button class="secondary-action small-action" type="button" data-action="show-all-production-orders">${t("showAllOrders")}</button>
+            </div>
+          </div>
+        ` : ""}
+        ${renderOrderList(visibleOrders, selectedProduct ? t("noProductOrders") : "")}
       </section>
       <section class="section-card">
         ${renderFlowGuide("Flujo de estatus de orden", orderStatusCatalog.map((status) => ({
@@ -4203,8 +4912,14 @@ function bindProductionPanelActions() {
   modulePanel.querySelectorAll("[data-action='open-labor-role']").forEach((button) => {
     button.addEventListener("click", () => openLaborRoleModal());
   });
+  modulePanel.querySelectorAll("[data-action='open-labor-area-form']").forEach((button) => {
+    button.addEventListener("click", () => openLaborAreaModal());
+  });
+  modulePanel.querySelectorAll("[data-action='edit-labor-area']").forEach((button) => {
+    button.addEventListener("click", () => openLaborAreaModal(button.dataset.areaId));
+  });
   modulePanel.querySelectorAll("[data-action='open-labor-role-area']").forEach((button) => {
-    button.addEventListener("click", () => openLaborRoleModal(null, button.dataset.area));
+    button.addEventListener("click", () => openLaborRoleModal(null, button.dataset.areaId));
   });
   modulePanel.querySelectorAll("[data-action='edit-labor-role']").forEach((button) => {
     button.addEventListener("click", () => openLaborRoleModal(button.dataset.roleId));
@@ -4316,7 +5031,7 @@ function bindProductionPanelActions() {
   }
   modulePanel.querySelectorAll("[data-action='open-labor-area']").forEach((button) => {
     button.addEventListener("click", () => {
-      navigateTo({ active: state.active, activeSubmodule: state.activeSubmodule, laborArea: button.dataset.area });
+      navigateTo({ active: state.active, activeSubmodule: state.activeSubmodule, laborArea: button.dataset.areaId });
     });
   });
   modulePanel.querySelectorAll("[data-action='back-labor-areas']").forEach((button) => {
@@ -4330,10 +5045,37 @@ function bindProductionPanelActions() {
       navigateTo({ active: "produccion", activeSubmodule: "recetas", laborArea: "" });
     });
   });
+  modulePanel.querySelectorAll("[data-action='view-product-orders']").forEach((button) => {
+    button.addEventListener("click", () => {
+      localStorage.setItem("erclave-production-orders-product", button.dataset.productId);
+      navigateTo({ active: "produccion", activeSubmodule: "ordenes", laborArea: "" });
+    });
+  });
+  modulePanel.querySelectorAll("[data-action='back-products-catalog']").forEach((button) => {
+    button.addEventListener("click", () => {
+      localStorage.removeItem("erclave-production-orders-product");
+      navigateTo({ active: "produccion", activeSubmodule: "productos-servicios", laborArea: "" });
+    });
+  });
+  modulePanel.querySelectorAll("[data-action='show-all-production-orders']").forEach((button) => {
+    button.addEventListener("click", () => {
+      localStorage.removeItem("erclave-production-orders-product");
+      render();
+    });
+  });
   modulePanel.querySelectorAll("[data-action='change-product-service-status']").forEach((select) => {
-    select.addEventListener("change", () => {
+    select.addEventListener("change", async () => {
       const item = mockDb.findProductService(select.dataset.productId);
       if (!item) return;
+      if (getApiMode() === "api") {
+        try {
+          const statuses={Activo:"active",Inactivo:"inactive","En espera de aprobacion":"pending_approval"};
+          await updateProductionProductServiceStatus(item.id,{status:statuses[select.value]||select.value,reason:"Actualizacion desde catalogo"});
+          await loadProductionApiData();
+          showToast(`${item.id} actualizado a ${select.value}.`);
+        } catch(error) { showToast(error.message||"No se pudo actualizar el estatus."); }
+        return;
+      }
       mockDb.updateProductService({ ...item, status: select.value });
       render();
       showToast(`${item.id} actualizado a ${select.value}.`);
@@ -4412,7 +5154,7 @@ function renderRecipeValidationOnly(recipes = mockDb.loadRecipes()) {
               .map(
                 (item) => `
                   <option value="${item.id}" ${item.id === recipe.id ? "selected" : ""}>
-                    ${item.id} · ${item.product}
+                    ${formatRecipeDisplayLabel(item)}
                   </option>
                 `
               )
@@ -4456,7 +5198,7 @@ function renderRecipeValidationOnly(recipes = mockDb.loadRecipes()) {
   `;
 }
 
-function renderOrderList(orders) {
+function renderOrderList(orders, emptyMessage = "") {
   return `
     <section class="section-card recipe-list-card">
       <div class="section-title">
@@ -4500,7 +5242,7 @@ function renderOrderList(orders) {
           `;
           })
           .join("")}
-        ${orders.length ? "" : `<p class="helper-copy">Todavia no hay ordenes de produccion registradas.</p>`}
+        ${orders.length ? "" : `<p class="helper-copy">${emptyMessage || "Todavia no hay ordenes de produccion registradas."}</p>`}
       </div>
     </section>
   `;
@@ -4522,8 +5264,8 @@ function renderRecipeList(recipes) {
             return `
               <article class="recipe-list-row">
                 <div>
-                  <strong>${recipe.id} · ${recipe.product}</strong>
-                  <span>v${recipe.version} · ${approvalStatus} · ${recipe.resources.length} recursos · ${recipe.steps.length} etapas genericas · costo estandar ${formatCurrency(standardCost)}</span>
+                  <strong>${formatRecipeDisplayLabel(recipe)}</strong>
+                  <span>${recipe.currentVersion ? `Vigente v${recipe.currentVersion}` : "Sin version vigente"}${recipe.draftVersionId ? ` · Edicion v${recipe.version} (${approvalStatus})` : ` · ${approvalStatus}`} · ${recipe.resources.length} recursos · ${recipe.steps.length} etapas genericas · costo estandar ${formatCurrency(standardCost)}</span>
                 </div>
                 <span class="chip ${validation.missing.length || !isRecipeApproved(recipe) ? "warning" : "active"}">
                   ${!isRecipeApproved(recipe) ? approvalStatus : validation.missing.length ? `${validation.missing.length} faltantes` : "Lista"}
@@ -5042,7 +5784,7 @@ function openWarehouseModal(module, submodule, recordId = null) {
   modalContent.querySelector("#warehouseForm").addEventListener("submit", (event) => saveWarehouseForm(event, module, submodule));
 }
 
-function saveWarehouseForm(event, module, submodule) {
+async function saveWarehouseForm(event, module, submodule) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = Object.fromEntries(new FormData(form).entries());
@@ -5061,6 +5803,15 @@ function saveWarehouseForm(event, module, submodule) {
 
   const code = data.code.trim().toUpperCase();
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
+  if (getApiMode() === "api") {
+    const payload = {name:data.name.trim(),type:data.type,business_center:data.businessCenter.trim(),location:data.location.trim(),owner:data.owner.trim(),capacity:data.capacity?.trim()||null,inventory_policy:data.policy,zone:data.zone?.trim()||null,aisle:data.aisle?.trim()||null,rack:data.rack?.trim()||null,level:data.level?.trim()||null,position:data.position?.trim()||null,description:data.description?.trim()||null,status:(data.status||"Activo")==="Activo"?"active":(data.status==="Bloqueado"?"blocked":"inactive")};
+    try {
+      if (existingRecord) await updateInventoryWarehouse(existingRecord.id,payload);
+      else await createInventoryWarehouse({code,...payload});
+      closeModal(); await loadInventoryApiData(); showToast(t(existingRecord ? "warehouseUpdated" : "warehouseSaved", { code }));
+    } catch (error) { renderFormErrors([error.message]); }
+    return;
+  }
   const record = {
     id: existingRecord?.id || `${module.id}-${Date.now()}`,
     code,
@@ -5182,6 +5933,10 @@ function openInventoryItemModal(module, submodule, recordId = null) {
             </select>
           ` : `<input name="defaultWarehouseName" type="text" value="${fields.defaultWarehouseName || ""}" placeholder="${t("warehouseNamePlaceholder")}" />`}
         </label>
+        <label class="preview-field checkbox-field">
+          <input name="useInRecipe" type="checkbox" value="true" ${fields.useInRecipe ? "checked" : ""} />
+          <span>${t("useInRecipe")}</span>
+        </label>
         <label class="preview-field wide-field">
           <span>${t("description")}</span>
           <textarea name="description" rows="3" placeholder="${t("inventoryItemDescriptionPlaceholder")}">${fields.description || ""}</textarea>
@@ -5202,7 +5957,7 @@ function openInventoryItemModal(module, submodule, recordId = null) {
   modalContent.querySelector("#inventoryItemForm").addEventListener("submit", (event) => saveInventoryItemForm(event, module, submodule));
 }
 
-function saveInventoryItemForm(event, module, submodule) {
+async function saveInventoryItemForm(event, module, submodule) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = Object.fromEntries(new FormData(form).entries());
@@ -5221,6 +5976,15 @@ function saveInventoryItemForm(event, module, submodule) {
   const code = data.code.trim().toUpperCase();
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
   const defaultWarehouseName = warehouse ? `${warehouse.code} - ${warehouse.title}` : data.defaultWarehouseName?.trim() || "";
+  if (getApiMode() === "api" && isInventoryApiEnabled()) {
+    const payload={name:data.name.trim(),type:data.type,category:data.category?.trim()||null,base_unit:data.unit.trim(),suggested_warehouse_id:data.defaultWarehouseId||null,minimum_stock:Number(data.minStock||0),maximum_stock:data.maxStock?Number(data.maxStock):null,use_in_recipe:data.useInRecipe==="true",status:(data.status||"Activo")==="Activo"?"active":(data.status==="Bloqueado"?"blocked":"inactive"),description:data.description?.trim()||null};
+    try {
+      if (existingRecord) await updateInventoryItem(existingRecord.id,payload);
+      else await createInventoryItem({code,inventory_policy:data.policy==="batch"?"lot":data.policy,...payload});
+      closeModal(); await loadInventoryApiData(); showToast(t(existingRecord ? "inventoryItemUpdated" : "inventoryItemSaved", { code }));
+    } catch (error) { renderFormErrors([error.message]); }
+    return;
+  }
   const record = {
     id: existingRecord?.id || `${module.id}-item-${Date.now()}`,
     code,
@@ -5238,6 +6002,7 @@ function saveInventoryItemForm(event, module, submodule) {
       minStock: data.minStock || "",
       maxStock: data.maxStock || "",
       policy: data.policy,
+      useInRecipe: data.useInRecipe === "true",
       defaultWarehouseId: data.defaultWarehouseId || "",
       defaultWarehouseName,
       description: data.description?.trim() || ""
@@ -5312,6 +6077,13 @@ function openInventoryMovementModal(module, submodule) {
               ${warehouses.map((warehouse) => `<option value="${warehouse.id}">${warehouse.code} - ${warehouse.title}</option>`).join("")}
             </select>
           ` : `<input name="warehouseName" type="text" placeholder="${t("warehouseNamePlaceholder")}" required />`}
+        </label>
+        <label class="preview-field">
+          <span>Almacen destino (solo transferencia)</span>
+          <select name="destinationWarehouseId">
+            <option value="">No aplica</option>
+            ${warehouses.map((warehouse) => `<option value="${warehouse.id}">${warehouse.code} - ${warehouse.title}</option>`).join("")}
+          </select>
         </label>
         <label class="preview-field">
           <span>${t("physicalLocation")}</span>
@@ -5417,7 +6189,7 @@ function syncMovementItemFields(event) {
   form.querySelector("[name='unit']").value = item.fields?.unit || "";
 }
 
-function saveInventoryMovementForm(event, module, submodule) {
+async function saveInventoryMovementForm(event, module, submodule) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = Object.fromEntries(new FormData(form).entries());
@@ -5440,6 +6212,10 @@ function saveInventoryMovementForm(event, module, submodule) {
   const warehouseName = warehouse ? `${warehouse.code} - ${warehouse.title}` : data.warehouseName.trim();
   const itemName = item ? `${item.code} - ${item.title}` : data.item.trim();
   const movementQuantity = Number(data.quantity || 0);
+  if (data.movementType === "transfer" && (!data.destinationWarehouseId || data.destinationWarehouseId === data.warehouseId)) {
+    renderFormErrors([t("transferDestinationRequired")]);
+    return;
+  }
   if (["exit", "negativeAdjustment"].includes(data.movementType)) {
     const itemKey = data.itemId || itemName;
     const warehouseKey = data.warehouseId || warehouseName;
@@ -5448,6 +6224,30 @@ function saveInventoryMovementForm(event, module, submodule) {
       renderFormErrors([t("insufficientStock", { available: formatNumber(available), unit: data.unit.trim() })]);
       return;
     }
+  }
+  if (getApiMode() === "api" && isInventoryApiEnabled()) {
+    const types = { positiveAdjustment: "positive_adjustment", negativeAdjustment: "negative_adjustment" };
+    try {
+      const savedMovement = await createInventoryMovement({
+        movement_type: types[data.movementType] || data.movementType,
+        inventory_item_id: data.itemId,
+        warehouse_id: data.warehouseId,
+        destination_warehouse_id: data.destinationWarehouseId || null,
+        quantity: movementQuantity,
+        unit: data.unit.trim(),
+        reason: data.reason?.trim() || "Movimiento manual",
+        source: { type: "manual", id: data.sourceDocument.trim() },
+        occurred_at: `${data.movementDate}T12:00:00Z`
+      });
+      state.inventoryMovements = { status: "idle", error: "" };
+      state.inventoryBalances = { status: "idle", data: [], page: {}, error: "", queryKey: "", cursor: "", previousCursors: [] };
+      closeModal();
+      await loadInventoryMovementData();
+      showToast(t("movementSaved", { code: savedMovement.movement_code }));
+    } catch (error) {
+      renderFormErrors([error.message || t("inventoryLoadError")]);
+    }
+    return;
   }
   const record = {
     id: `${module.id}-movement-${Date.now()}`,
@@ -5973,7 +6773,7 @@ function renderQuoteProductLookup(event) {
         .map((item) => `
           <button class="lookup-option" type="button" data-product-id="${item.id}">
             <strong>${item.name}</strong>
-            <span>${item.id} - ${item.kind} - ${item.unit}</span>
+            <span>${item.sku} · ${item.kind} · ${item.unit}</span>
           </button>
         `)
         .join("")
@@ -6725,13 +7525,43 @@ function validateProductService(item) {
   return errors;
 }
 
-function saveProductServiceForm(event) {
+async function saveProductServiceForm(event) {
   event.preventDefault();
   const item = buildProductServiceFromForm(event.currentTarget);
   const exists = Boolean(mockDb.findProductService(item.id));
   const errors = validateProductService(item);
   renderFormErrors(errors);
   if (errors.length) return;
+
+  if (getApiMode() === "api") {
+    try {
+      const payload = {
+        name: item.name,
+        category: item.category,
+        base_unit: item.unit,
+        target_price: item.targetPrice,
+        responsible_area: item.owner,
+        cost_center: item.center,
+        expected_margin: item.expectedMargin,
+        description: item.description
+      };
+      const saved = exists
+        ? await updateProductionProductService(item.id, payload)
+        : await createProductionProductService({ ...payload, code: item.sku, type: item.kind === "Servicio" ? "service" : "product" });
+      const statuses = { Activo: "active", Inactivo: "inactive", "En espera de aprobacion": "pending_approval" };
+      if (statuses[item.status] && saved.status !== statuses[item.status]) {
+        await updateProductionProductServiceStatus(saved.id, { status: statuses[item.status], reason: "Estatus inicial del catalogo" });
+      }
+      localStorage.setItem("erclave-product-service-search", "");
+      closeModal();
+      await loadProductionApiData();
+      navigateTo({ active: "produccion", activeSubmodule: "productos-servicios", laborArea: "" });
+      showToast(`${item.kind} ${saved.code} ${exists ? "actualizado" : "guardado"} en Production API.`);
+    } catch (error) {
+      renderFormErrors([error.message || "No se pudo guardar en Production API."]);
+    }
+    return;
+  }
 
   if (exists) {
     mockDb.updateProductService(item);
@@ -6758,35 +7588,129 @@ function syncRecipesForProductService(item) {
     });
 }
 
-function openLaborRoleModal(roleId = null, defaultArea = "") {
+function openLaborAreaModal(areaId = null) {
+  const existingArea = areaId ? mockDb.findLaborArea(areaId) : null;
+  const isEditing = Boolean(existingArea);
+  const requiredPermission = isEditing ? "hr.area.update" : "hr.area.create";
+  if (!hasPermission(requiredPermission)) {
+    showToast("No tienes permiso para realizar esta operacion sobre areas.");
+    return;
+  }
+  modalContent.innerHTML = `
+    <form class="recipe-form" id="laborAreaForm">
+      <input type="hidden" name="areaId" value="${existingArea?.id || ""}" />
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">${t("production")} - ${t("laborAreaCatalog")}</p>
+          <h2 id="modalTitle">${isEditing ? t("editLaborArea") : t("newLaborArea")}</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="Cerrar">x</button>
+      </div>
+      <p class="helper-copy">${t("laborAreaFormHelp")}</p>
+      <div class="form-grid">
+        <label class="preview-field"><span>${t("laborAreaCode")}</span><input name="code" type="text" value="${escapeAttribute(existingArea?.code || "")}" placeholder="Ej. COSTURA" required /></label>
+        <label class="preview-field"><span>${t("laborAreaName")}</span><input name="name" type="text" value="${escapeAttribute(existingArea?.name || "")}" placeholder="Ej. Costura" required /></label>
+        <label class="preview-field wide-field"><span>${t("laborAreaDescription")}</span><textarea name="description" rows="3" placeholder="Objetivo y alcance operativo del area">${escapeHtml(existingArea?.description || "")}</textarea></label>
+        <label class="preview-field"><span>${t("laborAreaStatus")}</span><select name="status"><option ${existingArea?.status === "Activo" ? "selected" : ""}>Activo</option><option ${existingArea?.status === "Inactivo" ? "selected" : ""}>Inactivo</option></select></label>
+      </div>
+      <div class="form-errors" id="formErrors" hidden></div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-action="close-labor-area">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${isEditing ? t("updateLaborArea") : t("saveLaborArea")}</button>
+      </div>
+    </form>`;
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-labor-area']").addEventListener("click", closeModal);
+  modalContent.querySelector("#laborAreaForm").addEventListener("submit", saveLaborAreaForm);
+}
+
+async function saveLaborAreaForm(event) {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  const areaId = String(data.get("areaId") || "").trim();
+  const requiredPermission = areaId ? "hr.area.update" : "hr.area.create";
+  if (!hasPermission(requiredPermission)) {
+    renderFormErrors(["No tienes permiso para guardar esta area."]);
+    return;
+  }
+  const code = String(data.get("code") || "").trim().toUpperCase();
+  const name = String(data.get("name") || "").trim();
+  const normalizedCode = code.toLowerCase();
+  const normalizedName = name.toLowerCase();
+  const duplicate = mockDb.loadLaborAreas().find((area) =>
+    area.id !== areaId && (area.code.toLowerCase() === normalizedCode || area.name.toLowerCase() === normalizedName)
+  );
+  const errors = [];
+  if (!code) errors.push("Captura el codigo del area.");
+  if (!name) errors.push("Captura el nombre del area.");
+  if (duplicate) errors.push(t("laborAreaDuplicate"));
+  renderFormErrors(errors);
+  if (errors.length) return;
+
+  const item = {
+    id: areaId || `area_${slugify(code)}_${Date.now().toString().slice(-4)}`,
+    code,
+    name,
+    description: String(data.get("description") || "").trim(),
+    status: String(data.get("status") || "Activo")
+  };
+  if (getApiMode() === "api") {
+    try {
+      const payload={name:item.name,description:item.description||null,status:item.status==="Activo"?"active":"inactive"};
+      if (areaId) await updateHrArea(areaId,payload);
+      else await createHrArea({code:item.code,name:item.name,description:item.description||null});
+      closeModal();await loadHrApiData();navigateTo({active:"recursos-humanos",activeSubmodule:"areas-puestos",laborArea:areaId||""});showToast(`Area ${item.name} ${areaId?"actualizada":"guardada"}.`);
+    } catch(error) { renderFormErrors([error.message]); }
+    return;
+  }
+  if (areaId) mockDb.updateLaborArea(item);
+  else mockDb.addLaborArea(item);
+  closeModal();
+  navigateTo({ active: "recursos-humanos", activeSubmodule: "areas-puestos", laborArea: areaId ? item.id : "" });
+  showToast(`Area ${item.name} ${areaId ? "actualizada" : "guardada"}.`);
+}
+
+function openLaborRoleModal(roleId = null, defaultAreaId = "") {
   const existingRole = roleId ? mockDb.findLaborRole(roleId) : null;
   const isEditing = Boolean(existingRole);
-  const contextArea = defaultArea || localStorage.getItem("erclave-labor-selected-area") || "";
-  const selectedArea = contextArea || "Costura";
-  const lockAreaField = Boolean(contextArea && (!existingRole || existingRole.area === contextArea));
+  const requiredPermission = isEditing ? "hr.position.update" : "hr.position.create";
+  if (!hasPermission(requiredPermission)) {
+    showToast("No tienes permiso para realizar esta operacion sobre puestos.");
+    return;
+  }
+  const areas = mockDb.loadLaborAreas();
+  const contextAreaId = defaultAreaId || localStorage.getItem("erclave-labor-selected-area") || "";
+  const selectedAreaId = existingRole?.areaId || contextAreaId || areas.find((area) => area.status === "Activo")?.id || "";
+  const selectableAreas = areas.filter((area) => area.status === "Activo" || area.id === selectedAreaId);
+  if (!selectableAreas.length) {
+    showToast(t("laborAreaRequiredFirst"));
+    return;
+  }
   modalContent.innerHTML = `
     <form class="recipe-form" id="laborRoleForm">
       <input type="hidden" name="roleId" value="${existingRole?.id || ""}" />
       <div class="modal-head">
         <div>
-          <p class="eyebrow">Produccion</p>
-          <h2 id="modalTitle">${isEditing ? "Editar puesto" : "Nueva area y puesto"}</h2>
+          <p class="eyebrow">${t("humanResources")}</p>
+          <h2 id="modalTitle">${isEditing ? t("editLaborRole") : t("newLaborRole")}</h2>
         </div>
         <button class="icon-button modal-close" type="button" aria-label="Cerrar">x</button>
       </div>
       <div class="form-grid">
-        <label class="preview-field"><span>Area</span><input name="area" type="text" value="${existingRole?.area || selectedArea}" ${lockAreaField ? "readonly" : ""} required /></label>
-        <label class="preview-field"><span>Puesto o rol</span><input name="position" type="text" value="${existingRole?.position || ""}" placeholder="Ej. Costurero" required /></label>
-        <label class="preview-field"><span>Nombre para receta</span><input name="name" type="text" value="${existingRole?.name || ""}" placeholder="Ej. Costurero senior" required /></label>
-        <label class="preview-field"><span>Cantidad de recursos</span><input name="quantity" type="number" min="1" value="${existingRole?.quantity || 1}" required /></label>
-        <label class="preview-field"><span>Minutos por recurso al dia</span><input name="minutesPerResource" type="number" min="1" value="${existingRole?.minutesPerResource || existingRole?.available || 480}" required /></label>
-        <label class="preview-field"><span>Costo por minuto</span><input name="cost" type="number" min="0" step="0.01" value="${existingRole?.cost || "2.00"}" required /></label>
+        <label class="preview-field"><span>${t("laborAreaExisting")}</span><select name="areaId" required>${selectableAreas.map((area) => `<option value="${area.id}" ${area.id === selectedAreaId ? "selected" : ""}>${area.code} - ${area.name}</option>`).join("")}</select></label>
+        <label class="preview-field"><span>${t("laborRolePosition")}</span><input name="position" type="text" value="${existingRole?.position || ""}" placeholder="Ej. Costurero" required /></label>
+        <label class="preview-field"><span>${t("laborRoleName")}</span><input name="name" type="text" value="${existingRole?.name || ""}" placeholder="Ej. Costurero senior" required /></label>
+        <label class="preview-field"><span>${t("laborRoleQuantity")}</span><input name="quantity" type="number" min="1" value="${existingRole?.quantity || 1}" required /></label>
+        <label class="preview-field"><span>${t("laborRoleMinutes")}</span><input name="minutesPerResource" type="number" min="1" value="${existingRole?.minutesPerResource || existingRole?.available || 480}" required /></label>
+        <label class="preview-field"><span>${t("laborRoleHourlyCost")}</span><input name="hourlyCost" type="number" min="0" step="0.01" value="${existingRole?.hourlyCost ?? Number(existingRole?.cost || 0) * 60}" required /></label>
+        <label class="preview-field checkbox-field"><input name="intervenesInProduction" type="checkbox" value="true" ${existingRole?.intervenesInProduction !== false ? "checked" : ""} /><span>${t("intervenesInProductionQuestion")}</span></label>
         <label class="preview-field"><span>Estatus</span><select name="status"><option ${existingRole?.status === "Activo" ? "selected" : ""}>Activo</option><option ${existingRole?.status === "Inactivo" ? "selected" : ""}>Inactivo</option></select></label>
       </div>
       <div class="form-errors" id="formErrors" hidden></div>
       <div class="modal-actions">
-        <button class="secondary-action" type="button" data-action="close-labor-role">Cancelar</button>
-        <button class="primary-action" type="submit">${isEditing ? "Actualizar puesto" : "Guardar puesto"}</button>
+        <button class="secondary-action" type="button" data-action="close-labor-role">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${isEditing ? t("updateLaborRole") : t("saveLaborRole")}</button>
       </div>
     </form>
   `;
@@ -6796,49 +7720,85 @@ function openLaborRoleModal(roleId = null, defaultArea = "") {
   modalContent.querySelector("#laborRoleForm").addEventListener("submit", saveLaborRoleForm);
 }
 
-function saveLaborRoleForm(event) {
+async function saveLaborRoleForm(event) {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
   const roleId = String(data.get("roleId") || "").trim();
+  const requiredPermission = roleId ? "hr.position.update" : "hr.position.create";
+  if (!hasPermission(requiredPermission)) {
+    renderFormErrors(["No tienes permiso para guardar este puesto."]);
+    return;
+  }
   const name = String(data.get("name") || "").trim();
-  const area = String(data.get("area") || "").trim();
+  const areaId = String(data.get("areaId") || "").trim();
+  const area = mockDb.findLaborArea(areaId);
   const position = String(data.get("position") || "").trim();
   const quantity = Math.max(1, Number(data.get("quantity") || 1));
   const minutesPerResource = Math.max(1, Number(data.get("minutesPerResource") || 1));
+  const duplicateRole = mockDb.loadLaborRoles().find((role) =>
+    role.id !== roleId && role.areaId === areaId && (
+      role.name.trim().toLowerCase() === name.toLowerCase() ||
+      role.position.trim().toLowerCase() === position.toLowerCase()
+    )
+  );
   const errors = [];
-  if (!area) errors.push("Captura el area.");
+  if (!area) errors.push(t("laborAreaInvalid"));
   if (!position) errors.push("Captura el puesto o rol.");
   if (!name) errors.push("Captura el nombre para receta.");
+  if (duplicateRole) errors.push(t("laborRoleDuplicate"));
   renderFormErrors(errors);
   if (errors.length) return;
 
   const item = {
     id: roleId || `mo_${slugify(name)}_${Date.now().toString().slice(-4)}`,
     name,
-    area,
+    areaId: area.id,
+    area: area.name,
     position,
     quantity,
     minutesPerResource,
     unit: "min",
     available: quantity * minutesPerResource,
-    cost: Number(data.get("cost") || 0),
+    hourlyCost: Number(data.get("hourlyCost") || 0),
+    cost: Number(data.get("hourlyCost") || 0) / 60,
     type: "Mano de obra",
-    source: "Areas y puestos",
+    source: "Recursos Humanos",
+    intervenesInProduction: data.get("intervenesInProduction") === "true",
     status: String(data.get("status") || "Activo")
   };
+  if (getApiMode() === "api") {
+    try {
+      const payload={labor_area_id:item.areaId,position:item.position,recipe_name:item.name,resource_quantity:item.quantity,minutes_per_resource:item.minutesPerResource,hourly_cost:item.hourlyCost,intervenes_in_production:item.intervenesInProduction,status:item.status==="Activo"?"active":"inactive"};
+      if (roleId) await updateHrPosition(roleId,payload);
+      else { const {status,...createPayload}=payload;await createHrPosition(createPayload); }
+      closeModal();await loadHrApiData();navigateTo({active:"recursos-humanos",activeSubmodule:"areas-puestos",laborArea:item.areaId});showToast(`Puesto ${item.name} ${roleId?"actualizado":"guardado"}.`);
+    } catch(error) { renderFormErrors([error.message]); }
+    return;
+  }
   if (roleId) {
     mockDb.updateLaborRole(item);
   } else {
     mockDb.addLaborRole(item);
   }
   closeModal();
-  navigateTo({ active: "produccion", activeSubmodule: "areas-puestos", laborArea: item.area });
+  navigateTo({ active: "recursos-humanos", activeSubmodule: "areas-puestos", laborArea: item.areaId });
   showToast(`Puesto ${item.name} ${roleId ? "actualizado" : "guardado"}.`);
 }
 
-function openMachineModal(machineId = null) {
+async function openMachineModal(machineId = null) {
   const existingMachine = machineId ? mockDb.findMachine(machineId) : null;
   const isEditing = Boolean(existingMachine);
+  let activeAreas;
+  try {
+    activeAreas = getApiMode() === "api"
+      ? (await getHrAreas()).filter((area) => area.status === "active")
+      : mockDb.loadLaborAreas().filter((area) => area.status === "Activo");
+  } catch (error) {
+    showToast(error.message || t("machineAreasLoadError"));
+    return;
+  }
+  const selectedArea = activeAreas.find((area) => area.name === existingMachine?.area);
+  const hasActiveAreas = activeAreas.length > 0;
   modalContent.innerHTML = `
     <form class="recipe-form" id="machineForm">
       <input type="hidden" name="machineId" value="${existingMachine?.id || ""}" />
@@ -6849,36 +7809,47 @@ function openMachineModal(machineId = null) {
         </div>
         <button class="icon-button modal-close" type="button" aria-label="Cerrar">x</button>
       </div>
+      <p class="helper-copy">${t("machineAreaCatalogHelp")}</p>
       <div class="form-grid">
-        <label class="preview-field"><span>Area</span><input name="area" type="text" value="${existingMachine?.area || "Costura"}" required /></label>
+        <label class="preview-field"><span>${t("laborAreaExisting")}</span><select name="area" required ${hasActiveAreas ? "" : "disabled"}>
+          <option value="">${t("machineAreaPlaceholder")}</option>
+          ${activeAreas.map((area) => `<option value="${escapeAttribute(area.name)}" data-area-id="${area.id}" ${selectedArea?.id === area.id ? "selected" : ""}>${escapeHtml(area.code)} - ${escapeHtml(area.name)}</option>`).join("")}
+        </select></label>
         <label class="preview-field"><span>Tipo de maquina</span><input name="machineType" type="text" value="${existingMachine?.machineType || ""}" placeholder="Ej. Costura" required /></label>
         <label class="preview-field"><span>Nombre de maquina</span><input name="name" type="text" value="${existingMachine?.name || ""}" placeholder="Ej. Maquina recta 02" required /></label>
         <label class="preview-field"><span>Minutos disponibles por dia</span><input name="available" type="number" min="1" value="${existingMachine?.available || 480}" required /></label>
         <label class="preview-field"><span>Costo hora/minuto maquina</span><input name="cost" type="number" min="0" step="0.01" value="${existingMachine?.cost || "1.80"}" required /></label>
         <label class="preview-field"><span>Estatus</span><select name="status"><option ${existingMachine?.status === "Activo" ? "selected" : ""}>Activo</option><option ${existingMachine?.status === "Inactivo" ? "selected" : ""}>Inactivo</option><option ${existingMachine?.status === "Mantenimiento" ? "selected" : ""}>Mantenimiento</option></select></label>
       </div>
+      ${hasActiveAreas ? "" : `<div class="validation-card warning machine-area-empty"><strong>${t("machineAreaRequiredFirst")}</strong><span>${t("machineAreaRequiredFirstHelp")}</span><button class="secondary-action" type="button" data-action="open-hr-areas">${t("machineGoToHrAreas")}</button></div>`}
       <div class="form-errors" id="formErrors" hidden></div>
       <div class="modal-actions">
         <button class="secondary-action" type="button" data-action="close-machine">Cancelar</button>
-        <button class="primary-action" type="submit">${isEditing ? "Actualizar maquina" : "Guardar maquina"}</button>
+        <button class="primary-action" type="submit" ${hasActiveAreas ? "" : "disabled"}>${isEditing ? "Actualizar maquina" : "Guardar maquina"}</button>
       </div>
     </form>
   `;
   modalBackdrop.hidden = false;
   modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
   modalContent.querySelector("[data-action='close-machine']").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='open-hr-areas']")?.addEventListener("click", () => {
+    closeModal();
+    navigateTo({ active: "recursos-humanos", activeSubmodule: "areas-puestos", laborArea: "" });
+  });
   modalContent.querySelector("#machineForm").addEventListener("submit", saveMachineForm);
 }
 
-function saveMachineForm(event) {
+async function saveMachineForm(event) {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
   const machineId = String(data.get("machineId") || "").trim();
   const name = String(data.get("name") || "").trim();
   const area = String(data.get("area") || "").trim();
+  const selectedAreaOption = event.currentTarget.querySelector('select[name="area"] option:checked');
+  const areaId = selectedAreaOption?.dataset.areaId || "";
   const machineType = String(data.get("machineType") || "").trim();
   const errors = [];
-  if (!area) errors.push("Captura el area.");
+  if (!area || !areaId) errors.push(t("machineAreaInvalid"));
   if (!machineType) errors.push("Captura el tipo de maquina.");
   if (!name) errors.push("Captura el nombre de maquina.");
   renderFormErrors(errors);
@@ -6896,6 +7867,16 @@ function saveMachineForm(event) {
     source: "Maquinaria",
     status: String(data.get("status") || "Activo")
   };
+  if (getApiMode() === "api") {
+    try {
+      const status={Activo:"active",Inactivo:"inactive",Mantenimiento:"maintenance"}[item.status];
+      const payload={name:item.name,machine_type:item.machineType,area_name:item.area,available_minutes_per_day:item.available,cost_per_minute:item.cost,status};
+      if (machineId) await updateProductionMachine(machineId,payload);
+      else { const {status:ignored,...createPayload}=payload;await createProductionMachine({...createPayload,code:slugify(item.name)}); }
+      closeModal();await loadProductionApiData();navigateTo({active:"produccion",activeSubmodule:"maquinaria",laborArea:""});showToast(`Maquina ${item.name} ${machineId?"actualizada":"guardada"} en Production API.`);
+    } catch(error) { renderFormErrors([error.message||"No se pudo guardar la maquina."]); }
+    return;
+  }
   if (machineId) {
     mockDb.updateMachine(item);
   } else {
@@ -6906,7 +7887,76 @@ function saveMachineForm(event) {
   showToast(`Maquina ${item.name} ${machineId ? "actualizada" : "guardada"}.`);
 }
 
-function openRecipeModal(recipeId = null) {
+async function prepareRecipeResourceCatalog() {
+  if (getApiMode() !== "api") return { areas: [] };
+  setMachineRecipeResources(mockDb.loadMachines()
+    .filter((machine) => machine.status === "Activo")
+    .map((machine) => ({
+      ...machine,
+      unit: "min",
+      resourceType: "machine",
+      type: "Maquinaria",
+      source: machine.area ? `Maquinaria: ${machine.area}` : "Maquinaria"
+    })));
+  const hrCatalog = isModuleAccessible("recursos-humanos") && hasPermission("hr.position.read")
+    ? await getHrCatalog({ production_only: true })
+    : { areas: [], positions: [] };
+  const activeAreas = (hrCatalog.areas || []).filter((area) => area.status === "active");
+  const areaById = new Map(activeAreas.map((area) => [area.id, area]));
+  const eligiblePositions = (hrCatalog.positions || [])
+    .filter((position) => position.status === "active" && position.intervenes_in_production && areaById.has(position.labor_area_id));
+  const productiveAreaIds = new Set(eligiblePositions.map((position) => position.labor_area_id));
+  const selectableAreas = activeAreas.filter((area) => productiveAreaIds.has(area.id));
+  setLaborRecipeResources(eligiblePositions
+    .map((position) => ({
+      id: position.id,
+      name: position.recipe_name,
+      unit: "min",
+      available: Number(position.resource_quantity) * Number(position.minutes_per_resource),
+      cost: Number(position.hourly_cost) / 60,
+      type: "Mano de obra",
+      resourceType: "labor",
+      source: `Recursos Humanos: ${areaById.get(position.labor_area_id).name}`
+    })));
+  if (!isInventoryApiEnabled()) {
+    setInventoryRecipeResources([]);
+    return { areas: selectableAreas, positions: eligiblePositions };
+  }
+  const [itemsResponse, balancesResponse] = await Promise.all([
+    getInventoryItems({ use_in_recipe: true, status: "active" }),
+    getInventoryBalances({ limit: 200 })
+  ]);
+  const balancesByItem = new Map();
+  (balancesResponse.data || []).forEach((balance) => {
+    const current = balancesByItem.get(balance.inventory_item_id) || { available: 0, warehouses: new Set() };
+    current.available += Number(balance.available_quantity || 0);
+    if (Number(balance.available_quantity || 0) !== 0) current.warehouses.add(balance.warehouse_name);
+    balancesByItem.set(balance.inventory_item_id, current);
+  });
+  setInventoryRecipeResources((itemsResponse.data || []).map((item) => {
+    const balance = balancesByItem.get(item.id) || { available: 0, warehouses: new Set() };
+    return {
+      id: item.id,
+      name: item.name,
+      unit: item.base_unit,
+      available: balance.available,
+      cost: 0,
+      type: translateInventoryItemType(item.type),
+      resourceType: "material",
+      source: balance.warehouses.size ? `Almacenes: ${[...balance.warehouses].join(", ")}` : "Almacenes"
+    };
+  }));
+  return { areas: selectableAreas, positions: eligiblePositions };
+}
+
+async function openRecipeModal(recipeId = null) {
+  let recipeCatalog;
+  try {
+    recipeCatalog = await prepareRecipeResourceCatalog();
+  } catch (error) {
+    showToast(error.message || t("recipeResourcesLoadError"));
+    return;
+  }
   const existingRecipe = recipeId ? mockDb.findRecipe(recipeId) : null;
   const isEditing = Boolean(existingRecipe);
   const selectedProductId = localStorage.getItem("erclave-recipe-product");
@@ -6920,12 +7970,18 @@ function openRecipeModal(recipeId = null) {
   const activeProductLabel = activeProductService
     ? formatProductServiceOption(activeProductService)
     : "";
+  const availableResourceIds = new Set(getRecipeResourceCatalog().map((resource) => resource.id));
   const recipeResources = existingRecipe?.resources?.length
-    ? existingRecipe.resources
-    : ["tela_algodon", "hilo_morado", "etiqueta", "maquina_recta", "costurero"].map((id) => ({
+    ? existingRecipe.resources.filter((resource) => getApiMode() !== "api" || availableResourceIds.has(resource.resourceId))
+    : getApiMode() === "api" ? [] : ["tela_algodon", "hilo_morado", "etiqueta", "maquina_recta", "costurero"].map((id) => ({
         resourceId: id,
         quantity: suggestedQuantity(id)
       }));
+  const activeAreas = getApiMode() === "api"
+    ? (recipeCatalog?.areas || [])
+    : mockDb.loadLaborAreas().filter((area) => area.status === "Activo");
+  const selectedStageIds = new Set((existingRecipe?.stageDefinitions || []).map((stage) => stage.laborAreaId).filter(Boolean));
+  const selectedStageNames = new Set(existingRecipe?.steps || []);
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="recipeForm">
@@ -6984,33 +8040,27 @@ function openRecipeModal(recipeId = null) {
         <strong>Recursos por unidad</strong>
       </div>
 
-      <p class="helper-copy">Solo puedes agregar recursos dados de alta previamente en Almacenes o Recursos Humanos. Este mock simula esos catalogos.</p>
+      <p class="helper-copy">${t("recipeEligibleResourcesHelp")}</p>
 
-      <div class="resource-picker">
-        <select id="resourceSelect" aria-label="Seleccionar recurso">
-          ${getRecipeResourceCatalog()
-            .map(
-              (resource) => `
-                <option value="${resource.id}">
-                  ${resource.name} · ${resource.type} · ${resource.source}
-                </option>
-              `
-            )
-            .join("")}
-        </select>
-        <button class="secondary-action" type="button" data-action="add-resource">Agregar recurso</button>
+      <div class="recipe-resource-groups">
+        ${renderRecipeResourceGroup("material", recipeResources)}
+        ${renderRecipeResourceGroup("labor", recipeResources)}
+        ${renderRecipeResourceGroup("machine", recipeResources)}
       </div>
 
-      <div class="selected-resource-list" id="selectedResourceList">
-        ${recipeResources
-          .map((item) => renderSelectedResourceRow(item.resourceId, item.quantity))
-          .join("")}
-      </div>
-
-      <label class="preview-field">
-        <span>Etapas operativas genericas</span>
-        <input name="steps" type="text" value="${existingRecipe?.steps?.join(", ") || "Preparacion, Ejecucion, Validacion, Entrega"}" />
-      </label>
+      <fieldset class="recipe-area-stages">
+        <legend>${t("recipeAreasLegend")}</legend>
+        <p class="helper-copy">${t("recipeAreasHelp")}</p>
+        ${activeAreas.length ? `<div class="recipe-area-grid">${activeAreas.map((area) => `
+          <label class="recipe-area-option">
+            <input type="checkbox" name="stageAreaId" value="${area.id}" data-area-name="${escapeAttribute(area.name)}" ${selectedStageIds.has(area.id) || selectedStageNames.has(area.name) ? "checked" : ""} />
+            <span class="recipe-area-card">
+              <span class="recipe-area-check" aria-hidden="true">✓</span>
+              <span><strong>${escapeHtml(area.name)}</strong><small>${escapeHtml(area.code || area.id)}</small></span>
+            </span>
+          </label>
+        `).join("")}</div>` : `<p class="validation-card warning">${t("recipeAreasEmpty")}</p>`}
+      </fieldset>
 
       <div class="form-errors" id="formErrors" hidden></div>
 
@@ -7028,14 +8078,14 @@ function openRecipeModal(recipeId = null) {
   modalContent.querySelector("#recipeProductSearch").addEventListener("focus", renderRecipeProductLookup);
   modalContent.querySelector("#recipeProductSearch").addEventListener("input", syncRecipeProductFields);
   modalContent.querySelector("#recipeProductResults").addEventListener("click", selectRecipeProductFromLookup);
-  modalContent.querySelector("[data-action='add-resource']").addEventListener("click", addResourceRow);
+  modalContent.querySelectorAll("[data-action='add-resource']").forEach((button) => button.addEventListener("click", addResourceRow));
   modalContent.querySelector("[data-action='preview-recipe']").addEventListener("click", previewRecipeForm);
   modalContent.querySelector("#recipeForm").addEventListener("submit", saveRecipeForm);
   bindResourceRowActions();
 }
 
 function formatProductServiceOption(item) {
-  return `${item.id} - ${item.name} - ${item.kind}`;
+  return `${item.name} - ${item.sku}`;
 }
 
 function findProductServiceByOption(value) {
@@ -7051,7 +8101,7 @@ function getProductServiceMatches(value) {
   const items = mockDb.loadProductsServices();
   if (!normalized) return items;
   return items.filter((item) =>
-    [item.id, item.name, item.kind, item.category, item.center]
+    [item.id, item.sku, item.name, item.kind, item.category, item.center]
       .join(" ")
       .toLowerCase()
       .includes(normalized)
@@ -7068,7 +8118,7 @@ function renderRecipeProductLookup(event) {
         .map((item) => `
           <button class="lookup-option" type="button" data-product-id="${item.id}">
             <strong>${item.name}</strong>
-            <span>${item.id} - ${item.kind} - ${item.unit}</span>
+            <span>${item.sku} · ${item.kind} · ${item.unit}</span>
           </button>
         `)
         .join("")
@@ -7098,18 +8148,65 @@ function syncRecipeProductFields(event) {
   form.querySelector("[name='center']").value = item.center;
 }
 
-function renderSelectedResourceRow(resourceId, quantity = 0) {
-  const resource = getResource(resourceId);
-  if (!resource) return "";
+function getRecipeResourceType(item) {
+  const catalogItem = getResource(item.resourceId || item.id);
+  return catalogItem?.resourceType || item.resourceType || (catalogItem?.type === "Maquinaria" ? "machine" : catalogItem?.type === "Mano de obra" ? "labor" : "material");
+}
+
+function renderRecipeResourceGroup(resourceType, recipeResources) {
+  const config = {
+    material: { icon: "MP", title: t("recipeMaterialsTitle"), help: t("recipeMaterialsHelp"), add: t("recipeAddMaterial"), empty: t("recipeMaterialsEmpty") },
+    labor: { icon: "HH", title: t("recipeLaborTitle"), help: t("recipeLaborHelp"), add: t("recipeAddLabor"), empty: t("recipeLaborEmpty") },
+    machine: { icon: "HM", title: t("recipeMachinesTitle"), help: t("recipeMachinesHelp"), add: t("recipeAddMachine"), empty: t("recipeMachinesEmpty") }
+  }[resourceType];
+  const catalog = getRecipeResourceCatalog().filter((resource) => getRecipeResourceType(resource) === resourceType);
+  const selected = recipeResources.filter((resource) => getRecipeResourceType(resource) === resourceType);
   return `
-    <div class="selected-resource-row" data-resource-row="${resource.id}">
+    <section class="recipe-resource-group recipe-resource-group-${resourceType}" aria-labelledby="recipe-resource-${resourceType}-title">
+      <div class="recipe-resource-group-head">
+        <span class="recipe-resource-type-icon" aria-hidden="true">${config.icon}</span>
+        <div><strong id="recipe-resource-${resourceType}-title">${config.title}</strong><p>${config.help}</p></div>
+      </div>
+      <div class="resource-picker">
+        <select id="resourceSelect-${resourceType}" aria-label="${config.title}" ${catalog.length ? "" : "disabled"}>
+          ${catalog.map((resource) => `<option value="${resource.id}">${resource.name} · ${resource.source}</option>`).join("")}
+        </select>
+        <button class="secondary-action" type="button" data-action="add-resource" data-resource-type="${resourceType}" ${catalog.length ? "" : "disabled"}>${config.add}</button>
+      </div>
+      <div class="selected-resource-list" id="selectedResourceList-${resourceType}">
+        ${selected.length ? selected.map((item) => renderSelectedResourceRow(item.resourceId, item.quantity, item)).join("") : `<p class="recipe-resource-empty">${config.empty}</p>`}
+      </div>
+    </section>`;
+}
+
+function renderSelectedResourceRow(resourceId, quantity = 0, fallback = {}) {
+  const resource = getResource(resourceId) || {
+    id: resourceId,
+    name: fallback.resourceName || resourceId,
+    type: fallback.resourceType || "Recurso",
+    source: "Production API",
+    available: 0,
+    unit: fallback.unit || "",
+    cost: Number(fallback.unitCost || 0),
+    resourceType: fallback.resourceType || "material"
+  };
+  const resourceType = getRecipeResourceType(resource);
+  const isTimed = resourceType === "labor" || resourceType === "machine";
+  const storageFactor = isTimed ? 60 : 1;
+  const displayQuantity = Number(quantity || 0) / storageFactor;
+  const displayAvailable = Number(resource.available || 0) / storageFactor;
+  const displayUnit = resourceType === "labor" ? t("recipeLaborUnit") : resourceType === "machine" ? t("recipeMachineUnit") : resource.unit;
+  const quantityLabel = resourceType === "labor" ? t("recipeLaborQuantity") : resourceType === "machine" ? t("recipeMachineQuantity") : `${t("recipeMaterialQuantity")} (${resource.unit})`;
+  return `
+    <div class="selected-resource-row" data-resource-row="${resource.id}" data-resource-type="${resourceType}" data-storage-factor="${storageFactor}">
       <div>
         <strong>${resource.name}</strong>
-        <span>${resource.type} · ${resource.source} · disponible ${formatNumber(resource.available)} ${resource.unit}</span>
+        <span>${resource.type} · ${resource.source} · ${t("recipeAvailable")} ${formatNumber(displayAvailable)} ${displayUnit}</span>
       </div>
       <label>
-        <span>Cantidad</span>
-        <input name="resource_${resource.id}" type="number" min="0" step="0.01" value="${quantity}" />
+        <span>${quantityLabel}</span>
+        <input name="resource_${resource.id}" type="number" min="0" step="${isTimed ? "any" : "0.01"}" value="${displayQuantity}" />
+        ${isTimed ? `<small class="recipe-time-hint">${t("recipeTimeDecimalHelp")}</small>` : ""}
       </label>
       <button class="icon-button remove-resource" type="button" data-action="remove-resource" aria-label="Quitar recurso">×</button>
     </div>
@@ -7117,14 +8214,16 @@ function renderSelectedResourceRow(resourceId, quantity = 0) {
 }
 
 function addResourceRow() {
-  const select = modalContent.querySelector("#resourceSelect");
-  const list = modalContent.querySelector("#selectedResourceList");
+  const resourceType = this.dataset.resourceType;
+  const select = modalContent.querySelector(`#resourceSelect-${resourceType}`);
+  const list = modalContent.querySelector(`#selectedResourceList-${resourceType}`);
   const resourceId = select.value;
   if (list.querySelector(`[data-resource-row="${resourceId}"]`)) {
     showToast("Ese recurso ya esta en la receta.");
     return;
   }
-  list.insertAdjacentHTML("beforeend", renderSelectedResourceRow(resourceId, 1));
+  list.querySelector(".recipe-resource-empty")?.remove();
+  list.insertAdjacentHTML("beforeend", renderSelectedResourceRow(resourceId, resourceType === "material" ? 1 : 60));
   bindResourceRowActions();
 }
 
@@ -7154,12 +8253,24 @@ function buildRecipeFromForm(form) {
   const productServiceId = String(data.get("productServiceId") || "").trim();
   const productService = mockDb.findProductService(productServiceId);
   const selectedRows = [...form.querySelectorAll("[data-resource-row]")];
+  const existingRecipe = recipeId ? mockDb.findRecipe(recipeId) : null;
+  const stageDefinitions = [...form.querySelectorAll('input[name="stageAreaId"]:checked')].map((input) => ({
+    laborAreaId: input.value,
+    laborAreaName: input.dataset.areaName,
+    name: input.dataset.areaName
+  }));
   const resources = selectedRows
     .map((row) => {
       const resourceId = row.dataset.resourceRow;
+      const existingResource = existingRecipe?.resources?.find((item) => item.resourceId === resourceId);
       return {
         resourceId,
-        quantity: Number(data.get(`resource_${resourceId}`) || 0)
+        quantity: Number(data.get(`resource_${resourceId}`) || 0) * Number(row.dataset.storageFactor || 1),
+        resourceCode: existingResource?.resourceCode,
+        resourceName: existingResource?.resourceName,
+        resourceType: existingResource?.resourceType,
+        unit: existingResource?.unit,
+        unitCost: existingResource?.unitCost
       };
     })
     .filter((item) => item.quantity > 0);
@@ -7178,11 +8289,38 @@ function buildRecipeFromForm(form) {
     changeReason: String(data.get("changeReason") || "").trim(),
     center: String(data.get("center") || "").trim(),
     resources,
-    steps: String(data.get("steps") || "")
-      .split(",")
-      .map((step) => step.trim())
-      .filter(Boolean),
+    steps: stageDefinitions.map((stage) => stage.name),
+    stageDefinitions,
     createdAt: recipeId ? (mockDb.findRecipe(recipeId)?.createdAt || new Date().toISOString().slice(0, 10)) : new Date().toISOString().slice(0, 10)
+  };
+}
+
+function toApiRecipeVersionPayload(recipe) {
+  return {
+    base_quantity: recipe.quantityBase,
+    base_unit: recipe.unit,
+    change_reason: recipe.changeReason || null,
+    resources: recipe.resources.map((item, index) => {
+      const catalogItem = getResource(item.resourceId);
+      return {
+        resource_type: item.resourceType || catalogItem?.resourceType || (catalogItem?.type === "Maquinaria" ? "machine" : catalogItem?.type === "Mano de obra" ? "labor" : "other"),
+        resource_ref_id: item.resourceId || null,
+        resource_code: item.resourceCode || catalogItem?.id || item.resourceId,
+        resource_name: item.resourceName || catalogItem?.name || item.resourceId,
+        quantity: Number(item.quantity),
+        unit: item.unit || catalogItem?.unit || recipe.unit,
+        unit_cost: Number(item.unitCost ?? catalogItem?.cost ?? 0),
+        sort_order: index + 1
+      };
+    }),
+    stages: recipe.stageDefinitions.map((stage, index) => ({
+      labor_area_ref_id: stage.laborAreaId,
+      labor_area_name: stage.laborAreaName,
+      name: stage.name,
+      expected_minutes: stage.expectedMinutes || null,
+      sort_order: index + 1,
+      status: "active"
+    }))
   };
 }
 
@@ -7236,7 +8374,7 @@ function previewRecipeForm() {
                 <strong>${row.name}</strong>
                 <span>${row.type}</span>
               </div>
-              <p>${formatNumber(row.required)} / ${formatNumber(row.available)} ${row.unit}</p>
+              <p>${formatRecipeValidationQuantity(row.required, row.type)} / ${formatRecipeValidationQuantity(row.available, row.type)} ${row.type === "Mano de obra" ? t("recipeLaborUnit") : row.type === "Maquinaria" ? t("recipeMachineUnit") : row.unit}</p>
             </article>
           `
         )
@@ -7245,14 +8383,55 @@ function previewRecipeForm() {
   `;
 }
 
-function saveRecipeForm(event) {
+async function saveRecipeForm(event) {
   event.preventDefault();
   const recipe = buildRecipeFromForm(event.currentTarget);
   const errors = validateRecipe(recipe);
   renderFormErrors(errors);
   if (errors.length) return;
 
-  const exists = Boolean(mockDb.findRecipe(recipe.id));
+  const currentRecipe = mockDb.findRecipe(recipe.id);
+  const exists = Boolean(currentRecipe);
+  if (getApiMode() === "api") {
+    try {
+      const versionPayload = toApiRecipeVersionPayload(recipe);
+      let savedVersion;
+      if (!exists) {
+        const created = await createProductionRecipe({
+          ...versionPayload,
+          product_service_id: recipe.productServiceId,
+          code: recipe.id,
+          name: `Receta ${recipe.product}`
+        });
+        savedVersion = created.versions?.[0];
+      } else if (currentRecipe.versionStatus === "draft") {
+        savedVersion = await updateProductionRecipeVersion(currentRecipe.versionId, versionPayload);
+      } else {
+        savedVersion = await createProductionRecipeVersion(currentRecipe.id, {
+          ...versionPayload,
+          change_reason: recipe.changeReason || "Nueva version desde frontend"
+        });
+      }
+
+      if (["Pendiente de aprobacion", "Aprobada"].includes(recipe.approvalStatus) && savedVersion?.status === "draft") {
+        savedVersion = await submitProductionRecipeVersion(savedVersion.id);
+      }
+      if (recipe.approvalStatus === "Aprobada" && savedVersion?.status === "pending_approval") {
+        await approveProductionRecipeVersion(savedVersion.id, {
+          approval_notes: recipe.changeReason || "Aprobada desde frontend"
+        });
+      }
+
+      localStorage.removeItem("erclave-recipe-product");
+      closeModal();
+      await loadProductionApiData();
+      navigateTo({ active: "produccion", activeSubmodule: "recetas", laborArea: "" });
+      showToast(`${formatRecipeDisplayLabel(recipe)}: receta ${exists ? "actualizada" : "guardada"} en Production API.`);
+    } catch (error) {
+      renderFormErrors([error.message || "No se pudo guardar la receta en Production API."]);
+    }
+    return;
+  }
   if (exists) {
     mockDb.updateRecipe(recipe);
   } else {
@@ -7269,12 +8448,28 @@ function saveRecipeForm(event) {
   localStorage.removeItem("erclave-recipe-product");
   closeModal();
   navigateTo({ active: "produccion", activeSubmodule: "recetas", laborArea: "" });
-  showToast(`Receta ${recipe.id} ${exists ? "actualizada" : "guardada"} y validada contra almacen.`);
+  showToast(`${formatRecipeDisplayLabel(recipe)}: receta ${exists ? "actualizada" : "guardada"} y validada contra almacen.`);
 }
 
-function approveRecipe(recipeId) {
+async function approveRecipe(recipeId) {
   const recipe = mockDb.findRecipe(recipeId);
   if (!recipe) return;
+  if (getApiMode() === "api") {
+    try {
+      let versionStatus = recipe.versionStatus;
+      if (versionStatus === "draft") {
+        versionStatus = (await submitProductionRecipeVersion(recipe.versionId)).status;
+      }
+      if (versionStatus === "pending_approval") {
+        await approveProductionRecipeVersion(recipe.versionId, { approval_notes: "Aprobada desde frontend" });
+      }
+      await loadProductionApiData();
+      showToast(`${formatRecipeDisplayLabel(recipe)}: receta aprobada para produccion.`);
+    } catch (error) {
+      showToast(error.message || "No se pudo aprobar la receta en Production API.");
+    }
+    return;
+  }
   mockDb.updateRecipe({
     ...recipe,
     status: "Activa",
@@ -7283,25 +8478,29 @@ function approveRecipe(recipeId) {
     approvedAt: new Date().toISOString().slice(0, 10)
   });
   render();
-  showToast(`Receta ${recipe.id} aprobada para produccion.`);
+  showToast(`${formatRecipeDisplayLabel(recipe)}: receta aprobada para produccion.`);
 }
 
 function deleteRecipe(recipeId) {
   const recipe = mockDb.findRecipe(recipeId);
   if (!recipe) return;
-  const hasOrders = mockDb.loadOrders().some((order) => order.recipeId === recipeId);
-  if (hasOrders) {
-    showToast(`Receta ${recipe.id} tiene ordenes relacionadas; no se puede eliminar.`);
+  if (getApiMode() === "api") {
+    showToast("Production API conserva recetas auditables; crea una nueva version en lugar de eliminarla.");
     return;
   }
-  const confirmed = window.confirm(`Eliminar la receta ${recipe.id} · ${recipe.product}?`);
+  const hasOrders = mockDb.loadOrders().some((order) => order.recipeId === recipeId);
+  if (hasOrders) {
+    showToast(`${formatRecipeDisplayLabel(recipe)} tiene ordenes relacionadas; no se puede eliminar la receta.`);
+    return;
+  }
+  const confirmed = window.confirm(`Eliminar la receta de ${formatRecipeDisplayLabel(recipe)}?`);
   if (!confirmed) return;
   const recipes = mockDb.deleteRecipe(recipeId);
   if (localStorage.getItem("erclave-selected-recipe") === recipeId) {
     localStorage.setItem("erclave-selected-recipe", recipes[0]?.id || (shouldUseSeedModuleData() ? defaultRecipes[0].id : ""));
   }
   render();
-  showToast(`Receta ${recipe.id} eliminada.`);
+  showToast(`${formatRecipeDisplayLabel(recipe)}: receta eliminada.`);
 }
 
 function openOrderModal() {
@@ -7332,7 +8531,7 @@ function openOrderModal() {
               .map(
                 (item) => `
                   <option value="${item.id}" ${item.id === recipe.id ? "selected" : ""}>
-                    ${item.id} · ${item.product} · v${item.version} · ${getRecipeApprovalStatus(item)}
+                    ${formatRecipeDisplayLabel(item)} · v${item.version} · ${getRecipeApprovalStatus(item)}
                   </option>
                 `
               )
@@ -7462,13 +8661,21 @@ function validateOrder(order) {
   return errors;
 }
 
-function previewOrderForm() {
+async function previewOrderForm() {
   const form = modalContent.querySelector("#orderForm");
   const order = buildOrderFromForm(form);
   const errors = validateOrder(order);
   renderFormErrors(errors);
   if (errors.length) return;
   const recipe = getOrderRecipe(order);
+  if (getApiMode() === "api") {
+    if (!recipe?.currentVersionId) { renderFormErrors(["La validacion requiere una receta aprobada vigente."]);return; }
+    try {
+      const remote=await validateProductionResources({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,observed_resources:buildObservedProductionResources(recipe)});
+      modalContent.querySelector("#orderPreview").innerHTML=`<div class="validator-head"><div><span class="muted-label">Validacion backend observada</span><strong>${order.quantity} ${order.unit} Â· ${formatCurrency(remote.planned_cost)}</strong></div><span class="chip ${remote.can_release?"active":"warning"}">${remote.can_release?"Lista para liberar":"Bloqueada"}</span></div>${remote.blockers?.length?`<p class="helper-copy">Pendientes: ${remote.blockers.join(", ")}.</p>`:""}<div class="resource-check-grid compact">${(remote.rows||[]).map((row)=>`<article class="resource-check ${row.ok?"ok":"risk"}"><div><strong>${row.resource_name}</strong><span>${row.resource_type} Â· ${row.source}</span></div><p>${formatNumber(row.required_quantity)} / ${formatNumber(row.available_quantity)} ${row.unit}</p></article>`).join("")}</div>`;
+    } catch(error) { renderFormErrors([error.message||"No se pudo validar recursos."]); }
+    return;
+  }
   const release = getReleaseReview(recipe, order.quantity);
   const validation = release.validation;
   modalContent.querySelector("#orderPreview").innerHTML = `
@@ -7498,12 +8705,42 @@ function previewOrderForm() {
   `;
 }
 
-function saveOrderForm(event) {
+function buildObservedProductionResources(recipe) {
+  const versionResources = recipe.currentVersionData?.resources || recipe.resources || [];
+  return versionResources.map((resource) => {
+    const resourceId = resource.resource_ref_id || resource.resourceId || resource.resource_code;
+    const catalog = getResource(resourceId);
+    return {
+      resource_ref_id: resourceId,
+      resource_type: resource.resource_type || resource.resourceType || "other",
+      available_quantity: Number(catalog?.available || 0),
+      unit: resource.unit,
+      unit_cost: Number(catalog?.cost ?? resource.unit_cost ?? resource.unitCost ?? 0),
+      source: catalog?.source || "catalogo no disponible"
+    };
+  });
+}
+
+function formatRecipeValidationQuantity(quantity, resourceType) {
+  return formatNumber(resourceType === "Mano de obra" || resourceType === "Maquinaria" ? Number(quantity) / 60 : quantity);
+}
+
+async function saveOrderForm(event) {
   event.preventDefault();
   const order = buildOrderFromForm(event.currentTarget);
   const errors = validateOrder(order);
   renderFormErrors(errors);
   if (errors.length) return;
+  if (getApiMode() === "api") {
+    const recipe=mockDb.findRecipe(order.recipeId);
+    if (!recipe?.currentVersionId) { renderFormErrors(["La orden requiere una version de receta aprobada vigente."]);return; }
+    const currentStages=recipe.currentVersionData?.stages?.filter((stage)=>stage.status==="active")||[];
+    try {
+      const saved=await createProductionOrder({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,observed_resources:buildObservedProductionResources(recipe),required_at:order.dueDate?`${order.dueDate}T23:59:59Z`:null,priority:({Alta:"high",Media:"medium",Baja:"low"})[order.priority]||"medium",responsible_name:order.responsible,stage_assignments:currentStages.map((stage,index)=>({recipe_stage_id:stage.id,responsible_name:order.areas[index]?.responsible||null})),source_type:"manual"});
+      localStorage.setItem("erclave-selected-recipe",order.recipeId);localStorage.setItem("erclave-validation-qty",order.quantity);closeModal();await loadProductionApiData();showToast(`Orden ${saved.code} generada en Production API.`);openOrderPrintModal(saved.id);
+    } catch(error) { renderFormErrors([error.message||"No se pudo generar la orden."]); }
+    return;
+  }
   mockDb.addOrder(order);
   localStorage.setItem("erclave-selected-recipe", order.recipeId);
   localStorage.setItem("erclave-validation-qty", order.quantity);
@@ -7522,17 +8759,30 @@ function advanceOrderStatus(orderId) {
   showToast(`Orden ${order.id} ahora esta en ${next}.`);
 }
 
-function changeOrderStatus(orderId, status) {
+async function changeOrderStatus(orderId, status) {
   const order = mockDb.findOrder(orderId);
   if (!order || !orderStatusCatalog.includes(status)) return;
+  if (getApiMode() === "api") {
+    try { await updateProductionOrderStatus(orderId,{status:toApiOrderStatus(status),reason:"Cambio operativo desde la orden"});await loadProductionApiData();showToast(`Orden ${order.id} ahora esta en ${status}.`); }
+    catch(error){showToast(error.message||"La transicion de orden no es valida.");}
+    return;
+  }
   mockDb.updateOrder({ ...order, status });
   render();
   showToast(`Orden ${order.id} ahora esta en ${status}.`);
 }
 
-function advanceOrderStage(orderId, stageIndex) {
+async function advanceOrderStage(orderId, stageIndex) {
   const order = mockDb.findOrder(orderId);
   if (!order || !order.areas?.[stageIndex]) return;
+  if (getApiMode() === "api") {
+    const stage=order.areas[stageIndex];
+    const next=stage.status==="Pendiente"?"in_progress":stage.status==="En proceso"?"completed":stage.status==="Bloqueada"?"in_progress":null;
+    if (!next) { showToast("La etapa ya es terminal y no puede reiniciarse.");return; }
+    try { await updateProductionOrderStage(stage.id,{status:next,notes:"Avance registrado desde Produccion"});await loadProductionApiData();showToast(`${order.id} actualizo la etapa ${stage.area}.`); }
+    catch(error){showToast(error.message||"La transicion de etapa no es valida.");}
+    return;
+  }
   const stages = order.areas.map((stage, index) => {
     if (index !== stageIndex) return stage;
     const nextStatus = stage.status === "Pendiente" ? "En proceso" : stage.status === "En proceso" ? "Terminada" : "Pendiente";
@@ -7581,7 +8831,7 @@ function openOrderPrintModal(orderId) {
         </div>
         <div class="print-grid">
           <p><strong>Producto:</strong> ${order.recipeName}</p>
-          <p><strong>Receta:</strong> ${recipe.id} · v${recipe.version}</p>
+          <p><strong>Receta:</strong> ${formatRecipeDisplayLabel(recipe)} · v${recipe.version}</p>
           <p><strong>Cantidad:</strong> ${order.quantity} ${order.unit}</p>
           <p><strong>Estado:</strong> ${order.status}</p>
           <p><strong>Prioridad:</strong> ${order.priority}</p>
@@ -7723,12 +8973,17 @@ function renderAuthControls() {
   authButton.title = state.auth.user ? `Cerrar sesion de ${state.auth.user.email}` : "Cerrar sesion";
 }
 
-function escapeAttribute(value) {
+function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
-    .replaceAll("\"", "&quot;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value)
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function getAuthErrorMessage(error, fallback) {

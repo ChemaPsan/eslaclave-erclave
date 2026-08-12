@@ -87,6 +87,7 @@ Campos base sugeridos:
 | Almacen sugerido | Almacen usual para recepcion o consumo. |
 | Estatus | Activo, inactivo o bloqueado. |
 | Descripcion | Uso, restricciones, equivalencias o notas. |
+| Usar en receta | Autoriza que Produccion ofrezca el articulo como recurso de receta. No modifica existencias. |
 
 Cuando se implemente usuarios y permisos, la creacion y edicion de articulos debera protegerse con permisos como:
 
@@ -177,6 +178,8 @@ En el MVP, Existencias debera permitir:
 ## 8. Reglas de negocio
 
 - Los articulos deberan darse de alta antes de usarse en movimientos cuando el catalogo ya exista.
+- Un articulo sin movimientos aparece en Inventario con saldo cero cuando tiene almacen sugerido; el alta del articulo no genera existencias.
+- Produccion solo consulta articulos activos con `use_in_recipe=true` y calcula su disponibilidad desde movimientos de cualquier almacen del tenant.
 - La creacion y edicion de articulos debera estar restringida a roles autorizados.
 - Todo movimiento deberá tener usuario, fecha, motivo y referencia.
 - Todo movimiento deberá conservar `documento_origen`.
@@ -291,3 +294,20 @@ Cuando Producción solicite validar una receta u orden, Almacenes deberá respon
 - Definir proceso de conteo físico.
 - Definir permisos para ajustes y cancelaciones.
 - Definir transferencias con origen y destino completos para afectar saldos por almacen.
+
+---
+
+## 13. Nombre visible y consulta escalable
+
+El modulo conserva el nombre visible **Almacenes** y el identificador tecnico `almacenes`. El submodulo visible **Existencias** se renombra a **Inventario**, conservando `existencias` como su id tecnico. **Almacenes** sigue nombrando el catalogo de espacios fisicos e **Inventario** la consulta calculada de saldos.
+
+Existencias debe buscar parcialmente por codigo o nombre de articulo y almacen. Los filtros de almacen, articulo, unidad, estado del saldo, tipo, categoria, politica y estado del articulo deben ejecutarse en servidor y combinarse con semantica AND. La lista usara paginacion por cursor, orden estable, `limit` default 50 y maximo 200; no se cargara el catalogo completo para filtrarlo en el navegador.
+
+Los indicadores bajo minimo y sobre maximo se calculan usando los campos guardados del articulo. No se persistiran como estados independientes.
+
+Hasta implementar Reservas, `available_quantity` sera igual a `on_hand_quantity`. La interfaz debera explicar esta limitacion y no comunicar inventario reservado o comprometido como real.
+
+El criterio inicial de volumen es consultar correctamente un tenant sintetico con al menos 10,000 articulos, sin duplicados u omisiones al paginar y sin acceder a QA. La especificacion tecnica y el procedimiento reproducible viven en:
+
+- `docs/arquitectura/inventario_consulta_escalable.md`;
+- `docs/operaciones/validacion_volumen_inventario_local.md`.

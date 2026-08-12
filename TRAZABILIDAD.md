@@ -2014,6 +2014,765 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `npm.cmd run validate` con 11 validadores correctos; `python -m pytest -q` desde `backend` con 67 pruebas correctas. |
 | Observaciones | Para impedir merges desde la configuracion de GitHub se deben marcar `Agent rule validators` y `Backend tests (Python 3.11)` como required status checks de la rama `main`. |
 
+### CHG-133
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-21 |
+| Cambio | Recetas y versiones reales en production-service |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260721_0005_production_recipes.py`, `backend/services/production-service/app/api.py`, `backend/services/production-service/app/repositories.py`, `backend/services/production-service/app/schemas.py`, `backend/services/production-service/tests/test_production_api.py`, `backend/services/production-service/README.md`, `tools/validators/validate-db-guardrails.js`, `TRAZABILIDAD.md` |
+| Secciones | Produccion, recetas, versionado, persistencia multi-tenant, API |
+| Descripcion | Se agregaron las tablas `production.recipes`, `recipe_versions`, `recipe_resources` y `recipe_stages`, junto con endpoints para crear, consultar, versionar, editar borradores y ejecutar las transiciones submit, approve y obsolete. La aprobacion exige recursos y etapas, actualiza la version vigente y el costo estandar del producto. |
+| Motivo | Continuar la Fase 4 del plan del arquitecto convirtiendo recetas en datos backend reales antes de implementar ordenes, Inventarios o Ventas. |
+| Impacto | Cada receta y sus componentes quedan aislados por `tenant_id`; las versiones aprobadas son inmutables y una nueva aprobacion vuelve obsoleta la anterior. El validador de FKs ahora distingue relaciones internas del mismo schema de relaciones cruzadas prohibidas. |
+| Validacion | `python -m py_compile`; `python -m pytest -q` con 72 pruebas; `npm.cmd run validate`. |
+| Observaciones | Este corte no incluye todavia ordenes de produccion, integracion con inventario ni conexion del frontend de recetas. |
+
+### CHG-134
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-21 |
+| Cambio | Prueba directa de API de recetas contra Cloud SQL QA |
+| Autor | Codex + agentes QA y seguridad |
+| Archivos | `backend/services/production-service/app/repositories.py`, `TRAZABILIDAD.md` |
+| Secciones | Produccion, API QA, recetas, aislamiento tenant, aprobacion |
+| Descripcion | Se ejecuto el flujo real crear-leer-listar-submit-approve contra `production-service` local conectado a Cloud SQL QA. La prueba encontro y corrigio una asignacion duplicada de `updated_at` que provocaba `500` al enviar una version a aprobacion. Tambien se endurecio la aprobacion para exigir al menos una etapa activa. |
+| Motivo | Verificar que el segundo corte de Produccion persiste y recupera datos reales antes de conectarlo al frontend o desplegarlo publicamente. |
+| Impacto | El flujo funcional completo queda comprobado en PostgreSQL QA; lectura cruzada y creacion de version desde otro tenant fueron rechazadas. Se confirmo que receta y producto apuntan a la version aprobada y que el snapshot contiene recursos y etapas. |
+| Validacion | API real: create `201`, read/list `200`, cross-tenant `404`, submit `200`, approve `200`; consulta SQL de snapshot y versiones vigentes; 72 pruebas Pytest; todos los validadores automaticos aprobados. |
+| Observaciones | La idempotencia real, autenticacion/autorizacion, `approved_by` confiable, FKs tenant-aware/RLS y concurrencia de versionado siguen pendientes; no debe desplegarse publicamente este corte hasta resolver al menos autenticacion e idempotencia. |
+
+### CHG-135
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-21 |
+| Cambio | Autorizacion e idempotencia real para production-service |
+| Autor | Codex + agentes de seguridad y persistencia |
+| Archivos | `backend/alembic/versions/20260721_0006_production_idempotency.py`, `backend/shared/erclave_common/config.py`, `backend/services/production-service/app/authorization.py`, `backend/services/production-service/app/api.py`, `backend/services/production-service/app/repositories.py`, `backend/services/production-service/app/schemas.py`, `backend/services/production-service/tests/test_production_api.py`, `contracts/api/production-service.openapi.yaml`, `backend/.env.example`, `backend/README.md`, `tools/validators/validate-backend-scaffold.js`, `tools/validators/validate-tenant-isolation.js`, `TRAZABILIDAD.md` |
+| Secciones | Seguridad, Firebase Auth, RBAC, multi-tenancy, idempotencia, Produccion |
+| Descripcion | Cada ruta de Produccion valida el Bearer token indirectamente mediante `admin-service /v1/session/context`, comprueba tenant activo, modulo contratado y permiso exacto. El aprobador se deriva de la sesion. Los comandos sensibles registran llave, hash, actor y respuesta en `production.idempotency_records` dentro de la misma transaccion, permitiendo replay y rechazando reutilizacion con otro payload. |
+| Motivo | Eliminar la confianza en `X-Tenant-Id` como autoridad y hacer seguros los reintentos antes de desplegar publicamente o conectar el frontend. |
+| Impacto | `X-Tenant-Id` queda como selector; Administracion conserva ownership de membresias/permisos. Las versiones se bloquean al numerarlas para evitar carreras. PATCH de borrador ahora tambien exige `Idempotency-Key`. |
+| Validacion | 76 pruebas Pytest; validadores completos; migracion QA `20260721_0006`; replay real devuelve el mismo ID, payload distinto devuelve `409`, y PostgreSQL confirma una receta y un registro completed. |
+| Observaciones | La prueba con token Firebase real se ejecutara durante el despliegue QA; local/demo conserva `X-Actor-Id` exclusivamente para pruebas controladas. RLS y FKs compuestas por tenant permanecen como endurecimiento posterior. |
+
+### CHG-136
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-21 |
+| Cambio | Despliegue seguro de production-service en Cloud Run QA |
+| Autor | Codex |
+| Archivos | `TRAZABILIDAD.md` |
+| Secciones | Cloud Run QA, Produccion, autenticacion entre servicios |
+| Descripcion | Se desplego el backend actualizado de Produccion y se configuro `ERCLAVE_AUTH_MODE=firebase`, proyecto Firebase, Cloud SQL, secreto de base y URL canonica de `admin-service`. La revision final `production-service-qa-00005-bmp` recibe el 100% del trafico. |
+| Motivo | Publicar en QA el corte de recetas con autorizacion e idempotencia antes de conectar el frontend. |
+| Impacto | Health y OpenAPI responden; recetas sin token reciben `401 auth_required` y un token invalido es rechazado por la integracion real con Administracion como `401 invalid_token`. |
+| Validacion | `/health` 200; `/openapi.json` 200; ruta protegida sin token 401; ruta protegida con token invalido 401; lectura positiva de recetas con token Firebase y permiso `production.recipe.read`; revision lista y 100% de trafico. |
+| Observaciones | El servicio QA quedo disponible en `https://production-service-qa-370105017372.us-central1.run.app`; el token usado para la comprobacion positiva no se almaceno en el repositorio. |
+
+### CHG-137
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-21 |
+| Cambio | Conexion del frontend de recetas con Production API QA |
+| Autor | Codex |
+| Archivos | `frontend/api/config.js`, `frontend/api/client.js`, `frontend/api/production.js`, `frontend/app.js`, `frontend/utils/production.js`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, Produccion, recetas, Firebase Auth, QA |
+| Descripcion | El modulo de Produccion carga productos y recetas desde la API usando la sesion Firebase y el tenant activo. Crear y editar receta persiste en QA; editar una receta no borrador genera una nueva version y las acciones de envio y aprobacion usan las transiciones auditables del backend. |
+| Motivo | Sustituir la persistencia local del flujo de recetas una vez comprobada la autorizacion positiva de un usuario QA. |
+| Impacto | Las recetas visibles en modo API reflejan PostgreSQL QA. Se preservan costos y metadatos de recursos externos al catalogo simulado, se generan llaves de idempotencia por comando y se impide la eliminacion fisica desde el frontend. |
+| Validacion | Sintaxis JavaScript y suite completa de validadores automaticos aprobadas; Firebase Hosting version `e3ab27b1b2f047d8` publicada; cliente servido verificado y preflight CORS de Production API respondio `200`. |
+| Observaciones | QA esta disponible en `https://erclave.web.app`. Ordenes y otros submodulos de Produccion conservan su comportamiento previo; este corte conecta el catalogo y ciclo de versiones de recetas. |
+
+### CHG-138
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-24 |
+| Cambio | Capa operativa de Codex para desarrollo verificable |
+| Autor | Codex |
+| Archivos | `AGENTS.md`, `.agents/skills/erclave-feature/`, `.agents/skills/erclave-db-migration/`, `tools/verify.js`, `tools/traceability-draft.js`, `tools/validators/validate-codex-tooling.js`, `tools/validators/validate-all.js`, `tools/validators/validate-cross-platform.js`, `package.json`, `.github/workflows/validate.yml`, `.github/workflows/pages.yml`, `README.md`, `TRAZABILIDAD.md` |
+| Secciones | Desarrollo asistido, calidad, CI/CD, skills, trazabilidad |
+| Descripcion | Se agregaron instrucciones persistentes para Codex, dos skills de proyecto para entrega funcional y migraciones seguras, un comando unificado que ejecuta guardrails, compilacion y Pytest, un generador de borradores CHG basado en Git y un validador que protege esta capa. Los workflows de validacion y Pages usan ahora el mismo criterio completo. |
+| Motivo | Reducir explicaciones repetidas, homogeneizar la implementacion entre modulos y asegurar que los cambios asistidos terminen con contratos, pruebas y trazabilidad alineados. |
+| Impacto | Codex dispone de un flujo versionado y descubrible dentro del repositorio. Desarrollo local y CI comparten `npm run verify`; los borradores de trazabilidad siguen requiriendo revision humana antes de considerarse completos. |
+| Validacion | Validacion oficial de ambas skills con `quick_validate.py`; `npm.cmd run verify`. |
+| Observaciones | El generador incluye todos los cambios visibles en Git para que el autor decida cuales pertenecen al corte. Se preservaron sin modificar el diagrama Draw.io y su archivo temporal preexistentes. |
+
+### CHG-139
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-24 |
+| Cambio | Correccion de redireccion posterior a invitacion Firebase |
+| Autor | Codex |
+| Archivos | `backend/shared/erclave_common/config.py`, `backend/services/admin-service/tests/test_config.py`, `backend/.env.example`, `backend/README.md`, `TRAZABILIDAD.md` |
+| Secciones | Onboarding, Firebase Auth, configuracion QA, seguridad operativa |
+| Descripcion | Se configuro `ERCLAVE_APP_PUBLIC_BASE_URL=https://erclave.web.app` en `admin-service-qa` para que Firebase redirija al frontend publico despues de establecer la contrasena. La configuracion ahora rechaza URLs locales, invalidas o sin HTTPS cuando el ambiente es QA o Produccion. |
+| Motivo | Las invitaciones completaban el cambio de contrasena pero redirigian al valor local por defecto `http://localhost:4173`, provocando que Safari no pudiera conectarse al servidor. |
+| Impacto | Las invitaciones generadas a partir de la correccion regresan al frontend QA. Una configuracion futura insegura impide que el servicio arranque en QA/Produccion en lugar de generar ligas defectuosas. |
+| Validacion | Revision Cloud Run `admin-service-qa-00011-bd5` lista con 100% de trafico; variable publica verificada; `/health` HTTP 200; `npm.cmd run verify`. |
+| Observaciones | Las ligas emitidas antes del cambio conservan el `continueUrl` anterior; para comprobar el flujo completo se debe usar una invitacion o recuperacion de contrasena nueva. |
+
+### CHG-140
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-24 |
+| Cambio | Guia manual de pruebas QA del MVP |
+| Autor | Codex + especialistas funcionales, tecnicos y QA |
+| Archivos | `docs/qa/guia_pruebas_qa_mvp.md`, `README.md`, `TRAZABILIDAD.md` |
+| Secciones | QA, onboarding, Administracion, Produccion, modulos prototipo, regresion |
+| Descripcion | Se documento el alcance comprobable por una persona de QA con contexto de negocio, prioridades P0/P1/P2, precondiciones, smoke diario, pasos, resultados esperados, motivo de cada prueba, evidencia minima y plantilla de defectos. La guia separa funciones reales en QA, prototipos locales y modulos todavia no disponibles. |
+| Motivo | Dar al equipo QA una referencia operativa basada en lo realmente implementado y evitar certificar como backend real una maqueta o reportar como defecto una integracion futura. |
+| Impacto | QA puede priorizar acceso, aislamiento, Administracion y recetas reales; evaluar Almacenes/Ventas como prototipos; y registrar resultados y defectos con contexto suficiente para desarrollo. |
+| Validacion | Revision cruzada de `AGENTES.md`, documentos funcionales, frontend, APIs, tests y `TRAZABILIDAD.md`; `npm.cmd run verify`. |
+| Observaciones | La guia no contiene credenciales ni datos reales. Debe actualizarse cuando un submodulo cambie de local/mock a API persistente o se habilite un nuevo servicio. |
+
+### CHG-141
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-24 |
+| Cambio | Documento Word de pruebas QA |
+| Autor | Codex |
+| Archivos | `docs/qa/guia_pruebas_qa_mvp.docx`, `tools/generate-qa-document.py`, `package.json`, `README.md`, `TRAZABILIDAD.md` |
+| Secciones | QA, Word, casos de prueba, contexto de negocio |
+| Descripcion | La guia Markdown se transformo en un documento Word profesional con portada, metadatos del ambiente, indice actualizable, encabezados, pie de pagina, listas y tablas formateadas para alcance, casos, evidencia y defectos. |
+| Motivo | Entregar al equipo QA una guia legible y compartible en Word que explique que probar, como hacerlo y por que importa para el negocio. |
+| Impacto | QA puede consultar, imprimir o compartir el documento y regenerarlo desde la fuente Markdown con `npm run qa:document`. |
+| Validacion | Generacion y reapertura con python-docx 1.2.0; contenido clave, tablas y tamano comprobados; `npm.cmd run verify`. |
+| Observaciones | El Markdown sigue siendo la fuente de verdad; regenerar el Word despues de modificar los casos. No capturar secretos, tokens o ligas vigentes. |
+
+### CHG-142
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-24 |
+| Cambio | Promocion del guardrail de invitaciones a Admin QA |
+| Autor | Codex |
+| Archivos | `TRAZABILIDAD.md` |
+| Secciones | Cloud Run QA, configuracion publica, onboarding |
+| Descripcion | Se construyo y desplego `backend/` en `admin-service-qa` para activar la validacion que rechaza URLs locales o sin HTTPS en QA/Produccion. Tambien se configuro `ERCLAVE_API_PUBLIC_BASE_URL` con la URL publica del servicio para que `/version` no anuncie localhost. |
+| Motivo | La revision que corrigio la redireccion Firebase solo habia actualizado variables sobre una imagen anterior; faltaba promover el guardrail de codigo y corregir la metadata publica del servicio. |
+| Impacto | QA queda protegido contra futuras invitaciones con `continueUrl` local y reporta sus URLs publicas correctas. |
+| Validacion | Revision final `admin-service-qa-00013-xmz` lista con 100% de trafico; `ERCLAVE_APP_PUBLIC_BASE_URL=https://erclave.web.app`; health y readiness HTTP 200; `/version` con URL publica; GitHub Actions aprobado. |
+| Observaciones | La guia QA y su documento Word no requieren despliegue de frontend; se publican como artefactos del repositorio. |
+
+### CHG-143
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-26 |
+| Cambio | Guardrail del tenant autorizado para desarrollo |
+| Autor | Codex |
+| Archivos | `AGENTS.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `docs/qa/guia_pruebas_qa_mvp.docx`, `TRAZABILIDAD.md` |
+| Secciones | Desarrollo local, QA, aislamiento multitenant, datos dummy |
+| Descripcion | Se establecio `ERClave Demo QA` (`ten_739ee59d765d5e14818674800d`) como el unico tenant autorizado para desarrollo local, pruebas manuales y datos dummy. Se exige confirmar el tenant antes de toda escritura y detenerse si no coincide. |
+| Motivo | Proteger el tenant separado del equipo de QA y evitar que seeds, cargas ficticias o mutaciones de ensayo contaminen sus datos. |
+| Impacto | Las futuras sesiones de Codex y la ejecucion manual de QA tienen una regla persistente y verificable para seleccionar el tenant de trabajo. Cualquier uso de otro tenant requiere autorizacion explicita. |
+| Validacion | Regla operativa revisada en `AGENTS.md`; guia Markdown y documento Word regenerado; `npm.cmd run verify`. |
+| Observaciones | No se documentan identificadores ni credenciales del tenant reservado del equipo de QA; la proteccion se expresa mediante una lista permitida de un solo tenant. |
+
+### CHG-144
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-26 |
+| Cambio | Catalogo enfocado de productos y servicios |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `frontend/i18n/translations.js`, `modulos/01_produccion.md`, `TRAZABILIDAD.md` |
+| Secciones | Frontend, Produccion, productos y servicios, ordenes |
+| Descripcion | Se reorganizo la vista inicial de Productos y servicios como un catalogo a ancho completo con resumen, buscador, datos maestros, costos, receta vigente y acciones por ficha. El historial de ordenes dejo de mostrarse dentro de la tarjeta y se sustituyo por una accion `Ver ordenes` con contador que abre Ordenes filtradas por el producto seleccionado. |
+| Motivo | Mantener la primera pantalla enfocada en consultar y administrar el catalogo, evitando mezclar el detalle operativo de ordenes y corrigiendo la distribucion estrecha causada por el riel lateral. |
+| Impacto | Cada producto o servicio conserva acceso a su ficha y receta, y ahora permite consultar sus ordenes en una vista especializada con regreso al catalogo o eliminacion del filtro. La relacion se resuelve por producto y recetas asociadas sin cambiar APIs ni persistencia. |
+| Validacion | Paridad i18n ES/EN, sintaxis JavaScript, validadores del repositorio y pruebas backend mediante `npm.cmd run verify`. |
+| Observaciones | El cambio es exclusivamente de frontend y documentacion funcional. No se desplego ni se escribieron datos en QA. |
+
+### CHG-145
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-26 |
+| Cambio | MVP real local de Almacenes e Inventarios |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260726_0007_inventory_service_initial.py`, `backend/services/inventory-service/`, `backend/services/inventory_service_adapter.py`, `backend/pyproject.toml`, `backend/README.md`, `contracts/api/inventory-service.openapi.yaml`, `frontend/api/inventory.js`, `frontend/api/config.js`, `frontend/app.js`, `frontend/env.js`, `TRAZABILIDAD.md` |
+| Secciones | Almacenes, articulos, movimientos, existencias, Kardex, autorizacion, auditoria |
+| Descripcion | Se implemento el corte vertical de inventory-service con schema propio, almacenes y articulos por tenant, movimientos inmutables, transferencias y reversas atomicas, bloqueo de saldos negativos, existencias y Kardex calculados, idempotencia, auditoria, autorizacion contra Admin y cliente frontend. |
+| Motivo | Proveer una fuente de verdad de materiales antes de continuar la integracion real del flujo de Produccion. |
+| Impacto | El frontend consume inventory-service local en el puerto 8004 contra PostgreSQL portatil aislado en 5434. Las escrituras requieren tenant, permiso e Idempotency-Key; no se modificaron datos ni infraestructura de QA. |
+| Validacion | `npm.cmd run verify` con 91 pruebas; 7 pruebas nuevas de API Inventory; ciclo Alembic real `upgrade -> downgrade -> upgrade` en `erclave_local`; smoke persistente con 2 almacenes, 1 articulo, entrada, salida, saldo 17, Kardex, auditoria, idempotencia y lectura negativa de aislamiento. |
+| Observaciones | PostgreSQL 17.10 portatil vive en `C:\tmp\erclave-postgresql17`, escucha solo en `127.0.0.1:5434` con SCRAM y puede iniciarse junto con Inventory API usando el script documentado con bypass por proceso, sin cambiar la politica global. Cloud SQL QA no recibio migraciones ni escrituras. Reservas quedan fuera de este corte. |
+
+### CHG-146
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-27 |
+| Cambio | Especificacion escalable y validacion local de volumen de Inventario |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `frontend/api/inventory.js`, `frontend/data/modules.js`, `frontend/i18n/translations.js`, `backend/services/inventory-service/app/`, `backend/services/inventory-service/tests/`, `backend/alembic/versions/20260727_0008_inventory_search_indexes.py`, `contracts/api/inventory-service.openapi.yaml`, `docs/arquitectura/inventario_consulta_escalable.md`, `docs/operaciones/validacion_volumen_inventario_local.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `modulos/02_almacenes_inventarios.md`, `tools/benchmarks/inventory-volume.js`, `TRAZABILIDAD.md` |
+| Secciones | Inventario, Existencias, busqueda, filtros, paginacion, volumen local |
+| Descripcion | Se renombro visualmente el submodulo Existencias a Inventario conservando el modulo Almacenes y los identificadores tecnicos `almacenes` y `existencias`. Se implementaron filtros y paginacion server-side, la igualdad temporal entre disponible y existencia fisica hasta implementar Reservas, y validaciones locales con 10,000 articulos por tenant. |
+| Motivo | Preparar una consulta operativa que pueda crecer sin descargar catalogos completos al navegador y verificar desde ahora su semantica de aislamiento, filtros y recorrido por cursor. |
+| Impacto | La consulta de Inventario consume balances enriquecidos y paginados desde `inventory-service`; incorpora busqueda parcial, filtros, orden y controles multitenant sin cambiar rutas tecnicas. |
+| Validacion | 19 pruebas de inventory-service; 103 pruebas backend totales; benchmark en memoria de 10,000 articulos/20,000 filas en 59.1 ms; PostgreSQL local con 10,000 articulos y 10,000 movimientos, busqueda sin acento y pagina de 50 en 30.896 ms tras `ANALYZE`; migracion `0008`; `npm.cmd run verify`. |
+| Observaciones | No se desplego, migro, cargo ni escribio informacion en QA. El umbral local de 2 segundos detecta regresiones gruesas y no constituye un SLO de produccion. |
+
+### CHG-147
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-27 |
+| Cambio | Memoria operativa persistente entre sesiones |
+| Autor | Codex |
+| Archivos | `AGENTS.md`, `package.json`, `docs/contexto/`, `tools/session-context.js`, `tools/validators/validate-session-context.js`, `tools/validators/validate-all.js`, `tools/validators/validate-codex-tooling.js`, `TRAZABILIDAD.md` |
+| Secciones | Inicio de sesion, estado actual, decisiones, tenants, pendientes, automatizacion Codex |
+| Descripcion | Se agrego `npm.cmd run session:context` para recuperar en modo solo lectura la rama, cambios locales, ultima migracion, ultima trazabilidad, memoria operativa y estado de servicios. Se incorporaron documentos persistentes y un validador obligatorio. |
+| Motivo | Reducir la perdida de contexto y asegurar que nuevas sesiones recuperen validaciones, decisiones de arquitectura, limites de agentes, tenant autorizado y siguiente prioridad desde el repositorio. |
+| Impacto | Las nuevas sesiones cuentan con un bootstrap reproducible y sin secretos. El flujo de inicio y cierre de `AGENTS.md` obliga a consultar y mantener esta memoria. |
+| Validacion | `npm.cmd run session:context`, `npm.cmd run validate:session-context`, `npm.cmd run verify`. |
+| Observaciones | El comando es solo lectura y no inicia servicios, modifica datos ni contacta QA. El contenido sigue requiriendo mantenimiento al cerrar cada corte. |
+
+### CHG-148
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-27 |
+| Cambio | Responsividad de la vista Inventario |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/index.html`, `frontend/styles.css`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Inventario, flujo guiado, filtros, tabla, alertas, responsive |
+| Descripcion | Se colapso el flujo de Inventario por defecto, se agregaron container queries para adaptar filtros y filas al ancho real del panel, etiquetas en modo tarjeta, hero flexible y reubicacion de Alertas en viewports intermedios. |
+| Motivo | Evitar encabezados encimados, textos cortados y compresion excesiva cuando conviven sidebar, flujo y panel de alertas. |
+| Impacto | Inventario conserva la tabla completa en paneles amplios y cambia a tarjetas de dos o una columna cuando el contenedor se estrecha, sin depender solo del ancho total de la ventana. |
+| Validacion | `npm.cmd run validate:syntax`, `npm.cmd run validate:i18n`, `npm.cmd run validate:active-localization`, comprobacion HTTP del copy Inventario y `npm.cmd run verify`. |
+| Observaciones | Se agrego version al entrypoint del frontend para evitar que el navegador conserve el copy anterior. No hubo despliegues ni escrituras sobre QA. |
+
+### CHG-149
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-27 |
+| Cambio | Estandar responsive transversal para agentes y QA |
+| Autor | Codex |
+| Archivos | `frontend/styles.css`, `frontend/index.html`, `frontend/backoffice/styles.css`, `frontend/backoffice/app.js`, `frontend/backoffice/index.html`, `tools/validators/validate-responsive-ui.js`, `tools/validators/validate-all.js`, `package.json`, `docs/arquitectura/estandar_responsive_transversal.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `AGENTS.md`, `AGENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Responsive, container queries, tablas, formularios, flujos, alertas, QA |
+| Descripcion | Se implemento y documento un estandar transversal con container queries para el panel operativo, modales y backoffice; layouts flexibles para catalogos, formularios, guias y acciones; filas etiquetadas en Inventario y backoffice; navegacion movil accesible, foco visible, salto al contenido y soporte de movimiento reducido. Un validador automatico protege sus puntos estructurales. |
+| Motivo | Evitar que cada modulo resuelva responsive de forma aislada o dependa solo del viewport cuando sidebar y paneles laterales determinan el ancho operativo real. |
+| Impacto | Los modulos y secciones existentes responden al ancho util que dejan sidebar, flujo y alertas; todos los agentes cuentan con criterios comunes y QA dispone de una matriz reproducible para detectar bloqueos, truncamientos, superposiciones y perdida de operabilidad. |
+| Validacion | `npm.cmd run validate:responsive`, revision cruzada de arquitectura, accesibilidad y reglas de agentes; `npm.cmd run verify`; `git diff --check`. |
+| Observaciones | Se actualizaron codigo fuente y documentacion Markdown, sin desplegar, regenerar el DOCX ni escribir datos en QA. La matriz visual manual permanece como requisito antes de promover el corte. |
+
+### CHG-150
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-28 |
+| Cambio | Separacion funcional de areas y puestos de Produccion |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/data/mockDb.js`, `frontend/data/resources.js`, `frontend/i18n/translations.js`, `frontend/index.html`, `contracts/api/production-service.openapi.yaml`, `docs/arquitectura/apis_mvp.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `modulos/01_produccion.md`, `tools/validators/validate-labor-catalog.js`, `tools/validators/validate-all.js`, `package.json`, `TRAZABILIDAD.md` |
+| Secciones | Produccion, areas, puestos, recursos, permisos, OpenAPI |
+| Descripcion | Se sustituyo el formulario combinado por un catalogo independiente de areas y otro formulario para puestos. Los puestos seleccionan por `areaId` una area previamente creada; areas y puestos pueden editarse por separado y el renombrado conserva la relacion. Se definieron permisos independientes de lectura, creacion y edicion para ambos recursos. |
+| Motivo | Evitar que errores tipograficos en un campo de texto creen areas implicitas y permitir delegar la administracion de areas y recursos laborales mediante roles distintos. |
+| Impacto | El flujo local rechaza puestos con areas inexistentes, evita duplicados de area y puesto, migra registros demo anteriores hacia IDs estables y prepara el contrato de production-service para persistencia multitenant posterior. |
+| Validacion | `npm.cmd run validate:labor-catalog`, paridad i18n ES/EN, validacion OpenAPI, sintaxis JavaScript y `npm.cmd run verify`. |
+| Observaciones | No se implemento aun persistencia backend de areas/puestos, no hubo migraciones, seeds, despliegues ni escrituras en QA. Los endpoints documentados son el contrato objetivo del siguiente corte backend. |
+
+### CHG-151
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-28 |
+| Cambio | Restauracion del riel vertical y limites de cambios compartidos |
+| Autor | Codex |
+| Archivos | `frontend/styles.css`, `frontend/index.html`, `tools/validators/validate-responsive-ui.js`, `docs/arquitectura/estandar_responsive_transversal.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `AGENTS.md`, `AGENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Guias de flujo, responsive, limites de alcance, agentes |
+| Descripcion | Se elimino la regla transversal que convertia toda guia abierta en una barra horizontal cuando el panel alcanzaba 1180 px. Se restauro el patron compartido de riel vertical izquierdo con estado comprimido y se formalizo que las excepciones deben usar clases especificas de pantalla. |
+| Motivo | La correccion responsive originada en Inventario altero componentes de Areas y puestos y otros submodulos que no formaban parte del problema original. |
+| Impacto | Los flujos descriptivos recuperan su distribucion estandar y futuras correcciones locales quedan impedidas de modificar globalmente el formato compartido sin delimitacion explicita. |
+| Validacion | `npm.cmd run validate:responsive`, sintaxis, trazabilidad, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | Cambio exclusivo de frontend, validadores y documentacion. No hubo despliegues, migraciones, seeds ni escrituras en QA. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
+### CHG-152
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Inventario cero, recursos reales de receta y modulo RH |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260730_0009_inventory_recipe_flag.py`, `backend/services/inventory-service`, `contracts/api/inventory-service.openapi.yaml`, `frontend`, `modulos`, `docs/contexto`, `docs/qa` |
+| Secciones | Inventario, Articulos, Recetas, Recursos Humanos |
+| Descripcion | Inventario incluye articulos sin movimientos con saldo cero; Articulos incorpora Usar en receta; Recetas consume candidatos reales de Almacenes; Areas y puestos se mueve a RH con costo por hora y bandera productiva. |
+| Motivo | El alta de articulos no era visible sin movimientos y Produccion seguia usando recursos fijos del frontend. |
+| Impacto | Integracion local coherente entre inventario, receta y mano de obra sin escribir en QA. |
+| Validacion | Migracion local aislada `0009`, pruebas inventory-service, validadores, consulta directa de balances y `npm.cmd run verify`. |
+| Observaciones | No hubo despliegue, seed ni migracion sobre QA. RH conserva persistencia local y permisos transitorios `production.labor_*`. |
+
+### CHG-153
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Desacoplamiento integral del modulo Recursos Humanos |
+| Autor | Codex |
+| Archivos | `backend/services/hr-service`, `backend/alembic/versions/20260730_0010_hr_service_initial.py`, `contracts/api/hr-service.openapi.yaml`, `frontend/api/hr.js`, `frontend/microfrontends/recursos-humanos`, `frontend/app.js`, `frontend/backoffice/app.js`, `AGENTES.md`, `modulos`, `docs`, `tools/validators` |
+| Secciones | Entitlement SaaS, permisos, areas, puestos, idempotencia, auditoria, aislamiento tenant, agentes |
+| Descripcion | RH se convirtio en modulo y servicio propietarios: se registro el entitlement `hr`, se agregaron permisos `hr.area.*` y `hr.position.*`, API y esquema propios, validacion de sesion/tenant/modulo/permiso, FK compuesta, idempotencia, auditoria y consumo de puestos elegibles desde Produccion. |
+| Motivo | Permitir activar o suspender RH y delegar sus funciones sin depender de Produccion ni de controles exclusivamente visuales. |
+| Impacto | Produccion deja de ser dueno del catalogo laboral; Administracion puede contratar el modulo por tenant y asignar permisos independientes; agentes transversales y especialistas cuentan con ownership y controles documentados. |
+| Validacion | Pruebas unitarias de `hr-service`, validadores de arquitectura/agentes/OpenAPI, migracion local aislada y suite `npm.cmd run verify`. |
+| Observaciones | Trabajo local. No se desplego ni se ejecuto migracion, seed, activacion o escritura sobre QA. |
+
+### CHG-154
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Grupo de permisos de Recursos Humanos en Administracion |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `backend/services/admin-service/tests/test_permission_seeds.py`, `tools/validators/validate-labor-catalog.js`, `modulos/10_recursos_humanos.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, Permisos, Roles, Recursos Humanos |
+| Descripcion | El catalogo de permisos muestra RH como Recursos Humanos y el selector de permisos de roles agrupa sus seis acciones por separado. Una prueba extrae los contratos completos y evita reintroducir permisos `production.labor_*`. |
+| Motivo | Hacer visible y asignable el nuevo modulo con la misma estructura administrativa del resto de ERClave. |
+| Impacto | Los administradores pueden identificar y asignar permisos de areas y puestos sin confundirlos con Produccion; activar el entitlement sigue sin conceder permisos implicitamente. |
+| Validacion | Prueba de seeds OpenAPI, validador de catalogos laborales, sintaxis frontend y `npm.cmd run verify`. |
+| Observaciones | Cambio local; QA no recibio seeds, migraciones, activaciones ni escrituras. |
+
+### CHG-155
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Reconciliacion de permisos laborales heredados |
+| Autor | Codex |
+| Archivos | `backend/scripts/seed_admin_mvp.py`, `backend/services/admin-service/tests/test_permission_seeds.py`, `tools/validators/validate-labor-catalog.js`, `tools/validators/validate-db-guardrails.js`, `modulos/10_recursos_humanos.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, permisos, seeds, Recursos Humanos |
+| Descripcion | El seed idempotente desactiva nueve permisos laborales heredados de Produccion y mantiene como vigentes exclusivamente los seis permisos `hr.area.*` y `hr.position.*`. La prueba ahora bloquea cualquier prefijo `production.labor`, incluido el formato con punto observado en QA. |
+| Motivo | Los seeds anteriores solo hacian upsert y dejaban activos permisos retirados del OpenAPI, provocando que Administracion siguiera mostrandolos bajo Produccion. |
+| Impacto | Los permisos antiguos dejan de aparecer y de ser efectivos sin borrar sus registros o relaciones historicas; RH conserva ownership independiente. |
+| Validacion | Seed aplicado dos veces en PostgreSQL local, consulta de estados, pruebas de contratos, guardrails de DB y `npm.cmd run verify`. |
+| Observaciones | La reconciliacion se aplico solo a local. Ejecutarla en QA requiere autorizacion explicita. |
+
+### CHG-156
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Sincronizacion autorizada del catalogo de permisos RH en QA |
+| Autor | Codex, con autorizacion explicita del usuario |
+| Archivos | PostgreSQL QA `admin.permissions`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, permisos, Recursos Humanos, QA |
+| Descripcion | Se ejecuto el seed idempotente contra `erclave_qa`: se activaron seis permisos `hr.area.*` y `hr.position.*`, y se inactivaron `production.labor.create/read/update`. |
+| Motivo | El catalogo de QA conservaba permisos laborales heredados bajo Produccion y no mostraba el grupo Recursos Humanos. |
+| Impacto | `GET /v1/permissions` devuelve 98 permisos activos, incluye seis bajo `module_code=hr` y no expone ningun prefijo `production.labor`. Las relaciones historicas se conservaron inactivas. |
+| Validacion | Preflight de identidad `erclave_qa`, postcondiciones SQL y lectura final de la Admin API local conectada a QA. |
+| Observaciones | No se ejecutaron migraciones, despliegues, datos dummy, cambios de entitlement ni escrituras en catalogos funcionales de RH. |
+
+### CHG-157
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-30 |
+| Cambio | Editor seguro e intuitivo de permisos por rol, sin plantillas |
+| Autor | Codex con revision transversal de arquitectura, seguridad y frontend |
+| Archivos | `frontend/app.js`, `frontend/api/admin.js`, `frontend/i18n/translations.js`, `frontend/styles.css`, `backend/services/admin-service/app/*`, `backend/services/admin-service/tests/*`, `backend/alembic/versions/20260730_0011_admin_permission_editor.py`, `backend/scripts/seed_admin_mvp.py`, `contracts/api/admin-service.openapi.yaml`, documentacion y validadores |
+| Secciones | Administracion, roles, permisos, seguridad, multitenant, frontend, PostgreSQL |
+| Descripcion | Se reemplazo la asignacion tortuosa por un editor con nombres funcionales ES/EN, busqueda, filtros, grupos, acciones masivas solo sobre resultados visibles, borrador, diff y guardado unico. El backend separa `admin.role.permissions.manage`, filtra permisos asignables por tenant y entitlement, aplica diffs, revision optimista e idempotencia persistente. |
+| Motivo | Hacer entendible y agil la personalizacion de roles sin perder granularidad ni abrir escalaciones hacia permisos internos o modulos no contratados. |
+| Impacto | Los roles siguen siendo completamente personalizables. Las asignaciones heredadas no visibles se preservan, los scopes no se sobrescriben y los conflictos concurrentes requieren recarga antes de reintentar. |
+| Validacion | `npm.cmd run verify`: 116 pruebas backend y todos los validadores aprobados; ademas, prueba PostgreSQL de integracion real, migracion/seed en `erclave_local`, smoke test del repositorio, OpenAPI offline y `git diff --check`. |
+| Observaciones | No se implementaron plantillas ni presets. No hubo despliegue, migracion, seed ni escritura en QA. |
+
+### CHG-158
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-31 |
+| Cambio | Apertura explicita del visor de permisos cuando QA aun no tiene el permiso de gestion |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/i18n/translations.js`, `frontend/styles.css`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, roles, permisos, UX, seguridad |
+| Descripcion | El boton ya no aparenta estar operativo mientras permanece deshabilitado. Con `admin.role.read` abre el detalle como `Ver permisos`; si falta `admin.role.permissions.manage`, presenta un aviso visible de solo lectura y bloquea checkboxes, acciones masivas y guardado. |
+| Motivo | La API QA actual conserva 98 permisos y aun no incluye el permiso nuevo, por lo que el boton anterior no ejecutaba eventos y no explicaba la causa. |
+| Impacto | El usuario puede inspeccionar las asignaciones sin obtener capacidad de escritura por fallback. La edicion se habilitara automaticamente cuando backend, migracion y seed compatibles sean promovidos con autorizacion. |
+| Validacion | `npm.cmd run verify`: 116 pruebas backend, i18n, sintaxis, responsive, editor de permisos, contratos y guardrails aprobados; `git diff --check` sin errores. |
+| Observaciones | No hubo migracion, seed, despliegue ni escritura en QA. |
+
+### CHG-159
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-31 |
+| Cambio | Correccion del render del visor de permisos |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `tools/validators/validate-permission-editor.js`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, roles, permisos, frontend |
+| Descripcion | Se incorporo la utilidad compartida `escapeHtml` usada por el editor y formularios de RH. Su ausencia provocaba `ReferenceError` al abrir Ver permisos y detenía el render. |
+| Motivo | El validador anterior comprobaba la presencia del flujo del editor, pero no que todas sus utilidades de render estuvieran definidas. |
+| Impacto | Ver permisos abre correctamente; los textos dinamicos siguen escapados para evitar inyeccion de HTML. |
+| Validacion | Validador del editor, sintaxis JavaScript y `npm.cmd run verify`: 116 pruebas backend y todos los guardrails aprobados. |
+| Observaciones | El 404 de `favicon.ico` observado en consola es independiente y no afecta la aplicacion. No se toco QA. |
+
+### CHG-160
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-31 |
+| Cambio | Promocion autorizada de migraciones y editor de permisos a PostgreSQL QA |
+| Autor | Codex, con autorizacion explicita del usuario |
+| Archivos | PostgreSQL QA `erclave_qa`, `backend/alembic/versions/20260726_0007_inventory_mvp.py` a `20260730_0011_admin_permission_editor.py`, `backend/scripts/seed_admin_mvp.py`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `docs/qa/guia_pruebas_qa_mvp.md`, `TRAZABILIDAD.md` |
+| Secciones | QA, PostgreSQL, Administracion, permisos, Almacenes, Recursos Humanos |
+| Descripcion | Se genero y verifico un respaldo completo, se promovio Alembic desde `20260721_0006` hasta `20260730_0011`, y se ejecuto dos veces el seed administrativo para comprobar idempotencia. La Admin API local fue reiniciada contra QA con el codigo compatible. |
+| Motivo | Habilitar el editor real de permisos y alinear el esquema QA con los contratos ya validados localmente. |
+| Impacto | QA expone 99 permisos activos y el owner de ERClave Demo QA conserva el piso administrativo con `admin.role.permissions.manage`. Se crearon los esquemas de Inventory y RH sin cargar registros funcionales o dummy. |
+| Validacion | Respaldo custom verificado con `pg_restore --list`; revision Alembic `20260730_0011`; tenant y modulo admin activos; un grant de gestion para el owner objetivo; cero owners del sistema sin piso, cero codigos activos duplicados, cero registros en almacenes, articulos, movimientos, areas y puestos; health/OpenAPI 200, llamada sin token 401; `npm.cmd run verify` con 116 pruebas aprobadas y todos los validadores. |
+| Observaciones | Respaldo recuperable en `C:\tmp\erclave_qa_pre_permission_20260731_093634.dump`. No se desplego frontend ni servicio alguno, no se activaron entitlements adicionales y no se ejecutaron seeds demo o cargas de volumen. |
+
+### CHG-161
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-07-31 |
+| Cambio | Cierre persistente de sesion y preparacion de publicacion |
+| Autor | Codex |
+| Archivos | `.gitignore`, `tools/session-context.js`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Operacion local, memoria persistente, repositorio |
+| Descripcion | El comando `session:context` verifica la Admin API en el puerto real `8000` y el repositorio ignora temporales `.$*.drawio.dtmp` para que un reinicio no confunda archivos de recuperacion del editor con cambios funcionales. |
+| Motivo | Dejar una lectura fiel y limpia del entorno al reiniciar la computadora o iniciar una nueva sesion de Codex. |
+| Impacto | La siguiente sesion recupera rama, migracion, trazabilidad, decisiones, pendientes y servicios locales sin reportar falsamente apagada la Admin API ni proponer temporales de Draw.io para commit. |
+| Validacion | `npm.cmd run session:context`, `git check-ignore`, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | No modifica datos, migraciones, seeds, despliegues ni configuracion de QA. |
+
+### CHG-162
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-04 |
+| Cambio | Formaliza fronteras de ambientes |
+| Autor | Codex, con decisiones aprobadas por el usuario propietario |
+| Archivos | `AGENTS.md`, `AGENTES.md`, `.agents/skills/erclave-environment-boundaries/`, `.agents/skills/erclave-feature/SKILL.md`, `.agents/skills/erclave-db-migration/SKILL.md`, `docs/arquitectura/fronteras_ambientes_local_qa_produccion.md`, `docs/arquitectura/qa_prod.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `tools/validators/validate-environment-boundaries.js`, `tools/validators/validate-all.js`, `tools/validators/validate-codex-tooling.js`, `package.json`, `TRAZABILIDAD.md` |
+| Secciones | Local, QA, Produccion, Firebase Emulator, release, agentes, skills y validadores |
+| Descripcion | Se establecio Local aislado con Firebase Emulator y recursos locales, se separo la variante local conectada a QA bajo autorizacion explicita y se definieron gates de promocion, RPO 15 minutos, RTO 2 horas, aprobacion directa del usuario y alcance del primer release: Administracion, Backoffice, Produccion, Almacenes/Inventario, RH y Ventas. |
+| Motivo | Evitar que procesos ejecutados en localhost consuman silenciosamente recursos QA y convertir las fronteras de ambientes en instrucciones reutilizables y validables. |
+| Impacto | Las tareas de arranque, pruebas, migraciones, seeds y despliegues deben ejecutar preflight de ambiente. Firebase Emulator queda aprobado como objetivo local, pero su arranque canonico aun debe implementarse y validarse antes de declararlo operativo. |
+| Validacion | `quick_validate.py` para la skill, `validate-environment-boundaries.js`, `validate-codex-tooling.js`, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | No se conecto ni escribio en QA, no se crearon recursos productivos y no hubo migraciones, seeds, cargas de datos ni despliegues. |
+
+### CHG-163
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-04 |
+| Cambio | Actualiza agentes al estado operativo vigente |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `modulos/README.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `tools/validators/validate-agents.js`, `TRAZABILIDAD.md` |
+| Secciones | Agentes transversales, agentes modulares, Local, QA, primer release y validadores |
+| Descripcion | Se agrego una matriz obligatoria que separa capacidades desplegadas en QA, implementadas solo en Local, prototipos y objetivos futuros. Se corrigieron referencias obsoletas a API futura de Produccion, UI pendiente de Administracion, endpoints pendientes de Inventario y pendientes de agentes ya automatizados. |
+| Motivo | Evitar que un agente confunda codigo, contrato, migracion o schema con una capacidad desplegada y asegurar que cada recomendacion nombre ambiente y evidencia. |
+| Impacto | Todos los agentes consultan el mismo estado operativo antes de aprobar cambios; `validate-agents.js` bloquea la perdida de esa matriz y la reaparicion de frases obsoletas. |
+| Validacion | `validate-agents.js`, `validate-environment-boundaries.js`, `validate-active-module-localization.js`, `validate-architecture.js`, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | No hubo conexiones o escrituras en QA, migraciones, seeds, cargas, despliegues ni infraestructura productiva. |
+
+### CHG-164
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-04 |
+| Cambio | Habilita el stack local canonico y aislado con Firebase Emulator |
+| Autor | Codex |
+| Archivos | `firebase.json`, `frontend/api/config.js`, `frontend/auth.js`, `frontend/env.js`, `frontend/backoffice/env.js`, `frontend/backoffice/README.md`, `backend/services/admin-service/app/auth.py`, `backend/scripts/start_local.ps1`, `backend/scripts/seed_local_demo.py`, `backend/scripts/seed_admin_qa_demo.py`, `backend/services/admin-service/tests/test_local_demo_seed.py`, `backend/README.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `tools/validators/validate-environment-boundaries.js`, `TRAZABILIDAD.md` |
+| Secciones | Arranque local, autenticacion, datos demo, Administracion, Produccion, Inventario, RH y frontend |
+| Descripcion | Se agrego un arranque unico que valida las fronteras, prepara exclusivamente `erclave_local`, inicia Firebase Auth Emulator bajo el proyecto sintetico `demo-erclave`, crea el usuario local y levanta frontend y APIs en loopback. El seed local activa `admin`, `production`, `inventory`, `hr`, `sales` e `integrations`. El frontend ignora modos de autenticacion persistidos y rechaza URLs remotas cuando se ejecuta en localhost. |
+| Motivo | Permitir revisar y continuar el flujo funcional completo sin consumir autenticacion, APIs, base de datos ni infraestructura de QA. |
+| Impacto | El entorno local queda reproducible mediante `backend/scripts/start_local.ps1`, con autenticacion Firebase emulada y datos locales independientes. |
+| Validacion | Pruebas focalizadas de seeds, validadores de fronteras, sintaxis JavaScript y PowerShell, smoke autenticado de sesion, productos, recetas, almacenes, balances, areas y puestos, mas `npm.cmd run verify`. |
+| Observaciones | Solo se escribio el seed en PostgreSQL local `127.0.0.1:5434/erclave_local`. El JDK portatil reside en `C:\\tmp`; no hubo solicitudes, escrituras, migraciones, seeds ni despliegues en QA o Produccion. |
+
+### CHG-165
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-04 |
+| Cambio | Corrige persistencia de movimientos y refresco de inventario |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/i18n/translations.js`, `tools/validators/validate-inventory-movement-flow.js`, `tools/validators/validate-all.js`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Almacenes, Movimientos, Inventario calculado, Kardex, Recetas y validacion automatica |
+| Descripcion | El guardado de un movimiento en modo API ahora ejecuta `createInventoryMovement` antes del fallback maqueta, invalida los estados de Movimientos e Inventario y recarga la lista desde PostgreSQL. Se retiro de `saveRecipeForm` el comando de inventario que estaba desplazado y se agrego una validacion estructural para impedir su reaparicion. |
+| Motivo | Movimientos mostraba registros guardados solo en `localStorage`, mientras Inventario consultaba balances reales sin esas entradas y por ello mostraba saldo cero. |
+| Impacto | Nuevas entradas, salidas, ajustes y transferencias en modo API comparten una sola fuente de verdad con balances y Kardex. Los dos registros mock anteriores no se migran: deben repetirse localmente para conservar un comando auditable con sus datos originales. |
+| Validacion | Revision de agentes funcional, tecnico y arquitectonico; inspeccion read-only de PostgreSQL local; `validate-inventory-movement-flow.js`, `validate-all.js`, sintaxis JavaScript, paridad i18n y `npm.cmd run verify`. |
+| Observaciones | No hubo migraciones ni cambios de esquema. No se conecto, escribio, cargo, migro ni desplego en QA o Produccion. |
+
+### CHG-166
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-04 |
+| Cambio | Implementa persistencia integral del ciclo de Produccion en Local |
+| Autor | Codex, con revision arquitectonica transversal |
+| Archivos | `backend/alembic/versions/20260804_0012_production_cycle.py`, `backend/services/production-service/app/`, `backend/services/production-service/tests/test_production_api.py`, `backend/services/production-service/README.md`, `contracts/api/production-service.openapi.yaml`, `frontend/api/production.js`, `frontend/app.js`, `tools/validators/validate-production-cycle.js`, `tools/validators/validate-all.js`, `docs/arquitectura/modelo_datos_mvp.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Productos/Servicios, Recetas, Maquinaria, validacion de recursos y costos, Ordenes, etapas, OpenAPI y frontend |
+| Descripcion | Productos/Servicios y Maquinaria persisten por API; Recetas separan version vigente de borrador; las Ordenes exigen receta aprobada vigente, revalidan recursos, guardan snapshots y ejecutan maquinas de estado backend para orden y etapas con permisos, auditoria e idempotencia. |
+| Motivo | Sustituir persistencia maqueta y evitar que el frontend sea fuente de verdad del ciclo productivo. |
+| Impacto | El ciclo funcional se recarga desde PostgreSQL Local. La disponibilidad es una observacion conservada en la orden y no reserva ni consume Inventario; ese contrato queda como trabajo posterior. |
+| Validacion | Alembic Local `upgrade`, `downgrade` y `upgrade`; 25 pruebas focalizadas de Production; smoke autenticado con Firebase Emulator del ciclo producto-maquina-receta-validacion-orden-etapa-cierre; `npm.cmd run verify` con 126 pruebas aprobadas y 1 omitida. |
+| Observaciones | La migracion y los datos sinteticos se aplicaron solo a `127.0.0.1:5434/erclave_local`. No hubo conexiones, escrituras, migraciones, seeds ni despliegues en QA o Produccion. |
+
+### CHG-167
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-04 |
+| Cambio | Normaliza snapshots de receta al recargar ordenes de Produccion |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/utils/production.js`, `frontend/index.html`, `tools/validators/validate-production-cycle.js`, `TRAZABILIDAD.md` |
+| Secciones | Produccion, ordenes, recetas, notificaciones y cache frontend |
+| Descripcion | La lectura de ordenes transforma el snapshot OpenAPI de receta a la estructura de calculo del frontend antes de generar costos, faltantes y notificaciones. El calculador tambien tolera recursos ausentes durante estados parciales de carga y se actualizo la version del modulo principal para invalidar cache. |
+| Motivo | Una orden persistida entregaba un objeto de receta con `versions`, mientras `calculateRecipe` esperaba `resources` en la raiz y fallaba al ejecutar `.map()`. |
+| Impacto | Produccion vuelve a renderizar productos, recetas, ordenes y notificaciones sin perder el snapshot historico de cada orden. |
+| Validacion | Validador estructural actualizado, sintaxis JavaScript y `npm.cmd run verify` con 126 pruebas aprobadas y 1 omitida. |
+| Observaciones | Correccion exclusiva de codigo Local; no hubo conexiones, escrituras, migraciones ni despliegues en QA o Produccion. El `403` de lectura administrativa de entitlements es independiente y no causa el fallo de Produccion. |
+
+### CHG-168
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-04 |
+| Cambio | Corrige autorizacion y rotulado de entitlements en Administracion Local |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/api.py`, `backend/services/admin-service/tests/test_admin_api.py`, `contracts/api/admin-service.openapi.yaml`, `docs/arquitectura/apis_mvp.md`, `frontend/app.js`, `frontend/index.html`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, entitlements, autorizacion, OpenAPI y fronteras visuales de ambiente |
+| Descripcion | La consulta de modulos del tenant exige `admin.tenant.read`, disponible para el owner y acotado por el tenant de la ruta. Modificar entitlements conserva `admin.entitlement.manage`. La interfaz identifica endpoints loopback como `API Local` y mantiene `API QA` solo para URLs remotas. |
+| Motivo | El GET de entitlements exigia un permiso interno no asignable a roles humanos y devolvia 403 al owner autenticado en Firebase Emulator; ademas la etiqueta fija mostraba QA aunque la URL efectiva era local. |
+| Impacto | El panel de Administracion carga modulos y limites en Local sin relajar permisos de escritura ni ocultar el ambiente efectivo. |
+| Validacion | 53 pruebas focalizadas de Admin; smoke autenticado contra Firebase Emulator y Admin API Local con HTTP 200; OpenAPI, sintaxis, cache frontend y `npm.cmd run verify`. |
+| Observaciones | Se reinicio unicamente Admin API Local. No hubo conexiones, escrituras, migraciones, seeds ni despliegues en QA o Produccion. |
+
+### CHG-169
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-05 |
+| Cambio | Retira la evaluacion interna de policy del dashboard de Administracion |
+| Autor | Codex |
+| Archivos | `frontend/api/admin.js`, `frontend/index.html`, `tools/validators/validate-permission-editor.js`, `TRAZABILIDAD.md` |
+| Secciones | Administracion, session context, autorizacion frontend y cache |
+| Descripcion | El dashboard obtiene la indicacion visual de lectura desde los permisos efectivos devueltos por `session/context` y deja de invocar `POST /v1/policy/evaluate`. El endpoint interno conserva intacta su autorizacion `internal.policy.evaluate`. |
+| Motivo | La interfaz de un usuario tenant llamaba un contrato interno y recibia correctamente 403, lo que convertia una comprobacion visual redundante en error de carga de todo el panel. |
+| Impacto | Administracion carga exclusivamente con contratos autorizados para el owner, sin duplicar la decision backend ni conceder permisos internos a usuarios humanos. |
+| Validacion | Validador del editor actualizado, smoke autenticado de todos los GET del dashboard contra Firebase Emulator y APIs Local, sintaxis y `npm.cmd run verify`. |
+| Observaciones | Cambio exclusivo de frontend Local; no se modifico la autorizacion del evaluador interno y no hubo conexiones, escrituras, migraciones, seeds ni despliegues en QA o Produccion. |
+
+### CHG-170
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-05 |
+| Cambio | Corrige el guardado API de areas de Recursos Humanos |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/index.html`, `tools/validators/validate-labor-catalog.js`, `TRAZABILIDAD.md` |
+| Secciones | Recursos Humanos, areas, frontera frontend/API y cache |
+| Descripcion | Se retiro del formulario de areas un bloque desplazado de Productos/Servicios que intentaba usar `item` antes de inicializarlo. El flujo ahora valida, construye el area y llama exclusivamente a `createHrArea` o `updateHrArea` antes del fallback mock. |
+| Motivo | Al guardar un area en modo API, JavaScript lanzaba `Cannot access 'item' before initialization` y nunca enviaba el comando a `hr-service`. |
+| Impacto | Altas y ediciones de areas pueden persistir en PostgreSQL Local mediante HR API y recargar su catalogo. |
+| Validacion | Guardrail que impide APIs de Productos dentro del flujo de areas y exige inicializacion previa; pruebas focalizadas de HR, sintaxis, cache frontend y `npm.cmd run verify`. |
+| Observaciones | No se registro automaticamente el area capturada por el usuario para evitar duplicar su comando al reintentar. No hubo conexiones, escrituras, migraciones, seeds ni despliegues en QA o Produccion. |
+
+### CHG-171
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-05 |
+| Cambio | Conecta Recetas exclusivamente con catalogos reales de Inventory y RH |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260805_0013_recipe_hr_areas.py`, `backend/services/production-service/app/schemas.py`, `backend/services/production-service/app/repositories.py`, `backend/services/production-service/tests/test_production_api.py`, `backend/services/production-service/README.md`, `contracts/api/production-service.openapi.yaml`, `frontend/app.js`, `frontend/utils/production.js`, `frontend/i18n/translations.js`, `frontend/index.html`, `tools/validators/validate-production-cycle.js`, `docs/arquitectura/modelo_datos_mvp.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion, Recetas, Inventory, Recursos Humanos, etapas y fronteras de datos |
+| Descripcion | En modo API el selector de recursos usa solo articulos activos con `use_in_recipe=true` y puestos RH activos con `intervenes_in_production=true`; excluye maquinaria y seeds. Las etapas se eligen entre areas RH activas y guardan `labor_area_ref_id` externo mas `labor_area_name` snapshot. Recursos historicos fuera del catalogo se omiten al editar una nueva version, sin alterar versiones aprobadas existentes. |
+| Motivo | El formulario seguia precargando IDs mock y permitia etapas genericas por texto aunque Inventory y HR ya exponian APIs reales. |
+| Impacto | Las nuevas versiones de receta quedan explicables y vinculadas a maestros existentes, sin FKs ni escrituras cruzadas. Actualmente Local devuelve cero materiales elegibles, dos puestos productivos y dos areas activas; los articulos deben marcarse para uso en receta antes de aparecer. |
+| Validacion | Migracion Local `upgrade`, `downgrade` y `upgrade` hasta `20260805_0013`; 25 pruebas focalizadas de Production; smoke autenticado read-only de Inventory, HR y Production; validadores de OpenAPI, i18n, fronteras y ciclo productivo; `npm.cmd run verify`. |
+| Observaciones | Se migro y reinicio exclusivamente Production API Local. No se crearon recetas ni catalogos durante el smoke. No hubo conexiones, escrituras, migraciones, seeds ni despliegues en QA o Produccion. |
+
+### CHG-172
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-05 |
+| Cambio | Filtra y mejora el selector de areas productivas en Recetas |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `frontend/i18n/translations.js`, `frontend/index.html`, `tools/validators/validate-production-cycle.js`, `docs/contexto/DECISIONES.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion, Recetas, Recursos Humanos, responsive y accesibilidad |
+| Descripcion | Las areas seleccionables se derivan exclusivamente de puestos activos con `intervenes_in_production=true`. El fieldset anterior se reemplazo por tarjetas compactas con codigo, check visual, foco de teclado, estado seleccionado y una columna en contenedores estrechos. |
+| Motivo | Un area activa de Ventas aparecia como etapa aunque ninguno de sus puestos interviniera en Produccion; los checkboxes heredaban estilos globales y se renderizaban desalineados. |
+| Impacto | Recetas muestra solo areas realmente productivas y ofrece una seleccion legible, accesible y responsive sin cambiar el catalogo maestro de RH. |
+| Validacion | Smoke autenticado read-only: dos puestos productivos, una area seleccionable y una area activa excluida; i18n, sintaxis, guardrail de ciclo productivo, cache frontend, responsive y `npm.cmd run verify`. |
+| Observaciones | No hubo escrituras de datos, migraciones nuevas, seeds, conexiones o despliegues en QA o Produccion. |
+
+### CHG-173
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-05 |
+| Cambio | Hace obligatorio reportar las APIs afectadas por cada cambio |
+| Autor | Codex |
+| Archivos | `AGENTS.md`, `AGENTES.md`, `.agents/skills/erclave-feature/SKILL.md`, `tools/traceability-draft.js`, `tools/validators/validate-codex-tooling.js`, `TRAZABILIDAD.md` |
+| Secciones | Agentes, skills, trazabilidad, entrega y validadores |
+| Descripcion | Cada cambio debe cerrar con un inventario que separe contratos API modificados, endpoints consumidos sin cambio y APIs no tocadas. El reporte incluye metodo, ruta, servicio, permiso y cambio de request/response cuando aplique; el borrador de trazabilidad incorpora el mismo campo. |
+| Motivo | Evitar que el impacto contractual quede implicito o se omita durante la entrega y revision del usuario. |
+| Impacto | Los agentes tecnicos y transversales, la skill de funcionalidades y el flujo de trazabilidad comparten una obligacion verificable y persistente. |
+| APIs afectadas | Ninguna. Este cambio solo modifica instrucciones, automatizacion documental y validadores locales. |
+| Validacion | `quick_validate.py` para `$erclave-feature`, `validate-codex-tooling.js`, borrador de trazabilidad y `npm.cmd run verify`. |
+| Observaciones | No hubo cambios funcionales, conexiones, escrituras de datos, migraciones, seeds ni despliegues en Local, QA o Produccion. |
+
+### CHG-174
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-05 |
+| Cambio | Separa materiales, mano de obra y maquinaria en recetas |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/utils/production.js`, `frontend/i18n/translations.js`, `frontend/styles.css`, `frontend/index.html`, `tools/validators/validate-production-cycle.js`, `modulos/01_produccion.md`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion / Recetas / Recursos por unidad |
+| Descripcion | El formulario de receta presenta tres bloques independientes para materiales, mano de obra y maquinaria. Materiales conserva la unidad base de Almacenes; mano de obra usa horas-persona y maquinaria horas-maquina. La UI convierte los tiempos a minutos al construir el payload para mantener compatibilidad con validacion, disponibilidad y costo existentes. |
+| Motivo | Evitar mezclar recursos con semanticas distintas y hacer explicita la magnitud que el usuario debe capturar. |
+| Impacto | Mejora el editor responsive ES/EN sin modificar persistencia ni contratos. Solo ofrece materiales elegibles, puestos productivos activos y maquinaria activa; recetas y ordenes existentes conservan sus cantidades internas en minutos. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/inventory/items?use_in_recipe=true&status=active` (`inventory-service`, `inventory.item.read`), `GET /v1/inventory/balances?limit=200` (`inventory-service`, `inventory.balance.read`), `GET /v1/hr/areas` (`hr-service`, `hr.area.read`), `GET /v1/hr/positions?production_only=true` (`hr-service`, `hr.position.read`) y `GET /v1/production/machines` (`production-service`, `production.machine.read`); request y response permanecen sin cambios. **APIs no tocadas:** Admin, Ventas y todos los comandos de escritura de Produccion, Inventory y HR. |
+| Validacion | Sintaxis JavaScript, `validate-production-cycle.js`, `npm.cmd run validate:responsive` y `npm.cmd run verify`. |
+| Observaciones | Cambio `local-write` de codigo y documentacion. No hubo migraciones, seeds, escrituras de datos, conexiones QA/Produccion ni despliegues. |
+
+### CHG-175
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-05 |
+| Cambio | Vincula maquinaria con areas activas de RH |
+| Autor | Codex |
+| Archivos | `frontend/api/hr.js`, `frontend/app.js`, `frontend/i18n/translations.js`, `frontend/styles.css`, `frontend/index.html`, `tools/validators/validate-production-cycle.js`, `modulos/01_produccion.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion / Maquinaria y Recursos Humanos / Areas y puestos |
+| Descripcion | El formulario de Maquinaria reemplaza el texto libre de area por un selector alimentado con areas activas de RH. Si no existen opciones, bloquea el guardado, explica la dependencia y permite navegar al catalogo propietario para registrar el area primero. |
+| Motivo | Evitar nombres inventados, duplicados o divergentes y mantener a RH como unica fuente de verdad de las areas organizacionales. |
+| Impacto | Produccion consume el catalogo RH sin escribirlo. El payload de Maquinaria conserva `area_name` como snapshot compatible; una maquina ligada a un area inactiva debe reasignarse a un area activa al editarla. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/hr/areas` (`hr-service`, `hr.area.read`, request/response sin cambios); `POST /v1/production/machines` (`production-service`, `production.machine.create`) y `PATCH /v1/production/machines/{machine_id}` (`production-service`, `production.machine.update`) conservan su contrato y reciben `area_name` desde la seleccion RH. **APIs no tocadas:** Admin, Inventory, Ventas, contratos OpenAPI y comandos de escritura de RH. |
+| Validacion | Sintaxis JavaScript, guardrail que rechaza area libre, paridad i18n, responsive y `npm.cmd run verify`. |
+| Observaciones | Operacion `local-write` de codigo y documentacion. No hubo migraciones, seeds, escrituras de datos, conexiones QA/Produccion ni despliegues. |
+
+### CHG-176
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-05 |
+| Cambio | Oculta IDs tecnicos en el buscador de productos de Recetas |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/index.html`, `tools/validators/validate-production-cycle.js`, `modulos/01_produccion.md`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion / Recetas / Buscador de producto o servicio y selector compartido de Ventas |
+| Descripcion | El valor seleccionado se presenta como `Nombre - codigo de producto`; los resultados muestran codigo, tipo y unidad. El ID `prs_*` permanece solo en atributos e inputs internos para resolver la relacion. |
+| Motivo | Priorizar informacion reconocible para el usuario y evitar exponer identificadores de infraestructura en la interfaz operativa. |
+| Impacto | Cambio exclusivamente visual y de busqueda: ahora tambien se busca por SKU. No cambia la identidad interna ni los payloads de Recetas o Ventas. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/production/product-services?limit=200` (`production-service`, `production.product_service.read`); request y response permanecen sin cambios. **APIs no tocadas:** Admin, Inventory, HR, Ventas backend y todos los comandos de escritura. |
+| Validacion | Sintaxis JavaScript, guardrail que impide mostrar IDs internos en el resultado de Recetas y `npm.cmd run verify`. |
+| Observaciones | Cambio `local-write` de codigo y documentacion. No hubo migraciones, seeds, escrituras de datos, conexiones QA/Produccion ni despliegues. |
+
+### CHG-177
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-05 |
+| Cambio | Permite precision por minutos en tiempos de receta |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/i18n/translations.js`, `frontend/styles.css`, `frontend/index.html`, `tools/validators/validate-production-cycle.js`, `modulos/01_produccion.md`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion / Recetas / Mano de obra y Maquinaria |
+| Descripcion | Los inputs de horas-persona y horas-maquina dejan de exigir incrementos de `0.25` horas y aceptan cualquier decimal. La UI muestra la equivalencia `0.5 h = 30 min`; al guardar conserva la conversion decimal por 60 al contrato interno en minutos. |
+| Motivo | Permitir tiempos operativos con precision menor a 15 minutos sin que la validacion nativa del navegador rechace valores intermedios. |
+| Impacto | Cambio de captura y ayuda visual ES/EN. No modifica cantidades persistidas, calculo de costos ni compatibilidad de recetas existentes. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `POST /v1/production/recipes`, `PATCH /v1/production/recipe-versions/{version_id}` y `POST /v1/production/recipes/{recipe_id}/versions` (`production-service`; permisos `production.recipe.create` o `production.recipe.update` segun operación); request/response permanecen sin cambios y las cantidades temporales siguen enviandose en minutos. **APIs no tocadas:** Admin, Inventory, HR, Ventas y demas contratos de Produccion. |
+| Validacion | Sintaxis JavaScript, paridad i18n, guardrail de precision temporal, responsive y `npm.cmd run verify`. |
+| Observaciones | Cambio `local-write` de codigo y documentacion. No hubo migraciones, seeds, escrituras de datos, conexiones QA/Produccion ni despliegues. |
+
+### CHG-178
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-05 |
+| Cambio | Oculta IDs tecnicos en la visualizacion de Recetas |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/i18n/translations.js`, `frontend/index.html`, `tools/validators/validate-production-cycle.js`, `modulos/01_produccion.md`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion / Recetas guardadas, validacion, ordenes, mensajes y documento imprimible |
+| Descripcion | La UI reemplaza títulos `rec_*` por `Nombre del producto - codigo`, acompañados de versión donde corresponde. Los IDs permanecen en `value`, `data-recipe-id`, snapshots y payloads internos. |
+| Motivo | Evitar que identificadores técnicos dominen la experiencia operativa o confundan al usuario final. |
+| Impacto | Cambio exclusivamente de presentación en listas, selectores, confirmaciones, notificaciones y orden imprimible. No modifica identidad, relaciones ni persistencia. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/production/recipes?limit=200` y `GET /v1/production/product-services?limit=200` (`production-service`; permisos `production.recipe.read` y `production.product_service.read`); request/response permanecen sin cambios. **APIs no tocadas:** Admin, Inventory, HR, Ventas y comandos de escritura de Produccion. |
+| Validacion | Sintaxis JavaScript, paridad i18n, guardrail que impide IDs visibles en títulos de receta y `npm.cmd run verify`. |
+| Observaciones | Cambio `local-write` de codigo y documentacion. No hubo migraciones, seeds, escrituras de datos, conexiones QA/Produccion ni despliegues. |
+
+### CHG-179
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-06 |
+| Cambio | Prepara el candidato e inventaria QA en modo lectura |
+| Autor | Codex |
+| Archivos | `docs/operaciones/preparacion_release_qa_20260806.md`, `TRAZABILIDAD.md` |
+| Secciones | Release / QA / Fronteras de ambientes |
+| Descripcion | Registra la validacion integral local, la cadena de migraciones, los servicios y revisiones desplegados, Hosting, Cloud SQL, backups y bloqueos previos a una liberacion controlada. |
+| Motivo | Producir evidencia reproducible antes de solicitar autorizaciones independientes para migrar, desplegar servicios o publicar el frontend. |
+| Impacto | Documental y operativo. Confirma que Inventory y RH aun no estan desplegados en QA y detecta configuracion local en el endpoint de version de Produccion. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consultados sin cambio:** `GET /health`, `GET /ready` y `GET /version` de Admin y Produccion. **APIs no tocadas:** endpoints funcionales de Admin, Produccion, Inventory, HR y Ventas. |
+| Validacion | `npm.cmd run session:context`, `git diff --check`, `npm.cmd run verify`, inventario GCP/Firebase sanitizado y healthchecks publicos no destructivos. |
+| Observaciones | Operacion `local-write` para documentacion y `read-only` sobre QA. No hubo migraciones, seeds, cargas, despliegues, cambios de trafico, IAM, secretos ni datos. |
+
+### CHG-180
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-07 |
+| Cambio | Prepara pipeline seguro, identidades y servicios del candidato QA |
+| Autor | Codex |
+| Archivos | `.github/workflows/qa-candidate.yml`, `.github/workflows/qa-release.yml`, `.github/workflows/pages.yml`, `backend/Dockerfile`, `backend/.dockerignore`, `backend/shared/erclave_common/config.py`, `backend/shared/erclave_common/health.py`, mains y pruebas de servicios, `backend/scripts/smoke_qa.ps1`, `tools/build-qa-frontend.js`, `tools/validators/validate-qa-release-pipeline.js`, `firebase.qa.json`, `infra/qa/*`, documentacion y `package.json` |
+| Secciones | Plataforma / QA / CI-CD / Inventory / RH / Administracion / Produccion |
+| Descripcion | Agrega construccion inmutable por SHA y digest, promocion manual con aprobaciones separadas, revisiones sin trafico, smoke, frontend sanitizado, Firebase Hosting gobernado y plan de identidades dedicadas con Workload Identity Federation. El backend rechaza configuracion local en QA/Produccion y readiness usa la base efectiva de cada servicio. |
+| Motivo | Cerrar los bloqueos de preparacion antes de solicitar autorizaciones para crear infraestructura, migrar o desplegar QA, evitando autodeploy, credenciales persistentes y configuracion localhost. |
+| Impacto | El repositorio queda preparado para construir Admin, Produccion, Inventory y RH y promoverlos de forma controlada. No crea recursos cloud ni cambia el estado operativo de QA. GitHub Pages pasa de automatico a manual. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints tecnicos con contrato sin cambio:** `GET /health`, `GET /ready`, `GET /version`; readiness ahora evalua la URL efectiva de Inventory/RH y QA/Prod valida su configuracion al arranque. **APIs no tocadas:** endpoints funcionales de Admin, Produccion, Inventory, HR y Ventas. |
+| Validacion | YAML parseable, pruebas de configuracion/CORS, build frontend QA sanitizado, validador de pipeline, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | Operacion `local-write`. No hubo migraciones, seeds, escrituras de datos, creacion IAM, publicacion de imagenes, despliegues, cambios de trafico ni modificaciones en QA/Produccion. Docker no esta instalado en el host local; el build real de imagenes queda como gate de `qa-candidate.yml`. |
+
+### CHG-181
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-08 |
+| Cambio | Aprovisiona controles previos al candidato QA |
+| Autor | Codex |
+| Archivos | Estado externo de GCP/GitHub, `infra/qa/README.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Plataforma / QA / IAM / CI-CD / Cloud SQL |
+| Descripcion | Crea Artifact Registry `erclave-qa`, seis cuentas dedicadas, WIF OIDC restringido al repositorio, bindings de minimo privilegio, cinco GitHub Environments con aprobador y variables QA. Crea un backup manual de Cloud SQL, exige cifrado y habilita PITR con siete dias de logs. |
+| Motivo | Completar exclusivamente los pasos 1, 2 y 3 previos al despliegue QA autorizado por el propietario. |
+| Impacto | El control plane de QA queda listo para construir el candidato y gobernar sus aprobaciones. No se publicaron imagenes, no se desplegaron Inventory/RH, no se modificaron revisiones ni trafico y no se publico Hosting. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** APIs administrativas de Google Cloud y GitHub para IAM, WIF, Artifact Registry, Environments, variables, backups y configuracion de Cloud SQL. **APIs no tocadas:** endpoints funcionales y tecnicos de Admin, Produccion, Inventory, HR y Ventas. |
+| Validacion | WIF `ACTIVE` y limitado a `ChemaPsan/eslaclave-erclave`; seis cuentas presentes; Artifact Registry creado; cinco environments con `ChemaPsan`; 21 variables QA presentes; backup `1786227437185` exitoso; Cloud SQL `RUNNABLE`, `ENCRYPTED_ONLY`, PITR activo y siete dias de logs. |
+| Observaciones | Operacion `qa-write` de infraestructura y configuracion. No hubo migraciones, seeds, cargas de datos, consultas SQL, builds, publicacion de imagenes, despliegues de servicios, cambios de trafico ni despliegue de frontend. |
+
+### CHG-182
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-11 |
+| Cambio | Elimina persistencia mock y entitlements sin backend del candidato QA |
+| Autor | Codex |
+| Archivos | `frontend/api/config.js`, `frontend/data/mockDb.js`, `.dockerignore`, `backend/Dockerfile`, `backend/scripts/configure_qa_tenant.py`, seeds y pruebas Admin, workflows QA, validador de pipeline, documentacion operativa y contexto |
+| Secciones | Plataforma / QA / Frontend / Administracion / Produccion / Inventory / RH / CI-CD |
+| Descripcion | Fuera de localhost, el frontend ignora overrides de modo, URLs, tenant y actor; en modo API conserva la proyeccion temporal solo en memoria y la reconstruye desde servicios reales. El pipeline empaca contratos y scripts estructurales, exige confirmacion adicional y reconcilia permisos y entitlements para habilitar exclusivamente Admin, Produccion, Inventory y RH, desactivando modulos sin microservicio real. |
+| Motivo | Garantizar que la interfaz liberada a QA no muestre ni persista datos operativos de `localStorage` como si provinieran de Cloud SQL y que ningun entitlement exponga una funcionalidad mock. |
+| Impacto | El candidato queda preparado para desplegar cuatro servicios reales y migrar/configurar QA de forma gobernada. Las preferencias visuales pueden seguir en `localStorage`, pero catalogos y transacciones del modo API no. La configuracion estructural no carga almacenes, articulos, movimientos, areas, puestos, recetas ni ordenes. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** endpoints vigentes de Admin, Produccion, Inventory y HR usados por el frontend en modo API; permisos y request/response permanecen sin cambios. **APIs no tocadas:** Ventas y modulos sin backend. |
+| Validacion | `npm.cmd run validate:qa-release`, YAML parseable, build frontend QA sanitizado, pruebas dirigidas `11 passed`, `git diff --check` y `npm.cmd run verify` con `135 passed, 1 skipped`. |
+| Observaciones | Operacion `local-write` y consultas `read-only` de inventario Cloud Run/Cloud SQL QA. No hubo migraciones, seeds, cargas de datos, builds Docker, publicacion de imagenes, despliegues, cambios de trafico, entitlements ni Hosting. |

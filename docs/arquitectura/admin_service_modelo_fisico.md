@@ -71,6 +71,16 @@ La idempotencia final se debera complementar con una tabla dedicada de comandos 
 - `PUT /v1/roles/{role_id}/permissions`.
 - `PUT /v1/settings/{key}`.
 
+El editor matricial implementa esa tabla para `role.permissions.replace`, con alcance unico `(tenant_id, operation, idempotency_key)`, hash del request y replay de la respuesta. Reusar una clave con otro payload produce conflicto.
+
+## Seguridad del catalogo y asignaciones
+
+`admin.permissions` incorpora metadata versionada para presentacion y policy: clasificacion, indicador asignable a rol tenant, riesgo, etiquetas/descripciones ES/EN y orden. El codigo tecnico sigue siendo la identidad estable.
+
+`GET /v1/permissions` requiere tenant, Firebase y `admin.role.read`; nunca expone permisos internos/publicos a un rol de cliente. La disponibilidad se calcula con los entitlements del tenant.
+
+`admin.roles.permission_revision` protege contra ultimo-escritor-gana. El reemplazo bloquea la fila, compara `expected_revision`, aplica un diff y aumenta la revision. Las asignaciones existentes conservan su `scope`; el payload legado se mantiene solo por compatibilidad temporal.
+
 ## Perfil organizacional
 
 Cada tenant debe nacer con:

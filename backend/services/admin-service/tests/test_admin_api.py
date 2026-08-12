@@ -48,7 +48,14 @@ def test_private_network_cors_preflight_is_allowed_for_firebase_host():
 
 
 class FakeAdminRepository:
-    session_permissions = ["admin.tenant.read", "production.product_service.read"]
+    session_permissions = [
+        "admin.tenant.read",
+        "admin.role.read",
+        "admin.role.create",
+        "admin.role.update",
+        "admin.role.permissions.manage",
+        "production.product_service.read",
+    ]
 
     def get_tenant(self, tenant_id: str):
         if tenant_id != TENANT_ID:
@@ -441,7 +448,12 @@ class FakeAdminRepository:
     def list_roles(self, tenant_id: str, limit: int = 50):
         return [RoleRead(id=ROLE_ID, code="owner", name="Owner", status="active", permissions=["admin.tenant.read"])]
 
-    def list_permissions(self, limit: int = 200):
+    def get_role(self, tenant_id: str, role_id: str):
+        if tenant_id != TENANT_ID or role_id != ROLE_ID:
+            return None
+        return RoleRead(id=ROLE_ID, code="owner", name="Owner", status="active", permissions=["admin.tenant.read"])
+
+    def list_permissions(self, tenant_id: str, limit: int = 200):
         return [
             PermissionRead(
                 id=PERMISSION_ID,
@@ -450,6 +462,15 @@ class FakeAdminRepository:
                 resource="tenant",
                 action="read",
                 status="active",
+                display_name_es="Ver tenants",
+                display_name_en="View tenants",
+                description_es="Permite consultar tenants.",
+                description_en="Allows viewing tenants.",
+                classification="tenant",
+                assignable_to_tenant_role=True,
+                risk_level="low",
+                entitlement_status="active",
+                available=True,
             )
         ]
 
@@ -484,14 +505,22 @@ class FakeAdminRepository:
         self,
         tenant_id: str,
         role_id: str,
-        permission_ids: list[str],
-        scope: dict,
+        assignments: list[dict],
+        expected_revision: int,
         idempotency_key: str,
         correlation_id: str,
+        actor_email: str | None = None,
     ):
-        if tenant_id != TENANT_ID or role_id != ROLE_ID or permission_ids != [PERMISSION_ID]:
+        if tenant_id != TENANT_ID or role_id != ROLE_ID or assignments != [{"permission_id": PERMISSION_ID, "scope": {}}]:
             return None
-        return RoleRead(id=ROLE_ID, code="owner", name="Owner", status="active", permissions=["admin.tenant.read"])
+        return RoleRead(
+            id=ROLE_ID,
+            code="owner",
+            name="Owner",
+            status="active",
+            permissions=["admin.tenant.read"],
+            permission_revision=expected_revision + 1,
+        )
 
 
 def client_with_fake_repo() -> TestClient:
@@ -853,6 +882,22 @@ def test_list_tenant_entitlements_returns_modules():
     assert [item["module_code"] for item in response.json()["data"]] == ["admin", "production"]
 
 
+def test_list_tenant_entitlements_allows_firebase_tenant_reader():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-user",
+        email="admin.qa@erclave.local",
+        name="Admin QA",
+    )
+    client = TestClient(app)
+
+    response = client.get(f"/v1/tenants/{TENANT_ID}/entitlements")
+
+    assert response.status_code == 200
+    assert [item["module_code"] for item in response.json()["data"]] == ["admin", "production"]
+
+
 def test_upsert_tenant_entitlement_returns_updated_module():
     client = client_with_fake_repo()
 
@@ -1194,10 +1239,19 @@ def test_list_roles_returns_roles_for_tenant():
 def test_list_permissions_returns_permission_catalog():
     client = client_with_fake_repo()
 
-    response = client.get("/v1/permissions")
+    response = client.get("/v1/permissions", headers={"X-Tenant-Id": TENANT_ID})
 
     assert response.status_code == 200
     assert response.json()["data"][0]["code"] == "admin.tenant.read"
+
+
+def test_list_permissions_requires_tenant_context():
+    client = client_with_fake_repo()
+
+    response = client.get("/v1/permissions")
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "tenant_required"
 
 
 def test_create_role_requires_tenant_header():
@@ -1258,8 +1312,21 @@ def test_replace_role_permissions_returns_role_with_permissions():
     response = client.put(
         f"/v1/roles/{ROLE_ID}/permissions",
         headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "test-role-permissions-001"},
-        json={"permission_ids": [PERMISSION_ID], "scope": {}},
+        json={"assignments": [{"permission_id": PERMISSION_ID, "scope": {}}], "expected_revision": 1},
     )
 
     assert response.status_code == 200
     assert response.json()["data"]["permissions"] == ["admin.tenant.read"]
+
+
+def test_replace_role_permissions_accepts_legacy_payload_with_server_revision():
+    client = client_with_fake_repo()
+
+    response = client.put(
+        f"/v1/roles/{ROLE_ID}/permissions",
+        headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "test-role-permissions-legacy"},
+        json={"permission_ids": [PERMISSION_ID], "scope": {}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["permission_revision"] == 2

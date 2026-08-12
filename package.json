@@ -1,15 +1,27 @@
 {
   "scripts": {
     "validate": "node tools/validators/validate-all.js",
+    "validate:codex-tooling": "node tools/validators/validate-codex-tooling.js",
+    "validate:environment-boundaries": "node tools/validators/validate-environment-boundaries.js",
+    "validate:qa-release": "node tools/validators/validate-qa-release-pipeline.js",
+    "validate:session-context": "node tools/validators/validate-session-context.js",
     "validate:agents": "node tools/validators/validate-agents.js",
     "validate:i18n": "node tools/validators/validate-i18n.js",
     "validate:active-localization": "node tools/validators/validate-active-module-localization.js",
+    "validate:responsive": "node tools/validators/validate-responsive-ui.js",
+    "validate:permission-editor": "node tools/validators/validate-permission-editor.js",
+    "validate:labor-catalog": "node tools/validators/validate-labor-catalog.js",
     "validate:architecture": "node tools/validators/validate-architecture.js",
     "validate:backend-scaffold": "node tools/validators/validate-backend-scaffold.js",
     "validate:cross-platform": "node tools/validators/validate-cross-platform.js",
     "validate:db-guardrails": "node tools/validators/validate-db-guardrails.js",
     "validate:openapi": "node tools/validators/validate-openapi-contracts.js",
     "validate:traceability": "node tools/validators/validate-traceability.js",
-    "validate:syntax": "node tools/validators/validate-syntax.js"
+    "validate:syntax": "node tools/validators/validate-syntax.js",
+    "verify": "node tools/verify.js",
+    "traceability:draft": "node tools/traceability-draft.js",
+    "session:context": "node tools/session-context.js",
+    "build:frontend:qa": "node tools/build-qa-frontend.js",
+    "qa:document": "python tools/generate-qa-document.py"
   }
 }

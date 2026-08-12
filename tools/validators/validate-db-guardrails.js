@@ -72,10 +72,16 @@ for (const fileName of migrationFiles) {
     }
   }
 
-  const foreignKeyTargets = [...upgradeBlock.matchAll(/ForeignKeyConstraint\(\[[^\]]+\],\s*\["([^"]+)"\]/g)].map((match) => match[1]);
-  for (const target of foreignKeyTargets) {
+  const foreignKeyTargets = [...upgradeBlock.matchAll(/ForeignKeyConstraint\(\[[^\]]+\],\s*\["([^"]+)"\]/g)];
+  for (const match of foreignKeyTargets) {
+    const target = match[1];
     const [schema] = target.split(".");
-    if (schema && schema !== "admin") {
+    const blockStart = upgradeBlock.lastIndexOf("op.create_table(", match.index);
+    const blockEndCandidate = upgradeBlock.indexOf("op.create_table(", match.index);
+    const blockEnd = blockEndCandidate === -1 ? upgradeBlock.length : blockEndCandidate;
+    const sourceBlock = upgradeBlock.slice(blockStart, blockEnd);
+    const sourceSchema = sourceBlock.match(/schema="([^"]+)"/)?.[1];
+    if (schema && sourceSchema && schema !== sourceSchema) {
       errors.push(`${relativePath} contains cross-schema FK target ${target}; use contract references unless explicitly approved.`);
     }
   }
@@ -136,6 +142,10 @@ for (const fragment of requiredQaDemoFragments) {
 }
 
 const permissionSeed = readText("backend/services/admin-service/app/seeds/permissions.py");
+const permissionSeedScript = readText("backend/scripts/seed_admin_mvp.py");
+for (const fragment of ["DEPRECATED_PERMISSION_CODES", '"production.labor.read"', "set status = 'inactive'", "code = any(:deprecated_codes)"]) {
+  if (!permissionSeedScript.includes(fragment)) errors.push(`backend/scripts/seed_admin_mvp.py must reconcile deprecated labor permissions: ${fragment}`);
+}
 if (!permissionSeed.includes("extract_permission_seeds")) {
   errors.push("Permission seed extractor must expose extract_permission_seeds.");
 }

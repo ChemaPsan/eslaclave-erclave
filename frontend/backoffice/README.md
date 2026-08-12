@@ -23,23 +23,24 @@ POST /v1/provisioning/tenant-onboarding
 ```js
 window.ERCLAVE_CONFIG = {
   apiMode: "api",
-  authMode: "firebase-local",
-  apiBaseUrl: "http://127.0.0.1:8010",
-  firebaseConfig: {
-    apiKey: "...",
-    authDomain: "erclave.firebaseapp.com",
-    projectId: "erclave",
-    storageBucket: "erclave.firebasestorage.app",
-    messagingSenderId: "...",
-    appId: "..."
+  authMode: "firebase-emulator",
+  localApiBaseUrl: "http://127.0.0.1:8000",
+  firebaseAuthEmulatorUrl: "http://127.0.0.1:9099",
+  localFirebaseConfig: {
+    apiKey: "demo-api-key",
+    authDomain: "demo-erclave.localhost",
+    projectId: "demo-erclave",
+    appId: "demo-erclave-web"
   }
 };
 ```
 
+El frontend local se conecta exclusivamente a Firebase Auth Emulator. La configuracion `firebaseConfig` del proyecto QA solo se usa fuera de `localhost` y `127.0.0.1`.
+
 En backend, cuando `ERCLAVE_AUTH_MODE=firebase`, el correo autenticado debe estar en:
 
 ```text
-ERCLAVE_BACKOFFICE_ADMIN_EMAILS=admin@eslaclave.com,soporte@eslaclave.com
+ERCLAVE_BACKOFFICE_ADMIN_EMAILS=admin.qa@erclave.local
 ```
 
 Para que Firebase envie el correo de activacion/restablecimiento al owner inicial:

@@ -41,6 +41,7 @@ Usar:
 
 ```text
 ERCLAVE_API_PUBLIC_BASE_URL
+ERCLAVE_APP_PUBLIC_BASE_URL
 ```
 
 Ejemplos:
@@ -59,6 +60,10 @@ http://localhost:4173
 ```
 
 Esto permite conectar la maqueta frontend local al backend local sin abrir la API a origenes externos.
+
+En QA y Produccion el proceso falla al iniciar si `ERCLAVE_API_PUBLIC_BASE_URL`, `ERCLAVE_ADMIN_SERVICE_URL` o `ERCLAVE_CORS_ORIGINS` contienen HTTP o hosts locales. Tambien exige Firebase real, proyecto Firebase y una URL de base obtenida por referencia desde Secret Manager. Inventory y RH pueden resolver su URL efectiva mediante `ERCLAVE_INVENTORY_DATABASE_URL` y `ERCLAVE_HR_DATABASE_URL`, respectivamente.
+
+Las imagenes se construyen desde la raiz del repositorio con `docker build -f backend/Dockerfile .`, indicando `ERCLAVE_SERVICE_ADAPTER` como argumento de build. El contexto raiz permite empacar los contratos OpenAPI que usa la configuracion estructural del tenant QA; `.dockerignore` excluye frontend, documentacion, pruebas y archivos locales. El pipeline registra y despliega el digest, nunca una etiqueta mutable. La imagen incluye Alembic y los scripts estructurales para que la migracion y la configuracion QA aprobadas se ejecuten mediante una identidad y Cloud Run Jobs separados.
 
 ## Instalacion local
 
@@ -83,6 +88,25 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
+## Arranque local aislado
+
+En Windows, el comando canonico levanta PostgreSQL local, Firebase Auth Emulator, frontend y las APIs de Administracion, Produccion, Inventario y RH:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_local.ps1
+```
+
+El preflight rechaza una base distinta de `127.0.0.1:5434/erclave_local` y puertos ocupados por procesos anteriores. Firebase usa el proyecto sintetico `demo-erclave`; no consume Firebase QA. Si Java no esta instalado globalmente, el script admite Microsoft OpenJDK 21 portatil bajo `C:\tmp\microsoft-jdk-21`.
+
+Credenciales locales del Emulator:
+
+```text
+admin.qa@erclave.local
+LocalDemo123!
+```
+
+Estas credenciales son exclusivamente locales y no conceden acceso a QA.
+
 ## Ejecutar admin-service
 
 Desde `backend`:
@@ -105,6 +129,18 @@ Desde `backend`:
 ```bash
 uvicorn services.production_service_adapter:app --reload --port 8002
 ```
+
+## Ejecutar inventory-service
+
+Con la migracion de Inventarios aplicada en una base local aislada:
+
+```bash
+uvicorn services.inventory_service_adapter:app --reload --port 8004
+```
+
+No aplicar la migracion de Inventarios a QA o Produccion sin autorizacion explicita. En Windows, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_inventory_local.ps1` inicia el PostgreSQL portatil aislado en `5434` y `inventory-service` en `8004` sin cambiar la politica global.
+
+En QA/Produccion, `production-service` debe configurar `ERCLAVE_AUTH_MODE=firebase`, `ERCLAVE_FIREBASE_PROJECT_ID` y `ERCLAVE_ADMIN_SERVICE_URL`. Cada ruta reenvia el Bearer token a `admin-service /v1/session/context` y valida tenant activo, modulo Produccion y permiso exacto. `X-Tenant-Id` funciona solamente como selector. En modo local `demo` se admite `X-Actor-Id` para pruebas controladas.
 
 Primer corte real de Produccion:
 
@@ -160,6 +196,8 @@ En modo local/demo, `GET /v1/session/context` tambien requiere temporalmente:
 ```text
 X-Actor-Id=<user_id>
 ```
+
+En QA y Produccion, `ERCLAVE_APP_PUBLIC_BASE_URL` debe ser la URL HTTPS publica del frontend (por ejemplo, `https://erclave.web.app`). Firebase redirige a esta URL despues de establecer la contrasena; el servicio rechaza configuraciones locales o HTTP fuera del ambiente local.
 
 En QA con `ERCLAVE_AUTH_MODE=firebase`, `GET /v1/session/context` requiere:
 
@@ -239,7 +277,8 @@ Este seed crea o actualiza:
 - usuario `admin.qa@erclave.local`;
 - rol `owner`;
 - membresia activa;
-- modulos activos `admin`, `production`, `inventory`, `sales` e `integrations`;
+- modulos activos `admin`, `production`, `inventory` y `hr`;
+- cualquier modulo sin microservicio real, incluidos `sales` e `integrations`, queda inactivo en QA;
 - setting inicial `organization.profile` para corporativo, razones sociales y sucursales;
 - asignacion del rol owner a todos los permisos activos.
 

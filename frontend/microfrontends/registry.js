@@ -7,6 +7,7 @@ import { manifest as costos } from "./costos/manifest.js";
 import { manifest as reportes } from "./reportes/manifest.js";
 import { manifest as administracion } from "./administracion/manifest.js";
 import { manifest as contabilidad } from "./contabilidad/manifest.js";
+import { manifest as recursosHumanos } from "./recursos-humanos/manifest.js";
 
 export const microfrontendRegistry = [
   produccion,
@@ -17,5 +18,6 @@ export const microfrontendRegistry = [
   costos,
   reportes,
   administracion,
+  recursosHumanos,
   contabilidad
 ];

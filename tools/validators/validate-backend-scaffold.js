@@ -32,10 +32,19 @@ const requiredPaths = [
   "backend/alembic/versions/20260701_0002_production_service_initial.py",
   "backend/services/production-service/app/main.py",
   "backend/services/production-service/app/api.py",
+  "backend/services/production-service/app/authorization.py",
   "backend/services/production-service/app/repositories.py",
   "backend/services/production-service/app/schemas.py",
   "backend/services/production-service/tests/test_production_api.py",
-  "backend/services/production_service_adapter.py"
+  "backend/services/production_service_adapter.py",
+  "backend/services/hr-service/app/main.py",
+  "backend/services/hr-service/app/api.py",
+  "backend/services/hr-service/app/authorization.py",
+  "backend/services/hr-service/app/repositories.py",
+  "backend/services/hr-service/app/schemas.py",
+  "backend/services/hr-service/tests/test_hr_api.py",
+  "backend/services/hr_service_adapter.py",
+  "backend/alembic/versions/20260730_0010_hr_service_initial.py"
 ];
 
 const requiredFragments = [
@@ -67,6 +76,7 @@ const requiredFragments = [
   ["backend/services/admin-service/app/seeds/catalog.py", "code=\"billing\""],
   ["backend/services/admin-service/app/seeds/catalog.py", "code=\"provisioning\""],
   ["backend/services/admin-service/app/seeds/catalog.py", "code=\"integrations\""],
+  ["backend/services/admin-service/app/seeds/catalog.py", "code=\"hr\""],
   ["backend/services/admin-service/app/seeds/permissions.py", "extract_permission_seeds"],
   ["backend/scripts/seed_admin_mvp.py", "on conflict (code) do update"],
   ["backend/scripts/seed_admin_qa_demo.py", "ACTIVE_DEMO_MODULES"],
@@ -77,9 +87,13 @@ const requiredFragments = [
   ["backend/services/production-service/app/main.py", "include_router(production_router)"],
   ["backend/services/production-service/app/api.py", "@router.get(\"/product-services\""],
   ["backend/services/production-service/app/api.py", "@router.post(\"/product-services\""],
+  ["backend/services/production-service/app/authorization.py", "require_production_access"],
   ["backend/services/production-service/app/repositories.py", "class ProductionRepository"],
   ["backend/services/production-service/app/repositories.py", "def create_product_service"],
-  ["backend/services/production_service_adapter.py", "production-service"]
+  ["backend/services/production_service_adapter.py", "production-service"],
+  ["backend/services/hr-service/app/authorization.py", "require_hr_access"],
+  ["backend/services/hr-service/app/repositories.py", "class HrRepository"],
+  ["backend/services/hr_service_adapter.py", "hr-service"]
 ];
 
 const errors = [];

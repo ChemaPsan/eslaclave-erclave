@@ -18,25 +18,14 @@ function commandHeaders(extraHeaders = {}) {
 export async function getAdminDashboard() {
   const tenantId = getDemoTenantId();
   const session = await getSessionContext();
-  const actorId = session?.user?.id || getDemoActorId();
 
   const tenant = await apiRequest(`/v1/tenants/${tenantId}`);
   const entitlements = await apiRequest(`/v1/tenants/${tenantId}/entitlements`);
   const settings = await apiRequest("/v1/settings?module_code=admin", { headers: { "X-Tenant-Id": tenantId } });
   const users = await apiRequest("/v1/users", { headers: { "X-Tenant-Id": tenantId } });
   const roles = await apiRequest("/v1/roles", { headers: { "X-Tenant-Id": tenantId } });
-  const permissions = await apiRequest("/v1/permissions");
-  const policy = await apiRequest("/v1/policy/evaluate", {
-    method: "POST",
-    body: JSON.stringify({
-      tenant_id: tenantId,
-      actor_id: actorId,
-      module: "admin",
-      resource: "tenant",
-      action: "read",
-      scope: {}
-    })
-  });
+  const permissions = await apiRequest("/v1/permissions", { headers: { "X-Tenant-Id": tenantId } });
+  const canReadTenant = (session?.permissions || []).includes("admin.tenant.read");
 
   return {
     tenant: tenant.data,
@@ -47,7 +36,11 @@ export async function getAdminDashboard() {
     users: users.data,
     roles: roles.data,
     permissions: permissions.data,
-    policy: policy.data
+    policy: {
+      allowed: canReadTenant,
+      reason: canReadTenant ? "session_permission" : "permission_not_granted",
+      matched_permissions: canReadTenant ? ["admin.tenant.read"] : []
+    }
   };
 }
 
@@ -235,12 +228,15 @@ export async function updateTenantRole(roleId, payload) {
 }
 
 
-export async function replaceTenantRolePermissions(roleId, permissionIds) {
+export async function replaceTenantRolePermissions(roleId, assignments, expectedRevision) {
   const tenantId = getDemoTenantId();
   const response = await apiRequest(`/v1/roles/${roleId}/permissions`, {
     method: "PUT",
     headers: commandHeaders({ "X-Tenant-Id": tenantId }),
-    body: JSON.stringify({ permission_ids: permissionIds, scope: {} })
+    body: JSON.stringify({
+      assignments,
+      expected_revision: expectedRevision
+    })
   });
 
   return response.data;

@@ -23,12 +23,12 @@ ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
 ALLOWED_HEADERS = "Accept, Accept-Language, Authorization, Content-Language, Content-Type, Idempotency-Key, X-Actor-Id, X-Correlation-Id, X-Tenant-Id"
 
 
-def _is_allowed_origin(origin: str | None) -> bool:
+def _is_allowed_origin(origin: str | None, allowed_origins: list[str], environment: str) -> bool:
     if not origin:
         return False
-    if origin in ALLOWED_ORIGINS:
+    if origin in allowed_origins:
         return True
-    return origin.startswith("https://erclave--") and origin.endswith(".web.app")
+    return environment == "qa" and origin.startswith("https://erclave--") and origin.endswith(".web.app")
 
 
 def _private_network_preflight_response(origin: str) -> PlainTextResponse:
@@ -59,8 +59,8 @@ def create_app() -> FastAPI:
     app.include_router(admin_router)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(ALLOWED_ORIGINS),
-        allow_origin_regex=QA_FIREBASE_ORIGIN_REGEX,
+        allow_origins=settings.cors_origin_list,
+        allow_origin_regex=QA_FIREBASE_ORIGIN_REGEX if settings.environment == "qa" else None,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[
@@ -78,7 +78,7 @@ def create_app() -> FastAPI:
         if (
             request.method == "OPTIONS"
             and request.headers.get("access-control-request-private-network") == "true"
-            and _is_allowed_origin(request.headers.get("origin"))
+            and _is_allowed_origin(request.headers.get("origin"), settings.cors_origin_list, settings.environment)
         ):
             return _private_network_preflight_response(request.headers["origin"])
         response = await call_next(request)

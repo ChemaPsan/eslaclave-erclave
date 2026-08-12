@@ -51,6 +51,7 @@ frontend/
   shell/                  Orquestador visual: layout, nav, idioma, tema, sesion.
   microfrontends/
     produccion/
+    recursos-humanos/
     almacenes/
     compras/
     ventas/
@@ -64,6 +65,7 @@ frontend/
 backend/
   services/
     production-service/
+    hr-service/
     inventory-service/
     purchasing-service/
     sales-service/
@@ -139,6 +141,7 @@ export function unmount() {
 | Servicio | Duenio de datos | Eventos que publica | Eventos que consume |
 |---|---|---|---|
 | production-service | productos/servicios productivos, recetas, ordenes, etapas, consumos | `production.order.created`, `production.order.completed`, `production.resource.shortage.detected` | `inventory.reservation.confirmed`, `purchasing.receipt.completed`, `sales.order.approved` |
+| hr-service | areas, puestos, capacidad nominal, costo hora y elegibilidad productiva | `hr.area.updated`, `hr.position.updated` (futuro) | cambios de entitlement y permisos resueltos sin persistir copias |
 | inventory-service | almacenes, ubicaciones, existencias, reservas, movimientos, kardex | `inventory.reservation.created`, `inventory.stock.moved`, `inventory.shortage.detected` | `production.order.created`, `purchasing.receipt.completed`, `sales.order.approved` |
 | purchasing-service | proveedores, requisiciones, ordenes de compra, recepciones | `purchasing.requisition.created`, `purchasing.order.sent`, `purchasing.receipt.completed` | `inventory.shortage.detected`, `production.resource.shortage.detected` |
 | sales-service | clientes, cotizaciones, pedidos, entregas, devoluciones | `sales.order.approved`, `sales.delivery.completed`, `sales.return.created` | `inventory.reservation.confirmed`, `production.order.completed` |

@@ -223,7 +223,7 @@ Administra tenants, usuarios, roles, permisos, modulos activos, unidades de nego
 | `PATCH` | `/v1/tenants/{tenant_id}` | `admin.tenant.update` | No | Editar datos generales del tenant. |
 | `POST` | `/v1/tenants/{tenant_id}/suspend` | `admin.tenant.suspend` | Si | Suspender tenant. |
 | `POST` | `/v1/tenants/{tenant_id}/reactivate` | `admin.tenant.reactivate` | Si | Reactivar tenant. |
-| `GET` | `/v1/tenants/{tenant_id}/entitlements` | interno | No | Consultar modulos y limites. |
+| `GET` | `/v1/tenants/{tenant_id}/entitlements` | `admin.tenant.read` | No | Consultar modulos y limites del tenant seleccionado. |
 | `PUT` | `/v1/tenants/{tenant_id}/entitlements/{module_code}` | interno o `admin.entitlement.manage` | Si | Activar/desactivar modulo. |
 | `POST` | `/v1/policy/evaluate` | interno | No | Evaluar permiso y alcance. |
 | `GET` | `/v1/users` | `admin.user.read` | No | Listar usuarios del tenant. |
@@ -233,11 +233,14 @@ Administra tenants, usuarios, roles, permisos, modulos activos, unidades de nego
 | `GET` | `/v1/roles` | `admin.role.read` | No | Listar roles. |
 | `POST` | `/v1/roles` | `admin.role.create` | Si | Crear rol. |
 | `PATCH` | `/v1/roles/{role_id}` | `admin.role.update` | No | Editar rol. |
-| `PUT` | `/v1/roles/{role_id}/permissions` | `admin.role.update` | Si | Reemplazar permisos de rol. |
+| `GET` | `/v1/permissions` | `admin.role.read` | No | Catalogo tenant-asignable con metadata ES/EN, riesgo y disponibilidad por entitlement. |
+| `PUT` | `/v1/roles/{role_id}/permissions` | `admin.role.permissions.manage` | Si | Aplicar asignaciones de un rol con scope, revision esperada y diff auditable. |
 | `GET` | `/v1/business-units` | `admin.business_unit.read` | No | Listar unidades de negocio. |
 | `POST` | `/v1/business-units` | `admin.business_unit.create` | Si | Crear unidad de negocio. |
 | `GET` | `/v1/settings` | `admin.setting.read` | No | Consultar parametros. |
 | `PUT` | `/v1/settings/{key}` | `admin.setting.update` | Si | Actualizar parametro. |
+
+El reemplazo de permisos acepta asignaciones `{permission_id, scope}` y `expected_revision`. El backend bloquea la fila del rol, compara revision, valida clasificacion/asignabilidad y aplica solo agregados, retirados o scopes cambiados. Una revision obsoleta devuelve `409 permission_set_conflict`; reusar `Idempotency-Key` con otro payload devuelve `409 idempotency_key_reused`. El payload legado `permission_ids + scope` es transitorio y no debe usarse por el editor nuevo.
 
 ### 5.3 Request ejemplo: crear tenant
 
@@ -301,10 +304,6 @@ Administra productos/servicios, recetas, versiones, recursos productivos, maquin
 | `GET` | `/v1/production/orders/{id}` | `production.order.read` | No | Consultar orden. |
 | `PATCH` | `/v1/production/orders/{id}/status` | `production.order.status.update` | Si | Cambiar estatus de orden. |
 | `PATCH` | `/v1/production/order-stages/{stage_id}` | `production.order_stage.update` | Si | Actualizar etapa. |
-| `GET` | `/v1/production/labor-areas` | `production.labor.read` | No | Listar areas. |
-| `POST` | `/v1/production/labor-areas` | `production.labor.create` | Si | Crear area. |
-| `POST` | `/v1/production/labor-areas/{area_id}/roles` | `production.labor.update` | Si | Crear rol dentro de area. |
-| `PATCH` | `/v1/production/labor-roles/{role_id}` | `production.labor.update` | No | Editar rol/recurso. |
 | `GET` | `/v1/production/machines` | `production.machine.read` | No | Listar maquinaria. |
 | `POST` | `/v1/production/machines` | `production.machine.create` | Si | Crear maquinaria. |
 | `PATCH` | `/v1/production/machines/{machine_id}` | `production.machine.update` | No | Editar maquinaria. |
@@ -367,6 +366,23 @@ Administra productos/servicios, recetas, versiones, recursos productivos, maquin
 - `production_order.status_changed`
 - `production_order.completed`
 - `production_order_stage.status_changed`
+
+---
+
+## 6A. `hr-service`
+
+Es dueno de areas y puestos. Requiere tenant activo, membresia vigente, entitlement `hr` y el permiso exacto.
+
+| Metodo | Ruta | Permiso | Idempotencia | Proposito |
+|---|---|---|---|---|
+| `GET` | `/v1/hr/areas` | `hr.area.read` | No | Listar areas del tenant. |
+| `POST` | `/v1/hr/areas` | `hr.area.create` | Si | Crear area independiente. |
+| `PATCH` | `/v1/hr/areas/{id}` | `hr.area.update` | Si | Editar o inactivar area. |
+| `GET` | `/v1/hr/positions` | `hr.position.read` | No | Listar puestos; admite `area_id` y `production_only`. |
+| `POST` | `/v1/hr/positions` | `hr.position.create` | Si | Crear puesto dentro de un area activa existente. |
+| `PATCH` | `/v1/hr/positions/{id}` | `hr.position.update` | Si | Editar, mover o inactivar puesto. |
+
+El contrato canonico es `contracts/api/hr-service.openapi.yaml`. Todas las consultas se filtran por tenant y el FK compuesto impide referencias cruzadas.
 
 ---
 

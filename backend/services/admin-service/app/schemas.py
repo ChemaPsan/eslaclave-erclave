@@ -250,12 +250,21 @@ class UserResponse(BaseModel):
     data: UserRead
 
 
+class PermissionAssignmentRead(BaseModel):
+    permission_id: str
+    code: str
+    scope: dict[str, Any] = Field(default_factory=dict)
+
+
 class RoleRead(BaseModel):
     id: str
     code: str
     name: str
     status: str
     permissions: list[str] = Field(default_factory=list)
+    permission_assignments: list[PermissionAssignmentRead] = Field(default_factory=list)
+    system_role: bool = False
+    permission_revision: int = 1
 
 
 class RoleListResponse(BaseModel):
@@ -275,8 +284,15 @@ class RoleUpdateRequest(BaseModel):
     status: Literal["active", "inactive"] | None = None
 
 
+class PermissionAssignmentWrite(BaseModel):
+    permission_id: str
+    scope: dict[str, Any] = Field(default_factory=dict)
+
+
 class RolePermissionsReplaceRequest(BaseModel):
-    permission_ids: list[str]
+    assignments: list[PermissionAssignmentWrite] | None = None
+    expected_revision: int | None = Field(default=None, ge=1)
+    permission_ids: list[str] | None = None
     scope: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -291,6 +307,16 @@ class PermissionRead(BaseModel):
     resource: str
     action: str
     status: str
+    display_name_es: str
+    display_name_en: str
+    description_es: str
+    description_en: str
+    classification: Literal["tenant", "internal", "public", "integration"]
+    assignable_to_tenant_role: bool
+    risk_level: Literal["low", "standard", "high", "critical"]
+    sort_order: int = 1000
+    entitlement_status: Literal["active", "inactive", "suspended"] | None = None
+    available: bool = False
 
 
 class PermissionListResponse(BaseModel):

@@ -11,6 +11,8 @@ La regla base es simple: cada modulo debe tener dos agentes.
 
 Antes de cambiar un modulo, se debe consultar al agente de negocio para validar si el flujo tiene sentido operativo y al agente tecnico para revisar impacto en codigo, datos, integraciones y trazabilidad.
 
+Todo agente tecnico y transversal debe cerrar cada cambio con `APIs afectadas`: contratos modificados, endpoints consumidos sin cambio y APIs no tocadas. Debe indicar metodo, ruta, servicio, permiso y cambio contractual cuando aplique; si no hubo APIs, debe declarar `Ninguna`. La misma informacion se registra en `TRAZABILIDAD.md`.
+
 Cada agente debe poder responder:
 
 - Que problema resuelve este modulo.
@@ -25,6 +27,8 @@ Cada agente debe poder responder:
 Este agente no pertenece a un modulo especifico. Debe consultarse antes de tomar decisiones de arquitectura, tecnologia, ambientes, despliegue, seguridad, multi-tenancy, datos compartidos, contratos globales o migracion de maqueta a plataforma real.
 
 ### Arquitecto senior de plataforma SaaS
+
+**Frontera obligatoria de ambientes:** aplicar `docs/arquitectura/fronteras_ambientes_local_qa_produccion.md` y la skill `$erclave-environment-boundaries` antes de aprobar arranques, conexiones, pruebas, migraciones, seeds, despliegues o promociones. Local usa Firebase Emulator y recursos locales; cualquier recurso QA convierte la sesion en `local conectado a QA` y requiere autorizacion explicita.
 
 **Rol principal:** definir y gobernar la arquitectura tecnica de ERClave para llevar los modulos MVP desde la maqueta hacia ambientes reales de QA y Produccion.
 
@@ -455,6 +459,8 @@ Frase guia:
 
 ### Ingeniero senior de QA, validadores y release
 
+**Frontera obligatoria de release:** verificar la matriz efectiva de ambiente antes de ejecutar pruebas o despliegues. El usuario propietario es el aprobador unico de releases y autodeploys, siempre despues de pruebas locales. Produccion debe cumplir RPO 15 minutos y RTO 2 horas, sin crear infraestructura productiva antes de su autorizacion.
+
 **Rol principal:** definir, automatizar y gobernar validaciones, pruebas, checks de arquitectura, CI/CD, criterios de QA y promocion segura hacia Produccion.
 
 **Mision:** convertir reglas de agentes y documentos en validadores repetibles, pruebas automatizadas y criterios objetivos de release, sin depender de memoria, buena suerte o revisiones manuales cuando una regla pueda verificarse por script.
@@ -557,6 +563,7 @@ Frase guia:
 | Sinergia modular | Especialista en coordinacion ERP entre areas | Arquitecto de contratos, eventos e integraciones internas |
 | Diseno, experiencia y localizacion | Especialista UX/UI de marca, experiencia operativa y lenguaje bilingue | Especialista tecnico de frontend, sistema visual e i18n |
 | Produccion | Especialista en flujos productivos y servicios repetibles | Especialista tecnico del modulo de Produccion |
+| Recursos Humanos | Especialista en estructura organizacional y capacidad laboral | Especialista tecnico del modulo de Recursos Humanos |
 | Almacenes e inventarios | Especialista en inventario, reservas, kardex y ubicaciones | Especialista tecnico de inventarios, movimientos y existencias |
 | Compras y abastecimiento | Especialista en requisiciones, proveedores y reabastecimiento | Especialista tecnico de compras, recepciones e integracion con inventario |
 | Ventas y clientes | Especialista comercial, pedidos, entregas y margen | Especialista tecnico de ventas, reservas y documentos comerciales |
@@ -569,6 +576,25 @@ Frase guia:
 ## Base de conocimiento comun
 
 Todos los agentes deben razonar con una combinacion de mejores practicas operativas, control interno y diseno tecnico. No deben repetir teoria de forma abstracta: deben convertirla en reglas concretas para ERClave.
+
+### Estado operativo vigente
+
+Antes de opinar o aprobar cambios, todos los agentes deben leer `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/PENDIENTES.md` y el documento del modulo. Deben separar explicitamente **desplegado en QA**, **implementado solo en Local**, **prototipo/mock** y **objetivo futuro**.
+
+| Superficie | Estado que los agentes deben asumir |
+|---|---|
+| Local | Frontera aprobada con PostgreSQL y APIs locales mas Firebase Emulator; el arranque canonico con Emulator aun esta pendiente de implementacion. |
+| QA | Frontend/backoffice, Firebase Auth, `admin-service` y `production-service` desplegados; Cloud SQL en `20260730_0011`. |
+| Administracion | API y UI reales en QA, incluidos organizacion, usuarios, roles, permisos, entitlements y backoffice. |
+| Produccion | Productos/servicios y recetas/versiones reales en QA; ordenes y automatizaciones posteriores no deben presentarse como completamente promovidas. |
+| Almacenes/Inventario | Servicio, schema, contrato y UI implementados en Local; schema vacio en QA, sin despliegue confirmado del servicio. Reservas reales siguen fuera del alcance actual. |
+| Recursos Humanos | Servicio, schema, contrato y UI implementados en Local; schema vacio en QA, servicio y entitlement aun no desplegados. |
+| Ventas | Flujo funcional de prototipo/local; backend y persistencia QA siguen pendientes. |
+| Compras, Gastos, Costos, Reportes y Contabilidad | Documentacion y prototipo generico; no son servicios reales desplegados. |
+| Primer release | Incluye Administracion, Backoffice, Produccion, Almacenes/Inventario, Recursos Humanos y Ventas, todos certificados previamente en QA. |
+| Produccion real | No existe aun infraestructura productiva autorizada; objetivo futuro RPO 15 minutos y RTO 2 horas. |
+
+Ningun agente puede usar la palabra `real`, `integrado`, `disponible` o `desplegado` sin nombrar el ambiente y la evidencia. La existencia de codigo, contrato, migracion o schema no equivale a servicio desplegado.
 
 ### Modelos de referencia
 
@@ -664,7 +690,7 @@ El agente de negocio debe dominar:
 - Paleta de marca: morado principal `#9B0FC9`, morado intenso `#6106A0`, violeta oscuro `#300C57`, fondo premium `#190F34` y acentos magenta `#F557D3`.
 - Paleta semantica: verde para exito, rojo para riesgo/error, naranja para advertencia, azul para informacion y morado para seleccion/actividad.
 - Experiencia SaaS operativa: dashboards densos pero ordenados, navegacion clara, acciones visibles y poca friccion para tareas repetidas.
-- Consistencia entre modulos: Produccion, Almacenes, Compras, Ventas, Gastos, Costos, Reportes, Administracion y Contabilidad deben sentirse como una sola app.
+- Consistencia entre modulos: Produccion, Recursos Humanos, Almacenes, Compras, Ventas, Gastos, Costos, Reportes, Administracion y Contabilidad deben sentirse como una sola app.
 - Redaccion de interfaz: textos breves, accionables, localizables, sin parrafos largos ni explicaciones innecesarias dentro de pantallas de trabajo.
 - Lenguaje bilingue: todo texto de interfaz debe poder entenderse en Espanol e Ingles sin perder tono, accion ni contexto operativo.
 - Glosario funcional: mantener consistencia en terminos como orden, receta, recurso, almacen, requisicion, pedido, gasto, costo, asiento, reporte y permiso.
@@ -740,6 +766,29 @@ Criterios de dominio:
 - Puede reconstruir la existencia desde movimientos.
 - Puede detectar cuando un flujo actualiza existencia pero olvida kardex, costo o documento origen.
 - Puede definir validaciones para lotes, series, ubicaciones y reservas.
+
+### Recursos Humanos
+
+El agente de negocio debe dominar:
+
+- Areas y puestos como catalogos separados, con identidad estable y sin altas implicitas por texto libre.
+- Capacidad nominal, minutos disponibles, costo por hora y elegibilidad para intervenir en produccion.
+- Limite del MVP: no incluye nomina, reclutamiento, expedientes ni datos personales.
+- Impacto de inactivar un area o puesto ya referenciado por una receta: no rompe snapshots historicos y evita nuevas selecciones.
+
+El agente tecnico debe dominar:
+
+- Ownership exclusivo de `hr-service`, esquema `hr`, contrato OpenAPI y microfrontend `recursos-humanos`.
+- Entitlement `hr`, permisos `hr.area.*` y `hr.position.*`, y autorizacion efectiva resuelta por `admin-service`.
+- Aislamiento por tenant, FK compuesto area-puesto, idempotencia y auditoria de mutaciones.
+- Integracion de solo lectura con Produccion y Costos mediante IDs estables y snapshots; ningun consumidor escribe tablas de RH.
+
+Criterios de dominio:
+
+- Puede impedir la creacion de un puesto sin area activa del mismo tenant.
+- Puede separar acceso al modulo, lectura, creacion y edicion por recurso.
+- Puede detectar PII o alcance de nomina introducido accidentalmente en este MVP.
+- Puede explicar que ocurre con recetas existentes cuando cambia el costo o estatus de un puesto.
 
 ### Compras y abastecimiento
 
@@ -936,13 +985,13 @@ Responsabilidad:
 - Definir contratos de datos entre modulos.
 - Revisar eventos, IDs, estados y documentos origen.
 - Detectar impactos tecnicos antes de modificar un flujo compartido.
-- Vigilar compatibilidad entre frontend mock, API futura y persistencia.
+  - Vigilar compatibilidad entre prototipos declarados, APIs existentes, contratos y persistencia por ambiente.
 
 Preguntas que responde:
 
 - Que modelo o estructura se rompe si cambia este campo?
 - Que modulo consume este estado?
-- Que endpoint o servicio futuro debe existir?
+- Que endpoint existe hoy, en que ambiente, y cual permanece pendiente?
 - Que validaciones deben estar en frontend y cuales en backend?
 
 Entregables:
@@ -1082,6 +1131,9 @@ Responsabilidad:
 - Revisar que Firebase/Auth solo resuelva identidad y que la autorizacion viva en `admin-service`.
 - Detectar impacto tecnico de activar, ocultar o restringir funciones.
 - Definir dependencias de configuracion para frontend, API y datos.
+- Bloquear permisos `internal`, `public` o de integracion tecnica en roles humanos mediante enforcement backend, no solo ocultamiento visual.
+- Exigir revision optimista, idempotencia real, diff auditable y preservacion de `scope` al editar permisos.
+- Validar que busqueda, filtros y acciones masivas nunca alteren permisos ocultos ni apliquen plantillas implicitas.
 
 Preguntas que responde:
 
@@ -1093,6 +1145,8 @@ Preguntas que responde:
 - Como se invalida o refresca el contexto cuando cambian roles, modulos, membresia o estado de suscripcion?
 - Que defaults necesita una empresa nueva?
 - Que validaciones deben bloquear acciones no permitidas?
+- Como se evita escalacion al asignar permisos internos o de modulos no disponibles?
+- Como se conserva la personalizacion y el scope ante filtros, concurrencia o reintentos?
 
 Entregables:
 
@@ -1136,21 +1190,21 @@ Dependencias principales:
 
 Responsabilidad:
 
-- Entender como Produccion esta representado en `frontend/app.js`, `frontend/data/modules.js`, `frontend/data/mockDb.js` y `frontend/utils/production.js`.
+- Entender como Produccion se reparte entre `frontend/api/production.js`, `frontend/app.js`, `production-service`, su OpenAPI y los datos mock que aun esten declarados.
 - Revisar dependencias con submodulos de productos/servicios, recetas, ordenes, recursos, areas, puestos y maquinaria.
-- Detectar que falta conectar en API futura, persistencia, permisos, reportes e integraciones.
+- Distinguir productos/servicios y recetas/versiones reales en QA de ordenes y automatizaciones que permanecen locales o pendientes.
 
 Preguntas que responde:
 
 - Que funciones del frontend renderizan o modifican Produccion?
-- Que datos mock deben convertirse en entidades reales?
+- Que datos siguen siendo mock/local y que datos ya son reales en QA?
 - Que validaciones estan solo en UI y deben pasar al backend?
 - Que se rompe si cambia receta, orden, recurso o estado?
 
 Entregables:
 
 - Mapa tecnico de funciones y datos.
-- Lista de endpoints pendientes.
+- Matriz de endpoints existentes y pendientes por ambiente.
 - Checklist de integracion con almacenes, compras, costos y contabilidad.
 - Riesgos antes de actualizar el modulo.
 
@@ -1183,13 +1237,13 @@ Dependencias principales:
 
 Responsabilidad:
 
-- Revisar estructuras de existencias, movimientos, reservas y kardex.
+- Custodiar `inventory-service`, su schema, OpenAPI, cliente frontend, movimientos inmutables, balances y Kardex calculados.
 - Validar que cada movimiento tenga documento origen, costo y trazabilidad.
-- Detectar si frontend, API o base de datos no actualizan disponibilidad de forma consistente.
+- Distinguir el servicio implementado en Local del schema vacio y servicio aun no desplegado en QA; no presentar Reservas como reales.
 
 Preguntas que responde:
 
-- Que entidad calcula disponible vs reservado?
+- Como se aplica hoy `available_quantity = on_hand_quantity` y `reserved_quantity = 0` hasta implementar Reservas?
 - Que eventos deben recalcular inventario?
 - Que validaciones deben ser transaccionales?
 - Que reportes dependen del kardex?
@@ -1198,8 +1252,55 @@ Entregables:
 
 - Modelo tecnico de movimientos.
 - Reglas de recalculo de existencia.
-- Endpoints pendientes de inventario.
+- Matriz de endpoints implementados, pendientes y desplegados por ambiente.
 - Pruebas criticas de concurrencia y reservas.
+
+### Recursos Humanos
+
+#### Agente de negocio: Especialista en estructura organizacional y capacidad laboral
+
+Responsabilidad:
+
+- Definir areas y puestos como catalogos independientes y gobernados.
+- Validar costo por hora, capacidad nominal y la bandera de intervencion en produccion.
+- Proteger el alcance MVP para que no se confunda con nomina, reclutamiento o expediente laboral.
+
+Preguntas que responde:
+
+- Que datos pertenecen al area y cuales al puesto?
+- Cuando un puesto puede seleccionarse en una receta?
+- Que debe ocurrir al inactivar un area o puesto ya usado historicamente?
+- Como se interpreta el costo por hora sin convertir RH en propietario del costeo final?
+
+Dependencias principales:
+
+- Administracion: entitlement `hr`, roles y permisos efectivos.
+- Produccion: consulta de puestos elegibles y snapshots en recetas.
+- Costos: consumo de costo hora como referencia.
+- Reportes: indicadores agregados sin exponer datos personales.
+
+#### Agente tecnico: Especialista tecnico del modulo de Recursos Humanos
+
+Responsabilidad:
+
+- Custodiar `hr-service`, el esquema `hr`, su OpenAPI y el microfrontend `recursos-humanos`.
+- Exigir filtro por `tenant_id`, FK compuesto, idempotencia, auditoria y validacion backend de permisos.
+- Evitar imports, escrituras o FKs fisicas entre servicios; las integraciones usan contratos e IDs estables.
+- Coordinar con Arquitectura, Datos, Seguridad, API, QA y los agentes consumidores ante cada cambio de contrato.
+
+Preguntas que responde:
+
+- Que endpoint y permiso gobiernan cada accion de areas o puestos?
+- Como se evita vincular un puesto con un area de otro tenant?
+- Que snapshot necesita Produccion para conservar historia reproducible?
+- Que migracion, prueba de aislamiento y contrato deben actualizarse juntos?
+
+Entregables:
+
+- Reglas funcionales y matriz `hr.area.*` / `hr.position.*`.
+- Contrato OpenAPI y migraciones versionadas.
+- Pruebas de tenant, permisos, idempotencia y area invalida.
+- Registro de impactos sobre Produccion, Costos, Reportes y Administracion.
 
 ### Compras y abastecimiento
 
@@ -1486,18 +1587,38 @@ Entregables:
 
 Antes de hacer una modificacion funcional o tecnica:
 
-1. Identificar modulo y submodulo afectado.
-2. Consultar agente de negocio correspondiente.
-3. Consultar agente tecnico correspondiente.
-4. Identificar microfrontend dueno y confirmar que el cambio no pertenece al shell o shared.
-5. Identificar microservicio dueno y confirmar que no invade datos de otro servicio.
-6. Revisar dependencias con otros modulos.
-7. Revisar contratos afectados: API, eventos, permisos, estados, UI y datos.
-8. Definir cambios esperados en frontend, API, datos, permisos y reportes.
-9. Evaluar blast radius: que puede romperse si cambia este boton, formulario, estado o endpoint.
-10. Validar localizacion: todo texto visible nuevo o modificado debe existir en Espanol e Ingles con las mismas variables dinamicas.
-11. Ejecutar validaciones tecnicas disponibles.
-12. Registrar el cambio en `TRAZABILIDAD.md`.
+1. Leer el estado operativo vigente y clasificar cada capacidad como QA, Local, mock o futura.
+2. Identificar modulo y submodulo afectado.
+3. Consultar agente de negocio correspondiente.
+4. Consultar agente tecnico correspondiente.
+5. Identificar microfrontend dueno y confirmar que el cambio no pertenece al shell o shared.
+6. Identificar microservicio dueno y confirmar que no invade datos de otro servicio.
+7. Revisar dependencias con otros modulos.
+8. Revisar contratos afectados: API, eventos, permisos, estados, UI y datos.
+9. Definir cambios esperados en frontend, API, datos, permisos y reportes.
+10. Evaluar blast radius: que puede romperse si cambia este boton, formulario, estado o endpoint.
+11. Validar localizacion: todo texto visible nuevo o modificado debe existir en Espanol e Ingles con las mismas variables dinamicas.
+12. Ejecutar validaciones tecnicas disponibles.
+13. Registrar el cambio en `TRAZABILIDAD.md`.
+
+## Estandar responsive obligatorio para todos los agentes
+
+Todo agente que cree o modifique una interfaz debe leer `docs/arquitectura/estandar_responsive_transversal.md` y tratar responsive, accesibilidad y localizacion como criterios de aceptacion, no como limpieza posterior.
+
+Antes de aprobar un cambio visual debe comprobar:
+
+1. componentes dentro de paneles adaptados con container queries; media queries reservadas para el shell global;
+2. estrategia explicita de tabla: tarjetas accesibles, scroll interno controlado o vista reducida justificada;
+3. textos largos ES/EN, identificadores y mensajes de error sin truncamiento destructivo;
+4. formularios, modales, lookups y acciones operables al pasar a una columna;
+5. guias de flujo, filtros, chips y alertas sin robar ni cubrir el area de trabajo;
+6. estados carga, vacio, error, permisos y datos reales en paneles amplio, intermedio y estrecho;
+7. foco visible, orden de teclado y targets tactiles adecuados;
+8. evidencia segun el checklist QA responsive.
+
+No debe aprobarse una solucion que solo funcione al redimensionar el viewport si el componente se rompe por el ancho que le dejan sidebar, flujo o alertas.
+
+La guia descriptiva de flujo conserva por defecto el riel vertical izquierdo y su compresion. Ningun agente debe convertirla globalmente a formato horizontal para resolver una pantalla particular; toda excepcion usa una clase propia, alcance limitado, evidencia y trazabilidad.
 
 ## Fuentes de referencia
 
@@ -1515,9 +1636,7 @@ Estas referencias sirven como base conceptual para entrenar a los agentes. No su
 
 ## Pendientes
 
-- Convertir esta matriz en prompts operativos para agentes reales.
-- Crear una ficha individual por agente cuando crezca el proyecto.
-- Agregar nivel de prioridad por modulo.
-- Definir responsables humanos o automatizados para cada agente.
-- Convertir la regla obligatoria de segmentacion en checklist automatizable por PR o revision de cambios.
-- Convertir la revision i18n Espanol/Ingles en validacion automatica de paridad de claves y variables.
+- Mantener la tabla de estado operativo sincronizada con `ESTADO_ACTUAL.md` en cada promocion.
+- Crear fichas individuales solo si un agente necesita instrucciones que ya no quepan de forma clara en este documento.
+- Ampliar validadores cuando una nueva regla objetiva no quede cubierta por `validate-agents`, `validate-architecture`, `validate-i18n` o `validate-environment-boundaries`.
+- No asignar responsables humanos adicionales mientras el usuario propietario conserve la aprobacion directa de releases.

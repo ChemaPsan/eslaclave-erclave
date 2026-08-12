@@ -75,8 +75,9 @@ if (fs.existsSync(workflowPath)) {
   if (!workflow.includes("runs-on: ubuntu-latest")) {
     errors.push(".github/workflows/validate.yml should run validators on ubuntu-latest to catch Linux compatibility.");
   }
-  if (!workflow.includes("npm run validate")) {
-    errors.push(".github/workflows/validate.yml should execute npm run validate.");
+  const runsValidation = workflow.includes("npm run validate") || workflow.includes("npm run verify");
+  if (!runsValidation) {
+    errors.push(".github/workflows/validate.yml should execute npm run validate or its npm run verify superset.");
   }
 }
 

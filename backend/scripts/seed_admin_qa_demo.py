@@ -12,7 +12,7 @@ DEFAULT_TENANT_SLUG = "demo-qa"
 DEFAULT_TENANT_NAME = "ERClave Demo QA"
 DEFAULT_ADMIN_EMAIL = "admin.qa@erclave.local"
 DEFAULT_ADMIN_NAME = "Admin QA ERClave"
-ACTIVE_DEMO_MODULES = ("admin", "production", "inventory", "sales", "integrations")
+ACTIVE_DEMO_MODULES = ("admin", "production", "inventory", "hr")
 DEFAULT_EXTRA_OWNER_EMAILS = ("eslaclavecaf@gmail.com",)
 
 
@@ -57,6 +57,7 @@ def apply_demo_seed(
     admin_email: str,
     admin_name: str,
     extra_owner_emails: tuple[str, ...] = DEFAULT_EXTRA_OWNER_EMAILS,
+    active_modules: tuple[str, ...] = ACTIVE_DEMO_MODULES,
 ) -> dict[str, int | str]:
     ids = demo_ids(tenant_slug, admin_email)
     engine = create_engine(database_url)
@@ -246,7 +247,7 @@ def apply_demo_seed(
                 "tenant_id": ids["tenant_id"],
                 "module_code": module_code,
             }
-            for module_code in ACTIVE_DEMO_MODULES
+            for module_code in active_modules
         ]
         connection.execute(
             text(
@@ -280,6 +281,23 @@ def apply_demo_seed(
             module_rows,
         )
 
+        active_module_codes = ", ".join(f"'{module_code}'" for module_code in active_modules)
+        connection.execute(
+            text(
+                f"""
+                update admin.tenant_modules
+                set status = 'inactive',
+                    source = 'seed',
+                    limits = '{{"seed": "qa-demo-disabled"}}'::jsonb,
+                    updated_at = now()
+                where tenant_id = :tenant_id
+                    and module_code not in ({active_module_codes})
+                    and status <> 'inactive'
+                """
+            ),
+            {"tenant_id": ids["tenant_id"]},
+        )
+
         role_permission_count = connection.execute(
             text(
                 """
@@ -298,6 +316,18 @@ def apply_demo_seed(
                     '{"seed": "qa-demo"}'::jsonb
                 from admin.permissions permissions
                 where permissions.status = 'active'
+                    and permissions.classification = 'tenant'
+                    and permissions.assignable_to_tenant_role = true
+                    and (
+                        permissions.module_code = 'admin'
+                        or exists (
+                            select 1
+                            from admin.tenant_modules tenant_modules
+                            where tenant_modules.tenant_id = :tenant_id
+                                and tenant_modules.module_code = permissions.module_code
+                                and tenant_modules.status = 'active'
+                        )
+                    )
                 on conflict (tenant_id, role_id, permission_id) do nothing
                 """
             ),
@@ -384,7 +414,7 @@ def apply_demo_seed(
         **ids,
         "tenant_slug": tenant_slug,
         "admin_email": admin_email.lower(),
-        "active_modules": len(ACTIVE_DEMO_MODULES),
+        "active_modules": len(active_modules),
         "available_permissions": permission_count,
         "role_permissions_inserted": role_permission_count,
         "membership_roles_inserted": membership_role_count,

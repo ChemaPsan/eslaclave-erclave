@@ -62,6 +62,7 @@ Ejemplos:
 |---|---|
 | Admin tenant-scoped | `admin.roles`, `admin.memberships`, `admin.role_permissions`, `admin.membership_roles`, `admin.tenant_modules`, `admin.tenant_settings`, `admin.tenant_usage_daily`. |
 | Produccion | `production.product_services` y futuras tablas de recetas, ordenes, consumos, centros de trabajo y costos. |
+| Recursos Humanos | `hr.labor_areas`, `hr.labor_roles`, `hr.idempotency_records` y eventos de auditoria vinculados al tenant. |
 | Inventarios | almacenes, existencias, movimientos, lotes, traspasos y kardex. |
 | Ventas | clientes, cotizaciones, pedidos, facturas y cobranza. |
 | Compras | proveedores, requisiciones, ordenes, recepciones y cuentas por pagar. |

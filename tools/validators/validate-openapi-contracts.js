@@ -5,6 +5,7 @@ const { fail, fromRoot, ok } = require("./shared");
 const requiredContracts = [
   "admin-service.openapi.yaml",
   "production-service.openapi.yaml",
+  "hr-service.openapi.yaml",
   "inventory-service.openapi.yaml",
   "sales-service.openapi.yaml",
   "billing-service.openapi.yaml",

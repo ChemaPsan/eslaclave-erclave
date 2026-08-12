@@ -1,3 +1,4 @@
+import hashlib
 import json
 from uuid import uuid4
 
@@ -21,6 +22,31 @@ from .schemas import (
     TenantRead,
     UserRead,
 )
+
+
+class RolePermissionConflictError(Exception):
+    pass
+
+
+class RolePermissionValidationError(Exception):
+    pass
+
+
+class RolePermissionForbiddenError(Exception):
+    pass
+
+
+class IdempotencyConflictError(Exception):
+    pass
+
+
+OWNER_PERMISSION_FLOOR = {
+    "admin.tenant.read",
+    "admin.user.read",
+    "admin.role.read",
+    "admin.role.permissions.manage",
+    "admin.entitlement.manage",
+}
 
 
 class AdminRepository:
@@ -623,6 +649,18 @@ class AdminRepository:
                         '{}'::jsonb
                     from admin.permissions permissions
                     where permissions.status = 'active'
+                        and permissions.classification = 'tenant'
+                        and permissions.assignable_to_tenant_role = true
+                        and (
+                            permissions.module_code = 'admin'
+                            or exists (
+                                select 1
+                                from admin.tenant_modules tenant_modules
+                                where tenant_modules.tenant_id = :tenant_id
+                                    and tenant_modules.module_code = permissions.module_code
+                                    and tenant_modules.status = 'active'
+                            )
+                        )
                     on conflict (tenant_id, role_id, permission_id) do nothing
                     """
                 ),
@@ -982,7 +1020,19 @@ class AdminRepository:
                         roles.code,
                         roles.name,
                         roles.status,
-                        coalesce(array_agg(permissions.code order by permissions.code) filter (where permissions.code is not null), '{}') as permissions
+                        roles.system_role,
+                        roles.permission_revision,
+                        coalesce(array_agg(permissions.code order by permissions.code) filter (where permissions.code is not null), '{}') as permissions,
+                        coalesce(
+                            jsonb_agg(
+                                jsonb_build_object(
+                                    'permission_id', permissions.id,
+                                    'code', permissions.code,
+                                    'scope', role_permissions.scope
+                                ) order by permissions.code
+                            ) filter (where permissions.id is not null),
+                            '[]'::jsonb
+                        ) as permission_assignments
                     from admin.membership_roles membership_roles
                     join admin.roles roles
                         on roles.tenant_id = membership_roles.tenant_id
@@ -996,7 +1046,7 @@ class AdminRepository:
                     where membership_roles.tenant_id = :tenant_id
                         and membership_roles.membership_id = :membership_id
                         and roles.status = 'active'
-                    group by roles.id, roles.code, roles.name, roles.status
+                    group by roles.id, roles.code, roles.name, roles.status, roles.system_role, roles.permission_revision
                     order by roles.code
                     """
                 ),
@@ -1036,6 +1086,18 @@ class AdminRepository:
                         and memberships.status = 'active'
                         and roles.status = 'active'
                         and permissions.status = 'active'
+                        and permissions.classification = 'tenant'
+                        and permissions.assignable_to_tenant_role = true
+                        and (
+                            permissions.module_code = 'admin'
+                            or exists (
+                                select 1
+                                from admin.tenant_modules permitted_modules
+                                where permitted_modules.tenant_id = :tenant_id
+                                    and permitted_modules.module_code = permissions.module_code
+                                    and permitted_modules.status = 'active'
+                            )
+                        )
                     order by permissions.code
                     """
                 ),
@@ -1520,6 +1582,7 @@ class AdminRepository:
         idempotency_key: str,
         correlation_id: str,
         metadata: dict,
+        actor_user_id: str | None = None,
     ) -> None:
         connection.execute(
             text(
@@ -1527,6 +1590,7 @@ class AdminRepository:
                 insert into admin.audit_events (
                     id,
                     tenant_id,
+                    actor_user_id,
                     actor_type,
                     action,
                     resource_type,
@@ -1541,7 +1605,8 @@ class AdminRepository:
                 values (
                     :id,
                     :tenant_id,
-                    'system',
+                    cast(:actor_user_id as varchar),
+                    case when cast(:actor_user_id as varchar) is null then 'system' else 'user' end,
                     :action,
                     :resource_type,
                     :resource_id,
@@ -1557,6 +1622,7 @@ class AdminRepository:
             {
                 "id": f"aud_{uuid4().hex[:26]}",
                 "tenant_id": tenant_id,
+                "actor_user_id": actor_user_id,
                 "action": action,
                 "resource_type": resource_type,
                 "resource_id": resource_id,
@@ -1823,7 +1889,19 @@ class AdminRepository:
                         roles.code,
                         roles.name,
                         roles.status,
-                        coalesce(array_agg(permissions.code order by permissions.code) filter (where permissions.code is not null), '{}') as permissions
+                        roles.system_role,
+                        roles.permission_revision,
+                        coalesce(array_agg(permissions.code order by permissions.code) filter (where permissions.code is not null), '{}') as permissions,
+                        coalesce(
+                            jsonb_agg(
+                                jsonb_build_object(
+                                    'permission_id', permissions.id,
+                                    'code', permissions.code,
+                                    'scope', role_permissions.scope
+                                ) order by permissions.code
+                            ) filter (where permissions.id is not null),
+                            '[]'::jsonb
+                        ) as permission_assignments
                     from admin.roles roles
                     left join admin.role_permissions role_permissions
                         on role_permissions.tenant_id = roles.tenant_id
@@ -1831,7 +1909,7 @@ class AdminRepository:
                     left join admin.permissions permissions
                         on permissions.id = role_permissions.permission_id
                     where roles.tenant_id = :tenant_id
-                    group by roles.id, roles.code, roles.name, roles.status
+                    group by roles.id, roles.code, roles.name, roles.status, roles.system_role, roles.permission_revision
                     order by roles.code
                     limit :limit
                     """
@@ -1841,22 +1919,52 @@ class AdminRepository:
 
         return [RoleRead.model_validate(dict(row)) for row in rows]
 
-    def list_permissions(self, limit: int = 200) -> list[PermissionRead]:
+    def list_permissions(self, tenant_id: str, limit: int = 200) -> list[PermissionRead]:
         with self.engine.connect() as connection:
             rows = connection.execute(
                 text(
                     """
-                    select id, code, module_code, resource, action, status
-                    from admin.permissions
-                    where status = 'active'
-                    order by module_code, resource, action, code
+                    select
+                        permissions.id,
+                        permissions.code,
+                        permissions.module_code,
+                        permissions.resource,
+                        permissions.action,
+                        permissions.status,
+                        permissions.display_name_es,
+                        permissions.display_name_en,
+                        permissions.description_es,
+                        permissions.description_en,
+                        permissions.classification,
+                        permissions.assignable_to_tenant_role,
+                        permissions.risk_level,
+                        permissions.sort_order,
+                        tenant_modules.status as entitlement_status,
+                        case
+                            when permissions.module_code = 'admin' then true
+                            when tenant_modules.status = 'active' then true
+                            else false
+                        end as available
+                    from admin.permissions permissions
+                    left join admin.tenant_modules tenant_modules
+                        on tenant_modules.tenant_id = :tenant_id
+                        and tenant_modules.module_code = permissions.module_code
+                    where permissions.status = 'active'
+                        and permissions.classification = 'tenant'
+                        and permissions.assignable_to_tenant_role = true
+                    order by permissions.sort_order, permissions.module_code, permissions.resource, permissions.action, permissions.code
                     limit :limit
                     """
                 ),
-                {"limit": limit},
+                {"tenant_id": tenant_id, "limit": limit},
             ).mappings().all()
 
         return [PermissionRead.model_validate(dict(row)) for row in rows]
+
+    def get_role(self, tenant_id: str, role_id: str) -> RoleRead | None:
+        with self.engine.connect() as connection:
+            row = self._get_role(connection, tenant_id, role_id)
+        return RoleRead.model_validate(dict(row)) if row else None
 
     def create_role(
         self,
@@ -1918,6 +2026,8 @@ class AdminRepository:
             before = self._get_role(connection, tenant_id, role_id)
             if before is None:
                 return None
+            if before["system_role"] and status == "inactive":
+                raise RolePermissionForbiddenError("system_role_cannot_be_inactivated")
             row = connection.execute(
                 text(
                     """
@@ -1961,44 +2071,222 @@ class AdminRepository:
         self,
         tenant_id: str,
         role_id: str,
-        permission_ids: list[str],
-        scope: dict,
+        assignments: list[dict],
+        expected_revision: int,
         idempotency_key: str,
         correlation_id: str,
+        actor_email: str | None = None,
     ) -> RoleRead | None:
+        normalized = sorted(
+            [
+                {"permission_id": assignment["permission_id"], "scope": assignment.get("scope") or {}}
+                for assignment in assignments
+            ],
+            key=lambda item: item["permission_id"],
+        )
+        permission_ids = [item["permission_id"] for item in normalized]
+        if len(permission_ids) != len(set(permission_ids)):
+            raise RolePermissionValidationError("duplicate_permission")
+        operation = f"admin.role.permissions.replace:{role_id}"
+        request_hash = hashlib.sha256(
+            json.dumps(
+                {"role_id": role_id, "assignments": normalized, "expected_revision": expected_revision},
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+
         with self.engine.begin() as connection:
-            before = self._get_role(connection, tenant_id, role_id)
-            if before is None:
-                return None
-            valid_permission_ids = connection.execute(
+            connection.execute(
+                text("select pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+                {"lock_key": f"{tenant_id}:{operation}:{idempotency_key}"},
+            )
+            existing_command = connection.execute(
                 text(
                     """
-                    select id
-                    from admin.permissions
-                    where id = any(:permission_ids) and status = 'active'
+                    select request_hash, response_payload
+                    from admin.command_idempotency
+                    where tenant_id = :tenant_id
+                        and operation = :operation
+                        and idempotency_key = :idempotency_key
                     """
                 ),
-                {"permission_ids": permission_ids},
-            ).scalars().all()
-            if len(valid_permission_ids) != len(set(permission_ids)):
+                {"tenant_id": tenant_id, "operation": operation, "idempotency_key": idempotency_key},
+            ).mappings().first()
+            if existing_command:
+                if existing_command["request_hash"] != request_hash:
+                    raise IdempotencyConflictError("idempotency_key_reused")
+                if existing_command["response_payload"] is not None:
+                    return RoleRead.model_validate(existing_command["response_payload"])
+                raise RolePermissionConflictError("command_in_progress")
+
+            before = self._get_role(connection, tenant_id, role_id, for_update=True)
+            if before is None:
                 return None
+            if before["permission_revision"] != expected_revision:
+                raise RolePermissionConflictError("permission_revision_conflict")
 
             connection.execute(
                 text(
                     """
-                    delete from admin.role_permissions
-                    where tenant_id = :tenant_id and role_id = :role_id
+                    insert into admin.command_idempotency (
+                        id, tenant_id, operation, idempotency_key, request_hash
+                    ) values (:id, :tenant_id, :operation, :idempotency_key, :request_hash)
+                    """
+                ),
+                {
+                    "id": f"cmd_{uuid4().hex[:26]}",
+                    "tenant_id": tenant_id,
+                    "operation": operation,
+                    "idempotency_key": idempotency_key,
+                    "request_hash": request_hash,
+                },
+            )
+
+            current_rows = connection.execute(
+                text(
+                    """
+                    select
+                        role_permissions.permission_id,
+                        role_permissions.scope,
+                        permissions.code,
+                        permissions.module_code,
+                        permissions.status,
+                        permissions.classification,
+                        permissions.assignable_to_tenant_role,
+                        tenant_modules.status as entitlement_status
+                    from admin.role_permissions role_permissions
+                    join admin.permissions permissions on permissions.id = role_permissions.permission_id
+                    left join admin.tenant_modules tenant_modules
+                        on tenant_modules.tenant_id = role_permissions.tenant_id
+                        and tenant_modules.module_code = permissions.module_code
+                    where role_permissions.tenant_id = :tenant_id and role_permissions.role_id = :role_id
                     """
                 ),
                 {"tenant_id": tenant_id, "role_id": role_id},
-            )
-            for permission_id in permission_ids:
+            ).mappings().all()
+            current = {row["permission_id"]: dict(row) for row in current_rows}
+
+            permission_rows = []
+            if permission_ids:
+                permission_rows = connection.execute(
+                    text(
+                        """
+                        select id, code, module_code, status, classification, assignable_to_tenant_role
+                        from admin.permissions
+                        where id = any(:permission_ids)
+                        """
+                    ),
+                    {"permission_ids": permission_ids},
+                ).mappings().all()
+            requested_permissions = {row["id"]: dict(row) for row in permission_rows}
+            if len(requested_permissions) != len(permission_ids):
+                raise RolePermissionValidationError("permission_not_found")
+
+            requested = {item["permission_id"]: item for item in normalized}
+            added_ids = set(requested) - set(current)
+            removal_candidates = set(current) - set(requested)
+            protected_removal_ids = {
+                permission_id
+                for permission_id in removal_candidates
+                if (
+                    current[permission_id]["status"] != "active"
+                    or current[permission_id]["classification"] != "tenant"
+                    or not current[permission_id]["assignable_to_tenant_role"]
+                    or (
+                        current[permission_id]["module_code"] != "admin"
+                        and current[permission_id]["entitlement_status"] != "active"
+                    )
+                )
+            }
+            removed_ids = removal_candidates - protected_removal_ids
+            scope_changed_ids = {
+                permission_id
+                for permission_id in set(requested) & set(current)
+                if requested[permission_id]["scope"] != (current[permission_id]["scope"] or {})
+            }
+            for permission_id in added_ids:
+                permission = requested_permissions[permission_id]
+                if (
+                    permission["status"] != "active"
+                    or permission["classification"] != "tenant"
+                    or not permission["assignable_to_tenant_role"]
+                ):
+                    raise RolePermissionForbiddenError("permission_not_assignable")
+            if scope_changed_ids or any(requested[permission_id]["scope"] for permission_id in added_ids):
+                raise RolePermissionValidationError("scope_change_not_supported")
+
+            added_modules = {
+                requested_permissions[permission_id]["module_code"]
+                for permission_id in added_ids
+                if requested_permissions[permission_id]["module_code"] != "admin"
+            }
+            active_modules: set[str] = set()
+            if added_modules:
+                active_modules = set(
+                    connection.execute(
+                        text(
+                            """
+                            select module_code
+                            from admin.tenant_modules
+                            where tenant_id = :tenant_id
+                                and module_code = any(:module_codes)
+                                and status = 'active'
+                            """
+                        ),
+                        {"tenant_id": tenant_id, "module_codes": list(added_modules)},
+                    ).scalars().all()
+                )
+            if added_modules - active_modules:
+                raise RolePermissionForbiddenError("module_not_active")
+
+            requested_codes = {permission["code"] for permission in requested_permissions.values()}
+            if before["system_role"] and before["code"] == "owner":
+                missing_floor = OWNER_PERMISSION_FLOOR - requested_codes
+                if missing_floor:
+                    raise RolePermissionForbiddenError("owner_permission_floor_required")
+
+            if not added_ids and not removed_ids and not scope_changed_ids:
+                connection.execute(
+                    text(
+                        """
+                        update admin.command_idempotency
+                        set response_payload = cast(:response_payload as jsonb), status_code = 200, completed_at = now()
+                        where tenant_id = :tenant_id
+                            and operation = :operation
+                            and idempotency_key = :idempotency_key
+                        """
+                    ),
+                    {
+                        "response_payload": json.dumps(dict(before), default=str),
+                        "tenant_id": tenant_id,
+                        "operation": operation,
+                        "idempotency_key": idempotency_key,
+                    },
+                )
+                return RoleRead.model_validate(dict(before))
+
+            if removed_ids:
+                connection.execute(
+                    text(
+                        """
+                        delete from admin.role_permissions
+                        where tenant_id = :tenant_id and role_id = :role_id
+                            and permission_id = any(:permission_ids)
+                        """
+                    ),
+                    {
+                        "tenant_id": tenant_id,
+                        "role_id": role_id,
+                        "permission_ids": list(removed_ids),
+                    },
+                )
+            for permission_id in added_ids:
                 connection.execute(
                     text(
                         """
                         insert into admin.role_permissions (id, tenant_id, role_id, permission_id, scope)
                         values (:id, :tenant_id, :role_id, :permission_id, cast(:scope as jsonb))
-                        on conflict (tenant_id, role_id, permission_id) do nothing
                         """
                     ),
                     {
@@ -2006,11 +2294,28 @@ class AdminRepository:
                         "tenant_id": tenant_id,
                         "role_id": role_id,
                         "permission_id": permission_id,
-                        "scope": json.dumps(scope),
+                        "scope": json.dumps(requested[permission_id]["scope"]),
                     },
                 )
 
+            connection.execute(
+                text(
+                    """
+                    update admin.roles
+                    set permission_revision = permission_revision + 1, updated_at = now()
+                    where tenant_id = :tenant_id and id = :role_id
+                    """
+                ),
+                {"tenant_id": tenant_id, "role_id": role_id},
+            )
+
             role = self._get_role(connection, tenant_id, role_id)
+            actor_user_id = None
+            if actor_email:
+                actor_user_id = connection.execute(
+                    text("select id from admin.users where email = lower(:email)"),
+                    {"email": actor_email},
+                ).scalar_one_or_none()
             self._record_audit_event(
                 connection,
                 tenant_id=tenant_id,
@@ -2021,12 +2326,44 @@ class AdminRepository:
                 after_state=dict(role),
                 idempotency_key=idempotency_key,
                 correlation_id=correlation_id,
-                metadata={"permission_ids": permission_ids},
+                metadata={
+                    "added": sorted(requested_permissions[item]["code"] for item in added_ids),
+                    "removed": sorted(current[item]["code"] for item in removed_ids),
+                    "scope_changed": [],
+                    "preserved_unavailable": sorted(current[item]["code"] for item in protected_removal_ids),
+                    "previous_revision": expected_revision,
+                    "new_revision": role["permission_revision"],
+                },
+                actor_user_id=actor_user_id,
+            )
+            connection.execute(
+                text(
+                    """
+                    update admin.command_idempotency
+                    set response_payload = cast(:response_payload as jsonb), status_code = 200, completed_at = now()
+                    where tenant_id = :tenant_id
+                        and operation = :operation
+                        and idempotency_key = :idempotency_key
+                    """
+                ),
+                {
+                    "response_payload": json.dumps(dict(role), default=str),
+                    "tenant_id": tenant_id,
+                    "operation": operation,
+                    "idempotency_key": idempotency_key,
+                },
             )
 
         return RoleRead.model_validate(dict(role))
 
-    def _get_role(self, connection, tenant_id: str, role_id: str):
+    def _get_role(self, connection, tenant_id: str, role_id: str, for_update: bool = False):
+        if for_update:
+            locked = connection.execute(
+                text("select id from admin.roles where tenant_id = :tenant_id and id = :role_id for update"),
+                {"tenant_id": tenant_id, "role_id": role_id},
+            ).scalar_one_or_none()
+            if locked is None:
+                return None
         return connection.execute(
             text(
                 """
@@ -2035,7 +2372,19 @@ class AdminRepository:
                     roles.code,
                     roles.name,
                     roles.status,
-                    coalesce(array_agg(permissions.code order by permissions.code) filter (where permissions.code is not null), '{}') as permissions
+                    roles.system_role,
+                    roles.permission_revision,
+                    coalesce(array_agg(permissions.code order by permissions.code) filter (where permissions.code is not null), '{}') as permissions,
+                    coalesce(
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'permission_id', permissions.id,
+                                'code', permissions.code,
+                                'scope', role_permissions.scope
+                            ) order by permissions.code
+                        ) filter (where permissions.id is not null),
+                        '[]'::jsonb
+                    ) as permission_assignments
                 from admin.roles roles
                 left join admin.role_permissions role_permissions
                     on role_permissions.tenant_id = roles.tenant_id
@@ -2043,7 +2392,7 @@ class AdminRepository:
                 left join admin.permissions permissions
                     on permissions.id = role_permissions.permission_id
                 where roles.tenant_id = :tenant_id and roles.id = :role_id
-                group by roles.id, roles.code, roles.name, roles.status
+                group by roles.id, roles.code, roles.name, roles.status, roles.system_role, roles.permission_revision
                 """
             ),
             {"tenant_id": tenant_id, "role_id": role_id},

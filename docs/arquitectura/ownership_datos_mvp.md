@@ -125,8 +125,6 @@ Reglas:
 | `recipe_stage` | `production-service` | Produccion autorizada | Produccion | `recipe_stage.updated` |
 | `production_order` | `production-service` | Produccion; Ventas solo solicita por contrato | Produccion, Ventas, Almacenes, Reportes | `production_order.created`, `production_order.status_changed`, `production_order.completed` |
 | `production_order_stage` | `production-service` | Produccion autorizada | Produccion, Reportes | `production_order_stage.status_changed` |
-| `labor_area` | `production-service` | Produccion autorizada | Produccion, Costos futuro | `labor_area.updated` |
-| `labor_role` | `production-service` | Produccion autorizada | Produccion, Costos futuro | `labor_role.updated` |
 | `machine` | `production-service` | Produccion autorizada | Produccion, Costos futuro | `machine.updated`, `machine.status_changed` |
 
 Reglas:
@@ -135,6 +133,19 @@ Reglas:
 - Almacenes no modifica recetas ni ordenes.
 - Si una receta cambia, las ordenes en curso conservan snapshot de la version con la que fueron liberadas.
 - Un producto/servicio sin receta aprobada puede venderse solo si la politica del tenant lo permite.
+
+### 5.2.1 Recursos Humanos
+
+| Entidad | Servicio dueno | Puede crear/editar | Puede consultar | Eventos principales |
+|---|---|---|---|---|
+| `labor_area` | `hr-service` | RH con permisos `hr.area.*` | RH, Produccion y Costos por contrato | `hr.area.updated` futuro |
+| `labor_position` | `hr-service` | RH con permisos `hr.position.*` | RH, Produccion y Costos por contrato | `hr.position.updated` futuro |
+
+Reglas:
+
+- El entitlement `hr` debe estar activo para toda operacion del servicio.
+- Produccion y Costos nunca escriben tablas del esquema `hr`.
+- Las recetas conservan snapshots; los IDs de RH son referencias externas, no FKs entre esquemas de servicio.
 
 ### 5.3 Almacenes
 

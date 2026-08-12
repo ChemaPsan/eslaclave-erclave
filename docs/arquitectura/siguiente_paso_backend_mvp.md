@@ -74,7 +74,8 @@ Definir entidades minimas reales para QA, con `tenant_id`, auditoria y estatus.
 | Modulo | Entidades MVP |
 |---|---|
 | Administracion | tenant, user, role, permission, module_entitlement, business_unit, tenant_setting. |
-| Produccion | product_service, recipe, recipe_version, recipe_resource, recipe_stage, production_order, production_order_stage, labor_area, labor_role, machine. |
+| Produccion | product_service, recipe, recipe_version, recipe_resource, recipe_stage, production_order, production_order_stage, machine. |
+| Recursos Humanos | labor_area, labor_position, capacidad nominal, costo hora y elegibilidad productiva. |
 | Almacenes | warehouse, warehouse_location, inventory_item, inventory_movement, inventory_balance_view, kardex_view. |
 | Ventas | customer, customer_contact, quote, quote_line, sales_order, sales_order_line, delivery_view. |
 | Billing / SaaS | plan, subscription, payment_event, manual_activation, invoice_reference. |

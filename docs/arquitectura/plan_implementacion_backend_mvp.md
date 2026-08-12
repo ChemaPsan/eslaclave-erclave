@@ -285,8 +285,7 @@ Entregables:
   - `recipe_stages`;
   - `production_orders`;
   - `production_order_stages`;
-  - `labor_areas`;
-  - `labor_roles`;
+  - referencias externas y snapshots de puestos administrados por `hr-service`;
   - `machines`;
 - endpoints MVP de productos/servicios;
 - endpoints MVP de recetas/versiones;
@@ -308,9 +307,9 @@ POST /v1/production/recipes/{id}/versions
 POST /v1/production/recipe-versions/{version_id}/approve
 POST /v1/production/orders
 PATCH /v1/production/orders/{id}/status
-GET /v1/production/labor-areas
-POST /v1/production/labor-areas
-POST /v1/production/labor-areas/{area_id}/roles
+GET /v1/hr/areas
+POST /v1/hr/areas
+POST /v1/hr/positions
 GET /v1/production/machines
 POST /v1/production/machines
 ```

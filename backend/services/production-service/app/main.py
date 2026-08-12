@@ -23,15 +23,8 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://127.0.0.1:4173",
-            "http://localhost:4173",
-            "http://127.0.0.1:8000",
-            "http://localhost:8000",
-            "https://erclave.web.app",
-            "https://erclave.firebaseapp.com",
-        ],
-        allow_origin_regex=QA_FIREBASE_ORIGIN_REGEX,
+        allow_origins=settings.cors_origin_list,
+        allow_origin_regex=QA_FIREBASE_ORIGIN_REGEX if settings.environment == "qa" else None,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
         allow_headers=["Content-Type", "X-Tenant-Id", "X-Correlation-Id", "Idempotency-Key", "Authorization"],

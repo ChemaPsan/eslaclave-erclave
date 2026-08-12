@@ -1,0 +1,234 @@
+name: Promote immutable candidate to QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full candidate commit SHA already built by qa-candidate
+        required: true
+        type: string
+      candidate_run_id:
+        description: Successful qa-candidate workflow run ID
+        required: true
+        type: string
+      confirmation:
+        description: Type PROMOTE_ERCLAVE_QA
+        required: true
+        type: string
+      execute_database_migration:
+        description: Apply the approved Alembic migration before services
+        required: true
+        default: false
+        type: boolean
+      configure_qa_tenant:
+        description: Reconcile QA permissions and enable only real-service modules
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: erclave-qa-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_SHA: ${{ inputs.release_sha }}
+  PROJECT_ID: ${{ vars.QA_GCP_PROJECT_ID }}
+  REGION: ${{ vars.QA_GCP_REGION }}
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate explicit QA promotion authorization
+        shell: bash
+        run: |
+          test "${{ inputs.confirmation }}" = "PROMOTE_ERCLAVE_QA"
+          test "${{ inputs.execute_database_migration }}" = "true"
+          test "${{ inputs.configure_qa_tenant }}" = "true"
+          test "$PROJECT_ID" = "erclave"
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${{ inputs.candidate_run_id }}" =~ ^[0-9]+$ ]]
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - name: Verify exact source
+        run: test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-images-${{ inputs.release_sha }}
+          path: candidate
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.candidate_run_id }}
+
+      - name: Validate immutable image manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(wc -l < candidate/qa-images.env)" -eq 4
+          grep -Eq '^ADMIN_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
+          grep -Eq '^PRODUCTION_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
+          grep -Eq '^INVENTORY_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
+          grep -Eq '^HR_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: approved-qa-images-${{ inputs.release_sha }}
+          path: candidate/qa-images.env
+          retention-days: 30
+
+  migrate:
+    needs: preflight
+    environment: qa-database
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: approved-qa-images-${{ inputs.release_sha }}
+          path: candidate
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.QA_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.QA_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Run approved Alembic migration as a Cloud Run job
+        shell: bash
+        run: |
+          set -euo pipefail
+          source candidate/qa-images.env
+          gcloud run jobs deploy erclave-migrate-qa \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --image "$ADMIN_IMAGE" \
+            --service-account "${{ vars.QA_MIGRATOR_SERVICE_ACCOUNT }}" \
+            --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" \
+            --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest \
+            --set-env-vars ERCLAVE_ENVIRONMENT=qa \
+            --command alembic --args=-c,/app/alembic.ini,upgrade,head \
+            --max-retries 0 --task-timeout 10m --quiet
+          gcloud run jobs execute erclave-migrate-qa \
+            --project "$PROJECT_ID" --region "$REGION" --wait
+
+      - name: Reconcile QA permission catalog and real-service entitlements
+        shell: bash
+        run: |
+          set -euo pipefail
+          source candidate/qa-images.env
+          gcloud run jobs deploy erclave-configure-tenant-qa \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --image "$ADMIN_IMAGE" \
+            --service-account "${{ vars.QA_MIGRATOR_SERVICE_ACCOUNT }}" \
+            --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" \
+            --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest \
+            --set-env-vars ERCLAVE_ENVIRONMENT=qa,ERCLAVE_QA_CONFIGURATION_CONFIRMATION=CONFIGURE_ERCLAVE_QA \
+            --command python --args=scripts/configure_qa_tenant.py \
+            --max-retries 0 --task-timeout 10m --quiet
+          gcloud run jobs execute erclave-configure-tenant-qa \
+            --project "$PROJECT_ID" --region "$REGION" --wait
+
+  deploy_candidate:
+    needs: migrate
+    environment: qa-services
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: approved-qa-images-${{ inputs.release_sha }}
+          path: candidate
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.QA_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.QA_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy candidate revisions without production resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          source candidate/qa-images.env
+          common=(--project "$PROJECT_ID" --region "$REGION" --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest --allow-unauthenticated --tag candidate --no-traffic --quiet)
+          cors="https://erclave.web.app,https://erclave.firebaseapp.com"
+          admin_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=admin-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_APP_PUBLIC_BASE_URL=https://erclave.web.app@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
+          inventory_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=inventory-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
+          hr_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=hr-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_HR_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
+          production_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=production-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
+
+          gcloud run deploy admin-service-qa --image "$ADMIN_IMAGE" --service-account "${{ vars.QA_ADMIN_RUNTIME_SERVICE_ACCOUNT }}" "${common[@]}" \
+            --set-env-vars "$admin_env"
+          gcloud run deploy inventory-service-qa --image "$INVENTORY_IMAGE" --service-account "${{ vars.QA_INVENTORY_RUNTIME_SERVICE_ACCOUNT }}" "${common[@]}" \
+            --set-env-vars "$inventory_env"
+          gcloud run deploy hr-service-qa --image "$HR_IMAGE" --service-account "${{ vars.QA_HR_RUNTIME_SERVICE_ACCOUNT }}" "${common[@]}" \
+            --set-env-vars "$hr_env"
+          gcloud run deploy production-service-qa --image "$PRODUCTION_IMAGE" --service-account "${{ vars.QA_PRODUCTION_RUNTIME_SERVICE_ACCOUNT }}" "${common[@]}" \
+            --set-env-vars "$production_env"
+
+      - name: Smoke candidate revision URLs
+        shell: bash
+        run: pwsh -File backend/scripts/smoke_qa.ps1 -ProjectId "$PROJECT_ID" -Region "$REGION" -RevisionTag candidate -ExpectedVersion "$RELEASE_SHA"
+
+  promote_traffic:
+    needs: deploy_candidate
+    environment: qa-traffic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.QA_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.QA_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Route QA traffic to certified candidate revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for service in admin-service-qa inventory-service-qa hr-service-qa production-service-qa; do
+            revision="$(gcloud run services describe "$service" --project "$PROJECT_ID" --region "$REGION" --format='value(status.traffic[?tag=candidate].revisionName)')"
+            test -n "$revision"
+            gcloud run services update-traffic "$service" --project "$PROJECT_ID" --region "$REGION" --to-revisions "$revision=100" --quiet
+          done
+
+  frontend:
+    needs: promote_traffic
+    environment: qa-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Build sanitized QA frontend artifact
+        env:
+          QA_ADMIN_API_URL: ${{ vars.QA_ADMIN_API_URL }}
+          QA_PRODUCTION_API_URL: ${{ vars.QA_PRODUCTION_API_URL }}
+          QA_INVENTORY_API_URL: ${{ vars.QA_INVENTORY_API_URL }}
+          QA_HR_API_URL: ${{ vars.QA_HR_API_URL }}
+          QA_FIREBASE_API_KEY: ${{ vars.QA_FIREBASE_API_KEY }}
+          QA_FIREBASE_AUTH_DOMAIN: ${{ vars.QA_FIREBASE_AUTH_DOMAIN }}
+          QA_FIREBASE_PROJECT_ID: erclave
+          QA_FIREBASE_STORAGE_BUCKET: ${{ vars.QA_FIREBASE_STORAGE_BUCKET }}
+          QA_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.QA_FIREBASE_MESSAGING_SENDER_ID }}
+          QA_FIREBASE_APP_ID: ${{ vars.QA_FIREBASE_APP_ID }}
+        run: npm run build:frontend:qa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qa-frontend-${{ inputs.release_sha }}
+          path: dist/qa-frontend
+          retention-days: 30
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.QA_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.QA_DEPLOY_SERVICE_ACCOUNT }}
+      - name: Deploy the exact QA frontend artifact
+        run: npx --yes firebase-tools@15.1.0 deploy --only hosting --project erclave --config firebase.qa.json

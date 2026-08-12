@@ -237,6 +237,7 @@ Roles por tenant.
 | `name` | `varchar(160)` | Nombre visible. |
 | `description` | `text` | Nullable. |
 | `status` | `varchar(40)` | `active`, `inactive`. |
+| `permission_revision` | `integer` | Revision monotona del conjunto de permisos; inicia en 1. |
 | `created_at` | `timestamptz` | Obligatorio. |
 | `updated_at` | `timestamptz` | Obligatorio. |
 
@@ -258,6 +259,14 @@ Catalogo global de permisos.
 | `action` | `varchar(80)` | Accion. |
 | `description` | `text` | Nullable. |
 | `status` | `varchar(40)` | `active`, `inactive`. |
+| `classification` | `varchar(20)` | `tenant`, `internal`, `public` o `integration`. |
+| `assignable_to_tenant_role` | `boolean` | Solo `true` para capacidades humanas delegables. |
+| `risk_level` | `varchar(20)` | `low`, `standard`, `high` o `critical`. |
+| `display_name_es` | `varchar(200)` | Nombre humano en Espanol. |
+| `display_name_en` | `varchar(200)` | Nombre humano en Ingles. |
+| `description_es` | `text` | Explicacion operativa en Espanol. |
+| `description_en` | `text` | Explicacion operativa en Ingles. |
+| `sort_order` | `integer` | Orden estable de presentacion. |
 
 Indices:
 
@@ -280,6 +289,8 @@ Relacion rol-permiso.
 Indices:
 
 - `unique(tenant_id, role_id, permission_id)`.
+
+Las asignaciones se modifican por diferencia; no se eliminan y recrean las filas que no cambiaron. Esto conserva fecha y `scope` por permiso.
 
 ### 5.6 `admin.user_roles`
 
@@ -507,7 +518,7 @@ Recursos requeridos por version de receta.
 Reglas:
 
 - Si `resource_type = material`, `resource_ref_id` apunta a `inventory.inventory_items.id` sin FK cruzada.
-- Si `resource_type = labor`, apunta a `production.labor_roles.id`.
+- Si `resource_type = labor`, `resource_ref` conserva el ID externo de `hr.labor_roles`; no existe FK fisica entre servicios y la version guarda el snapshot necesario.
 - Si `resource_type = machine`, apunta a `production.machines.id`.
 
 Indices:
@@ -517,13 +528,15 @@ Indices:
 
 ### 6.5 `production.recipe_stages`
 
-Etapas genericas de receta.
+Etapas operativas vinculadas a areas activas de Recursos Humanos al crear la version. Produccion conserva referencia externa y snapshot; no escribe el schema `hr`.
 
 | Columna | Tipo | Reglas |
 |---|---|---|
 | `id` | `varchar(40)` | PK. |
 | `tenant_id` | `varchar(40)` | Obligatorio. |
 | `recipe_version_id` | `varchar(40)` | FK interna. |
+| `labor_area_ref_id` | `varchar(40)` | ID externo de `hr.labor_areas`, sin FK cruzada; nullable solo para historia anterior. |
+| `labor_area_name` | `varchar(200)` | Snapshot del nombre del area. |
 | `name` | `varchar(200)` | Obligatorio. |
 | `description` | `text` | Nullable. |
 | `expected_minutes` | `numeric(18,6)` | Nullable. |
@@ -533,6 +546,7 @@ Etapas genericas de receta.
 Indices:
 
 - `index(tenant_id, recipe_version_id, sort_order)`.
+- `index(tenant_id, labor_area_ref_id)`.
 
 ### 6.6 `production.production_orders`
 
@@ -549,6 +563,9 @@ Orden operativa generada desde receta aprobada o solicitud externa.
 | `quantity` | `numeric(18,6)` | Cantidad a producir/ejecutar. |
 | `unit` | `varchar(40)` | Unidad. |
 | `status` | `varchar(40)` | `released`, `waiting_resources`, `in_progress`, `paused`, `in_validation`, `completed`, `cancelled`. |
+| `priority` | `varchar(40)` | `low`, `normal`, `high`, `urgent`. |
+| `required_at` | `timestamptz` | Fecha requerida, nullable. |
+| `responsible_name` | `varchar(200)` | Snapshot del responsable, nullable. |
 | `planned_start_at` | `timestamptz` | Nullable. |
 | `planned_end_at` | `timestamptz` | Nullable. |
 | `actual_start_at` | `timestamptz` | Nullable. |
@@ -559,6 +576,10 @@ Orden operativa generada desde receta aprobada o solicitud externa.
 | `planned_cost` | `numeric(18,6)` | Estimado. |
 | `actual_cost` | `numeric(18,6)` | Nullable. |
 | `recipe_snapshot` | `jsonb` | Obligatorio al liberar. |
+| `resource_validation_snapshot` | `jsonb` | Disponibilidad y costos observados al liberar. |
+| `validated_at` | `timestamptz` | Momento de la validacion backend. |
+| `created_by` | `varchar(160)` | Actor autenticado que libero la orden. |
+| `metadata` | `jsonb` | Contexto extensible, nullable. |
 | `created_at` | `timestamptz` | Obligatorio. |
 | `updated_at` | `timestamptz` | Obligatorio. |
 
@@ -580,20 +601,26 @@ Etapas reales copiadas desde la receta al generar orden.
 | `production_order_id` | `varchar(40)` | FK interna. |
 | `recipe_stage_id` | `varchar(40)` | Referencia interna original. |
 | `name` | `varchar(200)` | Snapshot de nombre. |
+| `description` | `text` | Snapshot de descripcion, nullable. |
 | `sort_order` | `integer` | Obligatorio. |
 | `status` | `varchar(40)` | `pending`, `in_progress`, `completed`, `skipped`, `blocked`. |
 | `planned_minutes` | `numeric(18,6)` | Nullable. |
 | `actual_minutes` | `numeric(18,6)` | Nullable. |
+| `responsible_name` | `varchar(200)` | Responsable asignado, nullable. |
+| `progress_percentage` | `numeric(5,2)` | Avance entre 0 y 100. |
 | `started_at` | `timestamptz` | Nullable. |
 | `completed_at` | `timestamptz` | Nullable. |
 | `notes` | `text` | Nullable. |
+| `metadata` | `jsonb` | Contexto extensible, nullable. |
+| `created_at` | `timestamptz` | Obligatorio. |
+| `updated_at` | `timestamptz` | Obligatorio. |
 
 Indices:
 
 - `index(tenant_id, production_order_id, sort_order)`;
 - `index(tenant_id, status)`.
 
-### 6.8 `production.labor_areas`
+### 6.8 `hr.labor_areas`
 
 Areas operativas para mano de obra.
 
@@ -611,7 +638,7 @@ Indices:
 - `unique(tenant_id, code)`;
 - `index(tenant_id, name)`.
 
-### 6.9 `production.labor_roles`
+### 6.9 `hr.labor_roles`
 
 Roles/puestos y cantidad de recursos disponibles.
 
@@ -620,18 +647,20 @@ Roles/puestos y cantidad de recursos disponibles.
 | `id` | `varchar(40)` | PK. |
 | `tenant_id` | `varchar(40)` | Obligatorio. |
 | `labor_area_id` | `varchar(40)` | FK interna. |
-| `code` | `varchar(80)` | Unico por tenant y area. |
-| `name` | `varchar(200)` | Puesto/rol. |
-| `recipe_display_name` | `varchar(200)` | Nombre para recetas. |
-| `resource_count` | `integer` | Cantidad de personas/recursos. |
-| `cost_per_minute` | `numeric(18,6)` | Costo. |
-| `standard_minutes` | `numeric(18,6)` | Minutos base sugeridos. |
+| `position` | `varchar(160)` | Nombre del puesto, unico dentro del area y tenant. |
+| `recipe_name` | `varchar(160)` | Nombre visible en recetas. |
+| `resource_quantity` | `integer` | Cantidad nominal de recursos; mayor a cero. |
+| `minutes_per_resource` | `integer` | Minutos disponibles por recurso; mayor a cero. |
+| `hourly_cost` | `numeric(18,6)` | Costo por hora no negativo. |
+| `intervenes_in_production` | `boolean` | Habilita la seleccion en nuevas recetas. |
 | `status` | `varchar(40)` | `active`, `inactive`. |
 
 Indices:
 
-- `unique(tenant_id, labor_area_id, code)`;
-- `index(tenant_id, labor_area_id, status)`.
+- `unique(tenant_id, labor_area_id, position)`;
+- FK compuesto `(tenant_id, labor_area_id)` hacia `hr.labor_areas`;
+- `index(tenant_id, labor_area_id, status)`;
+- `index(tenant_id, intervenes_in_production, status)`.
 
 ### 6.10 `production.machines`
 
@@ -643,11 +672,14 @@ Maquinaria o recursos tecnicos.
 | `tenant_id` | `varchar(40)` | Obligatorio. |
 | `code` | `varchar(80)` | Unico por tenant. |
 | `name` | `varchar(200)` | Obligatorio. |
+| `machine_type` | `varchar(120)` | Tipo de maquinaria, nullable. |
 | `area_name` | `varchar(200)` | Area donde opera. |
-| `capacity_per_hour` | `numeric(18,6)` | Nullable. |
-| `cost_per_hour` | `numeric(18,6)` | Costo maquina. |
+| `available_minutes_per_day` | `numeric(18,6)` | Capacidad diaria disponible. |
+| `cost_per_minute` | `numeric(18,6)` | Costo no negativo por minuto. |
 | `status` | `varchar(40)` | `active`, `inactive`, `maintenance`. |
 | `metadata` | `jsonb` | Nullable. |
+| `created_at` | `timestamptz` | Obligatorio. |
+| `updated_at` | `timestamptz` | Obligatorio. |
 
 Indices:
 

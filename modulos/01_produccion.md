@@ -93,6 +93,8 @@ Regla clave:
 
 - Si el producto/servicio ya tiene receta vigente, la accion debe ser **Editar receta**.
 - Si no tiene receta vigente, la accion debe ser **Generar receta**.
+- La vista inicial debe priorizar el catalogo y la ficha maestra; no debe incrustar el detalle de ordenes dentro de cada tarjeta.
+- Cada producto/servicio debe ofrecer **Ver ordenes** para abrir el apartado de Ordenes filtrado por ese registro, con opcion de volver al catalogo o quitar el filtro.
 
 ---
 
@@ -104,9 +106,14 @@ Funciones actuales:
 
 - crear receta desde el apartado de Recetas;
 - seleccionar producto/servicio desde catalogo buscable;
+- mostrar en el buscador el nombre seguido del codigo de producto, manteniendo el ID tecnico oculto para relaciones internas;
+- mostrar recetas guardadas, selectores y documentos con nombre/codigo del producto y version; el ID tecnico de receta permanece oculto;
 - buscar dentro del catalogo por clave, nombre o tipo;
 - mostrar resultados con scroll para no empujar la pantalla;
 - agregar recursos dados de alta previamente;
+- separar la captura en materiales, mano de obra y maquinaria;
+- capturar materiales en su unidad base de Almacenes, mano de obra en horas-persona y maquinaria en horas-maquina;
+- aceptar fracciones decimales de hora sin restringirlas a bloques de 15 minutos; `0.5` horas equivale a 30 minutos;
 - definir cantidad base;
 - definir unidad;
 - definir centro de costos;
@@ -243,17 +250,21 @@ Estados sugeridos por etapa:
 
 ### 4.6 Areas y puestos
 
+> El catalogo fue trasladado al modulo independiente **Recursos Humanos**, cuyo propietario es `hr-service`. Produccion no crea ni modifica areas o puestos: solo consume puestos activos marcados para intervenir en produccion y conserva snapshots en sus recetas.
+
 Este apartado configura la mano de obra. No debe tratarse como almacen.
 
 Funciones actuales:
 
 - consultar listado de areas;
 - buscar por area, puesto o rol;
+- crear un area mediante un formulario independiente con codigo, nombre, descripcion y estatus;
+- editar un area sin capturar ni duplicar puestos;
 - entrar al detalle de un area;
 - ver roles/puestos dentro del area;
-- crear nuevo rol/recurso dentro del area;
-- editar rol existente;
-- bloquear el campo Area cuando se crea o edita desde el detalle del area;
+- crear un puesto mediante un formulario independiente;
+- seleccionar el area desde el catalogo previamente creado; el puesto nunca crea areas por texto libre;
+- editar un puesto existente y actualizar su cantidad, capacidad, costo y estatus;
 - capturar cantidad de recursos;
 - capturar minutos disponibles por recurso;
 - calcular capacidad total;
@@ -265,6 +276,8 @@ Campos principales:
 | Campo | Descripcion |
 |---|---|
 | Area | Area operativa. |
+| Codigo de area | Identificador unico del area dentro del tenant. |
+| Descripcion de area | Alcance operativo del area. |
 | Puesto o rol | Rol requerido por la operacion. |
 | Nombre para receta | Nombre visible al asignar el recurso en receta. |
 | Cantidad de recursos | Numero de personas o recursos del mismo rol. |
@@ -272,6 +285,19 @@ Campos principales:
 | Capacidad total | Cantidad por minutos disponibles. |
 | Costo por minuto | Costo unitario de mano de obra. |
 | Estatus | Activo o Inactivo. |
+
+Permisos independientes:
+
+| Operacion | Permiso |
+|---|---|
+| Consultar areas | `hr.area.read` |
+| Crear area | `hr.area.create` |
+| Editar area | `hr.area.update` |
+| Consultar puestos | `hr.position.read` |
+| Crear puesto | `hr.position.create` |
+| Editar puesto y recursos | `hr.position.update` |
+
+`hr-service` debe rechazar un `area_id` inexistente o perteneciente a otro tenant. Renombrar un area conserva sus puestos mediante `labor_area_id`; el nombre mostrado no funciona como relacion ni crea registros implicitos.
 
 ---
 
@@ -282,6 +308,7 @@ Este apartado configura maquinaria o recursos tecnicos. Tampoco debe tratarse co
 Funciones actuales:
 
 - crear maquina;
+- seleccionar un area activa previamente registrada en Recursos Humanos; Maquinaria no permite crear ni capturar areas libres;
 - consultar maquinaria existente;
 - editar maquina;
 - capturar area;
@@ -331,6 +358,8 @@ Campos principales:
 - Si un producto/servicio tiene receta vigente, debe abrirse la edicion de receta.
 - Si no tiene receta vigente, debe permitir generar receta.
 - Mano de obra y maquinaria no pertenecen a almacenes.
+- El area de una maquina se selecciona del catalogo activo de Recursos Humanos; si no existe, debe darse de alta primero en RH.
+- La interfaz expresa los tiempos de receta en horas-persona y horas-maquina; el contrato vigente los conserva en minutos para validar capacidad y costo sin perder precision.
 - Almacenes queda para materias primas, consumibles y herramientas.
 - Una orden solo debe liberarse con receta aprobada.
 - Una orden debe validar disponibilidad de recursos antes de liberarse.

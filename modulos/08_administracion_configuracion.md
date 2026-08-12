@@ -188,3 +188,36 @@ Administración deberá permitir configurar dependencias como:
 - Definir bitácora de cambios administrativos.
 - Construir la pantalla `Administracion > Catalogos base`.
 - Migrar opciones fijas del MVP a catalogos administrables cuando el flujo lo requiera.
+
+---
+
+## 12. Editor de permisos por rol
+
+El editor administra un rol a la vez y conserva personalizacion permiso por permiso. No incluye plantillas, presets ni seleccion automatica basada en el nombre del rol.
+
+Flujo:
+
+1. Abrir un rol y seleccionar **Editar permisos**.
+2. Cargar el catalogo completo asignable y las asignaciones actuales con su `scope`.
+3. Buscar por nombre humano, descripcion o codigo tecnico; filtrar por asignados, no asignados o cambios.
+4. Seleccionar o quitar permisos individuales, por modulo o solo sobre resultados visibles.
+5. Revisar el resumen de permisos agregados y retirados.
+6. Guardar una sola vez con revision esperada e idempotencia.
+
+Reglas:
+
+- Los nombres visibles usan verbo + objeto en Espanol/Ingles; el codigo estable permanece como detalle tecnico.
+- Filtrar o colapsar un modulo nunca altera permisos ocultos.
+- Los permisos de un modulo inactivo se conservan como configuracion historica, pero no pueden agregarse ni ejecutarse hasta reactivarlo.
+- Permisos `internal`, `public` o de credenciales de integracion no son asignables a roles humanos del tenant.
+- Un permiso nuevo aparece desmarcado; no se agrega implicitamente a roles existentes.
+- La UI mantiene `original` y `draft`; salir con cambios exige confirmar descarte.
+- El backend rechaza revision obsoleta, permiso no asignable, modulo no disponible, rol de otro tenant o intento inseguro sobre rol de sistema.
+- El guardado aplica diferencias y conserva `scope` de asignaciones no modificadas.
+- La auditoria registra actor, revision anterior/nueva, agregados, retirados y scopes modificados.
+
+Responsive y accesibilidad:
+
+- En contenedor amplio se usa matriz por recurso y accion.
+- En contenedor estrecho cada recurso se transforma en tarjeta etiquetada sin scroll horizontal de pagina.
+- Checkboxes nativos, labels completos, foco visible, controles de modulo con estado mixto y resumen `aria-live`.

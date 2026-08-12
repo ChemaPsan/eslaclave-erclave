@@ -1,0 +1,84 @@
+openapi: 3.1.0
+info:
+  title: ERClave HR Service API
+  version: 0.1.0
+  summary: Tenant-scoped labor area and position capacity catalogs.
+servers:
+  - url: https://api.eslaclave.com
+security:
+  - bearerAuth: []
+tags:
+  - name: Areas
+  - name: Positions
+paths:
+  /v1/hr/areas:
+    get:
+      tags: [Areas]
+      operationId: listHrAreas
+      x-required-module: hr
+      x-permissions: [hr.area.read]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
+      responses: { '200': { description: Areas, content: { application/json: { schema: { $ref: '#/components/schemas/AreaListResponse' } } } } }
+    post:
+      tags: [Areas]
+      operationId: createHrArea
+      x-required-module: hr
+      x-permissions: [hr.area.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AreaCreate' } } } }
+      responses: { '201': { description: Area created, content: { application/json: { schema: { $ref: '#/components/schemas/AreaResponse' } } } } }
+  /v1/hr/areas/{id}:
+    patch:
+      tags: [Areas]
+      operationId: updateHrArea
+      x-required-module: hr
+      x-permissions: [hr.area.update]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AreaUpdate' } } } }
+      responses: { '200': { description: Area updated, content: { application/json: { schema: { $ref: '#/components/schemas/AreaResponse' } } } } }
+  /v1/hr/positions:
+    get:
+      tags: [Positions]
+      operationId: listHrPositions
+      x-required-module: hr
+      x-permissions: [hr.position.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - { name: area_id, in: query, schema: { type: string } }
+        - { name: production_only, in: query, schema: { type: boolean, default: false } }
+      responses: { '200': { description: Positions, content: { application/json: { schema: { $ref: '#/components/schemas/PositionListResponse' } } } } }
+    post:
+      tags: [Positions]
+      operationId: createHrPosition
+      x-required-module: hr
+      x-permissions: [hr.position.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PositionCreate' } } } }
+      responses: { '201': { description: Position created, content: { application/json: { schema: { $ref: '#/components/schemas/PositionResponse' } } } } }
+  /v1/hr/positions/{id}:
+    patch:
+      tags: [Positions]
+      operationId: updateHrPosition
+      x-required-module: hr
+      x-permissions: [hr.position.update]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PositionUpdate' } } } }
+      responses: { '200': { description: Position updated, content: { application/json: { schema: { $ref: '#/components/schemas/PositionResponse' } } } } }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    TenantHeader: { name: X-Tenant-Id, in: header, required: true, schema: { type: string } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8 } }
+    IdPath: { name: id, in: path, required: true, schema: { type: string } }
+  schemas:
+    Area: { type: object, required: [id, code, name, status], properties: { id: { type: string }, code: { type: string }, name: { type: string }, description: { type: [string, 'null'] }, status: { type: string, enum: [active, inactive] } } }
+    AreaCreate: { type: object, required: [code, name], properties: { code: { type: string }, name: { type: string }, description: { type: [string, 'null'] } } }
+    AreaUpdate: { type: object, properties: { name: { type: string }, description: { type: [string, 'null'] }, status: { type: string, enum: [active, inactive] } } }
+    AreaResponse: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Area' } } }
+    AreaListResponse: { type: object, required: [data], properties: { data: { type: array, items: { $ref: '#/components/schemas/Area' } } } }
+    Position: { type: object, required: [id, labor_area_id, position, recipe_name, resource_quantity, minutes_per_resource, hourly_cost, intervenes_in_production, status], properties: { id: { type: string }, labor_area_id: { type: string }, position: { type: string }, recipe_name: { type: string }, resource_quantity: { type: integer }, minutes_per_resource: { type: integer }, hourly_cost: { type: number }, intervenes_in_production: { type: boolean }, status: { type: string, enum: [active, inactive] } } }
+    PositionCreate: { type: object, required: [labor_area_id, position, recipe_name], properties: { labor_area_id: { type: string }, position: { type: string }, recipe_name: { type: string }, resource_quantity: { type: integer, minimum: 1 }, minutes_per_resource: { type: integer, minimum: 1 }, hourly_cost: { type: number, minimum: 0 }, intervenes_in_production: { type: boolean } } }
+    PositionUpdate: { type: object, properties: { labor_area_id: { type: string }, position: { type: string }, recipe_name: { type: string }, resource_quantity: { type: integer, minimum: 1 }, minutes_per_resource: { type: integer, minimum: 1 }, hourly_cost: { type: number, minimum: 0 }, intervenes_in_production: { type: boolean }, status: { type: string, enum: [active, inactive] } } }
+    PositionResponse: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Position' } } }
+    PositionListResponse: { type: object, required: [data], properties: { data: { type: array, items: { $ref: '#/components/schemas/Position' } } } }

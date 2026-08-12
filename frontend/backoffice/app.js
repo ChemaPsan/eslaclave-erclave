@@ -7,6 +7,7 @@ const app = document.getElementById("backofficeApp");
 const moduleOptions = [
   { code: "admin", label: "Administracion", required: true },
   { code: "production", label: "Produccion" },
+  { code: "hr", label: "Recursos Humanos" },
   { code: "inventory", label: "Almacenes" },
   { code: "sales", label: "Ventas" },
   { code: "integrations", label: "Integraciones" }
@@ -531,18 +532,18 @@ function renderUsagePanel() {
 function renderUsageRow(row) {
   return `
     <article class="usage-row">
-      <div>
+      <div data-label="Fecha">
         <strong>${escapeHtml(row.usage_date)}</strong>
         <small>${escapeHtml(row.source || "sin fuente")}</small>
       </div>
-      <div>
+      <div data-label="Tenant">
         <strong>${escapeHtml(row.tenant_name)}</strong>
         <small>${escapeHtml(row.tenant_slug)} - ${escapeHtml(row.tenant_id)}</small>
       </div>
-      <div><span>${formatNumber(row.active_users)}</span></div>
-      <div><span>${formatNumber(row.api_requests)}</span></div>
-      <div><span>${formatNumber(row.storage_mb)} MB</span></div>
-      <div><span>${formatMoney(row.estimated_cost_mxn)}</span></div>
+      <div data-label="Usuarios"><span>${formatNumber(row.active_users)}</span></div>
+      <div data-label="Requests"><span>${formatNumber(row.api_requests)}</span></div>
+      <div data-label="Storage"><span>${formatNumber(row.storage_mb)} MB</span></div>
+      <div data-label="Costo"><span>${formatMoney(row.estimated_cost_mxn)}</span></div>
     </article>
   `;
 }
@@ -554,23 +555,23 @@ function renderTenantRow(tenant) {
   const modules = (tenant.modules || []).join(", ") || "Sin modulos";
   return `
     <article class="tenant-row">
-      <div>
+      <div data-label="Tenant">
         <strong>${escapeHtml(tenant.commercial_name)}</strong>
         <span>${escapeHtml(tenant.slug)} - ${escapeHtml(tenant.legal_name || "Sin razon social")}</span>
         <small>${escapeHtml(tenant.id)} - Plan ${escapeHtml(tenant.plan_id || "sin plan")}</small>
       </div>
-      <div>
+      <div data-label="Owner">
         <span>${escapeHtml(tenant.owner_email || "Sin owner")}</span>
         <small>${Number(tenant.active_memberships || 0)} activos / ${Number(tenant.total_memberships || 0)} usuarios</small>
       </div>
-      <div>
+      <div data-label="Estado">
         <span class="status-pill ${escapeHtml(tenant.status)}">${escapeHtml(tenant.status)}</span>
         <small>${Number(tenant.legal_entities_count || 0)} razones - ${Number(tenant.branches_count || 0)} sucursales</small>
       </div>
-      <div>
+      <div data-label="Modulos">
         <span>${escapeHtml(modules)}</span>
       </div>
-      <div class="tenant-actions">
+      <div class="tenant-actions" data-label="Acciones">
         <button class="secondary-button inline" type="button" data-action="toggle-tenant-status" data-tenant-id="${escapeHtml(tenant.id)}" data-status="${isSuspended ? "active" : "suspended"}" ${isBusy ? "disabled" : ""}>
           ${isSuspended ? "Reactivar" : "Suspender"}
         </button>

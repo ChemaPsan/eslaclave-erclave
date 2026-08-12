@@ -4,9 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ERClave | Propuesta Frontend</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260805-recipe-minute-precision" />
   </head>
   <body>
+    <a class="skip-link" href="#mainWorkspace">Saltar al contenido principal</a>
     <div class="app-shell" data-theme="light">
       <aside class="sidebar" aria-label="Navegacion principal">
         <div class="brand-block">
@@ -17,7 +18,7 @@
           </div>
         </div>
 
-        <nav class="module-nav" id="moduleNav"></nav>
+        <nav class="module-nav" id="moduleNav" aria-label="Modulos y submodulos"></nav>
 
         <div class="sidebar-footer">
           <button class="icon-button" id="themeToggle" type="button" aria-label="Cambiar tema" title="Cambiar tema">
@@ -32,7 +33,7 @@
         </div>
       </aside>
 
-      <main class="workspace">
+      <main class="workspace" id="mainWorkspace" tabindex="-1">
         <section class="context-bar" aria-label="Contexto de sesion">
           <div class="context-pill">
             <span class="context-label">Usuario</span>
@@ -116,10 +117,10 @@
       </section>
     </div>
 
-    <div class="toast" id="toast" hidden></div>
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
     <div class="auth-gate" id="authGate" hidden></div>
 
     <script src="./env.js"></script>
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./app.js?v=20260805-recipe-display-labels"></script>
   </body>
 </html>

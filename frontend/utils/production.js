@@ -1,9 +1,25 @@
 import { resourceCatalog, defaultRecipes } from "../data/resources.js";
 import { mockDb } from "../data/mockDb.js";
-import { getApiMode, getConfiguredTenantId, getDemoTenantId } from "../api/config.js";
+import { getApiMode } from "../api/config.js";
 
 function shouldUseSeedData() {
-  return getApiMode() !== "api" || getDemoTenantId() === getConfiguredTenantId();
+  return getApiMode() !== "api";
+}
+
+let inventoryRecipeResources = [];
+let laborRecipeResources = [];
+let machineRecipeResources = [];
+
+export function setInventoryRecipeResources(resources) {
+  inventoryRecipeResources = Array.isArray(resources) ? resources : [];
+}
+
+export function setLaborRecipeResources(resources) {
+  laborRecipeResources = Array.isArray(resources) ? resources : [];
+}
+
+export function setMachineRecipeResources(resources) {
+  machineRecipeResources = Array.isArray(resources) ? resources : [];
 }
 
 export function getResource(id) {
@@ -11,25 +27,29 @@ export function getResource(id) {
 }
 
 export function getRecipeResourceCatalog() {
+  const inventoryResources = shouldUseSeedData() ? resourceCatalog : inventoryRecipeResources;
+  if (!shouldUseSeedData()) return [...inventoryResources, ...laborRecipeResources, ...machineRecipeResources];
   return [
-    ...resourceCatalog,
-    ...mockDb.loadLaborRoles(),
-    ...mockDb.loadMachines()
+    ...inventoryResources,
+    ...mockDb.loadLaborRoles().filter((item) => item.status === "Activo" && item.intervenesInProduction !== false),
+    ...mockDb.loadMachines().filter((item) => item.status === "Activo")
   ];
 }
 
 export function calculateRecipe(recipe, batchQuantity = 100) {
-  const baseQuantity = Math.max(1, Number(recipe.quantityBase || 1));
+  const safeRecipe = recipe && typeof recipe === "object" ? recipe : {};
+  const resources = Array.isArray(safeRecipe.resources) ? safeRecipe.resources : [];
+  const baseQuantity = Math.max(1, Number(safeRecipe.quantityBase || 1));
   const multiplier = Number(batchQuantity || 1) / baseQuantity;
-  const rows = recipe.resources.map((item) => {
+  const rows = resources.map((item) => {
     const resource = getResource(item.resourceId);
     const required = Number(item.quantity) * multiplier;
     const available = resource?.available || 0;
-    const cost = required * (resource?.cost || 0);
+    const cost = required * Number(item.unitCost ?? resource?.cost ?? 0);
     return {
-      name: resource?.name || item.resourceId,
-      unit: resource?.unit || "",
-      type: resource?.type || "",
+      name: resource?.name || item.resourceName || item.resourceId,
+      unit: resource?.unit || item.unit || "",
+      type: resource?.type || item.resourceType || "",
       source: resource?.source || "",
       required,
       available,
