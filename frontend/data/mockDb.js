@@ -10,6 +10,17 @@ function storageKey(baseKey) {
   return `${baseKey}-${getDemoTenantId()}`;
 }
 
+const apiMemoryStore = new Map();
+
+function readStoredValue(key) {
+  return shouldUseSeedData() ? localStorage.getItem(key) : apiMemoryStore.get(key) || null;
+}
+
+function writeStoredValue(key, value) {
+  if (shouldUseSeedData()) localStorage.setItem(key, value);
+  else apiMemoryStore.set(key, value);
+}
+
 export const mockDb = {
   getDefaultAdminOrganization(tenant = {}) {
     return {
@@ -28,19 +39,19 @@ export const mockDb = {
     };
   },
   loadAdminOrganization(tenant = {}) {
-    const raw = localStorage.getItem(storageKey("erclave-admin-organization"));
+    const raw = readStoredValue(storageKey("erclave-admin-organization"));
     return raw ? JSON.parse(raw) : this.getDefaultAdminOrganization(tenant);
   },
   saveAdminOrganization(organization) {
-    localStorage.setItem(storageKey("erclave-admin-organization"), JSON.stringify(organization));
+    writeStoredValue(storageKey("erclave-admin-organization"), JSON.stringify(organization));
     return organization;
   },
   loadProductsServices() {
-    const raw = localStorage.getItem(storageKey("erclave-products-services"));
+    const raw = readStoredValue(storageKey("erclave-products-services"));
     return raw ? JSON.parse(raw) : shouldUseSeedData() ? defaultProductsServices : [];
   },
   saveProductsServices(items) {
-    localStorage.setItem(storageKey("erclave-products-services"), JSON.stringify(items));
+    writeStoredValue(storageKey("erclave-products-services"), JSON.stringify(items));
   },
   addProductService(item) {
     const items = this.loadProductsServices();
@@ -57,12 +68,12 @@ export const mockDb = {
     return this.loadProductsServices().find((item) => item.id === itemId);
   },
   loadLaborAreas() {
-    const raw = localStorage.getItem(storageKey("erclave-labor-areas"));
+    const raw = readStoredValue(storageKey("erclave-labor-areas"));
     if (raw) return JSON.parse(raw);
     return shouldUseSeedData() ? [...defaultLaborAreas] : [];
   },
   saveLaborAreas(items) {
-    localStorage.setItem(storageKey("erclave-labor-areas"), JSON.stringify(items));
+    writeStoredValue(storageKey("erclave-labor-areas"), JSON.stringify(items));
   },
   addLaborArea(item) {
     const items = this.loadLaborAreas();
@@ -90,7 +101,7 @@ export const mockDb = {
     return this.loadLaborAreas().find((item) => item.id === itemId);
   },
   loadLaborRoles() {
-    const raw = localStorage.getItem(storageKey("erclave-labor-roles"));
+    const raw = readStoredValue(storageKey("erclave-labor-roles"));
     const roles = raw ? JSON.parse(raw) : shouldUseSeedData() ? defaultLaborRoles : [];
     const areas = this.loadLaborAreas();
     let changed = false;
@@ -105,7 +116,7 @@ export const mockDb = {
     return migrated;
   },
   saveLaborRoles(items) {
-    localStorage.setItem(storageKey("erclave-labor-roles"), JSON.stringify(items));
+    writeStoredValue(storageKey("erclave-labor-roles"), JSON.stringify(items));
   },
   addLaborRole(item) {
     const area = this.findLaborArea(item.areaId);
@@ -126,11 +137,11 @@ export const mockDb = {
     return this.loadLaborRoles().find((item) => item.id === itemId);
   },
   loadMachines() {
-    const raw = localStorage.getItem(storageKey("erclave-machines"));
+    const raw = readStoredValue(storageKey("erclave-machines"));
     return raw ? JSON.parse(raw) : shouldUseSeedData() ? defaultMachines : [];
   },
   saveMachines(items) {
-    localStorage.setItem(storageKey("erclave-machines"), JSON.stringify(items));
+    writeStoredValue(storageKey("erclave-machines"), JSON.stringify(items));
   },
   addMachine(item) {
     const items = this.loadMachines();
@@ -147,11 +158,11 @@ export const mockDb = {
     return this.loadMachines().find((item) => item.id === itemId);
   },
   loadRecipes() {
-    const raw = localStorage.getItem(storageKey("erclave-recipes"));
+    const raw = readStoredValue(storageKey("erclave-recipes"));
     return raw ? JSON.parse(raw) : shouldUseSeedData() ? defaultRecipes : [];
   },
   saveRecipes(recipes) {
-    localStorage.setItem(storageKey("erclave-recipes"), JSON.stringify(recipes));
+    writeStoredValue(storageKey("erclave-recipes"), JSON.stringify(recipes));
   },
   addRecipe(recipe) {
     const recipes = this.loadRecipes();
@@ -174,11 +185,11 @@ export const mockDb = {
     return this.loadRecipes().find((item) => item.id === recipeId);
   },
   loadOrders() {
-    const raw = localStorage.getItem(storageKey("erclave-orders"));
+    const raw = readStoredValue(storageKey("erclave-orders"));
     return raw ? JSON.parse(raw) : shouldUseSeedData() ? defaultOrders : [];
   },
   saveOrders(orders) {
-    localStorage.setItem(storageKey("erclave-orders"), JSON.stringify(orders));
+    writeStoredValue(storageKey("erclave-orders"), JSON.stringify(orders));
   },
   addOrder(order) {
     const orders = this.loadOrders();
@@ -195,12 +206,12 @@ export const mockDb = {
     return this.loadOrders().find((item) => item.id === orderId);
   },
   loadModuleRecords(moduleId, submoduleId = "") {
-    const raw = localStorage.getItem(storageKey(`erclave-module-records-${moduleId}`));
+    const raw = readStoredValue(storageKey(`erclave-module-records-${moduleId}`));
     const records = raw ? JSON.parse(raw) : [];
     return submoduleId ? records.filter((item) => item.submoduleId === submoduleId) : records;
   },
   saveModuleRecords(moduleId, records) {
-    localStorage.setItem(storageKey(`erclave-module-records-${moduleId}`), JSON.stringify(records));
+    writeStoredValue(storageKey(`erclave-module-records-${moduleId}`), JSON.stringify(records));
   },
   addModuleRecord(moduleId, record) {
     const records = this.loadModuleRecords(moduleId);

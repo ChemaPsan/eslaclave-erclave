@@ -15,7 +15,7 @@ Estado comprobado el 2026-08-08: las seis cuentas dedicadas, Artifact Registry `
 Cada environment debe requerir aprobacion directa del propietario:
 
 - `qa-build`: publica imagenes candidatas en Artifact Registry.
-- `qa-database`: ejecuta la migracion aprobada.
+- `qa-database`: ejecuta la migracion aprobada y, con una confirmacion independiente, reconcilia permisos y entitlements estructurales del tenant demo.
 - `qa-services`: crea revisiones sin trafico.
 - `qa-traffic`: mueve el trafico despues del smoke.
 - `qa-frontend`: publica el artefacto exacto en Firebase Hosting.
@@ -48,12 +48,13 @@ El secreto `erclave-database-url-qa` permanece exclusivamente en Secret Manager 
 ## Flujo
 
 1. `qa-candidate.yml` exige SHA completo, validacion local equivalente y confirmacion `BUILD_ERCLAVE_QA`; construye cuatro imagenes y registra digests.
-2. `qa-release.yml` exige el SHA, el run candidato y `PROMOTE_ERCLAVE_QA`.
+2. `qa-release.yml` exige el SHA, el run candidato, `PROMOTE_ERCLAVE_QA` y confirmaciones booleanas separadas para migracion y configuracion del tenant.
 3. `qa-database` aplica Alembic solamente tras aprobacion.
-4. `qa-services` crea revisiones etiquetadas `candidate` sin trafico.
-5. El smoke valida ambiente, readiness, SHA y URLs publicas.
-6. `qa-traffic` requiere otra aprobacion para mover trafico.
-7. `qa-frontend` construye un artefacto sin localhost/emulador, lo conserva y despliega exactamente ese directorio.
+4. El job estructural idempotente sincroniza permisos y deja activos solamente `admin`, `production`, `inventory` y `hr`; no carga almacenes, articulos, movimientos, areas, puestos, recetas ni ordenes.
+5. `qa-services` crea revisiones etiquetadas `candidate` sin trafico.
+6. El smoke valida ambiente, readiness, SHA y URLs publicas.
+7. `qa-traffic` requiere otra aprobacion para mover trafico.
+8. `qa-frontend` construye un artefacto sin localhost/emulador, lo conserva y despliega exactamente ese directorio.
 
 GitHub Pages queda como maqueta manual y ya no se publica automaticamente al cambiar `main`.
 

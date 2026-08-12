@@ -63,7 +63,7 @@ Esto permite conectar la maqueta frontend local al backend local sin abrir la AP
 
 En QA y Produccion el proceso falla al iniciar si `ERCLAVE_API_PUBLIC_BASE_URL`, `ERCLAVE_ADMIN_SERVICE_URL` o `ERCLAVE_CORS_ORIGINS` contienen HTTP o hosts locales. Tambien exige Firebase real, proyecto Firebase y una URL de base obtenida por referencia desde Secret Manager. Inventory y RH pueden resolver su URL efectiva mediante `ERCLAVE_INVENTORY_DATABASE_URL` y `ERCLAVE_HR_DATABASE_URL`, respectivamente.
 
-Las imagenes se construyen desde un Dockerfile comun indicando `ERCLAVE_SERVICE_ADAPTER` como argumento de build. El pipeline QA registra y despliega el digest, nunca una etiqueta mutable. La imagen incluye Alembic para que la migracion aprobada se ejecute mediante una identidad y un Cloud Run Job separados.
+Las imagenes se construyen desde la raiz del repositorio con `docker build -f backend/Dockerfile .`, indicando `ERCLAVE_SERVICE_ADAPTER` como argumento de build. El contexto raiz permite empacar los contratos OpenAPI que usa la configuracion estructural del tenant QA; `.dockerignore` excluye frontend, documentacion, pruebas y archivos locales. El pipeline registra y despliega el digest, nunca una etiqueta mutable. La imagen incluye Alembic y los scripts estructurales para que la migracion y la configuracion QA aprobadas se ejecuten mediante una identidad y Cloud Run Jobs separados.
 
 ## Instalacion local
 
@@ -277,7 +277,8 @@ Este seed crea o actualiza:
 - usuario `admin.qa@erclave.local`;
 - rol `owner`;
 - membresia activa;
-- modulos activos `admin`, `production`, `inventory`, `sales` e `integrations`;
+- modulos activos `admin`, `production`, `inventory` y `hr`;
+- cualquier modulo sin microservicio real, incluidos `sales` e `integrations`, queda inactivo en QA;
 - setting inicial `organization.profile` para corporativo, razones sociales y sucursales;
 - asignacion del rol owner a todos los permisos activos.
 

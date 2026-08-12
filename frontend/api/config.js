@@ -27,15 +27,18 @@ function getSafeLocalBaseUrl(candidate, fallback) {
 
 
 export function getApiMode() {
+  if (!isLocalPreviewHost()) return getRuntimeConfigValue("apiMode") || "api";
   return localStorage.getItem("erclave-api-mode") || getRuntimeConfigValue("apiMode") || "mock";
 }
 
 
 export function setApiMode(mode) {
+  if (!isLocalPreviewHost()) return;
   localStorage.setItem("erclave-api-mode", mode === "api" ? "api" : "mock");
 }
 
 export function isInventoryApiEnabled() {
+  if (!isLocalPreviewHost()) return getRuntimeConfigValue("inventoryApiMode") === "api";
   return (localStorage.getItem("erclave-inventory-api-mode") || getRuntimeConfigValue("inventoryApiMode") || "mock") === "api";
 }
 
@@ -50,7 +53,7 @@ export function getApiBaseUrl() {
       : localRuntimeBaseUrl || runtimeBaseUrl;
     return getSafeLocalBaseUrl(candidate, DEFAULT_API_BASE_URL);
   }
-  return localStorage.getItem("erclave-api-base-url") || runtimeBaseUrl || DEFAULT_API_BASE_URL;
+  return runtimeBaseUrl;
 }
 
 
@@ -61,7 +64,7 @@ export function getProductionApiBaseUrl() {
     const localRuntimeBaseUrl = getRuntimeConfigValue("localProductionApiBaseUrl");
     return getSafeLocalBaseUrl(localOverride || localRuntimeBaseUrl || runtimeBaseUrl, "http://127.0.0.1:8002");
   }
-  return localStorage.getItem("erclave-production-api-base-url") || runtimeBaseUrl;
+  return runtimeBaseUrl;
 }
 
 export function getInventoryApiBaseUrl() {
@@ -71,7 +74,7 @@ export function getInventoryApiBaseUrl() {
     const localBaseUrl = getRuntimeConfigValue("localInventoryApiBaseUrl");
     return getSafeLocalBaseUrl(override || localBaseUrl || runtimeBaseUrl, "http://127.0.0.1:8004");
   }
-  return localStorage.getItem("erclave-inventory-api-base-url") || runtimeBaseUrl;
+  return runtimeBaseUrl;
 }
 
 export function getHrApiBaseUrl() {
@@ -81,11 +84,12 @@ export function getHrApiBaseUrl() {
     const localBaseUrl = getRuntimeConfigValue("localHrApiBaseUrl");
     return getSafeLocalBaseUrl(override || localBaseUrl || runtimeBaseUrl, "http://127.0.0.1:8006");
   }
-  return localStorage.getItem("erclave-hr-api-base-url") || runtimeBaseUrl;
+  return runtimeBaseUrl;
 }
 
 
 export function getDemoTenantId() {
+  if (!isLocalPreviewHost()) return getRuntimeConfigValue("tenantId") || DEFAULT_TENANT_ID;
   return localStorage.getItem("erclave-api-tenant-id") || getRuntimeConfigValue("tenantId") || DEFAULT_TENANT_ID;
 }
 
@@ -96,6 +100,7 @@ export function getConfiguredTenantId() {
 
 
 export function setActiveTenantId(tenantId) {
+  if (!isLocalPreviewHost()) return;
   if (tenantId) {
     localStorage.setItem("erclave-api-tenant-id", tenantId);
   } else {
@@ -105,6 +110,7 @@ export function setActiveTenantId(tenantId) {
 
 
 export function getDemoActorId() {
+  if (!isLocalPreviewHost()) return getRuntimeConfigValue("actorId") || DEFAULT_ACTOR_ID;
   return localStorage.getItem("erclave-api-actor-id") || getRuntimeConfigValue("actorId") || DEFAULT_ACTOR_ID;
 }
 

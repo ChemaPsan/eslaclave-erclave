@@ -1,6 +1,6 @@
 # Estado actual de ERClave
 
-Ultima actualizacion: 2026-08-07.
+Ultima actualizacion: 2026-08-11.
 
 ## Ambiente local
 
@@ -84,10 +84,14 @@ Ultima actualizacion: 2026-08-07.
 - El candidato incorpora un pipeline QA manual en dos fases: construccion inmutable por SHA/digest y promocion con aprobaciones independientes para base, servicios, trafico y frontend.
 - La configuracion backend de QA/Produccion rechaza URLs locales, CORS local, autenticacion demo, Firebase sin proyecto y base ausente antes de arrancar.
 - El build QA del frontend elimina configuracion local, emulador, tenant y actor; `validate-qa-release-pipeline.js` protege estas fronteras.
+- Fuera de localhost, modo API, URLs, tenant y actor provienen exclusivamente del artefacto; los overrides de `localStorage` no pueden cambiar la frontera QA.
+- En modo API, la representacion temporal de catalogos operativos vive solo en memoria y se repuebla desde Admin, Produccion, Inventory y RH. Los datos operativos del navegador no persisten entre sesiones ni se tratan como fuente de verdad.
+- La configuracion estructural del tenant QA requiere confirmacion separada, sincroniza el catalogo de permisos y deja activos solamente `admin`, `production`, `inventory` y `hr`; no carga datos funcionales.
 - GitHub Pages ya no se publica automaticamente desde `main`; permanece como maqueta manual.
 - El 2026-08-08 se aprovisionaron en GCP QA las seis identidades dedicadas de `infra/qa/identity-plan.json`, Artifact Registry `erclave-qa` y Workload Identity Federation limitado a `ChemaPsan/eslaclave-erclave`; los accesos al secreto, Artifact Registry, Cloud SQL, Cloud Run y `actAs` quedaron delimitados por recurso o identidad.
 - Los GitHub Environments `qa-build`, `qa-database`, `qa-services`, `qa-traffic` y `qa-frontend` exigen aprobacion de `ChemaPsan`; las variables QA del pipeline quedaron configuradas sin llaves JSON ni URL de base de datos.
 - Cloud SQL QA exige conexiones cifradas (`ENCRYPTED_ONLY`), tiene PITR activo con siete dias de logs y conserva el backup manual exitoso `1786227437185`, creado antes del endurecimiento.
 - Inventory y RH continuan sin servicio desplegado en QA; preparar el pipeline no cambia su estado operativo.
+- En el corte CHG-182, `npm.cmd run verify` aprobo validadores, compilacion y `135 passed, 1 skipped`; no se construyeron imagenes ni se modifico QA.
 
 Este archivo debe describir hechos comprobados, no planes ni aspiraciones.

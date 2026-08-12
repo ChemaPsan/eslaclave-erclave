@@ -95,7 +95,7 @@ jobs:
             service="${entry%%:*}"
             adapter="${entry##*:}"
             image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$service-service:$RELEASE_SHA"
-            docker build --build-arg "ERCLAVE_SERVICE_ADAPTER=$adapter" --tag "$image" backend
+            docker build --file backend/Dockerfile --build-arg "ERCLAVE_SERVICE_ADAPTER=$adapter" --tag "$image" .
             docker push "$image"
             digest="$(gcloud artifacts docker images describe "$image" --format='value(image_summary.digest)')"
             test -n "$digest"
@@ -108,4 +108,3 @@ jobs:
           path: qa-images.env
           retention-days: 30
           if-no-files-found: error
-

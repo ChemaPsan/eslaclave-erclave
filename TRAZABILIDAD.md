@@ -2760,3 +2760,19 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** APIs administrativas de Google Cloud y GitHub para IAM, WIF, Artifact Registry, Environments, variables, backups y configuracion de Cloud SQL. **APIs no tocadas:** endpoints funcionales y tecnicos de Admin, Produccion, Inventory, HR y Ventas. |
 | Validacion | WIF `ACTIVE` y limitado a `ChemaPsan/eslaclave-erclave`; seis cuentas presentes; Artifact Registry creado; cinco environments con `ChemaPsan`; 21 variables QA presentes; backup `1786227437185` exitoso; Cloud SQL `RUNNABLE`, `ENCRYPTED_ONLY`, PITR activo y siete dias de logs. |
 | Observaciones | Operacion `qa-write` de infraestructura y configuracion. No hubo migraciones, seeds, cargas de datos, consultas SQL, builds, publicacion de imagenes, despliegues de servicios, cambios de trafico ni despliegue de frontend. |
+
+### CHG-182
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-11 |
+| Cambio | Elimina persistencia mock y entitlements sin backend del candidato QA |
+| Autor | Codex |
+| Archivos | `frontend/api/config.js`, `frontend/data/mockDb.js`, `.dockerignore`, `backend/Dockerfile`, `backend/scripts/configure_qa_tenant.py`, seeds y pruebas Admin, workflows QA, validador de pipeline, documentacion operativa y contexto |
+| Secciones | Plataforma / QA / Frontend / Administracion / Produccion / Inventory / RH / CI-CD |
+| Descripcion | Fuera de localhost, el frontend ignora overrides de modo, URLs, tenant y actor; en modo API conserva la proyeccion temporal solo en memoria y la reconstruye desde servicios reales. El pipeline empaca contratos y scripts estructurales, exige confirmacion adicional y reconcilia permisos y entitlements para habilitar exclusivamente Admin, Produccion, Inventory y RH, desactivando modulos sin microservicio real. |
+| Motivo | Garantizar que la interfaz liberada a QA no muestre ni persista datos operativos de `localStorage` como si provinieran de Cloud SQL y que ningun entitlement exponga una funcionalidad mock. |
+| Impacto | El candidato queda preparado para desplegar cuatro servicios reales y migrar/configurar QA de forma gobernada. Las preferencias visuales pueden seguir en `localStorage`, pero catalogos y transacciones del modo API no. La configuracion estructural no carga almacenes, articulos, movimientos, areas, puestos, recetas ni ordenes. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** endpoints vigentes de Admin, Produccion, Inventory y HR usados por el frontend en modo API; permisos y request/response permanecen sin cambios. **APIs no tocadas:** Ventas y modulos sin backend. |
+| Validacion | `npm.cmd run validate:qa-release`, YAML parseable, build frontend QA sanitizado, pruebas dirigidas `11 passed`, `git diff --check` y `npm.cmd run verify` con `135 passed, 1 skipped`. |
+| Observaciones | Operacion `local-write` y consultas `read-only` de inventario Cloud Run/Cloud SQL QA. No hubo migraciones, seeds, cargas de datos, builds Docker, publicacion de imagenes, despliegues, cambios de trafico, entitlements ni Hosting. |

@@ -12,7 +12,7 @@ DEFAULT_TENANT_SLUG = "demo-qa"
 DEFAULT_TENANT_NAME = "ERClave Demo QA"
 DEFAULT_ADMIN_EMAIL = "admin.qa@erclave.local"
 DEFAULT_ADMIN_NAME = "Admin QA ERClave"
-ACTIVE_DEMO_MODULES = ("admin", "production", "inventory", "sales", "integrations")
+ACTIVE_DEMO_MODULES = ("admin", "production", "inventory", "hr")
 DEFAULT_EXTRA_OWNER_EMAILS = ("eslaclavecaf@gmail.com",)
 
 
@@ -279,6 +279,23 @@ def apply_demo_seed(
                 """
             ),
             module_rows,
+        )
+
+        active_module_codes = ", ".join(f"'{module_code}'" for module_code in active_modules)
+        connection.execute(
+            text(
+                f"""
+                update admin.tenant_modules
+                set status = 'inactive',
+                    source = 'seed',
+                    limits = '{{"seed": "qa-demo-disabled"}}'::jsonb,
+                    updated_at = now()
+                where tenant_id = :tenant_id
+                    and module_code not in ({active_module_codes})
+                    and status <> 'inactive'
+                """
+            ),
+            {"tenant_id": ids["tenant_id"]},
         )
 
         role_permission_count = connection.execute(

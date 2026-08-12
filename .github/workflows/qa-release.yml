@@ -20,6 +20,11 @@ on:
         required: true
         default: false
         type: boolean
+      configure_qa_tenant:
+        description: Reconcile QA permissions and enable only real-service modules
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -44,6 +49,7 @@ jobs:
         run: |
           test "${{ inputs.confirmation }}" = "PROMOTE_ERCLAVE_QA"
           test "${{ inputs.execute_database_migration }}" = "true"
+          test "${{ inputs.configure_qa_tenant }}" = "true"
           test "$PROJECT_ID" = "erclave"
           [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "${{ inputs.candidate_run_id }}" =~ ^[0-9]+$ ]]
@@ -110,6 +116,23 @@ jobs:
             --command alembic --args=-c,/app/alembic.ini,upgrade,head \
             --max-retries 0 --task-timeout 10m --quiet
           gcloud run jobs execute erclave-migrate-qa \
+            --project "$PROJECT_ID" --region "$REGION" --wait
+
+      - name: Reconcile QA permission catalog and real-service entitlements
+        shell: bash
+        run: |
+          set -euo pipefail
+          source candidate/qa-images.env
+          gcloud run jobs deploy erclave-configure-tenant-qa \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --image "$ADMIN_IMAGE" \
+            --service-account "${{ vars.QA_MIGRATOR_SERVICE_ACCOUNT }}" \
+            --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" \
+            --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest \
+            --set-env-vars ERCLAVE_ENVIRONMENT=qa,ERCLAVE_QA_CONFIGURATION_CONFIRMATION=CONFIGURE_ERCLAVE_QA \
+            --command python --args=scripts/configure_qa_tenant.py \
+            --max-retries 0 --task-timeout 10m --quiet
+          gcloud run jobs execute erclave-configure-tenant-qa \
             --project "$PROJECT_ID" --region "$REGION" --wait
 
   deploy_candidate:

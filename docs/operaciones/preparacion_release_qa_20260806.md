@@ -43,6 +43,8 @@
 5. Sustituir la cuenta de computo predeterminada por identidades dedicadas de minimo privilegio.
 6. Validar la revision Alembic efectiva de `erclave_qa` antes de solicitar autorizacion de migracion.
 7. Separar el workflow de GitHub Pages de la promocion gobernada a Firebase Hosting QA.
+8. Impedir que `localStorage` sobrescriba modo, tenant, actor o URLs en el dominio QA y evitar persistir caches operativas del modo API en el navegador.
+9. Desactivar `sales`, `integrations` y cualquier entitlement sin microservicio real; activar RH solamente junto con `hr-service`.
 
 ## Preparacion incorporada el 2026-08-07
 
@@ -51,6 +53,8 @@
 - El plan de identidades dedicadas y Workload Identity Federation esta declarado, pendiente de aprovisionamiento autorizado.
 - El pipeline manual separa imagenes, migracion, revisiones sin trafico, smoke, trafico y frontend.
 - El artefacto frontend QA se genera sin localhost, emulador ni IDs locales.
+- Fuera de localhost, el frontend usa exclusivamente la configuracion empacada; la cache de datos API vive solo en memoria y se reconstruye desde los servicios.
+- La configuracion estructural QA queda gobernada por confirmacion independiente: actualiza permisos, activa `admin`, `production`, `inventory` y `hr`, e inactiva modulos sin backend. No carga datos funcionales.
 - GitHub Pages dejo de tener trigger por `push`; esta preparacion no modifico el hosting QA.
 
 Los bloqueos de Cloud SQL, aprovisionamiento IAM, Artifact Registry, GitHub Environments y ejecucion del pipeline permanecen abiertos hasta recibir autorizaciones independientes.
