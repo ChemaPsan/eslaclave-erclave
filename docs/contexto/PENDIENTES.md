@@ -1,13 +1,13 @@
 # Pendientes priorizados de ERClave
 
-Ultima actualizacion: 2026-08-11.
+Ultima actualizacion: 2026-08-12.
 
 ## Preparacion del release QA
 
-1. Confirmar y publicar el corte CHG-182, actualizar el PR y repetir su revision antes del merge.
-2. Ejecutar `qa-candidate.yml` solo despues de aprobar la escritura de imagenes en Artifact Registry y conservar sus cuatro digests.
-3. Solicitar autorizaciones independientes para migracion, configuracion estructural del tenant, revisiones Cloud Run sin trafico, movimiento de trafico y Firebase Hosting.
-4. Tras desplegar, comprobar con sesion Firebase QA que Admin, Produccion, Inventory y RH recargan exclusivamente datos de Cloud SQL y que Ventas/Integraciones permanecen inactivos.
+1. Corregir y relanzar `qa-services` para completar el bootstrap de Inventory/RH; Admin ya conserva un candidato CHG-182 con cero trafico y Produccion mantiene su revision vigente.
+2. Confirmar que los cuatro smokes candidatos validan ambiente QA, readiness de Cloud SQL, SHA y URL publica.
+3. Solicitar autorizaciones independientes para movimiento de trafico y Firebase Hosting.
+4. Tras promover trafico y frontend, comprobar con sesion Firebase QA que Admin, Produccion, Inventory y RH recargan exclusivamente datos de Cloud SQL y que Ventas/Integraciones permanecen inactivos.
 
 ## Prioridad siguiente
 
