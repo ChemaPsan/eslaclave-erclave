@@ -2904,3 +2904,19 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de los cuatro servicios; Firebase Hosting para publicacion. **APIs no tocadas:** contratos funcionales de Admin, Produccion, Inventory y RH. |
 | Validacion | Job `frontend` exitoso; dominio QA HTTP 200; recursos publicados sin `localhost`, `127.0.0.1`, `firebase-emulator` ni `demo-erclave`; cuatro URLs Cloud Run QA presentes; health, readiness y SHA `4e9c6881dab61239f1abd5fff688019fdd697977` confirmados en los cuatro servicios. |
 | Observaciones | Operacion `qa-write` limitada a Firebase Hosting. No hubo migraciones, seeds, cargas de datos, cambios de tenant, revisiones o trafico Cloud Run ni recursos de Produccion. Rollback: restaurar el release anterior de Firebase Hosting. La validacion funcional autenticada permanece como siguiente gate. |
+
+### CHG-191
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-12 |
+| Cambio | Prepara la allowlist gobernada del Backoffice QA |
+| Autor | Codex |
+| Archivos | `.github/workflows/qa-release.yml`, `.github/workflows/qa-admin-backoffice-config.yml`, `backend/scripts/configure_qa_backoffice.ps1`, `tools/validators/validate-qa-release-pipeline.js`, `infra/qa/README.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Plataforma / QA / Admin / Backoffice / Autorizacion / CI-CD |
+| Descripcion | Hace obligatoria la variable `QA_BACKOFFICE_ADMIN_EMAILS` en releases futuros y agrega un workflow manual que reutiliza la imagen Admin certificada, crea una revision sin trafico bajo `qa-services` y la promueve bajo `qa-traffic` solo despues de validar allowlist, imagen, version y ausencia de drift. |
+| Motivo | La revision Admin activa no tenia `ERCLAVE_BACKOFFICE_ADMIN_EMAILS`; el seed concedia rol owner dentro del tenant demo, pero la allowlist interna vacia producia 403 en las rutas del Backoffice. |
+| Impacto | Se conserva la separacion entre administracion interna SaaS y roles de clientes. La correccion no convierte owners de tenant en administradores globales ni requiere migraciones, seeds o reconstruccion de imagenes. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/backoffice/tenants`, `GET /health`, `GET /ready`, `GET /version`; APIs administrativas de Cloud Run. **APIs no tocadas:** contratos de tenant, permisos, Produccion, Inventory y RH. |
+| Validacion | Diagnostico read-only de revision/env y logs 403; parser PowerShell, guardrails de workflow/configuracion, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | Implementacion `local-write`; la variable externa, revision Cloud Run y trafico QA no se modificaron. Rollback previsto: restaurar 100% a `rollback_revision` registrado antes de promover. |

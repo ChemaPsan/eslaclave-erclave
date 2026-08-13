@@ -6,8 +6,10 @@ const errors = [];
 const requiredFiles = [
   ".github/workflows/qa-candidate.yml",
   ".github/workflows/qa-release.yml",
+  ".github/workflows/qa-admin-backoffice-config.yml",
   "backend/scripts/smoke_qa.ps1",
   "backend/scripts/promote_qa_traffic.ps1",
+  "backend/scripts/configure_qa_backoffice.ps1",
   "firebase.qa.json",
   "infra/qa/identity-plan.json",
   "infra/qa/README.md",
@@ -23,12 +25,14 @@ for (const file of requiredFiles) {
 if (!errors.length) {
   const candidate = readText(requiredFiles[0]);
   const release = readText(requiredFiles[1]);
+  const backofficeConfigWorkflow = readText(requiredFiles[2]);
   const pages = readText(".github/workflows/pages.yml");
   const builder = readText("tools/build-qa-frontend.js");
   const frontendConfig = readText("frontend/api/config.js");
   const mockDb = readText("frontend/data/mockDb.js");
   const smokeQa = readText("backend/scripts/smoke_qa.ps1");
   const promoteQaTraffic = readText("backend/scripts/promote_qa_traffic.ps1");
+  const configureQaBackoffice = readText("backend/scripts/configure_qa_backoffice.ps1");
   const qaSeed = readText("backend/scripts/seed_admin_qa_demo.py");
   const dockerfile = readText("backend/Dockerfile");
   const identityPlan = JSON.parse(readText("infra/qa/identity-plan.json"));
@@ -48,6 +52,9 @@ if (!errors.length) {
   if (!release.includes("workflow_dispatch:") || /\n\s+push:/.test(release)) {
     errors.push("QA release workflow must be manual-only.");
   }
+  if (!backofficeConfigWorkflow.includes("workflow_dispatch:") || /\n\s+push:/.test(backofficeConfigWorkflow)) {
+    errors.push("QA backoffice configuration workflow must be manual-only.");
+  }
   for (const environment of ["qa-build", "qa-database", "qa-services", "qa-traffic", "qa-frontend"]) {
     const source = environment === "qa-build" ? candidate : release;
     if (!source.includes(`environment: ${environment}`)) errors.push(`Missing protected environment: ${environment}`);
@@ -64,6 +71,43 @@ if (!errors.length) {
     if (![release, candidate, promoteQaTraffic].some((content) => content.includes(token))) {
       errors.push(`QA pipeline must include: ${token}`);
     }
+  }
+  for (const token of [
+    "BACKOFFICE_ADMIN_EMAILS: ${{ vars.QA_BACKOFFICE_ADMIN_EMAILS }}",
+    'test -n "$BACKOFFICE_ADMIN_EMAILS"',
+    "ERCLAVE_BACKOFFICE_ADMIN_EMAILS=$BACKOFFICE_ADMIN_EMAILS",
+    'admin_env="^|^'
+  ]) {
+    if (!release.includes(token)) errors.push(`QA release must preserve Backoffice access configuration: ${token}`);
+  }
+  for (const token of [
+    "environment: qa-services",
+    "environment: qa-traffic",
+    "CONFIGURE_BACKOFFICE_QA",
+    "configure_qa_backoffice.ps1",
+    "-Mode Stage",
+    "-Mode Promote",
+    "QA_BACKOFFICE_ADMIN_EMAILS"
+  ]) {
+    if (!backofficeConfigWorkflow.includes(token)) {
+      errors.push(`QA backoffice correction must include: ${token}`);
+    }
+  }
+  for (const token of [
+    '$revisionTag = "backoffice-config"',
+    '--update-env-vars "^|^ERCLAVE_BACKOFFICE_ADMIN_EMAILS=$normalizedEmails"',
+    "--no-traffic",
+    'Where-Object { $_.percent -eq 100 -and $_.revisionName }',
+    'if ($currentStable.Count -ne 1 -or $currentStable[0].revisionName -ne $state.rollback_revision)',
+    '--to-revisions "$($state.candidate_revision)=100"',
+    "Test-Revision"
+  ]) {
+    if (!configureQaBackoffice.includes(token)) {
+      errors.push(`QA backoffice configuration must stage, preflight and verify safely: ${token}`);
+    }
+  }
+  if ([release, backofficeConfigWorkflow].some((content) => content.includes("eslaclavecaf@gmail.com"))) {
+    errors.push("QA workflows must not hardcode the Backoffice administrator email.");
   }
   for (const token of [
     "deploy_candidate()",

@@ -4,8 +4,9 @@ Ultima actualizacion: 2026-08-12.
 
 ## Preparacion del release QA
 
-1. Comprobar con sesion Firebase QA que Admin, Produccion, Inventory y RH recargan exclusivamente datos de Cloud SQL y que Ventas/Integraciones permanecen inactivos.
-2. Ejecutar pruebas funcionales y negativas de permisos/aislamiento antes de considerar el candidato listo para salir de QA.
+1. Configurar `QA_BACKOFFICE_ADMIN_EMAILS` y ejecutar la promocion CHG-191 con aprobaciones `qa-services` y `qa-traffic`; comprobar que el administrador interno accede y que un owner de tenant normal conserva respuesta 403.
+2. Comprobar con sesion Firebase QA que Admin, Produccion, Inventory y RH recargan exclusivamente datos de Cloud SQL y que Ventas/Integraciones permanecen inactivos.
+3. Ejecutar pruebas funcionales y negativas de permisos/aislamiento antes de considerar el candidato listo para salir de QA.
 
 ## Prioridad siguiente
 

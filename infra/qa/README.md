@@ -41,6 +41,7 @@ Estado comprobado el 2026-08-08: los cinco environments existen y requieren apro
 | `QA_PRODUCTION_API_URL` | URL HTTPS estable de Produccion QA |
 | `QA_INVENTORY_API_URL` | URL HTTPS estable de Inventory QA |
 | `QA_HR_API_URL` | URL HTTPS estable de RH QA |
+| `QA_BACKOFFICE_ADMIN_EMAILS` | Allowlist separada por comas de administradores internos; no concede roles dentro de tenants |
 | `QA_FIREBASE_*` | Configuracion web publica del proyecto Firebase `erclave` |
 
 El secreto `erclave-database-url-qa` permanece exclusivamente en Secret Manager y se monta por referencia. Su valor no pertenece a GitHub.
@@ -55,6 +56,7 @@ El secreto `erclave-database-url-qa` permanece exclusivamente en Secret Manager 
 6. El smoke se obtiene del SHA inmutable que ejecuta el workflow y valida ambiente, readiness, SHA candidato y URLs publicas. Las imagenes siguen siendo exactamente los digests asociados a `release_sha`; corregir automatizacion de release no obliga a reconstruirlas.
 7. `qa-traffic` requiere otra aprobacion. Antes de escribir, resuelve desde JSON exactamente una revision `candidate` para cada uno de los cuatro servicios; solo con el conjunto completo mueve el trafico y verifica que cada revision certificada reciba 100%.
 8. `qa-frontend` construye un artefacto sin localhost/emulador, lo conserva y despliega exactamente ese directorio.
+9. `qa-admin-backoffice-config.yml` corrige la allowlist de Admin sin reconstruir imagenes: `qa-services` crea una revision sin trafico sobre la imagen certificada y `qa-traffic` la promueve solamente si imagen, version, configuracion y revision de rollback siguen coincidiendo.
 
 GitHub Pages queda como maqueta manual y ya no se publica automaticamente al cambiar `main`.
 
@@ -62,4 +64,5 @@ GitHub Pages queda como maqueta manual y ya no se publica automaticamente al cam
 
 - Servicios: reasignar trafico a las revisiones anteriores registradas antes del release.
 - Frontend: restaurar el release previo de Firebase Hosting.
+- Backoffice Admin: devolver 100% del trafico a `rollback_revision` registrado por el artefacto del workflow de configuracion.
 - Datos: usar restauracion o `forward-fix`; no ejecutar downgrade despues de admitir escrituras sin una decision explicita.
