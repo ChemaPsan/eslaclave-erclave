@@ -2872,3 +2872,35 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de los cuatro servicios; APIs administrativas de Cloud Run para routing. **APIs no tocadas:** contratos funcionales de Admin, Produccion, Inventory y RH. |
 | Validacion | Jobs `preflight`, `migrate`, `deploy_candidate` y `promote_traffic` exitosos; comprobacion independiente de 100% por revision, ambiente `qa`, readiness, Cloud SQL configurado y SHA candidato en las cuatro URLs estables. |
 | Observaciones | Operacion `qa-write` limitada a migracion/configuracion idempotente, revisiones Cloud Run y routing. Tenant estructural `ten_739ee59d765d5e14818674800d`. No hubo datos funcionales, fixtures, seeds demo, Produccion real ni Firebase Hosting; `qa-frontend` permanece pendiente. Rollback: Admin `00013-xmz`, Inventory `00001-jum`, RH `00001-vin` y Produccion `00005-bmp`. |
+
+### CHG-189
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-12 |
+| Cambio | Habilita el despliegue gobernado de Firebase Hosting QA |
+| Autor | Codex |
+| Archivos | `infra/qa/identity-plan.json`, `infra/qa/README.md`, `tools/validators/validate-qa-release-pipeline.js`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `TRAZABILIDAD.md`; IAM del proyecto QA `erclave` |
+| Secciones | Plataforma / QA / Firebase Hosting / IAM / CI-CD |
+| Descripcion | Agrega `roles/firebasehosting.admin` a la identidad federada `erclave-github-deployer-qa` y hace que el validador rechace un plan de identidad que omita el permiso requerido por `qa-frontend`. |
+| Motivo | El artefacto frontend CHG-182 se construyo y conservo, pero Firebase CLI fallo antes de publicar porque la identidad no podia resolver el proyecto ni administrar Hosting. |
+| Impacto | El pipeline puede consultar el proyecto Firebase `erclave` y publicar Hosting solamente despues de la aprobacion protegida `qa-frontend`; no se amplian permisos sobre base de datos, tenants, servicios backend ni Produccion. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **APIs administrativas consumidas sin cambio:** Firebase Management y Firebase Hosting mediante Firebase CLI. **APIs no tocadas:** contratos funcionales de Admin, Produccion, Inventory y RH. |
+| Validacion | Politica IAM leida con la cuenta propietaria y roles `roles/firebasehosting.admin` y `roles/run.admin` confirmados para la identidad; validador QA y `git diff --check` aprobados. |
+| Observaciones | Operacion `qa-write` limitada a un binding IAM del proyecto `erclave`. No hubo migraciones, seeds, cargas de datos, trafico Cloud Run, cambios de tenant ni publicacion de Hosting. Rollback: retirar `roles/firebasehosting.admin` de la identidad desplegadora. |
+
+### CHG-190
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-12 |
+| Cambio | Publica y verifica el frontend CHG-182 en Firebase Hosting QA |
+| Autor | Codex |
+| Archivos | Estado externo del run `31647661435`, Firebase Hosting `erclave`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `TRAZABILIDAD.md` |
+| Secciones | Plataforma / QA / Firebase Hosting / Admin / Produccion / Inventory / RH |
+| Descripcion | Reintenta solamente el job fallido `qa-frontend`, reconstruye de forma determinista y conserva el artefacto del `release_sha` aprobado, autentica por WIF y publica el directorio sanitizado en `https://erclave.web.app`. |
+| Motivo | Completar la promocion QA del candidato CHG-182 despues de corregir el permiso minimo de Firebase Hosting en CHG-189. |
+| Impacto | El frontend QA consume las APIs reales de Admin, Produccion, Inventory y RH respaldadas por Cloud SQL QA; no contiene referencias a Local, Emulator ni al tenant sintetico. Ventas e Integraciones continúan fuera del conjunto de servicios reales activos. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /health`, `GET /ready` y `GET /version` de los cuatro servicios; Firebase Hosting para publicacion. **APIs no tocadas:** contratos funcionales de Admin, Produccion, Inventory y RH. |
+| Validacion | Job `frontend` exitoso; dominio QA HTTP 200; recursos publicados sin `localhost`, `127.0.0.1`, `firebase-emulator` ni `demo-erclave`; cuatro URLs Cloud Run QA presentes; health, readiness y SHA `4e9c6881dab61239f1abd5fff688019fdd697977` confirmados en los cuatro servicios. |
+| Observaciones | Operacion `qa-write` limitada a Firebase Hosting. No hubo migraciones, seeds, cargas de datos, cambios de tenant, revisiones o trafico Cloud Run ni recursos de Produccion. Rollback: restaurar el release anterior de Firebase Hosting. La validacion funcional autenticada permanece como siguiente gate. |
