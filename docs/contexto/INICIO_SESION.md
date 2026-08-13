@@ -10,8 +10,9 @@ Este documento define el orden obligatorio para recuperar contexto antes de anal
 4. Leer el documento de `modulos/` correspondiente y las fuentes de arquitectura que este referencie.
 5. Revisar `git status --short`. Todo cambio previo se considera propiedad del usuario hasta demostrar lo contrario.
 6. Identificar microfrontend, servicio, schema, contrato, permisos y agentes especialistas afectados.
-7. Confirmar ambiente y `tenant_id` antes de cualquier escritura.
-8. Definir criterios de aceptacion y blast radius antes de implementar.
+7. Registrar `Agentes consultados`; para Local→QA usar Arquitectura, Seguridad y QA/Release como minimo.
+8. Confirmar ambiente y `tenant_id` antes de cualquier escritura.
+9. Definir criterios de aceptacion y blast radius antes de implementar.
 
 ## Cierre obligatorio
 

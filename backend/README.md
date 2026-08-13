@@ -90,6 +90,8 @@ python -m pip install -e ".[dev]"
 
 ## Arranque local aislado
 
+El camino canonico es `scripts/start_local.ps1`, que fuerza PostgreSQL `erclave_local`, loopback y Firebase Emulator. Los comandos `uvicorn` aislados de esta seccion son diagnosticos avanzados: requieren variables locales explicitas y nunca deben reutilizar `backend/.env`, Cloud SQL Auth Proxy o recursos QA.
+
 En Windows, el comando canonico levanta PostgreSQL local, Firebase Auth Emulator, frontend y las APIs de Administracion, Produccion, Inventario y RH:
 
 ```powershell

@@ -8,7 +8,8 @@ const requiredTransversalAgents = [
   "### Arquitecto senior de datos y persistencia",
   "### Custodio tecnico de la base de datos ERClave",
   "### Arquitecto senior de APIs y contratos backend",
-  "### Ingeniero senior de QA, validadores y release"
+  "### Ingeniero senior de QA, validadores y release",
+  "### Ingeniero senior de seguridad, IAM y supply chain"
 ];
 
 const requiredModules = [
@@ -38,19 +39,17 @@ const requiredCurrentStateFragments = [
   "### Estado operativo vigente",
   "local conectado a QA",
   "Firebase Emulator",
-  "`admin-service` y `production-service` desplegados",
-  "schema vacio en QA, sin despliegue confirmado del servicio",
-  "schema vacio en QA, servicio y entitlement aun no desplegados",
-  "backend y persistencia QA siguen pendientes",
-  "No existe aun infraestructura productiva autorizada",
-  "Administracion, Backoffice, Produccion, Almacenes/Inventario, Recursos Humanos y Ventas"
+  "`ESTADO_ACTUAL.md` es la unica fuente para el inventario operativo mutable"
 ];
 
 const staleAgentFragments = [
   "Vigilar compatibilidad entre frontend mock, API futura y persistencia.",
   "Detectar que falta conectar en API futura, persistencia, permisos, reportes e integraciones.",
   "Que datos mock deben convertirse en entidades reales?",
-  "Documentacion de catalogos base, permisos, roles y configuracion transversal; implementacion UI pendiente."
+  "Documentacion de catalogos base, permisos, roles y configuracion transversal; implementacion UI pendiente.",
+  "arranque canonico con Emulator aun esta pendiente",
+  "schema vacio en QA, sin despliegue confirmado del servicio",
+  "schema vacio en QA, servicio y entitlement aun no desplegados"
 ];
 
 for (const heading of requiredTransversalAgents) {
@@ -97,8 +96,8 @@ for (const fragment of staleAgentFragments) {
 const moduleIndex = readText("modulos/README.md");
 for (const fragment of [
   "UI y `admin-service` reales en QA",
-  "servicio y entitlement aun no desplegados",
-  "pertenecer al release no significa estar desplegada actualmente"
+  "Inventory y RH reales en QA",
+  "Reservas permanece fuera del alcance"
 ]) {
   if (!moduleIndex.includes(fragment)) {
     errors.push(`Module index is missing current state: ${fragment}`);

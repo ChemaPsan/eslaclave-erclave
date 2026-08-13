@@ -30,12 +30,12 @@ ROLE_ID = "rol_demo"
 PERMISSION_ID = "per_demo"
 
 
-def test_private_network_cors_preflight_is_allowed_for_firebase_host():
+def test_private_network_cors_preflight_is_allowed_for_local_frontend():
     client = TestClient(app)
     response = client.options(
         "/v1/provisioning/tenant-onboarding",
         headers={
-            "Origin": "https://erclave.web.app",
+            "Origin": "http://127.0.0.1:4173",
             "Access-Control-Request-Method": "POST",
             "Access-Control-Request-Headers": "authorization,content-type,idempotency-key,x-correlation-id",
             "Access-Control-Request-Private-Network": "true",
@@ -43,8 +43,23 @@ def test_private_network_cors_preflight_is_allowed_for_firebase_host():
     )
 
     assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == "https://erclave.web.app"
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:4173"
     assert response.headers["access-control-allow-private-network"] == "true"
+
+
+def test_local_api_rejects_qa_frontend_origin():
+    client = TestClient(app)
+    response = client.options(
+        "/v1/provisioning/tenant-onboarding",
+        headers={
+            "Origin": "https://erclave.web.app",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type,idempotency-key,x-correlation-id",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "access-control-allow-origin" not in response.headers
 
 
 class FakeAdminRepository:

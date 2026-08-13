@@ -3,7 +3,7 @@
 **Ambiente:** QA
 **Aplicación cliente:** `https://erclave.web.app`
 **Backoffice interno:** `https://erclave.web.app/backoffice/`
-**Última actualización:** 2026-07-26
+**Última actualización:** 2026-08-12
 
 ## 1. Objetivo
 
@@ -28,8 +28,9 @@ Cada caso usa una de estas etiquetas:
 | Autenticación y sesión | REAL QA | Login Firebase, invitación, recuperación, tenant, permisos y módulos contratados. |
 | Backoffice | REAL QA | Alta, búsqueda, suspensión, reactivación y eliminación de tenants; uso estimado. |
 | Administración | REAL QA | Organización, razones sociales, sucursales, usuarios, roles y permisos. |
-| Producción | HÍBRIDO | Productos/servicios y recetas/versiones son reales. Órdenes, recursos operativos, áreas y maquinaria siguen locales. |
-| Almacenes | PROTOTIPO LOCAL | UX de almacenes, artículos, movimientos, existencias y kardex. |
+| Producción | REAL QA | Productos/servicios, recetas/versiones, maquinaria, órdenes, etapas y validación observada persisten en Production API; no reserva/consume Inventario. |
+| Almacenes | REAL QA | Almacenes, artículos, movimientos, existencias y Kardex usan Inventory API/Cloud SQL; Reservas no disponible. |
+| Recursos Humanos | REAL QA | Áreas y puestos usan HR API/Cloud SQL; catálogos inicialmente vacíos. |
 | Ventas | PROTOTIPO LOCAL | UX de clientes, cotizaciones, pedidos, ajustes, entregas y PDF. |
 | Compras, Gastos, Costos, Reportes y Contabilidad | NO DISPONIBLE/DEMO | Navegación y comunicación visual; no certificar operación ni cifras. |
 
@@ -295,7 +296,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 ## 8. Producción
 
-**Contexto del módulo:** define qué producto o servicio ofrece la empresa y estandariza recursos y etapas mediante recetas versionadas. Hoy son reales únicamente Productos y servicios y Recetas.
+**Contexto del módulo:** define productos/servicios, recetas versionadas, maquinaria y órdenes persistidas. La validación de disponibilidad es una fotografía observada; no reserva ni consume Inventario.
 
 ### QA-PROD-01 — Crear producto o servicio
 
@@ -363,11 +364,11 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** protege integridad, autorización e idempotencia.
 
-### QA-PROD-06 — Funciones locales de Producción
+### QA-PROD-06 — Órdenes, etapas, maquinaria e integración de catálogos
 
-**Prioridad/tipo:** P1 · PROTOTIPO LOCAL
+**Prioridad/tipo:** P0 · REAL QA
 
-Recorrer Órdenes, Entregables, Validación de recursos, Áreas y puestos y Maquinaria. Evaluar formularios, cálculos, estados, impresión y claridad del flujo.
+Crear una orden desde una receta aprobada vigente, recargar, ejecutar transiciones válidas de etapas y cerrar explícitamente. Validar maquinaria contra áreas RH y recursos de receta contra artículos Inventory/RH reales.
 
 Para **Áreas y puestos** validar además:
 
@@ -389,28 +390,37 @@ Para **Áreas y puestos** validar además:
 - [ ] Solo puestos activos marcados para produccion aparecen como recursos de receta.
 - [ ] Un articulo sin movimientos y con almacen sugerido aparece en Inventario con saldo cero.
 - [ ] Solo articulos activos con Usar en receta aparecen en el selector de recursos; su disponibilidad suma almacenes del tenant.
-- [ ] Alta de área, alta de puesto, edición de área y edición de puesto producen auditoría e idempotencia cuando el backend sea implementado.
+- [ ] Alta de área, alta de puesto, edición de área y edición de puesto producen auditoría e idempotencia backend.
 
-**Esperado:** experiencia coherente en el mismo navegador. No exigir sincronización entre dispositivos ni persistencia PostgreSQL.
+**Esperado:** persistencia PostgreSQL entre recargas/sesiones, transiciones backend válidas y ningún fallback a datos simulados.
 
-**Por qué:** permite validar tempranamente el proceso antes de conectar el backend.
+**Por qué:** certifica el flujo real promovido sin confundir disponibilidad observada con reservas.
 
 ## 9. Almacenes
 
 **Contexto del módulo:** representa qué existe, dónde se encuentra y cuánto está disponible. Un error puede detener producción o provocar promesas de venta imposibles.
 
-**Estado:** PROTOTIPO LOCAL.
+**Estado:** REAL QA, excepto Reservas.
 
 | ID | Prioridad | Qué probar | Esperado |
 |---|---|---|---|
-| QA-INV-01 | P1 | Crear, buscar y editar almacén. | Validaciones y datos coherentes en el navegador actual. |
-| QA-INV-02 | P1 | Crear artículo con SKU, tipo y unidad. | Registro seleccionable y sin duplicados evidentes. |
-| QA-INV-03 | P1 | Entrada, salida, transferencia, ajuste y devolución. | Existencia y kardex cambian conforme al movimiento. |
+| QA-INV-01 | P0 | Crear, buscar y editar almacén; recargar/abrir otra sesión. | Persiste en Inventory API sin datos simulados. |
+| QA-INV-02 | P0 | Crear artículo con SKU, tipo y unidad; recargar. | Registro persistido, seleccionable y sin duplicados. |
+| QA-INV-03 | P0 | Entrada, salida, transferencia, ajuste y devolución. | Movimiento PostgreSQL, existencia y Kardex coherentes tras recarga. |
 | QA-INV-04 | P1 | Salida mayor a existencia. | Se bloquea o se comunica claramente el faltante. |
 | QA-INV-05 | P2 | Filtros de existencias y kardex. | Resultados y estados vacíos comprensibles. |
 | QA-INV-06 | P2 | Reservas. | Debe mostrarse deshabilitado/no disponible, no simular una reserva real. |
 
-No certificar todavía concurrencia, lotes, series, reservas reales ni integración con Producción.
+No certificar todavía lotes, series, reservas reales ni consumo automático desde Producción.
+
+## 9.1 Recursos Humanos
+
+**Estado:** REAL QA.
+
+- Crear área y puesto con permisos separados; recargar y verificar persistencia.
+- Rechazar área inexistente/inactiva/de otro tenant e idempotencia conflictiva.
+- Confirmar que puestos productivos alimentan Recetas y que Maquinaria selecciona áreas activas.
+- Un catálogo vacío debe mostrarse vacío, sin ejemplos ni conteos simulados.
 
 ## 10. Ventas
 

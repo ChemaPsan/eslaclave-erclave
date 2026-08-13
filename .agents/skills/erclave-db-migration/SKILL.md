@@ -31,6 +31,7 @@ Toda tabla operativa requiere `tenant_id` salvo excepción documentada. No crear
 6. Agregar pruebas de aislamiento, duplicados y datos existentes.
 
 No aplicar migraciones a QA o Producción sin autorización explícita.
+En QA, aplicar Alembic exclusivamente mediante el gate protegido `qa-database` de `qa-release.yml`; una terminal local puede hacer preflight de solo lectura, pero no sustituir el pipeline.
 
 ## Validar
 

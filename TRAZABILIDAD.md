@@ -2299,9 +2299,6 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `npm.cmd run validate:responsive`, sintaxis, trazabilidad, `git diff --check` y `npm.cmd run verify`. |
 | Observaciones | Cambio exclusivo de frontend, validadores y documentacion. No hubo despliegues, migraciones, seeds ni escrituras en QA. |
 
-## Convencion para futuros cambios
-
-Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
 ### CHG-152
 
 | Campo | Contenido |
@@ -2920,3 +2917,24 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/backoffice/tenants`, `GET /health`, `GET /ready`, `GET /version`; APIs administrativas de Cloud Run. **APIs no tocadas:** contratos de tenant, permisos, Produccion, Inventory y RH. |
 | Validacion | Diagnostico read-only de revision/env y logs 403; parser PowerShell, guardrails de workflow/configuracion, `git diff --check` y `npm.cmd run verify`. |
 | Observaciones | Implementacion `local-write`; la variable externa, revision Cloud Run y trafico QA no se modificaron. Rollback previsto: restaurar 100% a `rollback_revision` registrado antes de promover. |
+
+### CHG-192
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-12 |
+| Cambio | Optimiza agentes y corrige paridad segura Local-QA |
+| Autor | Codex |
+| Archivos | `AGENTS.md`, `AGENTES.md`, `.agents/skills/`, `.github/workflows/validate.yml`, `backend/shared/erclave_common/config.py`, `backend/services/admin-service/tests/test_config.py`, `backend/services/admin-service/tests/test_admin_api.py`, `backend/scripts/seed_admin_qa_demo.py`, `frontend/api/config.js`, `frontend/api/admin.js`, `frontend/app.js`, `frontend/data/modules.js`, `tools/verify.js`, `tools/validators/`, `tools/traceability-draft.js`, `docs/`, `modulos/README.md`, `README.md`, `package.json`, `TRAZABILIDAD.md` |
+| Secciones | Agentes / Skills / Local / QA / Seguridad / Backoffice / Frontend / Validadores / Operacion |
+| Agentes consultados | Arquitecto SaaS; Arquitecto de datos; Custodio DB; Arquitecto API; Ingeniero de Seguridad/IAM/supply chain; QA/Release; Administracion; tecnicos de Produccion, Inventory y RH. Se realizaron auditorias independientes de agentes/skills, pipeline y paridad. |
+| Descripcion | Crea `$erclave-qa-release` y el flujo canonico Local→QA, actualiza agentes y skills, elimina snapshots operativos duplicados, protege CI ante cambios de workflows QA y agrega `validate-local-qa-parity`. Corrige que Settings cargara un `.env` hibrido, bloquea URLs/bases/Firebase QA en Local, impide que `verify` herede una base remota y conserva en memoria el tenant seleccionado desde membresias en QA sin fallback demo. Retira correos Backoffice hardcodeados del seed y KPIs/reservas simuladas de superficies API. |
+| Motivo | La memoria transversal estaba desactualizada tras CHG-182/191 y los validadores aprobaban contradicciones. Dos huecos P0 permitian un Local marcado como tal consumir QA y hacian que usuarios QA de tenants nuevos enviaran el tenant demo al solicitar `session/context`. |
+| Impacto | El siguiente candidato alineara Local aislado y QA real sin sacrificar gates. No modifica contratos HTTP ni datos existentes. Un administrador Backoffice ya no se agrega implicitamente como owner en futuras ejecuciones del seed; membresias historicas no se eliminan. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/session/tenants`, `GET /v1/session/context`, `GET /health`, `GET /ready`, `GET /version`; APIs administrativas de GitHub Actions, Cloud Run y Firebase Hosting documentadas. **APIs no tocadas:** requests/responses funcionales de Admin, Produccion, Inventory y RH. |
+| Validacion | Auditorias independientes y forward-test de la nueva skill; pruebas nuevas de Settings Local; evaluacion dinamica de tenant QA; validadores de CI/seed/skills/paridad; `git diff --check`; `npm.cmd run verify`; smoke publico read-only de cuatro servicios y frontend QA vigente. |
+| Observaciones | Cambios de repositorio `local-write`; no se desplego este candidato ni hubo nuevas migraciones, seeds, datos, IAM, revisiones, trafico o frontend QA. Deuda prioritaria: promocion multi-servicio compensatoria, frontend build-once, provenance fuerte, gates DB condicionales y smoke autenticado/post-Hosting. |
+
+## Convencion para futuros cambios
+
+Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

@@ -1,16 +1,17 @@
 ---
 name: erclave-environment-boundaries
-description: Verificar y proteger las fronteras de Local, QA y Produccion en ERClave. Usar antes de levantar servicios, conectar APIs o bases, ejecutar migraciones, seeds o pruebas, usar Firebase, desplegar, promover releases o realizar cualquier accion que pueda leer o escribir recursos de otro ambiente.
+description: Verificar y proteger las fronteras de Local, QA y Produccion en ERClave. Usar antes de levantar servicios, conectar APIs o bases, ejecutar migraciones, seeds o pruebas, usar Firebase, preparar candidatos QA, ejecutar qa-candidate/qa-release, crear revisiones Cloud Run, mover trafico, publicar Firebase Hosting o realizar cualquier accion que lea o escriba recursos de otro ambiente.
 ---
 
 # Proteger ambientes ERClave
 
 ## Reunir evidencia
 
-1. Leer `AGENTS.md`, `docs/arquitectura/fronteras_ambientes_local_qa_produccion.md`, `docs/contexto/ESTADO_ACTUAL.md` y `docs/contexto/TENANTS.md`.
+1. Leer `AGENTS.md`, `docs/arquitectura/fronteras_ambientes_local_qa_produccion.md`, `docs/contexto/ESTADO_ACTUAL.md` y `docs/contexto/TENANTS.md`. Para `qa-write`, leer ademas `infra/qa/README.md` y usar `$erclave-qa-release`.
 2. Revisar `git status --short`.
 3. Clasificar la operacion como `read-only`, `local-write`, `qa-write` o `prod-write`.
 4. Identificar codigo, URLs, bases, identidad, secretos, integraciones, tenant y observabilidad efectivos.
+5. Declarar agentes consultados, mutaciones independientes y rollback antes de solicitar autorizacion.
 
 No inferir el ambiente por el host del proceso. Un servicio en localhost que consume un recurso QA es **local conectado a QA**.
 
@@ -53,6 +54,8 @@ Antes de actuar, mostrar o comprobar ambiente, clasificacion, servicios, base si
 3. Construir una vez y registrar hashes o digests.
 4. Desplegar a QA y ejecutar gates funcionales, seguridad, aislamiento, migracion y observabilidad.
 5. Promover a Produccion exactamente los artefactos aprobados.
+
+QA se promueve exclusivamente mediante los workflows manuales y GitHub Environments documentados. Nunca ejecutar `alembic`, `gcloud run`, seeds o Firebase deploy directamente desde Local como sustituto del pipeline.
 
 El primer release incluye Produccion, Almacenes, Recursos Humanos, Administracion, Ventas y Backoffice. Cada modulo debe estar desplegado y certificado previamente en QA.
 

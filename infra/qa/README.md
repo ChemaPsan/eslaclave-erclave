@@ -48,6 +48,8 @@ El secreto `erclave-database-url-qa` permanece exclusivamente en Secret Manager 
 
 ## Flujo
 
+El procedimiento transversal y la matriz de autorizaciones viven en `docs/operaciones/flujo_local_a_qa.md` y la skill `$erclave-qa-release`.
+
 1. `qa-candidate.yml` exige SHA completo, validacion local equivalente y confirmacion `BUILD_ERCLAVE_QA`; construye cuatro imagenes y registra digests.
 2. `qa-release.yml` exige el SHA, el run candidato, `PROMOTE_ERCLAVE_QA` y confirmaciones booleanas separadas para migracion y configuracion del tenant.
 3. `qa-database` aplica Alembic solamente tras aprobacion.
@@ -57,6 +59,8 @@ El secreto `erclave-database-url-qa` permanece exclusivamente en Secret Manager 
 7. `qa-traffic` requiere otra aprobacion. Antes de escribir, resuelve desde JSON exactamente una revision `candidate` para cada uno de los cuatro servicios; solo con el conjunto completo mueve el trafico y verifica que cada revision certificada reciba 100%.
 8. `qa-frontend` construye un artefacto sin localhost/emulador, lo conserva y despliega exactamente ese directorio.
 9. `qa-admin-backoffice-config.yml` corrige la allowlist de Admin sin reconstruir imagenes: `qa-services` crea una revision sin trafico sobre la imagen certificada y `qa-traffic` la promueve solamente si imagen, version, configuracion y revision de rollback siguen coincidiendo.
+
+Estado comprobado CHG-191: la variable esta configurada y el run `31661213987` promovio `admin-service-qa-bo-1-1` al 100%; rollback `admin-service-qa-00017-dih`. La prueba funcional autenticada administrador permitido/owner ordinario `403` debe repetirse con sesion renovada y sin almacenar credenciales.
 
 GitHub Pages queda como maqueta manual y ya no se publica automaticamente al cambiar `main`.
 

@@ -252,7 +252,7 @@ No guardes el `.env` real en Git.
 Desde `backend/`, crea un archivo local `.env` tomando como base `.env.example`:
 
 ```text
-ERCLAVE_ENV=qa
+ERCLAVE_ENVIRONMENT=qa
 ERCLAVE_DATABASE_URL=postgresql+psycopg://erclave_app:<DATABASE_PASSWORD>@127.0.0.1:5432/erclave_qa
 ERCLAVE_API_PUBLIC_BASE_URL=http://localhost:8000
 ```

@@ -49,6 +49,10 @@
 - Local, QA y Produccion no comparten bases de datos de prueba.
 - No se despliega, migra, ejecuta seed ni escribe en QA/Produccion sin autorizacion explicita.
 - Las pruebas de volumen y datos dummy se ejecutan solamente en recursos locales aislados y se limpian al terminar.
+- `backend/shared/erclave_common/config.py` no carga `.env` automaticamente. Local canonico recibe variables explicitas de `start_local.ps1`; QA/Produccion las reciben del runtime/pipeline. Esto impide que un archivo hibrido cambie silenciosamente la frontera.
+- En dominios no locales, el tenant activo se resuelve desde `/v1/session/tenants` y se conserva solo en memoria para enviar `X-Tenant-Id`; no existe fallback al tenant o actor demo.
+- `docs/contexto/ESTADO_ACTUAL.md` es la unica fuente de estado operativo mutable. Agentes, skills y documentos modulares deben referenciarlo, no duplicar revisiones o despliegues que envejecen.
+- Toda liberacion Local→QA usa `$erclave-qa-release`, registra `Agentes consultados` y conserva aprobaciones independientes para build, base/configuracion, servicios, trafico, frontend, IAM y datos.
 
 ## Responsive y accesibilidad visual
 

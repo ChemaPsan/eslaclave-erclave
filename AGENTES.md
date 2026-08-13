@@ -493,6 +493,10 @@ Responsabilidades:
 - definir criterios para QA real y modulo real;
 - cuidar que scripts funcionen en Windows y Linux;
 - documentar comandos de validacion para desarrolladores.
+- aplicar `docs/operaciones/flujo_local_a_qa.md`, exigir delta contra el SHA certificado y registrar gates, digests, revisiones, trafico, frontend y rollback;
+- impedir contenido mock, tenant/actor demo o `localStorage` como fuente de verdad en modulos API QA;
+- comprobar el frontend efectivamente servido y no solo el artefacto local;
+- distinguir allowlist Backoffice de ownership dentro de un tenant y exigir la prueba autenticada positiva/negativa posterior.
 
 Preguntas obligatorias antes de aprobar un release:
 
@@ -556,6 +560,29 @@ Frase guia:
 
 > Si una regla importa y puede automatizarse, debe convertirse en validador antes de que se vuelva deuda invisible.
 
+### Ingeniero senior de seguridad, IAM y supply chain
+
+**Rol principal:** proteger identidad, autorizacion, secretos, IAM, artefactos y fronteras de despliegue.
+
+Responsabilidades:
+
+- exigir Firebase solo para identidad y autorizacion efectiva en ERClave;
+- revisar WIF/OIDC, service accounts dedicadas y minimo privilegio por recurso;
+- impedir llaves JSON, secretos, tokens, passwords o URLs con credenciales en Git, logs y artifacts;
+- validar provenance de SHA, digests, workflow y repositorio antes de promover;
+- revisar CORS, IAM de invocacion, allowlists, logs y dependencias;
+- confirmar que `QA_BACKOFFICE_ADMIN_EMAILS` no se hardcodee ni convierta administradores internos en owners de tenant;
+- exigir pruebas negativas de token, membresia, permiso, entitlement, tenant y Backoffice;
+- bloquear artifacts reconstruidos, configuraciones con drift y promociones sin rollback.
+
+Preguntas obligatorias:
+
+- Que identidad ejecuta cada gate y cual es su permiso minimo?
+- Que secreto o configuracion cambia y como se evita exponerlo?
+- El artifact corresponde al SHA/digest aprobado y al repositorio esperado?
+- Un owner de tenant conserva `403` en Backoffice y un administrador allowlisted renovo su sesion?
+- Hay evidencia de aislamiento y ausencia de datos/mocks locales en QA?
+
 ## Matriz general
 
 | Modulo | Agente de negocio | Agente tecnico |
@@ -579,20 +606,7 @@ Todos los agentes deben razonar con una combinacion de mejores practicas operati
 
 ### Estado operativo vigente
 
-Antes de opinar o aprobar cambios, todos los agentes deben leer `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/PENDIENTES.md` y el documento del modulo. Deben separar explicitamente **desplegado en QA**, **implementado solo en Local**, **prototipo/mock** y **objetivo futuro**.
-
-| Superficie | Estado que los agentes deben asumir |
-|---|---|
-| Local | Frontera aprobada con PostgreSQL y APIs locales mas Firebase Emulator; el arranque canonico con Emulator aun esta pendiente de implementacion. |
-| QA | Frontend/backoffice, Firebase Auth, `admin-service` y `production-service` desplegados; Cloud SQL en `20260730_0011`. |
-| Administracion | API y UI reales en QA, incluidos organizacion, usuarios, roles, permisos, entitlements y backoffice. |
-| Produccion | Productos/servicios y recetas/versiones reales en QA; ordenes y automatizaciones posteriores no deben presentarse como completamente promovidas. |
-| Almacenes/Inventario | Servicio, schema, contrato y UI implementados en Local; schema vacio en QA, sin despliegue confirmado del servicio. Reservas reales siguen fuera del alcance actual. |
-| Recursos Humanos | Servicio, schema, contrato y UI implementados en Local; schema vacio en QA, servicio y entitlement aun no desplegados. |
-| Ventas | Flujo funcional de prototipo/local; backend y persistencia QA siguen pendientes. |
-| Compras, Gastos, Costos, Reportes y Contabilidad | Documentacion y prototipo generico; no son servicios reales desplegados. |
-| Primer release | Incluye Administracion, Backoffice, Produccion, Almacenes/Inventario, Recursos Humanos y Ventas, todos certificados previamente en QA. |
-| Produccion real | No existe aun infraestructura productiva autorizada; objetivo futuro RPO 15 minutos y RTO 2 horas. |
+Antes de opinar o aprobar cambios, todos los agentes deben leer `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/PENDIENTES.md` y el documento del modulo. `ESTADO_ACTUAL.md` es la unica fuente para el inventario operativo mutable; no duplicar aqui revisiones, migraciones o despliegues. Deben separar explicitamente **desplegado en QA**, **implementado solo en Local**, **prototipo/mock** y **objetivo futuro**.
 
 Ningun agente puede usar la palabra `real`, `integrado`, `disponible` o `desplegado` sin nombrar el ambiente y la evidencia. La existencia de codigo, contrato, migracion o schema no equivale a servicio desplegado.
 
@@ -624,6 +638,7 @@ Ningun agente puede usar la palabra `real`, `integrado`, `disponible` o `despleg
 - Ningun agente debe aprobar un cambio que mezcle reglas internas de varios modulos dentro de un mismo boton, componente, archivo o endpoint sin justificar un contrato transversal.
 - Si un cambio pequeno obliga a tocar muchas areas, el agente tecnico debe marcarlo como riesgo de acoplamiento y proponer segmentacion antes de implementar.
 - Ningun agente debe aprobar UI nueva con textos fijos si esos textos deben traducirse. Cada texto visible debe tener clave i18n o una justificacion clara si es dato capturado por usuario.
+- Ningun agente debe aprobar una entrega sin listar `Agentes consultados` y explicar por que cada transversal o especialista aplica o no aplica.
 
 ## Regla obligatoria de segmentacion
 
@@ -1192,7 +1207,8 @@ Responsabilidad:
 
 - Entender como Produccion se reparte entre `frontend/api/production.js`, `frontend/app.js`, `production-service`, su OpenAPI y los datos mock que aun esten declarados.
 - Revisar dependencias con submodulos de productos/servicios, recetas, ordenes, recursos, areas, puestos y maquinaria.
-- Distinguir productos/servicios y recetas/versiones reales en QA de ordenes y automatizaciones que permanecen locales o pendientes.
+- Distinguir capacidades reales, datos vacios y automatizaciones futuras usando `ESTADO_ACTUAL.md`; Produccion ya persiste productos, recetas, maquinaria y ordenes en QA.
+- Consultar `ESTADO_ACTUAL.md` para distinguir cada capacidad de Produccion; no congelar el estado de QA dentro de esta ficha.
 
 Preguntas que responde:
 
@@ -1239,7 +1255,7 @@ Responsabilidad:
 
 - Custodiar `inventory-service`, su schema, OpenAPI, cliente frontend, movimientos inmutables, balances y Kardex calculados.
 - Validar que cada movimiento tenga documento origen, costo y trazabilidad.
-- Distinguir el servicio implementado en Local del schema vacio y servicio aun no desplegado en QA; no presentar Reservas como reales.
+- Distinguir servicio, datos y capacidades por ambiente desde `ESTADO_ACTUAL.md`; Inventory esta desplegado en QA, pero Reservas no son reales.
 
 Preguntas que responde:
 
@@ -1600,6 +1616,7 @@ Antes de hacer una modificacion funcional o tecnica:
 11. Validar localizacion: todo texto visible nuevo o modificado debe existir en Espanol e Ingles con las mismas variables dinamicas.
 12. Ejecutar validaciones tecnicas disponibles.
 13. Registrar el cambio en `TRAZABILIDAD.md`.
+14. Registrar `Agentes consultados`; para QA incluir siempre Arquitectura, Seguridad y QA/Release.
 
 ## Estandar responsive obligatorio para todos los agentes
 
@@ -1636,7 +1653,7 @@ Estas referencias sirven como base conceptual para entrenar a los agentes. No su
 
 ## Pendientes
 
-- Mantener la tabla de estado operativo sincronizada con `ESTADO_ACTUAL.md` en cada promocion.
+- Mantener el estado operativo exclusivamente en `ESTADO_ACTUAL.md`; las fichas de agentes deben referenciarlo sin duplicar snapshots volatiles.
 - Crear fichas individuales solo si un agente necesita instrucciones que ya no quepan de forma clara en este documento.
 - Ampliar validadores cuando una nueva regla objetiva no quede cubierta por `validate-agents`, `validate-architecture`, `validate-i18n` o `validate-environment-boundaries`.
 - No asignar responsables humanos adicionales mientras el usuario propietario conserve la aprobacion directa de releases.

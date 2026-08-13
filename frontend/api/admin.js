@@ -48,10 +48,11 @@ export async function getAdminDashboard() {
 export async function getSessionContext() {
   const tenantId = getDemoTenantId();
   const actorId = getDemoActorId();
+  if (!tenantId) throw new Error("No se ha resuelto un tenant activo para la sesion.");
   const response = await apiRequest("/v1/session/context", {
     headers: {
       "X-Tenant-Id": tenantId,
-      "X-Actor-Id": actorId
+      ...(actorId ? { "X-Actor-Id": actorId } : {})
     }
   });
 

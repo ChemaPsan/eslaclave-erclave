@@ -6,6 +6,7 @@ const validators = [
   "validate-codex-tooling.js",
   "validate-environment-boundaries.js",
   "validate-qa-release-pipeline.js",
+  "validate-local-qa-parity.js",
   "validate-session-context.js",
   "validate-i18n.js",
   "validate-active-module-localization.js",

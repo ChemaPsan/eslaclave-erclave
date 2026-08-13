@@ -106,8 +106,18 @@ if (!errors.length) {
       errors.push(`QA backoffice configuration must stage, preflight and verify safely: ${token}`);
     }
   }
-  if ([release, backofficeConfigWorkflow].some((content) => content.includes("eslaclavecaf@gmail.com"))) {
-    errors.push("QA workflows must not hardcode the Backoffice administrator email.");
+  if ([release, backofficeConfigWorkflow, qaSeed].some((content) => content.includes("eslaclavecaf@gmail.com"))) {
+    errors.push("QA workflows and seeds must not hardcode the Backoffice administrator email.");
+  }
+  if (!qaSeed.includes("DEFAULT_EXTRA_OWNER_EMAILS: tuple[str, ...] = ()")) {
+    errors.push("QA demo seed must not grant tenant ownership to Backoffice administrators implicitly.");
+  }
+
+  const validationWorkflow = readText(".github/workflows/validate.yml");
+  for (const workflowPath of ["qa-candidate.yml", "qa-release.yml", "qa-admin-backoffice-config.yml"]) {
+    if (!validationWorkflow.includes(`.github/workflows/${workflowPath}`)) {
+      errors.push(`Repository verification must run when ${workflowPath} changes.`);
+    }
   }
   for (const token of [
     "deploy_candidate()",

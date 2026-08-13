@@ -2,6 +2,7 @@ const LEGACY_DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8010";
 const DEFAULT_TENANT_ID = "ten_739ee59d765d5e14818674800d";
 const DEFAULT_ACTOR_ID = "usr_595f3cd6d4325901a8dbd028e1";
+let activeTenantId = "";
 
 
 function isLocalPreviewHost() {
@@ -89,17 +90,18 @@ export function getHrApiBaseUrl() {
 
 
 export function getDemoTenantId() {
-  if (!isLocalPreviewHost()) return getRuntimeConfigValue("tenantId") || DEFAULT_TENANT_ID;
+  if (!isLocalPreviewHost()) return activeTenantId || getRuntimeConfigValue("tenantId");
   return localStorage.getItem("erclave-api-tenant-id") || getRuntimeConfigValue("tenantId") || DEFAULT_TENANT_ID;
 }
 
 
 export function getConfiguredTenantId() {
-  return getRuntimeConfigValue("tenantId") || DEFAULT_TENANT_ID;
+  return getRuntimeConfigValue("tenantId") || (isLocalPreviewHost() ? DEFAULT_TENANT_ID : "");
 }
 
 
 export function setActiveTenantId(tenantId) {
+  activeTenantId = tenantId || "";
   if (!isLocalPreviewHost()) return;
   if (tenantId) {
     localStorage.setItem("erclave-api-tenant-id", tenantId);
@@ -110,7 +112,7 @@ export function setActiveTenantId(tenantId) {
 
 
 export function getDemoActorId() {
-  if (!isLocalPreviewHost()) return getRuntimeConfigValue("actorId") || DEFAULT_ACTOR_ID;
+  if (!isLocalPreviewHost()) return getRuntimeConfigValue("actorId");
   return localStorage.getItem("erclave-api-actor-id") || getRuntimeConfigValue("actorId") || DEFAULT_ACTOR_ID;
 }
 

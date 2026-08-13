@@ -303,7 +303,7 @@ function renderNav() {
           <button class="nav-button ${module.id === state.active && !state.activeSubmodule ? "active" : ""} ${access.enabled ? "" : "disabled-module"}" type="button" data-module-root="${module.id}" title="${access.enabled ? label : access.reason}" aria-disabled="${access.enabled ? "false" : "true"}">
             <span class="nav-icon">${module.icon}</span>
             <span>${label}</span>
-            <small class="nav-count">${module.count}</small>
+            ${getApiMode() === "api" ? "" : `<small class="nav-count">${module.count}</small>`}
           </button>
           ${renderSubnav(module)}
         </div>
@@ -418,6 +418,13 @@ function renderPanel() {
       return;
     }
     if (state.activeSubmodule) { renderGenericSubmodulePanel(module); return; }
+    const warehouseCount = mockDb.loadModuleRecords("almacenes").filter((record) => record.recordType === "warehouse").length;
+    module.primary = "Nuevo almacen";
+    module.primaryEn = "New warehouse";
+    module.status = "Datos persistidos en API";
+    module.statusEn = "API-persisted data";
+    module.kpis = [["Almacenes", String(warehouseCount), "positive"], ["Reservas", "No disponibles", "warning"], ["Fuente", "PostgreSQL", "positive"]];
+    module.kpisEn = [["Warehouses", String(warehouseCount), "positive"], ["Reservations", "Unavailable", "warning"], ["Source", "PostgreSQL", "positive"]];
   } else if (state.activeSubmodule) {
     renderGenericSubmodulePanel(module);
     return;

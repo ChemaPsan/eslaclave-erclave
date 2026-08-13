@@ -35,7 +35,7 @@ export const modules = [
       "Seleccionar receta activa",
       "Calcular recursos por cantidad",
       "Validar inventario y herramientas",
-      "Reservar insumos",
+      "Registrar disponibilidad observada",
       "Ejecutar etapas",
       "Cerrar produccion y generar producto terminado"
     ],
@@ -43,7 +43,7 @@ export const modules = [
       "Select the active recipe",
       "Calculate resources by quantity",
       "Validate inventory and tools",
-      "Reserve inputs",
+      "Record observed availability",
       "Run production stages",
       "Close production and generate finished goods"
     ],
@@ -56,13 +56,13 @@ export const modules = [
       rows: []
     },
     validations: [
-      ["Almacenes", "Consulta existencias, reservas y faltantes antes de programar."],
+      ["Almacenes", "Consulta existencias y faltantes observados; no reserva ni consume inventario."],
       ["Compras", "Recibe requisiciones automaticas si no hay insumos."],
       ["Costos", "Calcula costo estimado y real por orden."],
       ["Contabilidad", "Prepara mapeos para consumo, merma y producto terminado."]
     ],
     validationsEn: [
-      ["Warehouses", "Checks stock, reservations, and shortages before scheduling."],
+      ["Warehouses", "Checks observed stock and shortages; it does not reserve or consume inventory."],
       ["Purchasing", "Receives automatic requisitions when inputs are missing."],
       ["Costs", "Calculates estimated and actual cost per order."],
       ["Accounting", "Prepares mappings for consumption, scrap, and finished goods."]
@@ -115,21 +115,21 @@ export const modules = [
     titleEn: "Warehouses",
     eyebrow: "Inventario vivo",
     eyebrowEn: "Live inventory",
-    summary: "Existencias, reservas, movimientos, kardex, espacios fisicos y merma.",
-    summaryEn: "Stock, reservations, movements, kardex, physical spaces, and scrap.",
-    primary: "Reservar inventario",
-    primaryEn: "Reserve inventory",
-    status: "7 articulos criticos",
-    statusEn: "7 critical items",
+    summary: "Almacenes, articulos, movimientos y existencias calculadas; Reservas permanece deshabilitado.",
+    summaryEn: "Warehouses, items, movements, and calculated stock; Reservations remains disabled.",
+    primary: "Nuevo almacen",
+    primaryEn: "New warehouse",
+    status: "Reservas no disponibles",
+    statusEn: "Reservations unavailable",
     kpis: [
-      ["Disponible", "$428k", "positive"],
-      ["Reservado", "$96k", "warning"],
-      ["Mermas mes", "2.1%", "danger"]
+      ["Almacenes", "0", "positive"],
+      ["Reservas", "No disponibles", "warning"],
+      ["Fuente", "Sin datos cargados", "positive"]
     ],
     kpisEn: [
-      ["Available", "$428k", "positive"],
-      ["Reserved", "$96k", "warning"],
-      ["Monthly scrap", "2.1%", "danger"]
+      ["Warehouses", "0", "positive"],
+      ["Reservations", "Unavailable", "warning"],
+      ["Source", "No loaded data", "positive"]
     ],
     submodules: [
       ["Almacenes", "Materia prima, herramientas, producto en proceso y terminado."],

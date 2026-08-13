@@ -4,6 +4,7 @@
     "validate:codex-tooling": "node tools/validators/validate-codex-tooling.js",
     "validate:environment-boundaries": "node tools/validators/validate-environment-boundaries.js",
     "validate:qa-release": "node tools/validators/validate-qa-release-pipeline.js",
+    "validate:local-qa-parity": "node tools/validators/validate-local-qa-parity.js",
     "validate:session-context": "node tools/validators/validate-session-context.js",
     "validate:agents": "node tools/validators/validate-agents.js",
     "validate:i18n": "node tools/validators/validate-i18n.js",

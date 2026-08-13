@@ -40,14 +40,14 @@ Cada módulo deberá documentarse con una estructura similar:
 
 | Modulo | Estado actual |
 |---|---|
-| Produccion | Modulo de referencia funcional para catalogo de productos/servicios, recetas, ordenes con snapshot de receta/version, validacion de recursos, areas/puestos y maquinaria. |
-| Almacenes | Alta, busqueda y edicion de almacenes; catalogo de articulos; movimientos manuales con validacion de salida; existencias calculadas; Kardex como consulta; Reservas queda deshabilitado para una fase posterior. |
+| Produccion | API, persistencia y UI reales en QA para productos/servicios, recetas, maquinaria, ordenes con snapshot y validacion observada; no reserva ni consume Inventario. |
+| Almacenes | Inventory y RH reales en QA junto con sus contratos y persistencia. Almacenes, articulos, movimientos, existencias y Kardex usan API; Reservas permanece fuera del alcance. |
 | Ventas | Alta, busqueda y edicion de clientes con perfil comercial y fiscal; cotizaciones multipartida ligadas a clientes y productos/servicios dados de alta; pedidos desde cotizaciones aprobadas con costo/margen estimado y bitacora de ajustes; entregas con estatus, notas y seguimiento; PDF generico imprimible. |
 | Administracion | UI y `admin-service` reales en QA para organizacion, usuarios, roles, permisos, entitlements, sesion y backoffice. |
-| Recursos Humanos | Servicio, schema, contrato y UI implementados en Local; schema vacio en QA, pero servicio y entitlement aun no desplegados. |
+| Recursos Humanos | `hr-service`, schema, contrato, UI y entitlement estructural reales en QA; areas y puestos permanecen vacios hasta captura funcional autorizada. |
 | Resto de modulos | Mantienen MVP generico para especializarse progresivamente. |
 
-La navegacion efectiva depende de `session/context`, entitlements y permisos. Produccion, Almacenes, Recursos Humanos, Administracion y Ventas pertenecen al alcance del primer release, pero cada capacidad debe identificarse como QA, Local, mock o futura conforme a `docs/contexto/ESTADO_ACTUAL.md`; pertenecer al release no significa estar desplegada actualmente.
+La navegacion efectiva depende de `session/context`, entitlements y permisos. Cada capacidad debe identificarse como QA, Local, mock o futura conforme a `docs/contexto/ESTADO_ACTUAL.md`; el estado no se duplica en fichas de agentes.
 
 ## Principio rector
 

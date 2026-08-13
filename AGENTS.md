@@ -14,6 +14,7 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 ## Reglas obligatorias
 
 - Antes de levantar servicios, conectar recursos, probar en QA, migrar, ejecutar seeds o desplegar, usar `$erclave-environment-boundaries` y leer `docs/arquitectura/fronteras_ambientes_local_qa_produccion.md`.
+- Para preparar, desplegar o verificar un candidato Local→QA, usar además `$erclave-qa-release` y `docs/operaciones/flujo_local_a_qa.md`.
 - "Levantar en local" significa Local aislado: PostgreSQL local, APIs locales y Firebase Emulator. No permite Cloud SQL, APIs, Firebase, secretos ni integraciones QA/Produccion.
 - "Local conectado a QA" requiere autorizacion explicita por recurso y alcance; migraciones, seeds, cargas, mutaciones y deploys requieren autorizaciones independientes.
 - El usuario propietario es el aprobador de releases y del autodeploy del frontend; ninguna promocion ocurre antes de pruebas locales y su aprobacion directa.
@@ -34,13 +35,14 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 ## Flujo de implementación
 
 1. Definir criterios de aceptación y blast radius.
-2. Implementar el corte vertical mínimo completo.
-3. Agregar o actualizar pruebas negativas, de permisos, idempotencia y aislamiento según aplique.
-4. Actualizar documentación contractual y operativa afectada.
-5. Agregar una entrada correlativa a `TRAZABILIDAD.md`. Usar `npm run traceability:draft -- --title "..."` para preparar el borrador.
-6. Actualizar `docs/contexto/ESTADO_ACTUAL.md` y `docs/contexto/PENDIENTES.md` cuando cambie el estado real.
-7. Ejecutar `npm run verify`.
-8. Entregar una seccion `APIs afectadas` que enumere cada metodo y ruta involucrados. Separar: contratos modificados, endpoints consumidos sin cambio y APIs no tocadas. Para cada contrato modificado indicar servicio, permiso y cambio de request/response; si no hubo APIs, escribir explicitamente `Ninguna`.
+2. Declarar `Agentes consultados`: negocio/tecnico del modulo y transversales aplicables. Todo release QA incluye Arquitectura, Seguridad y QA/Release.
+3. Implementar el corte vertical mínimo completo.
+4. Agregar o actualizar pruebas negativas, de permisos, idempotencia y aislamiento según aplique.
+5. Actualizar documentación contractual y operativa afectada.
+6. Agregar una entrada correlativa a `TRAZABILIDAD.md`. Usar `npm run traceability:draft -- --title "..."` para preparar el borrador.
+7. Actualizar `docs/contexto/ESTADO_ACTUAL.md` y `docs/contexto/PENDIENTES.md` cuando cambie el estado real.
+8. Ejecutar `npm run verify`.
+9. Entregar una seccion `APIs afectadas` que enumere cada metodo y ruta involucrados. Separar: contratos modificados, endpoints consumidos sin cambio y APIs no tocadas. Para cada contrato modificado indicar servicio, permiso y cambio de request/response; si no hubo APIs, escribir explicitamente `Ninguna`.
 
 Para funcionalidades completas usar la skill `$erclave-feature`. Para modelos o migraciones usar además `$erclave-db-migration`.
 

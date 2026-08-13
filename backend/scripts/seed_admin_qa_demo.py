@@ -13,7 +13,7 @@ DEFAULT_TENANT_NAME = "ERClave Demo QA"
 DEFAULT_ADMIN_EMAIL = "admin.qa@erclave.local"
 DEFAULT_ADMIN_NAME = "Admin QA ERClave"
 ACTIVE_DEMO_MODULES = ("admin", "production", "inventory", "hr")
-DEFAULT_EXTRA_OWNER_EMAILS = ("eslaclavecaf@gmail.com",)
+DEFAULT_EXTRA_OWNER_EMAILS: tuple[str, ...] = ()
 
 
 def stable_id(prefix: str, natural_key: str) -> str:

@@ -23,7 +23,7 @@ if (!errors.length) {
   }
 
   const startup = readText("docs/contexto/INICIO_SESION.md");
-  for (const token of ["session:context", "AGENTS.md", "AGENTES.md", "git status", "run verify", "TRAZABILIDAD.md"]) {
+  for (const token of ["session:context", "AGENTS.md", "AGENTES.md", "git status", "Agentes consultados", "run verify", "TRAZABILIDAD.md"]) {
     if (!startup.includes(token)) errors.push(`INICIO_SESION.md must reference ${token}.`);
   }
 

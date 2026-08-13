@@ -22,6 +22,20 @@ def test_local_environment_allows_local_app_url():
 
 
 @pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("api_public_base_url", "https://admin-service-qa.example.run.app"),
+        ("database_url", "postgresql+psycopg://user:password@127.0.0.1:5432/erclave_qa"),
+        ("database_url", "postgresql+psycopg://user:password@qa-db.example/erclave_local"),
+        ("firebase_project_id", "erclave"),
+    ],
+)
+def test_local_environment_rejects_qa_resources(field, value):
+    with pytest.raises(ValidationError):
+        Settings(environment="local", **{field: value})
+
+
+@pytest.mark.parametrize(
     "app_public_base_url",
     [
         "http://localhost:4173",

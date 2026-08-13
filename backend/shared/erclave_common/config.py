@@ -14,7 +14,6 @@ AuthMode = Literal["demo", "firebase"]
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="ERCLAVE_",
-        env_file=".env",
         extra="ignore",
     )
 
@@ -25,7 +24,7 @@ class Settings(BaseSettings):
     admin_service_url: str = "http://localhost:8000"
     authorization_timeout_seconds: float = 5.0
     app_public_base_url: str = "http://localhost:4173"
-    cors_origins: str = "http://127.0.0.1:4173,http://localhost:4173,https://erclave.web.app,https://erclave.firebaseapp.com"
+    cors_origins: str = "http://127.0.0.1:4173,http://localhost:4173"
     auth_mode: AuthMode = "demo"
     firebase_project_id: str | None = None
     firebase_web_api_key: str | None = None
@@ -38,6 +37,26 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_environment_boundaries(self) -> "Settings":
         if self.environment == "local":
+            local_hosts = {"localhost", "127.0.0.1", "::1"}
+            for value, variable in [
+                (self.api_public_base_url, "ERCLAVE_API_PUBLIC_BASE_URL"),
+                (self.app_public_base_url, "ERCLAVE_APP_PUBLIC_BASE_URL"),
+                (self.admin_service_url, "ERCLAVE_ADMIN_SERVICE_URL"),
+            ]:
+                if urlparse(value).hostname not in local_hosts:
+                    raise ValueError(f"{variable} must remain on loopback in Local isolated mode.")
+            for value, variable in [
+                (self.database_url, "ERCLAVE_DATABASE_URL"),
+                (self.inventory_database_url, "ERCLAVE_INVENTORY_DATABASE_URL"),
+                (self.hr_database_url, "ERCLAVE_HR_DATABASE_URL"),
+            ]:
+                if not value:
+                    continue
+                parsed = urlparse(value)
+                if parsed.hostname not in local_hosts or parsed.path.rstrip("/") != "/erclave_local":
+                    raise ValueError(f"{variable} must target erclave_local on loopback in Local isolated mode.")
+            if self.firebase_project_id and self.firebase_project_id != "demo-erclave":
+                raise ValueError("Local isolated mode only accepts the demo-erclave Firebase Emulator project.")
             return self
 
         local_hosts = {"localhost", "127.0.0.1", "::1"}

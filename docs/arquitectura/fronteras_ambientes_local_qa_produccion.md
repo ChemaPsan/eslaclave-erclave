@@ -1,8 +1,8 @@
 # Fronteras para Local, QA y Produccion
 
-> **Estado:** decisiones aprobadas; adopcion normativa en curso.  
-> **Fecha:** 2026-08-03.  
-> **Autor del analisis:** Arquitectura transversal ERClave.  
+> **Estado:** decisiones aprobadas e implementadas en agentes, skills, validadores y pipeline QA.
+> **Fecha:** 2026-08-12.
+> **Autor del analisis:** Arquitectura transversal ERClave.
 > **Efecto normativo:** fuente transversal de fronteras. Este documento no autoriza por si mismo despliegues, migraciones, seeds, cargas de datos ni cambios de infraestructura.
 
 ## 1. Objetivo
@@ -49,7 +49,7 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 
 ## 4. Inventario actual confirmado
 
-### 4.1 QA verificado al 3 de agosto de 2026
+### 4.1 QA verificado al 12 de agosto de 2026
 
 | Componente o capacidad | Estado confirmado | Evidencia o limite |
 |---|---|---|
@@ -57,15 +57,15 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 | `admin-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | `production-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | Firebase Auth | Integrado | Login y sesion QA documentados |
-| Cloud SQL `erclave_qa` | Migrado | Revision documentada `20260730_0011` |
+| Cloud SQL `erclave_qa` | Migrado | Revision documentada `20260805_0013` |
 | Administracion | Real QA | Tenant, sesion, permisos, roles, entitlements y organizacion |
 | Productos y servicios | Real QA | API de Produccion desplegada |
 | Recetas y versiones | Real QA | Integracion publicada y documentada |
-| Ordenes de produccion | Parcial/local | No candidata a Produccion |
-| `inventory-service` | Codigo y ejecucion local | No consta despliegue del proceso en QA |
+| Ordenes de produccion | Real QA | API, snapshots, etapas y validacion observada persistidos; no reserva Inventario |
+| `inventory-service` | Activo QA | Servicio, contrato y Cloud SQL reales; catalogos sin carga funcional |
 | Schema `inventory` | Presente en QA | Catalogos documentados en cero registros |
-| `hr-service` | Codigo y ejecucion local | No desplegado en QA |
-| Schema `hr` | Presente en QA | Vacio; entitlement no activado |
+| `hr-service` | Activo QA | Servicio, contrato y entitlement estructural activos |
+| Schema `hr` | Presente en QA | Areas y puestos en cero registros |
 | Ventas | Prototipo local | No candidata a Produccion |
 | Compras, Gastos, Costos, Contabilidad y Reportes | Demo o futuro | Sin backend productivo certificado |
 | Infraestructura de Produccion | No confirmada | No hay evidencia documental de ambiente productivo desplegado |
@@ -185,9 +185,8 @@ QA debe usar una topologia equivalente a Produccion, con menor capacidad y recur
 
 ### 7.2 Servicios condicionados
 
-- `inventory-service-qa` solo despues de cumplir sus gates;
-- `hr-service-qa` solo despues de cumplir sus gates y decidir el entitlement;
-- Ventas y servicios futuros solo al cumplir su definicion de modulo real.
+- `inventory-service-qa` y `hr-service-qa` ya cumplieron sus gates y estan activos;
+- Ventas y servicios futuros solo se activan al cumplir su definicion de modulo real.
 
 ### 7.3 Datos permitidos
 
@@ -414,13 +413,13 @@ QA y Produccion deben tener dashboards, alertas y retencion separados.
 | Dueño funcional | Aceptacion del flujo |
 | QA y Release | Gates, despliegue, monitoreo y rollback |
 
-## 15. Cambios futuros propuestos para agentes y skills
+## 15. Adopcion en agentes y skills
 
-Esta seccion describe cambios recomendados. No estan aprobados ni implementados.
+Las fronteras ya estan implementadas mediante `AGENTS.md`, `AGENTES.md`, `$erclave-environment-boundaries`, `$erclave-qa-release`, `docs/operaciones/flujo_local_a_qa.md` y validadores del repositorio. Las reglas siguientes describen el comportamiento vigente.
 
-### 15.1 Skill transversal propuesta
+### 15.1 Skills transversales vigentes
 
-Crear `.agents/skills/erclave-environment-boundaries/SKILL.md` y activarla ante instrucciones como:
+Activar `$erclave-environment-boundaries` y, para promociones, `$erclave-qa-release` ante instrucciones como:
 
 - "levanta el proyecto";
 - "prueba en QA";
@@ -430,7 +429,7 @@ Crear `.agents/skills/erclave-environment-boundaries/SKILL.md` y activarla ante 
 - "despliega";
 - "pasa a Produccion".
 
-La skill debera:
+Las skills deben:
 
 1. clasificar la operacion como lectura, escritura local, escritura QA o escritura Prod;
 2. imprimir una matriz efectiva de dependencias;
@@ -443,65 +442,16 @@ La skill debera:
 9. detenerse ante discrepancias de ambiente;
 10. impedir que `.env` o `localStorage` cambien silenciosamente la frontera.
 
-### 15.2 Otros cambios propuestos
+### 15.2 Estado de adopcion
 
-- Agregar a `AGENTS.md` la definicion canonica de ambientes.
-- Agregar las mismas preguntas obligatorias a Arquitectura, Datos, DB, Seguridad y QA/Release.
-- Separar "local aislado" de "local conectado a QA".
-- Actualizar `docs/arquitectura/qa_prod.md` con el inventario real.
-- Actualizar la guia QA para Inventory y RH.
-- Crear un manifest versionado de recursos permitidos por ambiente.
-- Agregar un validador que detecte URLs QA/Prod en configuracion Local.
-- Agregar un validador que detecte `localhost` en builds QA/Prod.
-- Crear checklist y plantilla de promocion a Produccion.
-- Identificar el workflow de GitHub Pages como publicacion de maqueta, no como pipeline productivo completo.
-- Evitar autodeploy de `main` hacia QA si se adopta una promocion gobernada por releases.
+Ya estan implementados la definicion canonica, agentes transversales, separacion Local/QA, guia QA, workflow manual, bloqueo de configuracion Local remota y sanitizacion runtime del frontend. Permanecen pendientes el manifest/provenance fuerte de recursos, la promocion compensatoria y el checklist productivo final.
 
-## 16. Plan de adopcion propuesto
+## 16. Mantenimiento continuo
 
-### Fase 0. Aprobacion conceptual
-
-- Revisar este documento.
-- Resolver las decisiones abiertas.
-- Corregir alcance y terminologia.
-- Aprobar o rechazar formalmente la propuesta.
-
-### Fase 1. Fuente de verdad documental
-
-- Integrar la definicion aprobada en `AGENTS.md` y `AGENTES.md`.
-- Actualizar `qa_prod.md`, `ESTADO_ACTUAL.md`, `DECISIONES.md` y `PENDIENTES.md`.
-- Registrar trazabilidad.
-
-### Fase 2. Skills y validadores
-
-- Crear `erclave-environment-boundaries`.
-- Integrarla con `erclave-feature` y `erclave-db-migration`.
-- Agregar manifest por ambiente.
-- Agregar validadores de fronteras.
-
-### Fase 3. Arranque local canonico
-
-- Crear un comando unico de preflight y arranque.
-- Consolidar variables locales.
-- Bloquear QA y Prod.
-- Emitir la matriz efectiva de servicios.
-- Agregar comando de apagado local seguro.
-
-### Fase 4. Pipeline QA
-
-- Construir artefactos inmutables.
-- Desplegar QA desde pipeline.
-- Ejecutar migraciones controladas.
-- Ejecutar smoke tests.
-- Publicar evidencia de release.
-
-### Fase 5. Preparacion de Produccion
-
-- Crear proyecto y recursos productivos separados.
-- Definir dominio, IAM, secretos, backups, RTO y RPO.
-- Certificar el primer corte.
-- Ensayar despliegue y rollback.
-- Promover los mismos digests aprobados en QA.
+- Mantener `ESTADO_ACTUAL.md` como inventario mutable unico.
+- Ejecutar `npm.cmd run validate:environment-boundaries` y `validate:local-qa-parity` en cada cambio de ambientes.
+- Actualizar el pipeline, sus skills y validadores en el mismo corte.
+- Resolver la deuda de atomicidad, provenance, frontend build-once y smoke autenticado antes de Produccion.
 
 ## 17. Registro de decisiones
 
@@ -513,8 +463,8 @@ La skill debera:
 | Local conectado a QA | Se permitira solo con autorizacion explicita para una necesidad y alcance concretos. | Aprobado |
 | Alcance completo del primer release | Administracion, Backoffice, Produccion, Almacenes/Inventario, RH y Ventas. | Aprobado |
 | Backoffice | Formara parte del primer release. | Aprobado |
-| Recursos Humanos | Formara parte del primer release, sujeto a despliegue y certificacion previa en QA. | Aprobado |
-| Inventario | Formara parte del primer release, sujeto a despliegue y certificacion previa en QA. | Aprobado |
+| Recursos Humanos | Forma parte del primer release y su servicio ya fue desplegado/certificado estructuralmente en QA. | Aprobado y cumplido en QA |
+| Inventario | Forma parte del primer release y su servicio ya fue desplegado/certificado estructuralmente en QA. | Aprobado y cumplido en QA |
 | RPO productivo | 15 minutos. | Aprobado |
 | RTO productivo | 2 horas. | Aprobado |
 | Infraestructura RTO/RPO | Se planeara antes del release, pero no se implementara hasta autorizar la fase de Produccion. | Aprobado |
@@ -525,13 +475,6 @@ La skill debera:
 
 1. Definir dominio productivo cuando sea adquirido.
 
-## 18. Criterio para aprobar esta propuesta
+## 18. Criterio de mantenimiento
 
-La propuesta puede pasar de borrador a decision vigente cuando:
-
-- el usuario resuelva las decisiones abiertas;
-- Arquitectura, Datos, Seguridad y QA/Release validen sus fronteras;
-- se acuerde el primer corte productivo;
-- se defina la politica de local conectado a QA;
-- se identifiquen responsables de aprobacion;
-- el documento sea incorporado a las fuentes normativas y a las skills mediante un cambio posterior autorizado.
+Toda modificacion de ambientes debe actualizar este documento, agentes, skills, validadores, runbooks y trazabilidad en el mismo corte; Produccion continúa bloqueada hasta autorizacion explicita y certificacion completa.

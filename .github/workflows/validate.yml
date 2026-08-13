@@ -19,6 +19,9 @@ on:
       - "tools/**"
       - ".github/workflows/validate.yml"
       - ".github/workflows/pages.yml"
+      - ".github/workflows/qa-candidate.yml"
+      - ".github/workflows/qa-release.yml"
+      - ".github/workflows/qa-admin-backoffice-config.yml"
   push:
     branches:
       - main
@@ -37,6 +40,9 @@ on:
       - "tools/**"
       - ".github/workflows/validate.yml"
       - ".github/workflows/pages.yml"
+      - ".github/workflows/qa-candidate.yml"
+      - ".github/workflows/qa-release.yml"
+      - ".github/workflows/qa-admin-backoffice-config.yml"
   workflow_dispatch:
 
 permissions:
