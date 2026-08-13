@@ -1,0 +1,106 @@
+name: Configure QA Backoffice access
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_version:
+        description: Full certified Admin commit SHA currently active in QA
+        required: true
+        type: string
+      confirmation:
+        description: Type CONFIGURE_BACKOFFICE_QA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: erclave-qa-release
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ${{ vars.QA_GCP_PROJECT_ID }}
+  REGION: ${{ vars.QA_GCP_REGION }}
+  EXPECTED_VERSION: ${{ inputs.expected_version }}
+  BACKOFFICE_ADMIN_EMAILS: ${{ vars.QA_BACKOFFICE_ADMIN_EMAILS }}
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate explicit QA backoffice authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirmation }}" = "CONFIGURE_BACKOFFICE_QA"
+          test "$PROJECT_ID" = "erclave"
+          [[ "$EXPECTED_VERSION" =~ ^[0-9a-f]{40}$ ]]
+          test -n "$BACKOFFICE_ADMIN_EMAILS"
+          [[ "$BACKOFFICE_ADMIN_EMAILS" != *"|"* ]]
+
+  stage:
+    needs: preflight
+    runs-on: windows-latest
+    environment: qa-services
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.QA_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.QA_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Stage allowlist on the certified Admin image without traffic
+        shell: pwsh
+        run: |
+          backend/scripts/configure_qa_backoffice.ps1 `
+            -Mode Stage `
+            -ProjectId $env:PROJECT_ID `
+            -Region $env:REGION `
+            -AllowedEmails $env:BACKOFFICE_ADMIN_EMAILS `
+            -ExpectedVersion $env:EXPECTED_VERSION `
+            -RevisionSuffix "bo-${{ github.run_number }}-${{ github.run_attempt }}" `
+            -StatePath backoffice-promotion.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qa-backoffice-promotion-${{ github.run_id }}-${{ github.run_attempt }}
+          path: backoffice-promotion.json
+          retention-days: 30
+
+  promote:
+    needs: stage
+    runs-on: windows-latest
+    environment: qa-traffic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-backoffice-promotion-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.QA_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.QA_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Promote only the verified Admin configuration revision
+        shell: pwsh
+        run: |
+          backend/scripts/configure_qa_backoffice.ps1 `
+            -Mode Promote `
+            -ProjectId $env:PROJECT_ID `
+            -Region $env:REGION `
+            -AllowedEmails $env:BACKOFFICE_ADMIN_EMAILS `
+            -ExpectedVersion $env:EXPECTED_VERSION `
+            -StatePath backoffice-promotion.json

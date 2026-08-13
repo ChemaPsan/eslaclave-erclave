@@ -39,6 +39,7 @@ env:
   RELEASE_SHA: ${{ inputs.release_sha }}
   PROJECT_ID: ${{ vars.QA_GCP_PROJECT_ID }}
   REGION: ${{ vars.QA_GCP_REGION }}
+  BACKOFFICE_ADMIN_EMAILS: ${{ vars.QA_BACKOFFICE_ADMIN_EMAILS }}
 
 jobs:
   preflight:
@@ -53,6 +54,8 @@ jobs:
           test "$PROJECT_ID" = "erclave"
           [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "${{ inputs.candidate_run_id }}" =~ ^[0-9]+$ ]]
+          test -n "$BACKOFFICE_ADMIN_EMAILS"
+          [[ "$BACKOFFICE_ADMIN_EMAILS" != *"|"* ]]
 
       - uses: actions/checkout@v4
         with:
@@ -163,7 +166,7 @@ jobs:
           source candidate/qa-images.env
           common=(--project "$PROJECT_ID" --region "$REGION" --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest --allow-unauthenticated --tag candidate --quiet)
           cors="https://erclave.web.app,https://erclave.firebaseapp.com"
-          admin_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=admin-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_APP_PUBLIC_BASE_URL=https://erclave.web.app@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
+          admin_env="^|^ERCLAVE_ENVIRONMENT=qa|ERCLAVE_SERVICE_NAME=admin-service|ERCLAVE_VERSION=$RELEASE_SHA|ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_ADMIN_API_URL }}|ERCLAVE_APP_PUBLIC_BASE_URL=https://erclave.web.app|ERCLAVE_CORS_ORIGINS=$cors|ERCLAVE_AUTH_MODE=firebase|ERCLAVE_FIREBASE_PROJECT_ID=erclave|ERCLAVE_BACKOFFICE_ADMIN_EMAILS=$BACKOFFICE_ADMIN_EMAILS"
           inventory_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=inventory-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
           hr_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=hr-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_HR_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
           production_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=production-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
