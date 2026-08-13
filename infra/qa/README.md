@@ -8,7 +8,7 @@ Esta carpeta declara la configuracion necesaria para preparar el candidato. No a
 
 Antes de aprovisionar se debe revisar el plan con el usuario aprobador y conceder cada rol mediante una actividad `qa-write` independiente.
 
-Estado comprobado el 2026-08-08: las seis cuentas dedicadas, Artifact Registry `erclave-qa` y el provider WIF limitado a `ChemaPsan/eslaclave-erclave` estan aprovisionados. No existen llaves JSON del pipeline.
+Estado comprobado el 2026-08-12: las seis cuentas dedicadas, Artifact Registry `erclave-qa` y el provider WIF limitado a `ChemaPsan/eslaclave-erclave` estan aprovisionados. La identidad desplegadora cuenta con `roles/firebasehosting.admin` para publicar exclusivamente mediante el gate `qa-frontend`. No existen llaves JSON del pipeline.
 
 ## GitHub Environments obligatorios
 

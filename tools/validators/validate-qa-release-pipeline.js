@@ -107,6 +107,12 @@ if (!errors.length) {
       errors.push(`Identity plan must include erclave-${service}-qa.`);
     }
   }
+  const deployerIdentity = identityPlan.serviceAccounts.find(
+    (account) => account.accountId === "erclave-github-deployer-qa"
+  );
+  if (!deployerIdentity?.projectRoles?.includes("roles/firebasehosting.admin")) {
+    errors.push("QA deployer identity must include roles/firebasehosting.admin for the gated frontend release.");
+  }
   for (const forbidden of ["credentials_json", "service_account_key", "localhost", "firebase-emulator", "demo-erclave"]) {
     if ([candidate, release].some((content) => content.includes(forbidden))) {
       errors.push(`QA workflows contain forbidden token: ${forbidden}`);
