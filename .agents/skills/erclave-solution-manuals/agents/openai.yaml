@@ -1,0 +1,6 @@
+interface:
+  display_name: "ERClave Solution Manuals"
+  short_description: "Crea y mantiene manuales funcionales por modulo"
+  default_prompt: "Usa $erclave-solution-manuals para crear o actualizar el manual funcional del modulo solicitado."
+policy:
+  allow_implicit_invocation: true

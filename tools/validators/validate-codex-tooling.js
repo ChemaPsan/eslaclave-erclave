@@ -11,6 +11,8 @@ const requiredFiles = [
   ".agents/skills/erclave-db-migration/agents/openai.yaml",
   ".agents/skills/erclave-environment-boundaries/SKILL.md",
   ".agents/skills/erclave-environment-boundaries/agents/openai.yaml",
+  ".agents/skills/erclave-qa-release/SKILL.md",
+  ".agents/skills/erclave-qa-release/agents/openai.yaml",
   "tools/verify.js",
   "tools/traceability-draft.js",
   "tools/session-context.js",
@@ -40,7 +42,7 @@ if (!errors.length) {
     errors.push("Traceability drafts must include an APIs afectadas field.");
   }
 
-  for (const name of ["erclave-feature", "erclave-db-migration", "erclave-environment-boundaries"]) {
+  for (const name of ["erclave-feature", "erclave-db-migration", "erclave-environment-boundaries", "erclave-qa-release"]) {
     const skill = readText(path.join(".agents", "skills", name, "SKILL.md"));
     if (!skill.startsWith(`---\nname: ${name}\n`)) {
       errors.push(`${name}/SKILL.md has invalid frontmatter or name.`);
@@ -52,10 +54,11 @@ if (!errors.length) {
 
     const yaml = readText(path.join(".agents", "skills", name, "agents", "openai.yaml"));
     if (!yaml.includes(`$${name}`)) errors.push(`${name}/agents/openai.yaml must invoke $${name}.`);
+    if (yaml.includes("�")) errors.push(`${name}/agents/openai.yaml contains invalid replacement characters.`);
   }
 
   const packageJson = JSON.parse(readText("package.json"));
-  for (const script of ["validate:codex-tooling", "validate:environment-boundaries", "validate:session-context", "verify", "traceability:draft", "session:context"]) {
+  for (const script of ["validate:codex-tooling", "validate:environment-boundaries", "validate:local-qa-parity", "validate:session-context", "verify", "traceability:draft", "session:context"]) {
     if (!packageJson.scripts?.[script]) errors.push(`package.json is missing script ${script}.`);
   }
 }

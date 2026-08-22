@@ -75,11 +75,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(wc -l < candidate/qa-images.env)" -eq 4
+          test "$(wc -l < candidate/qa-images.env)" -eq 5
           grep -Eq '^ADMIN_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
           grep -Eq '^PRODUCTION_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
           grep -Eq '^INVENTORY_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
           grep -Eq '^HR_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
+          grep -Eq '^SALES_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
 
       - uses: actions/upload-artifact@v4
         with:
@@ -167,9 +168,10 @@ jobs:
           common=(--project "$PROJECT_ID" --region "$REGION" --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest --allow-unauthenticated --tag candidate --quiet)
           cors="https://erclave.web.app,https://erclave.firebaseapp.com"
           admin_env="^|^ERCLAVE_ENVIRONMENT=qa|ERCLAVE_SERVICE_NAME=admin-service|ERCLAVE_VERSION=$RELEASE_SHA|ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_ADMIN_API_URL }}|ERCLAVE_APP_PUBLIC_BASE_URL=https://erclave.web.app|ERCLAVE_CORS_ORIGINS=$cors|ERCLAVE_AUTH_MODE=firebase|ERCLAVE_FIREBASE_PROJECT_ID=erclave|ERCLAVE_BACKOFFICE_ADMIN_EMAILS=$BACKOFFICE_ADMIN_EMAILS"
-          inventory_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=inventory-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
+          inventory_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=inventory-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_PRODUCTION_SERVICE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
           hr_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=hr-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_HR_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
-          production_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=production-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
+          production_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=production-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_HR_SERVICE_URL=${{ vars.QA_HR_API_URL }}@ERCLAVE_INVENTORY_SERVICE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
+          sales_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=sales-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_SALES_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_HR_SERVICE_URL=${{ vars.QA_HR_API_URL }}@ERCLAVE_PRODUCTION_SERVICE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_INVENTORY_SERVICE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
 
           deploy_candidate() {
             local service="$1"
@@ -191,6 +193,7 @@ jobs:
           deploy_candidate inventory-service-qa "$INVENTORY_IMAGE" "${{ vars.QA_INVENTORY_RUNTIME_SERVICE_ACCOUNT }}" "$inventory_env"
           deploy_candidate hr-service-qa "$HR_IMAGE" "${{ vars.QA_HR_RUNTIME_SERVICE_ACCOUNT }}" "$hr_env"
           deploy_candidate production-service-qa "$PRODUCTION_IMAGE" "${{ vars.QA_PRODUCTION_RUNTIME_SERVICE_ACCOUNT }}" "$production_env"
+          deploy_candidate sales-service-qa "$SALES_IMAGE" "${{ vars.QA_SALES_RUNTIME_SERVICE_ACCOUNT }}" "$sales_env"
 
       - name: Smoke candidate revision URLs
         shell: bash
@@ -231,6 +234,7 @@ jobs:
           QA_PRODUCTION_API_URL: ${{ vars.QA_PRODUCTION_API_URL }}
           QA_INVENTORY_API_URL: ${{ vars.QA_INVENTORY_API_URL }}
           QA_HR_API_URL: ${{ vars.QA_HR_API_URL }}
+          QA_SALES_API_URL: ${{ vars.QA_SALES_API_URL }}
           QA_FIREBASE_API_KEY: ${{ vars.QA_FIREBASE_API_KEY }}
           QA_FIREBASE_AUTH_DOMAIN: ${{ vars.QA_FIREBASE_AUTH_DOMAIN }}
           QA_FIREBASE_PROJECT_ID: erclave

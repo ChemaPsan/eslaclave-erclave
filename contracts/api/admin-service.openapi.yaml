@@ -21,13 +21,14 @@ tags:
   - name: Roles
   - name: BusinessUnits
   - name: Settings
+  - name: Catalogs
 paths:
   /v1/session/context:
     get:
       tags: [Session]
       operationId: getSessionContext
       summary: Get current tenant, actor, active modules and granted permissions.
-      description: In QA/prod, resolves the actor from a Firebase Auth ID token sent as `Authorization: Bearer <token>`. In local/demo mode, `X-Actor-Id` can be used as a temporary fallback.
+      description: "In QA/prod, resolves the actor from a Firebase Auth ID token sent as `Authorization: Bearer <token>`. In local/demo mode, `X-Actor-Id` can be used as a temporary fallback."
       x-required-module: admin
       x-permissions: [internal.session.context.read]
       parameters:
@@ -47,6 +48,19 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /v1/session/tenants:
+    get:
+      tags: [Session]
+      operationId: listSessionTenants
+      summary: List tenants available to the authenticated Firebase actor.
+      x-required-module: admin
+      x-permissions: [internal.session.tenant.read]
+      responses:
+        '200':
+          description: Available tenant memberships.
+          content: {application/json: {schema: {$ref: '#/components/schemas/SessionTenantListResponse'}}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
   /v1/tenants/{tenant_id}:
     get:
       tags: [Tenants]
@@ -76,6 +90,7 @@ paths:
       summary: Update tenant general data.
       x-required-module: admin
       x-permissions: [admin.tenant.update]
+      x-implementation-status: planned
       parameters:
         - $ref: '#/components/parameters/TenantIdPath'
         - $ref: '#/components/parameters/CorrelationId'
@@ -202,6 +217,109 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /v1/backoffice/tenants:
+    get:
+      tags: [Backoffice]
+      operationId: listBackofficeTenants
+      summary: List tenants for the internal ERClave backoffice.
+      x-required-module: admin
+      x-permissions: [internal.backoffice.tenant.read]
+      parameters:
+        - name: search
+          in: query
+          schema: {type: string}
+        - name: limit
+          in: query
+          schema: {type: integer, default: 50, minimum: 1, maximum: 100}
+      responses:
+        '200':
+          description: Tenant list.
+          content: {application/json: {schema: {$ref: '#/components/schemas/BackofficeTenantListResponse'}}}
+  /v1/backoffice/modules:
+    get:
+      tags: [Backoffice]
+      operationId: listBackofficeModules
+      summary: List the ERClave module catalog and implementation availability.
+      x-required-module: admin
+      x-permissions: [internal.backoffice.tenant.read]
+      responses:
+        '200':
+          description: Module catalog.
+          content: {application/json: {schema: {$ref: '#/components/schemas/ModuleCatalogListResponse'}}}
+  /v1/backoffice/tenants/{tenant_id}/status:
+    patch:
+      tags: [Backoffice]
+      operationId: setBackofficeTenantStatus
+      summary: Activate or suspend a tenant from internal backoffice.
+      x-required-module: admin
+      x-permissions: [internal.backoffice.tenant.manage]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/BackofficeTenantStatusRequest'}}}
+      responses:
+        '200':
+          description: Tenant status updated.
+          content: {application/json: {schema: {$ref: '#/components/schemas/TenantResponse'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /v1/backoffice/tenants/{tenant_id}:
+    patch:
+      tags: [Backoffice]
+      operationId: updateBackofficeTenant
+      summary: Update editable tenant identity and localization fields.
+      x-required-module: admin
+      x-permissions: [internal.backoffice.tenant.manage]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/BackofficeTenantUpdateRequest'}}}
+      responses:
+        '200':
+          description: Tenant updated.
+          content: {application/json: {schema: {$ref: '#/components/schemas/TenantResponse'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      tags: [Backoffice]
+      operationId: deleteBackofficeTenant
+      summary: Permanently remove a tenant through the protected internal backoffice.
+      x-required-module: admin
+      x-permissions: [internal.backoffice.tenant.delete]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Tenant deletion result.
+          content: {application/json: {schema: {$ref: '#/components/schemas/BackofficeTenantDeleteResponse'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /v1/backoffice/tenants/{tenant_id}/entitlements/{module_code}:
+    put:
+      tags: [Backoffice]
+      operationId: setBackofficeTenantEntitlement
+      summary: Grant, suspend or withdraw a tenant module entitlement from internal Backoffice.
+      x-required-module: admin
+      x-permissions: [internal.backoffice.entitlement.manage]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/ModuleCodePath'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/BackofficeEntitlementUpdateRequest'}}}
+      responses:
+        '200':
+          description: Contractual entitlement updated.
+          content: {application/json: {schema: {$ref: '#/components/schemas/EntitlementResponse'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
   /v1/tenants/{tenant_id}/suspend:
     post:
       tags: [Tenants]
@@ -209,6 +327,7 @@ paths:
       summary: Suspend tenant writes and access according to policy.
       x-required-module: admin
       x-permissions: [admin.tenant.suspend]
+      x-implementation-status: planned
       parameters:
         - $ref: '#/components/parameters/TenantIdPath'
         - $ref: '#/components/parameters/CorrelationId'
@@ -235,6 +354,7 @@ paths:
       summary: Reactivate a suspended tenant.
       x-required-module: admin
       x-permissions: [admin.tenant.reactivate]
+      x-implementation-status: planned
       parameters:
         - $ref: '#/components/parameters/TenantIdPath'
         - $ref: '#/components/parameters/CorrelationId'
@@ -273,7 +393,7 @@ paths:
     put:
       tags: [Entitlements]
       operationId: upsertTenantEntitlement
-      summary: Activate, suspend or update limits for a module.
+      summary: Turn on or off a module already granted by Backoffice.
       x-required-module: admin
       x-permissions: [admin.entitlement.manage]
       parameters:
@@ -286,7 +406,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EntitlementUpsertRequest'
+              $ref: '#/components/schemas/EntitlementPreferenceUpdateRequest'
       responses:
         '200':
           description: Entitlement updated.
@@ -565,6 +685,7 @@ paths:
       summary: List business units.
       x-required-module: admin
       x-permissions: [admin.business_unit.read]
+      x-implementation-status: planned
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -581,6 +702,7 @@ paths:
       summary: Create business unit.
       x-required-module: admin
       x-permissions: [admin.business_unit.create]
+      x-implementation-status: planned
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -846,6 +968,185 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrganizationItemResponse'
+  /v1/catalogs/units-of-measure:
+    get:
+      tags: [Catalogs]
+      operationId: listUnitsOfMeasure
+      summary: List the tenant unit-of-measure catalog.
+      x-required-module: admin
+      x-permissions: [admin.unit.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: include_inactive
+          in: query
+          schema: {type: boolean, default: false}
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 120}
+      responses:
+        '200':
+          description: Tenant catalog.
+          content: {application/json: {schema: {$ref: '#/components/schemas/UnitOfMeasureListResponse'}}}
+    post:
+      tags: [Catalogs]
+      operationId: createUnitOfMeasure
+      summary: Add a tenant-specific unit of measure.
+      x-required-module: admin
+      x-permissions: [admin.unit.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/UnitOfMeasureWrite'}}}
+      responses:
+        '201':
+          description: Unit created.
+          content: {application/json: {schema: {$ref: '#/components/schemas/UnitOfMeasureResponse'}}}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /v1/catalogs/code-sequences:
+    get:
+      tags: [Catalogs]
+      operationId: listCodeSequences
+      summary: List tenant business-code policies and current counters.
+      x-required-module: admin
+      x-permissions: [admin.setting.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Tenant code-sequence catalog.
+          content: {application/json: {schema: {$ref: '#/components/schemas/CodeSequenceListResponse'}}}
+  /v1/catalogs/code-sequences/{sequence_id}:
+    patch:
+      tags: [Catalogs]
+      operationId: updateCodeSequence
+      summary: Configure automatic or manual business-code capture.
+      x-required-module: admin
+      x-permissions: [admin.setting.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: sequence_id
+          in: path
+          required: true
+          schema: {type: string}
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/CodeSequenceUpdate'}}}
+      responses:
+        '200': {description: Sequence policy updated, content: {application/json: {schema: {$ref: '#/components/schemas/CodeSequenceResponse'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /v1/catalogs/code-sequences/{document_type}/next:
+    post:
+      tags: [Catalogs]
+      operationId: allocateBusinessCode
+      summary: Atomically allocate the next managed code or validate a manual code.
+      x-required-module: admin
+      x-permissions: [production.product_service.create, production.recipe.create, production.order.create, production.machine.create, inventory.warehouse.create, inventory.item.create, inventory.movement.create, hr.area.create, hr.position.create, hr.worker.create, sales.customer.create, sales.quote.create, sales.order.create, sales.delivery.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: document_type
+          in: path
+          required: true
+          schema: {type: string, maxLength: 80}
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/CodeSequenceNext'}}}
+      responses:
+        '200': {description: Stable code allocated for the command, content: {application/json: {schema: {$ref: '#/components/schemas/CodeSequenceAllocationResponse'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /v1/catalogs/units-of-measure/by-code/{code}:
+    get:
+      tags: [Catalogs]
+      operationId: getUnitOfMeasureByCode
+      summary: Resolve an active unit by stable code.
+      x-required-module: admin
+      x-permissions: [admin.unit.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: code
+          in: path
+          required: true
+          schema: {type: string, maxLength: 20}
+      responses:
+        '200':
+          description: Active tenant unit.
+          content: {application/json: {schema: {$ref: '#/components/schemas/UnitOfMeasureResponse'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /v1/catalogs/units-of-measure/{unit_id}:
+    patch:
+      tags: [Catalogs]
+      operationId: updateUnitOfMeasure
+      summary: Update or deactivate a tenant unit of measure.
+      x-required-module: admin
+      x-permissions: [admin.unit.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: unit_id
+          in: path
+          required: true
+          schema: {type: string}
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/UnitOfMeasureUpdate'}}}
+      responses:
+        '200':
+          description: Unit updated.
+          content: {application/json: {schema: {$ref: '#/components/schemas/UnitOfMeasureResponse'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /v1/catalogs/commercial/{catalog_code}:
+    get:
+      operationId: listCommercialCatalogItems
+      x-required-module: admin
+      x-permissions: [admin.catalog.read, sales.customer.read, sales.customer.create, sales.customer.update, sales.quote.read, sales.quote.create, sales.quote.update, sales.order.read, sales.order.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { name: catalog_code, in: path, required: true, schema: { type: string, enum: [currencies, payment_terms] } }, { name: include_inactive, in: query, schema: { type: boolean } }]
+      responses: { '200': { description: Tenant commercial catalog. } }
+    post:
+      operationId: createCommercialCatalogItem
+      x-required-module: admin
+      x-permissions: [admin.catalog.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { name: catalog_code, in: path, required: true, schema: { type: string, enum: [currencies, payment_terms] } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [code, name_es, name_en], properties: { code: { type: string }, name_es: { type: string }, name_en: { type: string }, metadata: { type: object } } } } } }
+      responses: { '201': { description: Commercial catalog item created. } }
+  /v1/catalogs/commercial/{catalog_code}/by-code/{code}:
+    get:
+      operationId: getCommercialCatalogItemByCode
+      x-required-module: admin
+      x-permissions: [admin.catalog.read, sales.customer.create, sales.customer.update, sales.quote.create, sales.quote.update, sales.order.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { name: catalog_code, in: path, required: true, schema: { type: string } }, { name: code, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: Active commercial catalog item. } }
+  /v1/catalogs/commercial/{catalog_code}/{item_id}:
+    patch:
+      operationId: updateCommercialCatalogItem
+      x-required-module: admin
+      x-permissions: [admin.catalog.update]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { name: catalog_code, in: path, required: true, schema: { type: string } }, { name: item_id, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { name_es: { type: string }, name_en: { type: string }, metadata: { type: object }, status: { type: string, enum: [active, inactive] } } } } } }
+      responses: { '200': { description: Commercial catalog item updated. } }
+  /v1/document-template:
+    get:
+      operationId: getDocumentTemplate
+      x-required-module: admin
+      x-permissions: [admin.setting.read, sales.quote.read, sales.order.read, sales.delivery.read, production.order.read]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
+      responses: { '200': { description: Tenant PDF identity template. } }
+    put:
+      operationId: updateDocumentTemplate
+      x-required-module: admin
+      x-permissions: [admin.setting.update]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [primary_color, accent_color, text_color, show_page_number], properties: { logo_data_url: { type: [string, 'null'], maxLength: 1500000, description: "Local only. Valid PNG, JPEG or WebP data URL whose decoded content is at most 1 MB; null removes the current logo." }, primary_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }, accent_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }, text_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }, footer_text: { type: [string, 'null'], maxLength: 300 }, show_page_number: { type: boolean } } } } } }
+      responses: { '200': { description: Tenant PDF identity template updated. } }
 components:
   securitySchemes:
     bearerAuth:
@@ -956,6 +1257,163 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    CodeSequence:
+      type: object
+      required: [id, document_type, module_code, name_es, name_en, prefix, separator, next_number, padding, mode, system_default, status]
+      properties:
+        id: {type: string}
+        document_type: {type: string, maxLength: 80}
+        module_code: {type: string, maxLength: 40}
+        name_es: {type: string, maxLength: 160}
+        name_en: {type: string, maxLength: 160}
+        prefix: {type: string, maxLength: 24}
+        separator: {type: string, maxLength: 3}
+        next_number: {type: integer, minimum: 1}
+        padding: {type: integer, minimum: 1, maximum: 12}
+        mode: {type: string, enum: [managed, manual]}
+        system_default: {type: boolean}
+        status: {type: string, enum: [active, inactive]}
+    CodeSequenceUpdate:
+      type: object
+      properties:
+        prefix: {type: string, minLength: 1, maxLength: 24, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+        separator: {type: string, maxLength: 3, pattern: '^[._/-]*$'}
+        next_number: {type: integer, minimum: 1}
+        padding: {type: integer, minimum: 1, maximum: 12}
+        mode: {type: string, enum: [managed, manual]}
+        status: {type: string, enum: [active, inactive]}
+    CodeSequenceNext:
+      type: object
+      properties:
+        manual_code: {type: [string, 'null'], minLength: 1, maxLength: 60, pattern: '^[A-Za-z0-9][A-Za-z0-9._/-]*$'}
+    CodeSequenceAllocation:
+      type: object
+      required: [document_type, mode, code]
+      properties:
+        document_type: {type: string}
+        mode: {type: string, enum: [managed, manual]}
+        code: {type: string}
+        sequence_number: {type: [integer, 'null']}
+    CodeSequenceResponse:
+      type: object
+      required: [data]
+      properties: {data: {$ref: '#/components/schemas/CodeSequence'}}
+    CodeSequenceListResponse:
+      type: object
+      required: [data]
+      properties: {data: {type: array, items: {$ref: '#/components/schemas/CodeSequence'}}}
+    CodeSequenceAllocationResponse:
+      type: object
+      required: [data]
+      properties: {data: {$ref: '#/components/schemas/CodeSequenceAllocation'}}
+    UnitOfMeasure:
+      type: object
+      required: [id, code, name_es, name_en, symbol, category, decimal_places, system_default, status]
+      properties:
+        id: {type: string}
+        code: {type: string, maxLength: 20}
+        name_es: {type: string, maxLength: 120}
+        name_en: {type: string, maxLength: 120}
+        symbol: {type: string, maxLength: 24}
+        category: {type: string, maxLength: 40}
+        decimal_places: {type: integer, minimum: 0, maximum: 6}
+        system_default: {type: boolean}
+        status: {type: string, enum: [active, inactive]}
+    UnitOfMeasureWrite:
+      type: object
+      required: [code, name_es, name_en, symbol, category]
+      properties:
+        code: {type: string, maxLength: 20}
+        name_es: {type: string, maxLength: 120}
+        name_en: {type: string, maxLength: 120}
+        symbol: {type: string, maxLength: 24}
+        category: {type: string, maxLength: 40}
+        decimal_places: {type: integer, minimum: 0, maximum: 6}
+    UnitOfMeasureUpdate:
+      type: object
+      properties:
+        name_es: {type: string, minLength: 1, maxLength: 120}
+        name_en: {type: string, minLength: 1, maxLength: 120}
+        symbol: {type: string, minLength: 1, maxLength: 24}
+        category: {type: string, minLength: 1, maxLength: 40}
+        decimal_places: {type: integer, minimum: 0, maximum: 6}
+        status: {type: string, enum: [active, inactive]}
+    UnitOfMeasureResponse:
+      type: object
+      required: [data]
+      properties: {data: {$ref: '#/components/schemas/UnitOfMeasure'}}
+    UnitOfMeasureListResponse:
+      type: object
+      required: [data]
+      properties: {data: {type: array, items: {$ref: '#/components/schemas/UnitOfMeasure'}}}
+    SessionTenant:
+      type: object
+      required: [tenant, user_status, membership_status, roles]
+      properties:
+        tenant: {$ref: '#/components/schemas/Tenant'}
+        user_status: {type: string}
+        membership_status: {type: string}
+        roles: {type: array, items: {type: string}}
+    SessionTenantListResponse:
+      type: object
+      required: [data]
+      properties:
+        data: {type: array, items: {$ref: '#/components/schemas/SessionTenant'}}
+        page: {$ref: '#/components/schemas/Page'}
+    BackofficeTenant:
+      allOf:
+        - $ref: '#/components/schemas/Tenant'
+        - type: object
+          properties:
+            owner_email: {type: [string, 'null']}
+            active_memberships: {type: integer}
+            total_memberships: {type: integer}
+            modules: {type: array, items: {type: string}}
+            entitlements: {type: array, items: {$ref: '#/components/schemas/Entitlement'}}
+            legal_entities_count: {type: integer}
+            branches_count: {type: integer}
+    BackofficeTenantListResponse:
+      type: object
+      required: [data]
+      properties: {data: {type: array, items: {$ref: '#/components/schemas/BackofficeTenant'}}}
+    BackofficeTenantStatusRequest:
+      type: object
+      required: [status]
+      properties: {status: {type: string, enum: [active, suspended]}}
+    BackofficeTenantUpdateRequest:
+      type: object
+      properties:
+        commercial_name: {type: string, minLength: 1, maxLength: 240}
+        legal_name: {type: [string, 'null'], maxLength: 240}
+        plan_id: {type: [string, 'null'], maxLength: 40}
+        timezone: {type: string, minLength: 1, maxLength: 80}
+        locale: {type: string, minLength: 2, maxLength: 20}
+    BackofficeEntitlementUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [active, inactive, suspended]}
+        limits: {type: object, additionalProperties: true}
+        source: {type: string, enum: [subscription, manual, trial], default: manual}
+    ModuleCatalog:
+      type: object
+      required: [code, name, description, owner_service, public_feature, implementation_status, dependencies]
+      properties:
+        code: {type: string}
+        name: {type: string}
+        description: {type: string}
+        owner_service: {type: string}
+        public_feature: {type: boolean}
+        implementation_status: {type: string, enum: [implemented, planned]}
+        dependencies: {type: array, items: {type: string}}
+    ModuleCatalogListResponse:
+      type: object
+      required: [data]
+      properties: {data: {type: array, items: {$ref: '#/components/schemas/ModuleCatalog'}}}
+    BackofficeTenantDeleteResponse:
+      type: object
+      required: [data]
+      properties: {data: {type: object, additionalProperties: true}}
     ErrorResponse:
       type: object
       required: [error]
@@ -1227,12 +1685,19 @@ components:
           type: string
     Entitlement:
       type: object
+      required: [module_code, status, source, tenant_enabled, effective_active, limits]
       properties:
         module_code:
           type: string
         status:
           type: string
           enum: [active, inactive, suspended]
+        source:
+          type: string
+        tenant_enabled:
+          type: boolean
+        effective_active:
+          type: boolean
         limits:
           type: object
           additionalProperties: true
@@ -1312,19 +1777,11 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/SessionContext'
-    EntitlementUpsertRequest:
+    EntitlementPreferenceUpdateRequest:
       type: object
-      required: [status]
+      required: [enabled]
       properties:
-        status:
-          type: string
-          enum: [active, inactive, suspended]
-        limits:
-          type: object
-          additionalProperties: true
-        source:
-          type: string
-          enum: [subscription, manual, trial]
+        enabled: {type: boolean}
     PolicyEvaluateRequest:
       type: object
       required: [tenant_id, actor_id, module, resource, action]

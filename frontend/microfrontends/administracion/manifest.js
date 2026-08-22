@@ -4,6 +4,7 @@ export const manifest = {
   icon: "AD",
   version: "0.1.0",
   service: "admin-service",
-  permissions: ["administracion:read"],
+  implementationStatus: "implemented",
+  permissions: ["admin.tenant.read"],
   routes: ["/administracion", "/administracion/usuarios", "/administracion/roles", "/administracion/configuracion"]
 };

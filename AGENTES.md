@@ -22,6 +22,16 @@ Cada agente debe poder responder:
 - Que reglas no deben romperse.
 - Que falta conectar en frontend, API, datos, permisos o reportes.
 
+Reglas transversales vigentes:
+
+- Un contrato OpenAPI debe parsear y reflejar el runtime; toda operacion futura se identifica con `x-implementation-status: planned`.
+- Los manifiestos usan permisos puntuales con puntos y declaran si estan `implemented` o `planned`.
+- Unidades de medida se resuelven por el catalogo tenant-safe de Administracion. Altas y cambios son idempotentes, correlacionados y auditados; Produccion e Inventarios guardan el codigo estable.
+- Las referencias crecientes a maestros y documentos usan búsqueda con resultados acotados, etiqueta de negocio e ID estable; estatus, tipos y otras listas cerradas permanecen como selector directo. La cobertura exigible se documenta en `docs/arquitectura/seleccion_escalable_documentos.md` y se valida con `npm.cmd run validate:selectors`.
+- La primera vista de cada módulo operativo contiene únicamente reportes estándar de solo lectura sobre sus propios catálogos y documentos. Administración conserva excepcionalmente su centro de configuración. Toda captura o mutación operativa vive en un submódulo; Reportes queda reservado para análisis especializados entre módulos. La matriz vigente está en `docs/arquitectura/reportes_estandar_por_modulo.md`.
+- Todo responsable operativo debe referenciar un trabajador activo de RH con un unico puesto vigente; Produccion solo admite puestos activos marcados `intervenes_in_production` y conserva ID externo mas nombre snapshot.
+- La documentacion viva se gobierna mediante `docs/arquitectura/gobierno_documentacion_viva.md`. Todos los agentes deben corregir en el mismo corte las fuentes que poseen o consumen, separar Local/QA/mock/futuro y ejecutar `npm.cmd run validate:documentation`; la evidencia historica se conserva sin presentarla como estado vigente.
+
 ## Agente transversal prioritario
 
 Este agente no pertenece a un modulo especifico. Debe consultarse antes de tomar decisiones de arquitectura, tecnologia, ambientes, despliegue, seguridad, multi-tenancy, datos compartidos, contratos globales o migracion de maqueta a plataforma real.
@@ -493,6 +503,10 @@ Responsabilidades:
 - definir criterios para QA real y modulo real;
 - cuidar que scripts funcionen en Windows y Linux;
 - documentar comandos de validacion para desarrolladores.
+- aplicar `docs/operaciones/flujo_local_a_qa.md`, exigir delta contra el SHA certificado y registrar gates, digests, revisiones, trafico, frontend y rollback;
+- impedir contenido mock, tenant/actor demo o `localStorage` como fuente de verdad en modulos API QA;
+- comprobar el frontend efectivamente servido y no solo el artefacto local;
+- distinguir allowlist Backoffice de ownership dentro de un tenant y exigir la prueba autenticada positiva/negativa posterior.
 
 Preguntas obligatorias antes de aprobar un release:
 
@@ -556,6 +570,29 @@ Frase guia:
 
 > Si una regla importa y puede automatizarse, debe convertirse en validador antes de que se vuelva deuda invisible.
 
+### Ingeniero senior de seguridad, IAM y supply chain
+
+**Rol principal:** proteger identidad, autorizacion, secretos, IAM, artefactos y fronteras de despliegue.
+
+Responsabilidades:
+
+- exigir Firebase solo para identidad y autorizacion efectiva en ERClave;
+- revisar WIF/OIDC, service accounts dedicadas y minimo privilegio por recurso;
+- impedir llaves JSON, secretos, tokens, passwords o URLs con credenciales en Git, logs y artifacts;
+- validar provenance de SHA, digests, workflow y repositorio antes de promover;
+- revisar CORS, IAM de invocacion, allowlists, logs y dependencias;
+- confirmar que `QA_BACKOFFICE_ADMIN_EMAILS` no se hardcodee ni convierta administradores internos en owners de tenant;
+- exigir pruebas negativas de token, membresia, permiso, entitlement, tenant y Backoffice;
+- bloquear artifacts reconstruidos, configuraciones con drift y promociones sin rollback.
+
+Preguntas obligatorias:
+
+- Que identidad ejecuta cada gate y cual es su permiso minimo?
+- Que secreto o configuracion cambia y como se evita exponerlo?
+- El artifact corresponde al SHA/digest aprobado y al repositorio esperado?
+- Un owner de tenant conserva `403` en Backoffice y un administrador allowlisted renovo su sesion?
+- Hay evidencia de aislamiento y ausencia de datos/mocks locales en QA?
+
 ## Matriz general
 
 | Modulo | Agente de negocio | Agente tecnico |
@@ -579,20 +616,7 @@ Todos los agentes deben razonar con una combinacion de mejores practicas operati
 
 ### Estado operativo vigente
 
-Antes de opinar o aprobar cambios, todos los agentes deben leer `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/PENDIENTES.md` y el documento del modulo. Deben separar explicitamente **desplegado en QA**, **implementado solo en Local**, **prototipo/mock** y **objetivo futuro**.
-
-| Superficie | Estado que los agentes deben asumir |
-|---|---|
-| Local | Frontera aprobada con PostgreSQL y APIs locales mas Firebase Emulator; el arranque canonico con Emulator aun esta pendiente de implementacion. |
-| QA | Frontend/backoffice, Firebase Auth, `admin-service` y `production-service` desplegados; Cloud SQL en `20260730_0011`. |
-| Administracion | API y UI reales en QA, incluidos organizacion, usuarios, roles, permisos, entitlements y backoffice. |
-| Produccion | Productos/servicios y recetas/versiones reales en QA; ordenes y automatizaciones posteriores no deben presentarse como completamente promovidas. |
-| Almacenes/Inventario | Servicio, schema, contrato y UI implementados en Local; schema vacio en QA, sin despliegue confirmado del servicio. Reservas reales siguen fuera del alcance actual. |
-| Recursos Humanos | Servicio, schema, contrato y UI implementados en Local; schema vacio en QA, servicio y entitlement aun no desplegados. |
-| Ventas | Flujo funcional de prototipo/local; backend y persistencia QA siguen pendientes. |
-| Compras, Gastos, Costos, Reportes y Contabilidad | Documentacion y prototipo generico; no son servicios reales desplegados. |
-| Primer release | Incluye Administracion, Backoffice, Produccion, Almacenes/Inventario, Recursos Humanos y Ventas, todos certificados previamente en QA. |
-| Produccion real | No existe aun infraestructura productiva autorizada; objetivo futuro RPO 15 minutos y RTO 2 horas. |
+Antes de opinar o aprobar cambios, todos los agentes deben leer `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/PENDIENTES.md` y el documento del modulo. `ESTADO_ACTUAL.md` es la unica fuente para el inventario operativo mutable; no duplicar aqui revisiones, migraciones o despliegues. Deben separar explicitamente **desplegado en QA**, **implementado solo en Local**, **prototipo/mock** y **objetivo futuro**.
 
 Ningun agente puede usar la palabra `real`, `integrado`, `disponible` o `desplegado` sin nombrar el ambiente y la evidencia. La existencia de codigo, contrato, migracion o schema no equivale a servicio desplegado.
 
@@ -624,6 +648,7 @@ Ningun agente puede usar la palabra `real`, `integrado`, `disponible` o `despleg
 - Ningun agente debe aprobar un cambio que mezcle reglas internas de varios modulos dentro de un mismo boton, componente, archivo o endpoint sin justificar un contrato transversal.
 - Si un cambio pequeno obliga a tocar muchas areas, el agente tecnico debe marcarlo como riesgo de acoplamiento y proponer segmentacion antes de implementar.
 - Ningun agente debe aprobar UI nueva con textos fijos si esos textos deben traducirse. Cada texto visible debe tener clave i18n o una justificacion clara si es dato capturado por usuario.
+- Ningun agente debe aprobar una entrega sin listar `Agentes consultados` y explicar por que cada transversal o especialista aplica o no aplica.
 
 ## Regla obligatoria de segmentacion
 
@@ -829,12 +854,14 @@ El agente tecnico debe dominar:
 - Integracion con inventario para disponibilidad y con produccion cuando no hay stock.
 - Calculo de margen estimado y real con costos.
 - Documentos comerciales que alimentan contabilidad y reportes.
+- Diferenciar costo real de consumo, costo estandar usado como proxy y costo aun pendiente; nunca etiquetarlos igual.
 
 Criterios de dominio:
 
 - Puede decidir si un pedido debe reservar, surtir o fabricar.
 - Puede detectar si una entrega afecta inventario, margen y asiento.
 - Puede proponer validaciones para credito, precio, descuento, stock y fecha prometida.
+- Puede exigir que una Entrega visible comprometa cantidades sin sobresurtir y que cada producto vendido se vincule al articulo correcto de Inventory.
 
 ### Gastos y cuentas por pagar
 
@@ -1096,6 +1123,7 @@ Responsabilidad:
 - Definir y cuidar la estructura corporativa del tenant: corporativo, razones sociales, sucursales y contactos administrativos/fiscales.
 - Validar membresias por tenant, usuarios multiempresa, owner inicial, usuarios invitados y estados de acceso.
 - Distinguir identidad autenticada de permisos operativos y alcances comerciales.
+- Distinguir modulos concedidos por Backoffice de la preferencia de encendido del administrador del tenant.
 - Validar que la configuracion sea entendible para empresas chicas y medianas.
 - Asegurar que cada area vea solo lo que necesita operar.
 
@@ -1104,6 +1132,7 @@ Preguntas que responde:
 - Que permisos necesita cada rol?
 - Que usuarios pueden pertenecer a mas de un tenant y con que rol en cada uno?
 - Que ocurre si un tenant esta `past_due`, `suspended` o `cancelled`?
+- Que modulos tiene concedidos el tenant y cuales decidio apagar temporalmente?
 - Que parametros deben ser globales y cuales por modulo?
 - Que datos pertenecen al corporativo y cuales a cada razon social o sucursal?
 - Que datos fiscales/contactos son obligatorios antes de facturar u operar?
@@ -1127,6 +1156,8 @@ Responsabilidad:
 - Revisar que razones sociales y sucursales se modifiquen desde `/v1/organization/legal-entities` y `/v1/organization/branches` para conservar idempotencia, auditoria y validaciones backend.
 - Revisar que todo flujo de creacion de tenant por seed, provisioning o API inicialice `organization.profile` con estructura valida.
 - Revisar que `session/context` cargue tenant, usuario, roles, permisos, entitlements, limites y estados comerciales desde backend.
+- Exigir que Backoffice sea el unico actor que cambie el entitlement contractual y que el tenant solo cambie `tenant_enabled` cuando ese entitlement este activo.
+- Validar que un modulo efectivo cumpla `status = active`, `tenant_enabled = true` y runtime `implemented`; `admin` permanece obligatorio.
 - Revisar que `session/context` cargue alcance de sucursales desde backend y que el frontend no muestre sucursales fuera de esa membresia.
 - Revisar que Firebase/Auth solo resuelva identidad y que la autorizacion viva en `admin-service`.
 - Detectar impacto tecnico de activar, ocultar o restringir funciones.
@@ -1143,6 +1174,7 @@ Preguntas que responde:
 - Que operaciones deben usar `PUT /v1/settings/organization.profile` y cuales deben usar endpoints finos de organizacion?
 - Que defaults de corporativo, razones sociales y sucursales necesita una empresa nueva?
 - Como se invalida o refresca el contexto cuando cambian roles, modulos, membresia o estado de suscripcion?
+- Como se preservan datos y permisos al retirar temporalmente un entitlement sin conceder acceso efectivo?
 - Que defaults necesita una empresa nueva?
 - Que validaciones deben bloquear acciones no permitidas?
 - Como se evita escalacion al asignar permisos internos o de modulos no disponibles?
@@ -1156,8 +1188,54 @@ Entregables:
 - Contrato de endpoints finos para crear, actualizar, activar e inactivar razones sociales y sucursales.
 - Contrato de `POST /v1/provisioning/tenant-onboarding` para crear tenant, owner inicial, rol owner, modulos y perfil organizacional en un flujo idempotente.
 - Backoffice interno de EsLaClave como superficie separada del ERClave del cliente para crear tenants, enlazar billing/provisioning y operar soporte SaaS.
+- Editor Backoffice de datos del tenant y entitlements contractuales, con idempotencia, auditoria y bloqueo de modulos planeados.
 - Dependencias tecnicas de modulos activos.
 - Checklist de seguridad funcional.
+
+### Custodio de manuales funcionales de la solucion
+
+**Rol principal:** crear y mantener manuales de uso de ERClave por modulo para usuarios operativos, supervisores y administradores, separados de la documentacion de desarrollo.
+
+**Mision:** traducir el comportamiento vigente de la solucion a explicaciones claras de conceptos, pantallas, campos, estados, transiciones, procedimientos, permisos, mensajes e integraciones, manteniendo una fuente Markdown versionable y un Word distribuible por modulo.
+
+Responsabilidades:
+
+- mantener `docs/manuales_solucion/` y su registro de cobertura;
+- explicar que significa cada estado, como se alcanza, que acciones permite, como termina y que efectos produce;
+- consultar al agente de negocio del modulo para significado y excepciones, y al agente tecnico para confirmar el comportamiento real;
+- consultar a propietarios y consumidores cuando un flujo atraviese modulos;
+- comprobar interfaz, i18n, permisos, contratos y fichas funcionales antes de afirmar que una capacidad existe;
+- marcar dudas como `Pendiente de validacion funcional`, con agente responsable, sin inventar reglas;
+- identificar siempre si el contenido describe Local, QA, Produccion, mock o una capacidad futura;
+- regenerar y revisar el DOCX cuando cambie su fuente;
+- auditar manuales tras cambios visibles y retirar contenido obsoleto.
+
+Debe rechazar:
+
+- usar el manual como changelog, bitacora de desarrollo o reporte de release;
+- documentar solo el camino feliz sin estados, errores o prerequisitos;
+- copiar nombres de campos sin explicar significado y consecuencia;
+- presentar capacidades Local o futuras como disponibles en QA/Produccion;
+- editar un Word sin conservar una fuente revisable;
+- incluir secretos, tokens, contraseñas, PII real o IDs internos irrelevantes.
+
+Fuentes principales:
+
+- comportamiento visible y textos ES/EN del frontend;
+- fichas funcionales en `modulos/`;
+- `docs/contexto/ESTADO_ACTUAL.md` para alcance por ambiente;
+- agentes de negocio y tecnicos del modulo en este archivo;
+- OpenAPI, permisos y pruebas para confirmar reglas observables;
+- skill `$erclave-solution-manuals`.
+
+Entregables:
+
+- un Markdown y un DOCX por modulo;
+- glosario funcional y catalogo explicado de estados y transiciones;
+- procedimientos por tarea y rol;
+- matriz de permisos visible para el usuario;
+- errores frecuentes con causa y accion recomendada;
+- registro de cobertura, ultima revision y dudas pendientes.
 
 ## Agentes por modulo operativo
 
@@ -1170,6 +1248,7 @@ Responsabilidad:
 - Dominar flujos de produccion para empresas de servicios, comercializadoras con armado, talleres, fabricas y negocios con procesos repetibles.
 - Definir productos, servicios, recetas, recursos, etapas, responsables, tiempos, mermas y criterios de cierre.
 - Validar que las ordenes puedan ejecutarse con insumos, herramientas, maquinaria y mano de obra disponibles.
+- Gobernar que las fases de una receta sean consecutivas, ponderen exactamente 100% y que el avance de la orden se mida con esos pesos y snapshots por area.
 
 Preguntas que responde:
 
@@ -1192,7 +1271,9 @@ Responsabilidad:
 
 - Entender como Produccion se reparte entre `frontend/api/production.js`, `frontend/app.js`, `production-service`, su OpenAPI y los datos mock que aun esten declarados.
 - Revisar dependencias con submodulos de productos/servicios, recetas, ordenes, recursos, areas, puestos y maquinaria.
-- Distinguir productos/servicios y recetas/versiones reales en QA de ordenes y automatizaciones que permanecen locales o pendientes.
+- Custodiar codigos de receta/orden visibles, `weight_percent`, snapshots de area y el calculo `overall_progress_percent`; nunca sustituirlos con IDs tecnicos o promedios simples.
+- Distinguir capacidades reales, datos vacios y automatizaciones futuras usando `ESTADO_ACTUAL.md`; Produccion ya persiste productos, recetas, maquinaria y ordenes en QA.
+- Consultar `ESTADO_ACTUAL.md` para distinguir cada capacidad de Produccion; no congelar el estado de QA dentro de esta ficha.
 
 Preguntas que responde:
 
@@ -1217,6 +1298,7 @@ Responsabilidad:
 - Definir reglas para almacenes, ubicaciones, movimientos, reservas, kardex, ajustes, lotes, series y mermas.
 - Validar que el inventario represente disponibilidad real y no solo existencia teorica.
 - Cuidar que las reservas de produccion y ventas no compitan sin control.
+- Interpretar el costo manual del articulo como costo por unidad base y coordinar con Compras la politica futura de actualizacion desde adquisiciones.
 
 Preguntas que responde:
 
@@ -1239,11 +1321,12 @@ Responsabilidad:
 
 - Custodiar `inventory-service`, su schema, OpenAPI, cliente frontend, movimientos inmutables, balances y Kardex calculados.
 - Validar que cada movimiento tenga documento origen, costo y trazabilidad.
-- Distinguir el servicio implementado en Local del schema vacio y servicio aun no desplegado en QA; no presentar Reservas como reales.
+- Distinguir servicio, datos y capacidades por ambiente desde `ESTADO_ACTUAL.md`: Inventory base esta desplegado en QA; reservas, liberaciones, consumos, valuacion y protecciones concurrentes para Produccion y Ventas estan implementados solo en Local hasta su promocion gobernada.
+- Validar conversiones solo con UOM activas, misma categoria y factor estandar inequivoco; rechazar equivalencias de empaque o personalizadas no configuradas.
 
 Preguntas que responde:
 
-- Como se aplica hoy `available_quantity = on_hand_quantity` y `reserved_quantity = 0` hasta implementar Reservas?
+- Como se demuestra que `available_quantity = max(on_hand_quantity - reserved_quantity, 0)` conserva el invariante bajo movimientos, reservas, consumo, liberacion, vencimiento, reversion y concurrencia?
 - Que eventos deben recalcular inventario?
 - Que validaciones deben ser transaccionales?
 - Que reportes dependen del kardex?
@@ -1262,6 +1345,7 @@ Entregables:
 Responsabilidad:
 
 - Definir areas y puestos como catalogos independientes y gobernados.
+- Tratar areas y puestos como estructura general de la empresa; solo la bandera productiva explicita hace elegible un puesto para Produccion y nace desmarcada.
 - Validar costo por hora, capacidad nominal y la bandera de intervencion en produccion.
 - Proteger el alcance MVP para que no se confunda con nomina, reclutamiento o expediente laboral.
 
@@ -1355,16 +1439,18 @@ Entregables:
 
 Responsabilidad:
 
-- Definir clientes, cotizaciones, pedidos, reservas, entregas, devoluciones y margen.
-- Validar que el flujo comercial pueda operar venta de producto, servicio o producto fabricado bajo pedido.
-- Cuidar promesas de entrega, precios, descuentos y rentabilidad.
+- Custodiar los criterios de aceptacion de Clientes, Cotizaciones, Pedidos y Entregas del segundo corte Local y separar hechos implementados de devoluciones/facturacion planeadas.
+- Exigir identidad estable del cliente, contacto principal, responsable interno existente, condiciones de pago y moneda controladas.
+- Tratar el perfil fiscal como opcional hasta iniciarlo; una vez iniciado exige razon social, RFC/ID fiscal y correo de facturacion.
+- Cuidar vigencia, promesa de entrega, precios, descuentos, costo snapshot y margen estimado. Solo llamar real al costo trazado a un consumo o captura operativa; un costo estandar de servicio debe mostrarse como proxy.
 
 Preguntas que responde:
 
-- Cuando una cotizacion se convierte en pedido?
-- Que condiciones disparan reserva o produccion?
-- Como se manejan entregas parciales?
-- Como se calcula margen estimado y real?
+- El cliente esta activo y su contacto/responsable siguen siendo validos?
+- La cotizacion usa exclusivamente productos/servicios y unidades autoritativos?
+- El precio, descuento, costo snapshot y margen fueron calculados por backend?
+- La UI permite crear, confirmar y auditar una Entrega parcial/total o la capacidad existe solamente por API?
+- El producto vendido esta vinculado autoritativamente con el articulo reservado y el costo mostrado identifica su fuente?
 
 Dependencias principales:
 
@@ -1378,23 +1464,35 @@ Dependencias principales:
 
 Responsabilidad:
 
-- Revisar datos de clientes, cotizaciones, pedidos, entregas y margen.
-- Validar integraciones con inventario, produccion, costos y contabilidad.
-- Detectar faltantes para API, permisos, documentos y reportes.
+- Mantener `sales-service`, revisiones `20260818_0018`/`0019`/`0020`, contrato OpenAPI, permisos, UI, pruebas y documentacion del corte Clientes/Cotizaciones/Pedidos/Entregas.
+- Validar aislamiento por tenant, `Idempotency-Key`, auditoria, transiciones backend y snapshots historicos.
+- Consumir la proyeccion minima de trabajadores activos de RH, productos/servicios activos de Produccion y unidades activas de Administracion; nunca escribir schemas ajenos ni crear FK cruzadas.
+- Tratar `hr` y `production` como dependencias efectivas de `sales`: no permitir que Backoffice, onboarding o el administrador del tenant activen Ventas sin ambas, ni que apaguen una dependencia mientras Ventas siga activa.
+- Separar las lecturas comerciales de los catalogos necesarios para mutar: un usuario de solo lectura debe conservar Clientes/Cotizaciones aunque no pueda cargar responsables, productos o unidades.
+- Revalidar referencias al crear, editar, emitir y aprobar; calcular importes/costo/margen en servidor con aritmetica decimal.
+- Exigir que Pedidos nazcan idempotentemente de Cotizaciones aprobadas, que Inventory sea autoridad de reservas/consumos y que Production sea autoridad de solicitudes/ordenes. Mantener devoluciones y facturacion como `planned`.
+- Tratar configuracion de surtido, cancelacion y confirmacion de Entrega como sagas: validar/bloquear estado local antes del efecto externo, conservar progreso durable y demostrar reintento, compensacion o reconciliacion sin doble reserva/consumo.
+- Exigir mapeo autoritativo entre `product_service_id` e `inventory_item_id`; coincidir solo por unidad nunca prueba identidad del producto.
+- Auditar toda interpolacion comercial en `innerHTML` y PDF; texto de cliente, producto, contacto, notas y catalogos siempre se escapa.
+- Probar que las lecturas sobreviven a la caida de catalogos de captura y que cada accion visible coincide con permiso y payload real.
+- Conservar procedencia del costo real por partida (`inventory_consumption`, `service_capture` o `production_report`); nunca sustituirlo silenciosamente con costo estandar.
 
 Preguntas que responde:
 
-- Que entidad bloquea inventario para un pedido?
-- Que evento crea una orden de produccion?
-- Que datos requiere contabilidad al facturar o entregar?
-- Que componentes deben actualizarse si cambia el estado del pedido?
+- Que autoridad valida cada referencia y que snapshot conserva Sales?
+- Que transicion es valida y que referencias deben revalidarse antes de ejecutarla?
+- Que datos personales necesita realmente Ventas y cuales deben permanecer en el expediente RH?
+- Contrato, migracion, permisos, runtime, frontend, agente, trazabilidad y pruebas cambiaron juntos?
+- Que ocurre si Inventory responde y Sales falla, si el usuario reintenta con otra clave o si dos Entregas compiten por la misma partida?
 
 Entregables:
 
-- Mapa tecnico del flujo comercial.
-- Contratos con almacenes y produccion.
-- Estados y transiciones de pedido.
-- Pendientes de API y UI.
+- Matriz de criterios de aceptacion de Clientes y Cotizaciones.
+- Contratos con RH, Produccion y Administracion, con proyecciones minimas.
+- Matriz de dependencias de modulo y pruebas de los dos niveles de habilitacion, incluyendo onboarding y acceso API directo.
+- Estados y transiciones de cotizacion, idempotencia y auditoria.
+- Separacion explicita entre el segundo corte Local real y devoluciones/facturacion futuras.
+- Matriz de fallas distribuidas, locks, compensaciones y reconciliacion; pruebas de stock, entregas concurrentes, XSS y permisos negativos.
 
 ### Gastos y cuentas por pagar
 
@@ -1598,8 +1696,9 @@ Antes de hacer una modificacion funcional o tecnica:
 9. Definir cambios esperados en frontend, API, datos, permisos y reportes.
 10. Evaluar blast radius: que puede romperse si cambia este boton, formulario, estado o endpoint.
 11. Validar localizacion: todo texto visible nuevo o modificado debe existir en Espanol e Ingles con las mismas variables dinamicas.
-12. Ejecutar validaciones tecnicas disponibles.
+12. Ejecutar `npm.cmd run validate:documentation` y las demas validaciones tecnicas aplicables.
 13. Registrar el cambio en `TRAZABILIDAD.md`.
+14. Registrar `Agentes consultados`; para QA incluir siempre Arquitectura, Seguridad y QA/Release.
 
 ## Estandar responsive obligatorio para todos los agentes
 
@@ -1636,7 +1735,7 @@ Estas referencias sirven como base conceptual para entrenar a los agentes. No su
 
 ## Pendientes
 
-- Mantener la tabla de estado operativo sincronizada con `ESTADO_ACTUAL.md` en cada promocion.
+- Mantener el estado operativo exclusivamente en `ESTADO_ACTUAL.md`; las fichas de agentes deben referenciarlo sin duplicar snapshots volatiles.
 - Crear fichas individuales solo si un agente necesita instrucciones que ya no quepan de forma clara en este documento.
 - Ampliar validadores cuando una nueva regla objetiva no quede cubierta por `validate-agents`, `validate-architecture`, `validate-i18n` o `validate-environment-boundaries`.
 - No asignar responsables humanos adicionales mientras el usuario propietario conserve la aprobacion directa de releases.

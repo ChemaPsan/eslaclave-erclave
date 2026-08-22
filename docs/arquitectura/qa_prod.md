@@ -206,16 +206,16 @@ Escalamiento futuro:
 
 ---
 
-## 7. CI/CD propuesto
+## 7. CI/CD vigente
 
 ```mermaid
 flowchart TD
   PR[Pull request] --> Validate[npm run validate + pruebas backend]
   Validate --> Review[Revision tecnica]
   Review --> Merge[Merge a main]
-  Merge --> Build[Build frontend y contenedores]
+  Merge --> Build[Candidate manual por SHA]
   Build --> Push[Publicar imagenes en Artifact Registry]
-  Push --> DeployQA[Deploy automatico QA]
+  Push --> DeployQA[Release manual con gates QA]
   DeployQA --> Smoke[Smoke tests QA]
   Smoke --> Approval[Aprobacion manual]
   Approval --> DeployProd[Deploy Produccion]
@@ -225,7 +225,7 @@ flowchart TD
 Reglas:
 
 - Ningun despliegue a Produccion sin validadores.
-- QA puede desplegarse automaticamente desde `main` o rama de release.
+- QA se despliega solo mediante workflows manuales, SHA completo y GitHub Environments protegidos.
 - Produccion requiere aprobacion manual.
 - Cada release debe tener commit, fecha, responsable y notas.
 - El rollback debe ser posible por version de imagen o artifact.
@@ -239,7 +239,7 @@ Reglas:
 - El frontend QA se construye sin URLs locales, Firebase Emulator, tenant ni actor local; el mismo directorio guardado como artefacto se entrega a Firebase Hosting.
 - GitHub Pages permanece como maqueta de ejecucion manual y no publica automaticamente cambios de `main`.
 - Las cuentas runtime y el migrador son dedicados; GitHub usa Workload Identity Federation y no llaves JSON.
-- El pipeline permanece inoperante hasta aprovisionar las identidades, variables y protecciones documentadas en `infra/qa/README.md` mediante una autorizacion posterior.
+- Las identidades WIF, variables y protecciones documentadas en `infra/qa/README.md` estan aprovisionadas; el pipeline CHG-182/190 fue ejecutado y verificado.
 
 ---
 
@@ -350,12 +350,9 @@ Cada evento debe tener:
 
 ## 13. Pendientes del arquitecto SaaS
 
-- Definir si QA se despliega por rama, tag o entorno de GitHub.
-- Definir naming convention de proyectos/servicios cloud.
-- Definir estrategia inicial de base de datos multi-tenant.
-- Definir formato OpenAPI base.
-- Definir contrato de eventos base.
-- Definir primer servicio real a implementar.
-- Definir estrategia de migracion de `frontend/app.js` hacia shell + microfrontends.
-- Definir estrategia de secrets y variables por ambiente.
-- Definir plan de monitoreo y alertas.
+- Hacer atomica o compensatoria la promocion multi-servicio y conservar estado de rollback verificable.
+- Construir el frontend una sola vez en el candidato y validar su hash/provenance antes de Firebase Hosting.
+- Separar migracion y configuracion estructural en jobs condicionales con autorizaciones independientes.
+- Fijar Actions por SHA y fortalecer provenance/attestation de artifacts e imagenes.
+- Ampliar smoke con autenticacion negativa, aislamiento, CORS/IAM y contenido efectivamente servido.
+- Completar monitoreo, alertas y ensayos de recuperacion antes de Produccion.

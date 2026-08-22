@@ -12,9 +12,11 @@ El enfoque del modulo debe ser agnostico a la industria. No debe asumir procesos
 
 ---
 
-## 2. Alcance actual de la maqueta
+## 2. Alcance por ambiente
 
-La maqueta actual contempla:
+El corte desplegado en QA persiste productos/servicios, recetas/versiones, maquinaria, ordenes y etapas. El codigo Local posterior agrega validacion autoritativa, reservas y consumo de materiales, capacidad comprometida y costo real; estas capacidades no se consideran disponibles en QA hasta su promocion gobernada.
+
+El alcance funcional contempla:
 
 - catalogo maestro de productos y servicios;
 - alta, busqueda, edicion y cambio de estatus de productos/servicios;
@@ -24,7 +26,7 @@ La maqueta actual contempla:
 - recetas con recursos, version, etapas genericas, estado de aprobacion y motivo de cambio;
 - validacion de recursos antes de liberar una orden;
 - separacion entre almacenes, mano de obra y maquinaria;
-- catalogo de areas, puestos/roles y cantidad de recursos disponibles;
+- consulta de areas, puestos productivos y trabajadores elegibles gobernados por RH;
 - catalogo de maquinaria con capacidad, costo y estatus;
 - ordenes de produccion con estatus seleccionable desde catalogo;
 - ordenes de produccion con snapshot de receta/version al momento de liberacion;
@@ -80,7 +82,7 @@ Campos principales:
 | SKU / codigo interno | Clave operativa del producto o servicio. |
 | Tipo | Producto o Servicio. |
 | Nombre | Nombre comercial u operativo. |
-| Unidad base | Unidad de produccion o ejecucion. |
+| Unidad base | Codigo activo seleccionado del catalogo de unidades de Administracion. |
 | Categoria | Agrupador del catalogo. |
 | Centro de costos | Centro donde se acumula el costo. |
 | Responsable | Area o persona dueña de la ficha. |
@@ -102,12 +104,16 @@ Regla clave:
 
 La receta define como se produce un producto o como se ejecuta un servicio.
 
+Cada receta cuenta con un **codigo de receta** distinto del codigo comercial del producto. En modo administrado, Administracion asigna el consecutivo; en modo manual, el operador captura el codigo permitido por la politica del tenant. El codigo se muestra en listas y selectores para identificar la receta sin exponer su ID tecnico.
+
 Funciones actuales:
 
 - crear receta desde el apartado de Recetas;
 - seleccionar producto/servicio desde catalogo buscable;
 - mostrar en el buscador el nombre seguido del codigo de producto, manteniendo el ID tecnico oculto para relaciones internas;
 - mostrar recetas guardadas, selectores y documentos con nombre/codigo del producto y version; el ID tecnico de receta permanece oculto;
+- numerar las fases activas de forma consecutiva y asignar a cada area un porcentaje mayor que cero;
+- exigir que los porcentajes de las fases sumen exactamente 100 antes de guardar o aprobar;
 - buscar dentro del catalogo por clave, nombre o tipo;
 - mostrar resultados con scroll para no empujar la pantalla;
 - agregar recursos dados de alta previamente;
@@ -132,7 +138,7 @@ Campos principales:
 | Producto/servicio | Se selecciona desde el catalogo maestro. |
 | Version | Numero de version de receta. |
 | Cantidad base | Cantidad sobre la que se calculan recursos. |
-| Unidad | Unidad base de la receta. |
+| Unidad | Codigo activo del catalogo de unidades; debe ser compatible con el producto y los recursos. |
 | Centro de costos | Centro responsable del costo. |
 | Recursos | Materiales, mano de obra y maquinaria. |
 | Etapas operativas | Pasos genericos definidos por la empresa. |
@@ -168,6 +174,8 @@ La validacion debe revisar:
 - costo planeado del lote;
 - faltantes o bloqueos antes de liberar.
 
+En el corte Local autoritativo, el navegador solo envia receta, cantidad, unidad y fecha. `production-service` consulta existencia/valuacion a `inventory-service`, capacidad laboral a `hr-service` y maquinaria a su propio catalogo; despues descuenta reservas y compromisos activos. Ningun costo o disponible enviado por el cliente se acepta como fuente de verdad.
+
 Resultado esperado:
 
 | Resultado | Descripcion |
@@ -181,9 +189,12 @@ Resultado esperado:
 
 Las ordenes se generan a partir de una receta aprobada y una cantidad solicitada.
 
+La orden tiene su propio codigo de negocio. Al generarla copia la version de receta, las areas, el numero y el porcentaje de cada fase. El avance general se calcula como `suma(avance de fase * porcentaje / 100)`, de modo que una fase con mayor peso aporta mas al progreso real.
+
 Funciones actuales:
 
 - generar orden desde receta seleccionada;
+- asignar codigo administrado o aceptar uno manual segun Administracion;
 - validar orden antes de crearla;
 - conservar snapshot de receta, version, recursos y etapas usadas al momento de generarla;
 - asignar responsable general;
@@ -193,6 +204,8 @@ Funciones actuales:
 - consultar costo planeado;
 - consultar costo real;
 - consultar variacion;
+- registrar porcentaje real de avance por etapa; la captura de tiempo real de mano de obra y maquinaria se reserva para una fase futura de eficiencia;
+- reservar materiales al liberar, consumirlos al iniciar por primera vez y liberarlos si se cancela antes de iniciar;
 - cambiar estatus desde un catalogo directo;
 - imprimir o generar vista de orden;
 - avanzar etapas operativas.
@@ -202,11 +215,11 @@ Catalogo actual de estatus:
 | Estatus | Descripcion |
 |---|---|
 | Liberada | Orden autorizada para iniciar. |
-| En espera de recursos | Orden bloqueada por recursos, capacidad o confirmacion. |
-| En produccion | Orden en ejecucion. |
+| En espera de recursos | Orden bloqueada por recursos, capacidad o confirmacion; solo puede iniciar si conserva todas sus reservas materiales. |
+| En produccion | Orden en ejecucion; al entrar por primera vez consume las reservas y registra las salidas fisicas por almacen. |
 | Pausada | Orden detenida temporalmente. |
 | En validacion | Orden en revision antes de cierre. |
-| Terminada | Orden completada. |
+| Terminada | Orden completada; exige etapas concluidas y consolida el costo real sin duplicar las salidas registradas al iniciar. |
 | Cancelada | Orden cancelada. |
 
 Reglas clave:
@@ -215,12 +228,18 @@ Reglas clave:
 - Una orden solo debe liberarse si no hay faltantes de recursos.
 - La orden debe conservar la version de receta usada al momento de liberacion.
 - El estatus general de la orden se maneja separado del avance por etapa.
+- La fecha compromete minutos de puestos y maquinas para impedir sobreasignacion concurrente.
+- El cierre exige materiales consumidos y todas las etapas al 100%; en este corte no exige tiempos reales de recursos temporales.
+- `En validacion` solo se alcanza con todas las etapas terminadas u omitidas; la ultima etapa concluida realiza el cambio automaticamente.
+- La interfaz solo ofrece transiciones validas. Para cerrar, el operador captura el porcentaje de cada tarjeta de fase hasta que todas lleguen a 100% y despues selecciona `Terminada`.
 
 ---
 
 ### 4.5 Seguimiento por etapas operativas
 
 El modulo no debe asumir etapas especificas de una industria. Las etapas vienen desde la receta.
+
+**Entregables por area** consulta las etapas reales copiadas a cada orden. Cada tarjeta identifica el codigo de orden, numero de fase, area, peso y avance general; actualizar una etapa modifica el progreso de esa orden sin alterar la receta maestra ni otras ordenes.
 
 Ejemplos genericos:
 
@@ -235,7 +254,7 @@ Cada etapa puede tener:
 - responsable;
 - estatus;
 - avance;
-- costo real estimado o factor de variacion;
+- porcentaje real completado;
 - relacion con la orden.
 
 Estados sugeridos por etapa:
@@ -252,26 +271,19 @@ Estados sugeridos por etapa:
 
 > El catalogo fue trasladado al modulo independiente **Recursos Humanos**, cuyo propietario es `hr-service`. Produccion no crea ni modifica areas o puestos: solo consume puestos activos marcados para intervenir en produccion y conserva snapshots en sus recetas.
 
-Este apartado configura la mano de obra. No debe tratarse como almacen.
+La configuracion de mano de obra se realiza en Recursos Humanos, no en Produccion ni en Almacenes. Produccion solo consulta el contrato propietario.
 
-Funciones actuales:
+Funciones consumidas por Produccion:
 
-- consultar listado de areas;
-- buscar por area, puesto o rol;
-- crear un area mediante un formulario independiente con codigo, nombre, descripcion y estatus;
-- editar un area sin capturar ni duplicar puestos;
-- entrar al detalle de un area;
-- ver roles/puestos dentro del area;
-- crear un puesto mediante un formulario independiente;
-- seleccionar el area desde el catalogo previamente creado; el puesto nunca crea areas por texto libre;
-- editar un puesto existente y actualizar su cantidad, capacidad, costo y estatus;
-- capturar cantidad de recursos;
-- capturar minutos disponibles por recurso;
-- calcular capacidad total;
-- capturar costo por minuto;
-- cambiar estatus.
+- consultar areas activas y puestos productivos;
+- seleccionar puestos por ID estable al configurar recursos de receta;
+- seleccionar areas activas por ID estable para etapas y maquinaria;
+- validar trabajadores activos y elegibles al asignar responsables;
+- obtener capacidad diaria desde trabajadores activos por puesto;
+- derivar costo por minuto desde el costo por hora del puesto;
+- conservar IDs externos y nombres/costos snapshot para reproducibilidad historica.
 
-Campos principales:
+Datos autoritativos de RH utilizados:
 
 | Campo | Descripcion |
 |---|---|
@@ -280,10 +292,10 @@ Campos principales:
 | Descripcion de area | Alcance operativo del area. |
 | Puesto o rol | Rol requerido por la operacion. |
 | Nombre para receta | Nombre visible al asignar el recurso en receta. |
-| Cantidad de recursos | Numero de personas o recursos del mismo rol. |
-| Minutos por recurso | Capacidad individual diaria. |
-| Capacidad total | Cantidad por minutos disponibles. |
-| Costo por minuto | Costo unitario de mano de obra. |
+| Trabajadores activos | Expedientes activos asignados al puesto; no es una cantidad capturada por Produccion. |
+| Minutos por trabajador | Capacidad individual diaria definida por RH. |
+| Capacidad total | Trabajadores activos por minutos disponibles, descontando compromisos de la fecha. |
+| Costo por hora | Referencia maestra de RH; Produccion conserva el costo por minuto como snapshot. |
 | Estatus | Activo o Inactivo. |
 
 Permisos independientes:
@@ -297,7 +309,7 @@ Permisos independientes:
 | Crear puesto | `hr.position.create` |
 | Editar puesto y recursos | `hr.position.update` |
 
-`hr-service` debe rechazar un `area_id` inexistente o perteneciente a otro tenant. Renombrar un area conserva sus puestos mediante `labor_area_id`; el nombre mostrado no funciona como relacion ni crea registros implicitos.
+Las altas y ediciones de areas y puestos pertenecen al microfrontend y a la API de RH. `hr-service` debe rechazar un `area_id` inexistente o perteneciente a otro tenant. Renombrar un area conserva sus puestos mediante `labor_area_id`; el nombre mostrado no funciona como relacion ni crea registros implicitos.
 
 ---
 
@@ -379,7 +391,7 @@ El modulo debe diferenciar:
 |---|---|
 | Costo estandar | Costo calculado desde receta aprobada. |
 | Costo planeado | Costo estimado para una orden y cantidad especifica. |
-| Costo real | Costo resultante o simulado durante la ejecucion. |
+| Costo real | Suma de materiales consumidos y cantidades reales de recursos temporales valuados con el snapshot de la orden. |
 | Variacion | Diferencia entre costo planeado y real. |
 | Margen esperado | Margen objetivo de la ficha maestra. |
 
@@ -417,13 +429,16 @@ El costo debe considerar:
 - Validar que tenga recursos.
 - Validar que tenga etapas.
 - Validar que el producto/servicio siga activo.
+- Revalidar articulos/unidades, puestos/areas y maquinaria contra sus catalogos propietarios.
 - Registrar aprobador y fecha.
 
 ### Al generar orden
 
 - Validar receta aprobada.
 - Validar disponibilidad de recursos.
+- Mostrar el recurso insuficiente con requerido, disponible y unidad antes de asignar el folio.
 - Calcular costo planeado.
+- Reservar materiales y comprometer capacidad por fecha bajo bloqueo transaccional.
 - Registrar version de receta usada.
 - Generar etapas desde la receta.
 
@@ -431,16 +446,19 @@ El costo debe considerar:
 
 - Actualizar estatus general de orden.
 - Actualizar avance por etapa.
-- Registrar costo real.
+- Registrar porcentaje real por etapa; las reservas ya consumidas al iniciar aportan el costo real de materiales. La medicion de tiempos y eficiencia se incorporara cuando exista su modelo operativo.
 - Registrar pausas, cancelaciones o cierre.
+
+La reserva al liberar y la salida al iniciar representan hechos distintos. La primera entrada a **En produccion** solicita a Almacenes consumir cada reserva y crear una salida inmutable en el almacen que la otorgo. Reanudar una orden pausada o cerrarla no vuelve a descontar. Cancelar antes del inicio libera la reserva; cancelar despues conserva las salidas fisicas ya registradas. El frontend debe impedir materiales cuya UOM no pertenezca al catalogo activo de Administracion y conservar visibles, pero bloqueados, los recursos invalidos de versiones heredadas.
 
 ---
 
-## 9. Integraciones futuras
+## 9. Integraciones
 
 | Modulo | Relacion |
 |---|---|
-| Almacenes | Disponibilidad, reserva y consumo de materias primas/consumibles. |
+| Almacenes | Disponibilidad, reserva, valuacion y consumo de materias primas/consumibles implementados en codigo Local. |
+| Recursos Humanos | Trabajadores elegibles, areas, puestos y capacidad diaria autoritativa implementados en codigo Local. |
 | Compras | Solicitudes por faltantes. |
 | Ventas | Produccion bajo pedido o demanda. |
 | Finanzas/Costos | Costo estandar, real y variaciones. |
@@ -471,13 +489,28 @@ El costo debe considerar:
 
 ## 11. Pendientes funcionales
 
-- Definir modelo de datos definitivo para backend.
-- Definir permisos por rol.
-- Definir aprobaciones formales por usuario.
-- Definir versionamiento real de recetas.
-- Definir consumo real de recursos.
 - Definir mermas, rechazos y retrabajos.
 - Definir cierre parcial de orden.
-- Definir integracion con almacenes reales.
+- Implementar recepcion de merma y reglas de rechazo/retrabajo en Almacenes.
+- Definir calendarios, turnos, ausencias y mantenimiento para capacidad multi-dia.
 - Definir reportes gerenciales.
-- Definir auditoria y bitacora de cambios.
+- Promover y certificar en QA el corte Local autoritativo antes de presentarlo como desplegado.
+# CHG-206: vínculo con producto terminado
+
+Producción es dueña de `product_services.inventory_item_ref_id`. Un producto activo puede vincularse por ID con un único artículo activo de tipo `finishedGood` y la misma unidad base. El nombre/código de Producción son comerciales; los de Inventario son logísticos y pueden ser distintos.
+
+## CHG-209: seleccion escalable
+
+Productos, recetas, artículos vinculables, recursos, áreas y responsables usan búsqueda por identidad visible y conservan su ID técnico. Estatus y prioridad continúan como listas cerradas. Al superar 200 candidatos, la búsqueda deberá paginarse desde el servicio propietario.
+
+## CHG-222: recepcion fisica posterior al cierre
+
+Una orden **Terminada** queda disponible para recepcion en Almacenes. El almacenista confirma almacen, cantidad, fecha y observaciones; Inventory valida la orden y el vinculo, permite parciales y registra la entrada. El cierre de Produccion no incrementa existencias por si solo.
+
+## CHG-214: consistencia de unidades heredadas
+
+La revision Local `20260821_0023` normaliza de forma auditada los alias inequivocos `LTS -> LTR` y `MT -> MTR` tanto en los articulos y movimientos de Inventory como en los recursos y snapshots de Produccion. Esto permite que una receta historica siga refiriendo la misma magnitud sin alterar cantidades ni costos. Produccion no infiere otras equivalencias y continua rechazando unidades ausentes o inactivas del catalogo del tenant.
+
+## CHG-215: maquinaria elegible para recetas
+
+Una maquina puede conservarse activa en su catalogo aunque todavia no este asignada a un area, pero no puede formar parte de una receta hasta tener `area_ref_id` estable hacia un area activa de RH. La UI no la ofrece como candidata y la identifica como pendiente de vinculacion. Si una receta envia una referencia que dejo de ser elegible, el backend responde `422 machine_resource_invalid`; nunca se vincula automaticamente comparando nombres visibles.

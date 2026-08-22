@@ -15,22 +15,18 @@ ERClave es una propuesta SaaS modular bajo la marca EsLaClave para gestionar pro
 - Mapa de catalogos base para Administracion y Configuracion en `docs/catalogos_base.md`.
 - Manual de identidad visual.
 - Trazabilidad detallada de cambios en `TRAZABILIDAD.md`.
-- Prototipo frontend navegable con mock DB en `localStorage`.
+- Frontend navegable en modo API con caches en memoria; el modo maqueta permanece aislado y no es fuente de verdad en QA.
 
-## Frontend local
+## Local aislado canonico
 
-Para ver el prototipo:
+Recuperar contexto y arrancar el stack completo con PostgreSQL `erclave_local`, APIs locales y Firebase Emulator:
 
-```bash
-cd frontend
-python3 -m http.server 4173
+```powershell
+npm.cmd run session:context
+backend\scripts\start_local.ps1
 ```
 
-Abrir:
-
-```text
-http://localhost:4173/
-```
+Abrir `http://127.0.0.1:4173/`. No abrir Cloud SQL Auth Proxy ni reutilizar un `.env` QA para este flujo. Un proceso local que consume cualquier recurso QA se clasifica como `local conectado a QA` y requiere autorizacion explicita.
 
 ## Validaciones automaticas
 
@@ -47,6 +43,7 @@ Validaciones disponibles:
 
 ```bash
 npm run validate:agents
+npm run validate:local-qa-parity
 npm run validate:i18n
 npm run validate:active-localization
 npm run validate:architecture
@@ -82,46 +79,9 @@ npm run qa:document
 
 En GitHub, el workflow `.github/workflows/validate.yml` ejecuta estas validaciones automaticamente en `push`, `pull_request` y ejecucion manual.
 
-## Backend local
+## Desarrollo y liberacion
 
-El scaffolding FastAPI inicial vive en `backend/` y arranca con `admin-service`.
-
-```bash
-cd backend
-python -m venv .venv
-python -m pip install -e ".[dev]"
-uvicorn services.admin_service_adapter:app --reload --port 8000
-```
-
-Windows PowerShell:
-
-```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
-uvicorn services.admin_service_adapter:app --reload --port 8000
-```
-
-El dominio publico todavia no esta comprado. Configurar el valor publico con:
-
-```text
-ERCLAVE_API_PUBLIC_BASE_URL
-```
-
-## Frontend con API local
-
-La maqueta conserva modo mock por defecto. El modulo `Administracion` puede alternar a API local y leer `admin-service` en:
-
-```text
-http://127.0.0.1:8000
-```
-
-Requisitos:
-
-- Cloud SQL Auth Proxy abierto.
-- `admin-service` levantado con `ERCLAVE_DATABASE_URL`.
-- Seeds `seed_admin_mvp.py` y `seed_admin_qa_demo.py` aplicados.
+El script canonico prepara `admin-service`, `production-service`, `inventory-service`, `hr-service`, frontend, base local y usuario del Emulator sin depender de QA. Para una liberacion usar `$erclave-qa-release` y [flujo_local_a_qa.md](docs/operaciones/flujo_local_a_qa.md); no desplegar desde una terminal local como sustituto del pipeline.
 
 El consumo HTTP del frontend debe vivir en `frontend/api/`; las pantallas no deben llamar `fetch` directamente.
 

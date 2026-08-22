@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -159,6 +160,7 @@ class TenantModule(TimestampMixin, Base):
         UniqueConstraint("tenant_id", "module_code", name="uq_tenant_modules_tenant_module"),
         CheckConstraint("status in ('active', 'inactive', 'suspended')", name="ck_tenant_modules_status"),
         Index("ix_tenant_modules_tenant_status", "tenant_id", "status"),
+        Index("ix_tenant_modules_tenant_effective", "tenant_id", "status", "tenant_enabled"),
         {"schema": "admin"},
     )
 
@@ -170,6 +172,7 @@ class TenantModule(TimestampMixin, Base):
     )
     module_code: Mapped[str] = mapped_column(String(80), nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="inactive")
+    tenant_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     source: Mapped[str] = mapped_column(String(40), nullable=False, default="manual")
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -360,3 +363,73 @@ class AuditEvent(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class UnitOfMeasure(TimestampMixin, Base):
+    __tablename__ = "units_of_measure"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_units_of_measure_tenant_code"),
+        CheckConstraint("status in ('active', 'inactive')", name="ck_units_of_measure_status"),
+        CheckConstraint("decimal_places between 0 and 6", name="ck_units_of_measure_decimal_places"),
+        Index("ix_units_of_measure_tenant_status_name", "tenant_id", "status", "name_es"),
+        {"schema": "admin"},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("uom"))
+    tenant_id: Mapped[str] = mapped_column(String(40), ForeignKey("admin.tenants.id", ondelete="CASCADE"), nullable=False)
+    code: Mapped[str] = mapped_column(String(20), nullable=False)
+    name_es: Mapped[str] = mapped_column(String(120), nullable=False)
+    name_en: Mapped[str] = mapped_column(String(120), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(24), nullable=False)
+    category: Mapped[str] = mapped_column(String(40), nullable=False)
+    decimal_places: Mapped[int] = mapped_column(nullable=False, default=3)
+    system_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+
+
+class CatalogItem(TimestampMixin, Base):
+    __tablename__ = "catalog_items"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "catalog_code", "code", name="uq_admin_catalog_item_code"),
+        CheckConstraint("catalog_code in ('currencies', 'payment_terms')", name="ck_admin_catalog_item_catalog"),
+        CheckConstraint("status in ('active', 'inactive')", name="ck_admin_catalog_item_status"),
+        Index("ix_admin_catalog_items_lookup", "tenant_id", "catalog_code", "status", "name_es"),
+        {"schema": "admin"},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("cat"))
+    tenant_id: Mapped[str] = mapped_column(String(40), ForeignKey("admin.tenants.id", ondelete="CASCADE"), nullable=False)
+    catalog_code: Mapped[str] = mapped_column(String(60), nullable=False)
+    code: Mapped[str] = mapped_column(String(40), nullable=False)
+    name_es: Mapped[str] = mapped_column(String(160), nullable=False)
+    name_en: Mapped[str] = mapped_column(String(160), nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    system_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+
+
+class CodeSequence(TimestampMixin, Base):
+    __tablename__ = "code_sequences"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "document_type", name="uq_code_sequences_tenant_document_type"),
+        CheckConstraint("mode in ('managed', 'manual')", name="ck_code_sequences_mode"),
+        CheckConstraint("next_number >= 1", name="ck_code_sequences_next_number"),
+        CheckConstraint("padding between 1 and 12", name="ck_code_sequences_padding"),
+        CheckConstraint("status in ('active', 'inactive')", name="ck_code_sequences_status"),
+        Index("ix_code_sequences_tenant_module", "tenant_id", "module_code", "document_type"),
+        {"schema": "admin"},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("seq"))
+    tenant_id: Mapped[str] = mapped_column(String(40), ForeignKey("admin.tenants.id", ondelete="CASCADE"), nullable=False)
+    document_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    module_code: Mapped[str] = mapped_column(String(40), nullable=False)
+    name_es: Mapped[str] = mapped_column(String(160), nullable=False)
+    name_en: Mapped[str] = mapped_column(String(160), nullable=False)
+    prefix: Mapped[str] = mapped_column(String(24), nullable=False)
+    separator: Mapped[str] = mapped_column(String(3), nullable=False, default="-")
+    next_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    padding: Mapped[int] = mapped_column(Integer, nullable=False, default=6)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False, default="managed")
+    system_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")

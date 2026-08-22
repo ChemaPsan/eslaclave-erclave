@@ -3,10 +3,33 @@ const path = require("path");
 
 const repoRoot = path.resolve(__dirname, "..");
 const python = process.env.PYTHON || (process.platform === "win32" ? "python" : "python3");
+const inheritedTestDatabaseUrl = process.env.ERCLAVE_TEST_DATABASE_URL || "";
+if (inheritedTestDatabaseUrl) {
+  let parsed;
+  try {
+    parsed = new URL(inheritedTestDatabaseUrl);
+  } catch {
+    console.error("[FAIL] ERCLAVE_TEST_DATABASE_URL is not a valid database URL; refusing to run tests.");
+    process.exit(1);
+  }
+  const localHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+  if (!localHosts.has(parsed.hostname) || parsed.pathname.replace(/\/$/, "") !== "/erclave_local") {
+    console.error("[FAIL] ERCLAVE_TEST_DATABASE_URL must target erclave_local on loopback; refusing to run tests.");
+    process.exit(1);
+  }
+}
 const localTestEnvironment = {
   ...process.env,
   ERCLAVE_ENVIRONMENT: "local",
-  ERCLAVE_APP_PUBLIC_BASE_URL: "http://localhost:4173"
+  ERCLAVE_API_PUBLIC_BASE_URL: "http://127.0.0.1:8000",
+  ERCLAVE_APP_PUBLIC_BASE_URL: "http://127.0.0.1:4173",
+  ERCLAVE_ADMIN_SERVICE_URL: "http://127.0.0.1:8000",
+  ERCLAVE_AUTH_MODE: "demo",
+  ERCLAVE_FIREBASE_PROJECT_ID: "demo-erclave",
+  ERCLAVE_DATABASE_URL: "",
+  ERCLAVE_INVENTORY_DATABASE_URL: "",
+  ERCLAVE_HR_DATABASE_URL: ""
+  ,ERCLAVE_SALES_DATABASE_URL: ""
 };
 const steps = [
   {
@@ -25,7 +48,7 @@ const steps = [
   {
     name: "Pruebas backend",
     command: python,
-    args: ["-m", "pytest", "-q"],
+    args: [path.join(repoRoot, "tools", "run_pytest.py")],
     cwd: path.join(repoRoot, "backend"),
     env: localTestEnvironment
   }

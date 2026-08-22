@@ -91,7 +91,8 @@ jobs:
             "admin:admin_service_adapter" \
             "production:production_service_adapter" \
             "inventory:inventory_service_adapter" \
-            "hr:hr_service_adapter"; do
+            "hr:hr_service_adapter" \
+            "sales:sales_service_adapter"; do
             service="${entry%%:*}"
             adapter="${entry##*:}"
             image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$service-service:$RELEASE_SHA"

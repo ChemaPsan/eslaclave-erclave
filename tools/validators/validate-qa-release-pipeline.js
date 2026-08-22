@@ -106,8 +106,18 @@ if (!errors.length) {
       errors.push(`QA backoffice configuration must stage, preflight and verify safely: ${token}`);
     }
   }
-  if ([release, backofficeConfigWorkflow].some((content) => content.includes("eslaclavecaf@gmail.com"))) {
-    errors.push("QA workflows must not hardcode the Backoffice administrator email.");
+  if ([release, backofficeConfigWorkflow, qaSeed].some((content) => content.includes("eslaclavecaf@gmail.com"))) {
+    errors.push("QA workflows and seeds must not hardcode the Backoffice administrator email.");
+  }
+  if (!qaSeed.includes("DEFAULT_EXTRA_OWNER_EMAILS: tuple[str, ...] = ()")) {
+    errors.push("QA demo seed must not grant tenant ownership to Backoffice administrators implicitly.");
+  }
+
+  const validationWorkflow = readText(".github/workflows/validate.yml");
+  for (const workflowPath of ["qa-candidate.yml", "qa-release.yml", "qa-admin-backoffice-config.yml"]) {
+    if (!validationWorkflow.includes(`.github/workflows/${workflowPath}`)) {
+      errors.push(`Repository verification must run when ${workflowPath} changes.`);
+    }
   }
   for (const token of [
     "deploy_candidate()",
@@ -145,11 +155,21 @@ if (!errors.length) {
   ]) {
     if (!release.includes(token)) errors.push(`QA release must explicitly reconcile the QA tenant: ${token}`);
   }
-  for (const service of ["admin", "production", "inventory", "hr"]) {
+  for (const service of ["admin", "production", "inventory", "hr", "sales"]) {
     if (!candidate.includes(`${service}_service_adapter`)) errors.push(`Candidate workflow must build ${service}-service.`);
     if (!identityPlan.serviceAccounts.some((account) => account.accountId === `erclave-${service}-qa`)) {
       errors.push(`Identity plan must include erclave-${service}-qa.`);
     }
+  }
+  for (const token of [
+    'test "$(wc -l < candidate/qa-images.env)" -eq 5',
+    "SALES_IMAGE",
+    "QA_SALES_RUNTIME_SERVICE_ACCOUNT",
+    "QA_SALES_API_URL",
+    "deploy_candidate sales-service-qa",
+    "ERCLAVE_PRODUCTION_SERVICE_URL=${{ vars.QA_PRODUCTION_API_URL }}"
+  ]) {
+    if (!release.includes(token)) errors.push(`QA release must include the five-service runtime: ${token}`);
   }
   const deployerIdentity = identityPlan.serviceAccounts.find(
     (account) => account.accountId === "erclave-github-deployer-qa"
@@ -163,7 +183,14 @@ if (!errors.length) {
     }
   }
   if (/\n\s+push:/.test(pages)) errors.push("GitHub Pages mock must not autodeploy from push.");
-  for (const token of ["QA_ADMIN_API_URL", "QA_INVENTORY_API_URL", "QA_HR_API_URL", "authMode: \"firebase\""]) {
+  for (const token of [
+    "QA_ADMIN_API_URL",
+    "QA_PRODUCTION_API_URL",
+    "QA_INVENTORY_API_URL",
+    "QA_HR_API_URL",
+    "QA_SALES_API_URL",
+    "authMode: \"firebase\""
+  ]) {
     if (!builder.includes(token)) errors.push(`QA frontend builder must include: ${token}`);
   }
   if (!builder.includes('const forbidden = ["localhost", "127.0.0.1", "firebase-emulator", "demo-erclave"')) {
@@ -206,7 +233,7 @@ if (!errors.length) {
   if (mockDbForApi.loadProductsServices()[0]?.id !== "api-record") {
     errors.push("API-mode frontend cache must retain freshly loaded API data in memory.");
   }
-  if (!qaSeed.includes('ACTIVE_DEMO_MODULES = ("admin", "production", "inventory", "hr")')) {
+  if (!qaSeed.includes('ACTIVE_DEMO_MODULES = ("admin", "production", "inventory", "hr", "sales")')) {
     errors.push("QA seed must enable only modules backed by deployed real services.");
   }
   if (!qaSeed.includes("module_code not in ({active_module_codes})")) {

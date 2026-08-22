@@ -87,6 +87,7 @@ paths:
       summary: Create warehouse location.
       x-required-module: inventory
       x-permissions: [inventory.location.create]
+      x-implementation-status: planned
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -111,7 +112,7 @@ paths:
       operationId: listInventoryItems
       summary: Search inventory items.
       x-required-module: inventory
-      x-permissions: [inventory.item.read]
+      x-permissions: [inventory.item.read, production.product_service.create, production.product_service.update, sales.order.fulfill]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -201,6 +202,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ItemResponse'
+  /v1/inventory/items/{id}/unit-conversion:
+    post:
+      tags: [Items]
+      operationId: convertInventoryItemUnit
+      summary: Convert a quantity and optional unit cost to the item's authoritative base unit.
+      x-required-module: inventory
+      x-permissions: [inventory.item.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UnitConversionRequest'}
+      responses:
+        '200':
+          description: Quantity and cost expressed in the item's base unit.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UnitConversionResponse'}
+        '422':
+          description: Units are inactive, incompatible, or require an item-specific conversion.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
   /v1/inventory/balances:
     get:
       tags: [Balances]
@@ -359,7 +387,8 @@ paths:
       operationId: createAvailabilityCheck
       summary: Check item availability for production or sales.
       x-required-module: inventory
-      x-permissions: [inventory.availability.check]
+      x-permissions: [production.order.validate, production.order.create]
+      x-permission-mode: any
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -384,6 +413,7 @@ paths:
       summary: Register production consumption requested by production-service.
       x-required-module: inventory
       x-permissions: [internal.production.inventory.consume]
+      x-implementation-status: planned
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -402,12 +432,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/MovementResponse'
   /v1/inventory/finished-goods-receipts:
+    get:
+      tags: [Movements]
+      operationId: listFinishedGoodsReceipts
+      summary: List received quantities grouped by production order.
+      x-required-module: inventory
+      x-permissions: [inventory.movement.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Finished-goods receipt summaries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinishedGoodsReceiptListResponse'
     post:
       tags: [Movements]
       operationId: createFinishedGoodsReceipt
-      summary: Register finished goods receipt requested by production-service.
+      summary: Confirm physical receipt of a completed production order.
       x-required-module: inventory
-      x-permissions: [internal.production.inventory.receive]
+      x-permissions: [inventory.movement.create]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -417,21 +463,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ExternalMovementRequest'
+              $ref: '#/components/schemas/FinishedGoodsReceiptCreateRequest'
       responses:
         '201':
           description: Receipt movement recorded.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MovementResponse'
+                $ref: '#/components/schemas/FinishedGoodsReceiptResponse'
+        '409':
+          description: Order is not completed, mapping is invalid, units differ, or quantity exceeds the pending amount.
   /v1/inventory/reservation-requests:
     post:
       tags: [Reservations]
       operationId: createReservationRequest
       summary: Create inventory reservation.
       x-required-module: inventory
-      x-permissions: [inventory.reservation.create]
+      x-permissions: [production.order.create, sales.order.fulfill]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -455,12 +503,18 @@ paths:
       operationId: releaseReservation
       summary: Release inventory reservation.
       x-required-module: inventory
-      x-permissions: [inventory.reservation.release]
+      x-permissions: [production.order.status.update, sales.order.cancel]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
       responses:
         '200':
           description: Reservation released.
@@ -468,6 +522,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReservationResponse'
+  /v1/inventory/reservations/{id}/consume:
+    post:
+      tags: [Reservations]
+      operationId: consumeReservation
+      summary: Consume all or part of a reservation into an immutable inventory exit.
+      x-required-module: inventory
+      x-permissions: [production.order.status.update, sales.delivery.confirm]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '201':
+          description: Reservation consumed and movement recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -661,6 +740,11 @@ components:
         suggested_warehouse_id: { type: [string, 'null'] }
         minimum_stock: { type: number }
         maximum_stock: { type: [number, 'null'] }
+        default_unit_cost: { type: number, minimum: 0 }
+        default_unit_cost_per_base_unit:
+          type: number
+          minimum: 0
+          description: Default cost explicitly expressed per one base_unit.
         use_in_recipe: { type: boolean, default: false }
         description: { type: [string, 'null'] }
     ItemResponse:
@@ -698,6 +782,7 @@ components:
           type: string
         minimum_stock: { type: number, minimum: 0, default: 0 }
         maximum_stock: { type: [number, 'null'], minimum: 0 }
+        default_unit_cost: { type: number, minimum: 0, default: 0 }
         use_in_recipe: { type: boolean, default: false }
         description: { type: [string, 'null'] }
     ItemUpdateRequest:
@@ -713,11 +798,35 @@ components:
           type: string
         minimum_stock: { type: [number, 'null'], minimum: 0 }
         maximum_stock: { type: [number, 'null'], minimum: 0 }
+        default_unit_cost: { type: [number, 'null'], minimum: 0 }
         use_in_recipe: { type: boolean }
         status:
           type: string
           enum: [active, inactive, blocked]
         description: { type: [string, 'null'] }
+    UnitConversionRequest:
+      type: object
+      required: [source_unit, quantity]
+      properties:
+        source_unit: { type: string, minLength: 1, maxLength: 40 }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        source_unit_cost: { type: [number, 'null'], minimum: 0 }
+    UnitConversionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [inventory_item_id, source_unit, base_unit, conversion_factor, source_quantity, base_quantity]
+          properties:
+            inventory_item_id: { type: string }
+            source_unit: { type: string }
+            base_unit: { type: string }
+            conversion_factor: { type: number, exclusiveMinimum: 0 }
+            source_quantity: { type: number, exclusiveMinimum: 0 }
+            base_quantity: { type: number, exclusiveMinimum: 0 }
+            source_unit_cost: { type: [number, 'null'], minimum: 0 }
+            unit_cost_per_base_unit: { type: [number, 'null'], minimum: 0 }
     Movement:
       type: object
       properties:
@@ -785,6 +894,52 @@ components:
     ExternalMovementRequest:
       allOf:
         - $ref: '#/components/schemas/MovementCreateRequest'
+    FinishedGoodsReceiptCreateRequest:
+      type: object
+      required: [production_order_id, warehouse_id, quantity, received_at]
+      properties:
+        production_order_id: { type: string, minLength: 1, maxLength: 80 }
+        warehouse_id: { type: string, minLength: 1, maxLength: 80 }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        received_at: { type: string, format: date-time }
+        notes: { type: [string, 'null'], maxLength: 1000 }
+    FinishedGoodsReceipt:
+      type: object
+      required: [production_order_id, production_order_code, product_service_id, product_service_code, product_service_name, inventory_item_id, inventory_item_code, inventory_item_name, warehouse_id, unit, ordered_quantity, received_quantity, cumulative_received_quantity, remaining_quantity, movement]
+      properties:
+        production_order_id: { type: string }
+        production_order_code: { type: string }
+        product_service_id: { type: string }
+        product_service_code: { type: string }
+        product_service_name: { type: string }
+        inventory_item_id: { type: string }
+        inventory_item_code: { type: string }
+        inventory_item_name: { type: string }
+        warehouse_id: { type: string }
+        unit: { type: string }
+        ordered_quantity: { type: number }
+        received_quantity: { type: number }
+        cumulative_received_quantity: { type: number }
+        remaining_quantity: { type: number }
+        movement: { $ref: '#/components/schemas/Movement' }
+    FinishedGoodsReceiptResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/FinishedGoodsReceipt' }
+    FinishedGoodsReceiptListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [production_order_id, received_quantity]
+            properties:
+              production_order_id: { type: string }
+              received_quantity: { type: number }
+              last_received_at: { type: [string, 'null'], format: date-time }
     SourceRef:
       type: object
       required: [type, id]
@@ -801,6 +956,9 @@ components:
       properties:
         reason:
           type: string
+        quantity:
+          type: [number, 'null']
+          exclusiveMinimum: 0
     BalanceListResponse:
       type: object
       properties:
@@ -835,6 +993,10 @@ components:
               reserved_quantity:
                 type: number
               available_quantity:
+                type: number
+              average_unit_cost:
+                type: number
+              inventory_value:
                 type: number
               unit:
                 type: string
@@ -883,7 +1045,7 @@ components:
                 additionalProperties: true
     ReservationCreateRequest:
       type: object
-      required: [inventory_item_id, quantity, unit, source]
+      required: [inventory_item_id, warehouse_id, quantity, unit, source]
       properties:
         inventory_item_id:
           type: string

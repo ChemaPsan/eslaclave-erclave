@@ -10,6 +10,7 @@ security:
 tags:
   - name: Areas
   - name: Positions
+  - name: Workers
 paths:
   /v1/hr/areas:
     get:
@@ -64,6 +65,60 @@ paths:
       parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PositionUpdate' } } } }
       responses: { '200': { description: Position updated, content: { application/json: { schema: { $ref: '#/components/schemas/PositionResponse' } } } } }
+  /v1/hr/workers:
+    get:
+      tags: [Workers]
+      operationId: listHrWorkers
+      x-required-module: hr
+      x-permissions: [hr.worker.read]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { name: position_id, in: query, schema: { type: string } }, { name: production_only, in: query, schema: { type: boolean } }, { name: active_only, in: query, schema: { type: boolean } }]
+      responses: { '200': { description: Workers, content: { application/json: { schema: { $ref: '#/components/schemas/WorkerListResponse' } } } } }
+    post:
+      tags: [Workers]
+      operationId: createHrWorker
+      x-required-module: hr
+      x-permissions: [hr.worker.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WorkerCreate' } } } }
+      responses:
+        '201': { description: Worker created, content: { application/json: { schema: { $ref: '#/components/schemas/WorkerResponse' } } } }
+        '409': { description: Identidad duplicada, clave idempotente reutilizada o puesto inactivo/inexistente., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '422': { description: Expediente invalido. La respuesta identifica campos y codigos sin repetir valores personales., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+  /v1/hr/workers/production-eligible:
+    get:
+      tags: [Workers]
+      operationId: listProductionEligibleWorkers
+      x-required-module: hr
+      x-permissions: [production.order.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
+      responses: { '200': { description: Active workers in active production positions, content: { application/json: { schema: { $ref: '#/components/schemas/WorkerListResponse' } } } } }
+  /v1/hr/workers/sales-eligible:
+    get:
+      tags: [Workers]
+      operationId: listSalesEligibleWorkers
+      x-required-module: hr
+      x-permissions: [sales.customer.create, sales.customer.update, sales.quote.create, sales.quote.update]
+      x-permission-mode: any
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
+      responses: { '200': { description: Minimal projection of active workers in active positions for Sales assignments. } }
+  /v1/hr/production-capacity:
+    get:
+      tags: [Positions]
+      operationId: listProductionCapacity
+      x-required-module: hr
+      x-permissions: [production.order.validate, production.order.create]
+      x-permission-mode: any
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
+      responses: { '200': { description: Authoritative daily capacity based on active workers, content: { application/json: { schema: { $ref: '#/components/schemas/ProductionCapacityListResponse' } } } } }
+  /v1/hr/workers/{id}:
+    patch:
+      tags: [Workers]
+      operationId: updateHrWorker
+      x-required-module: hr
+      x-permissions: [hr.worker.update]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WorkerUpdate' } } } }
+      responses: { '200': { description: Worker updated, content: { application/json: { schema: { $ref: '#/components/schemas/WorkerResponse' } } } } }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -72,6 +127,18 @@ components:
     IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8 } }
     IdPath: { name: id, in: path, required: true, schema: { type: string } }
   schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            correlation_id: { type: [string, 'null'] }
+            details: { type: object, additionalProperties: true }
     Area: { type: object, required: [id, code, name, status], properties: { id: { type: string }, code: { type: string }, name: { type: string }, description: { type: [string, 'null'] }, status: { type: string, enum: [active, inactive] } } }
     AreaCreate: { type: object, required: [code, name], properties: { code: { type: string }, name: { type: string }, description: { type: [string, 'null'] } } }
     AreaUpdate: { type: object, properties: { name: { type: string }, description: { type: [string, 'null'] }, status: { type: string, enum: [active, inactive] } } }
@@ -82,3 +149,19 @@ components:
     PositionUpdate: { type: object, properties: { labor_area_id: { type: string }, position: { type: string }, recipe_name: { type: string }, resource_quantity: { type: integer, minimum: 1 }, minutes_per_resource: { type: integer, minimum: 1 }, hourly_cost: { type: number, minimum: 0 }, intervenes_in_production: { type: boolean }, status: { type: string, enum: [active, inactive] } } }
     PositionResponse: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Position' } } }
     PositionListResponse: { type: object, required: [data], properties: { data: { type: array, items: { $ref: '#/components/schemas/Position' } } } }
+    WorkerCreate:
+      type: object
+      required: [employee_number, first_names, first_last_name, curp, rfc, nss, hire_date, labor_position_id]
+      properties: { employee_number: { type: string }, first_names: { type: string }, first_last_name: { type: string }, second_last_name: { type: [string, 'null'] }, curp: { type: string, minLength: 18, maxLength: 18 }, rfc: { type: string, minLength: 13, maxLength: 13 }, nss: { type: string, pattern: '^\\d{11}$' }, hire_date: { type: string, format: date }, labor_position_id: { type: string }, personal_email: { type: [string, 'null'] }, phone: { type: [string, 'null'] }, birth_date: { type: [string, 'null'], format: date }, nationality: { type: [string, 'null'] }, marital_status: { type: [string, 'null'] }, address: { type: [string, 'null'] }, emergency_contact_name: { type: [string, 'null'] }, emergency_contact_phone: { type: [string, 'null'] }, notes: { type: [string, 'null'] } }
+    WorkerUpdate: { type: object, properties: { first_names: { type: string }, first_last_name: { type: string }, second_last_name: { type: [string, 'null'] }, labor_position_id: { type: string }, status: { type: string, enum: [active, inactive, terminated] }, personal_email: { type: [string, 'null'] }, phone: { type: [string, 'null'] }, nationality: { type: [string, 'null'] }, marital_status: { type: [string, 'null'] }, address: { type: [string, 'null'] }, emergency_contact_name: { type: [string, 'null'] }, emergency_contact_phone: { type: [string, 'null'] }, notes: { type: [string, 'null'] } } }
+    Worker:
+      allOf:
+        - { $ref: '#/components/schemas/WorkerCreate' }
+        - { type: object, required: [id, status, full_name, position_name, labor_area_id, labor_area_name, intervenes_in_production], properties: { id: { type: string }, status: { type: string, enum: [active, inactive, terminated] }, full_name: { type: string }, position_name: { type: string }, labor_area_id: { type: string }, labor_area_name: { type: string }, intervenes_in_production: { type: boolean } } }
+    WorkerResponse: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Worker' } } }
+    WorkerListResponse: { type: object, required: [data], properties: { data: { type: array, items: { $ref: '#/components/schemas/Worker' } } } }
+    ProductionCapacity:
+      type: object
+      required: [position_id, position_name, recipe_name, labor_area_id, labor_area_name, active_worker_count, minutes_per_worker, available_minutes, hourly_cost, cost_per_minute]
+      properties: { position_id: { type: string }, position_name: { type: string }, recipe_name: { type: string }, labor_area_id: { type: string }, labor_area_name: { type: string }, active_worker_count: { type: integer, minimum: 0 }, minutes_per_worker: { type: integer, minimum: 1 }, available_minutes: { type: number, minimum: 0 }, hourly_cost: { type: number, minimum: 0 }, cost_per_minute: { type: number, minimum: 0 } }
+    ProductionCapacityListResponse: { type: object, required: [data], properties: { data: { type: array, items: { $ref: '#/components/schemas/ProductionCapacity' } } } }

@@ -4,7 +4,9 @@
 
 Este documento convierte el ownership de datos del MVP en un modelo inicial para PostgreSQL.
 
-No es una migracion final de Alembic todavia. Es el contrato tecnico de datos que debe guiar:
+Es un contrato tecnico vivo: las secciones iniciales conservan el modelo objetivo y las secciones de corte documentan las revisiones Alembic ya implementadas. Ante diferencias operativas, prevalecen la migracion vigente, el runtime, OpenAPI y `docs/contexto/ESTADO_ACTUAL.md`.
+
+Este documento guia:
 
 - migraciones iniciales;
 - modelos SQLAlchemy/SQLModel;
@@ -335,9 +337,12 @@ Modulos contratados por tenant.
 | `tenant_id` | `varchar(40)` | FK interna. |
 | `module_code` | `varchar(80)` | Referencia a modulo global por codigo. |
 | `status` | `varchar(40)` | `active`, `inactive`, `suspended`. |
+| `tenant_enabled` | `boolean` | Preferencia operativa del tenant; default `true`. No concede el modulo. |
 | `limits` | `jsonb` | Limites por plan. |
 | `source` | `varchar(40)` | `subscription`, `manual`, `trial`. |
 | `starts_at` | `timestamptz` | Nullable. |
+
+Regla calculada: el modulo esta disponible solo cuando `status = 'active' AND tenant_enabled = true`. `status` pertenece a Backoffice/Billing/Provisioning; `tenant_enabled` solo puede cambiarlo un administrador autorizado del mismo tenant. La implementacion fisica usa `admin.tenant_modules` e indice `(tenant_id, status, tenant_enabled)`.
 | `ends_at` | `timestamptz` | Nullable. |
 
 Indices:
@@ -413,6 +418,25 @@ Estructura minima:
 ```
 
 Regla de evolucion: mientras Administracion use `tenant_settings`, este JSONB es la fuente de verdad administrativa. Cuando facturacion/contabilidad requieran constraints fiscales, folios, certificados o integracion SAT, las razones sociales y sucursales podran promoverse a tablas dedicadas con migracion/backfill documentado.
+
+### 5.11 `admin.code_sequences`
+
+Autoridad tenant-safe para codigos visibles de documentos y catalogos.
+
+| Columna | Tipo | Reglas |
+|---|---|---|
+| `id` | `varchar(40)` | PK. |
+| `tenant_id` | `varchar(40)` | FK interna a tenant. |
+| `document_type` | `varchar(80)` | Tipo estable, unico por tenant. |
+| `module_code` | `varchar(40)` | Modulo consumidor. |
+| `prefix` | `varchar(24)` | Prefijo configurable. |
+| `separator` | `varchar(3)` | Separador configurable. |
+| `next_number` | `integer` | Mayor o igual que 1; se incrementa con bloqueo de fila. |
+| `padding` | `integer` | Entre 1 y 12. |
+| `mode` | `varchar(20)` | `managed` o `manual`. |
+| `status` | `varchar(20)` | `active` o `inactive`. |
+
+Indice unico: `unique(tenant_id, document_type)`. La asignacion se registra en idempotencia y auditoria del schema Admin.
 
 ---
 
@@ -541,6 +565,7 @@ Etapas operativas vinculadas a areas activas de Recursos Humanos al crear la ver
 | `description` | `text` | Nullable. |
 | `expected_minutes` | `numeric(18,6)` | Nullable. |
 | `sort_order` | `integer` | Obligatorio. |
+| `weight_percent` | `numeric(5,2)` | Mayor que 0 y menor o igual que 100. Las etapas activas suman 100. |
 | `status` | `varchar(40)` | `active`, `inactive`. |
 
 Indices:
@@ -603,6 +628,9 @@ Etapas reales copiadas desde la receta al generar orden.
 | `name` | `varchar(200)` | Snapshot de nombre. |
 | `description` | `text` | Snapshot de descripcion, nullable. |
 | `sort_order` | `integer` | Obligatorio. |
+| `weight_percent` | `numeric(5,2)` | Snapshot del peso de la fase. |
+| `labor_area_ref_id` | `varchar(40)` | Referencia externa RH, sin FK cruzada. |
+| `labor_area_name` | `varchar(200)` | Snapshot del area. |
 | `status` | `varchar(40)` | `pending`, `in_progress`, `completed`, `skipped`, `blocked`. |
 | `planned_minutes` | `numeric(18,6)` | Nullable. |
 | `actual_minutes` | `numeric(18,6)` | Nullable. |
@@ -661,6 +689,27 @@ Indices:
 - FK compuesto `(tenant_id, labor_area_id)` hacia `hr.labor_areas`;
 - `index(tenant_id, labor_area_id, status)`;
 - `index(tenant_id, intervenes_in_production, status)`.
+
+### 6.9.1 `hr.workers`
+
+Expediente minimo del trabajador. Cada registro mantiene un unico puesto vigente; varios trabajadores pueden referenciar el mismo puesto.
+
+| Columna | Tipo | Reglas |
+|---|---|---|
+| `id` | `varchar(40)` | PK. |
+| `tenant_id` | `varchar(40)` | Obligatorio. |
+| `employee_number` | `varchar(40)` | Unico por tenant. |
+| `first_names`, `first_last_name` | `varchar` | Obligatorios. |
+| `second_last_name` | `varchar(100)` | Opcional. |
+| `curp` | `varchar(18)` | Unico por tenant; formato validado. |
+| `rfc` | `varchar(13)` | Unico por tenant; persona fisica. |
+| `nss` | `varchar(11)` | Unico por tenant; digitos y verificador validos. |
+| `hire_date` | `date` | Obligatoria; no futura. |
+| `labor_position_id` | `varchar(40)` | FK interna compuesta con tenant hacia `hr.labor_roles`. |
+| `status` | `varchar(20)` | `active`, `inactive`, `terminated`; no se elimina historia. |
+| contacto, nacimiento, nacionalidad, estado civil, domicilio, emergencia, notas | varios | Opcionales y minimizados. |
+
+Indices: `unique(tenant_id, employee_number/curp/rfc/nss)` e `index(tenant_id, labor_position_id, status)`.
 
 ### 6.10 `production.machines`
 
@@ -739,6 +788,7 @@ Articulos inventariables.
 | `type` | `varchar(60)` | `raw_material`, `consumable`, `tool`, `finished_goods`, `spare_part`, `supply`. |
 | `category` | `varchar(120)` | Nullable. |
 | `base_unit` | `varchar(40)` | Obligatorio. |
+| `default_unit_cost` | `numeric(18,6)` | Costo manual por una unidad base; fallback cuando no existe saldo valuado. |
 | `inventory_policy` | `varchar(60)` | `standard`, `lot`, `serial`, `restricted`. |
 | `suggested_warehouse_id` | `varchar(40)` | FK interna nullable. |
 | `status` | `varchar(40)` | `active`, `inactive`, `blocked`. |
@@ -814,7 +864,7 @@ Reglas:
 
 ### 7.6 `inventory.inventory_reservations`
 
-Reserva de inventario. Puede quedar fase futura, pero el modelo queda preparado.
+Reserva de inventario. El modelo conceptual se materializo para ordenes de Produccion en la revision Local `20260818_0017`; consultar la seccion 20 para constraints, valuacion, concurrencia y relaciones definitivas del corte. Reservas para Ventas y otros origenes permanecen futuras.
 
 | Columna | Tipo | Reglas |
 |---|---|---|
@@ -1557,8 +1607,8 @@ Estas reglas deben vivir en servicios backend, no solo en base ni frontend:
 | Guardar snapshot de receta en orden | `production-service`. |
 | No permitir salida mayor a existencia | `inventory-service`. |
 | Calcular kardex desde movimientos | `inventory-service`. |
-| Crear cotizacion solo con cliente existente | `sales-service`. |
-| Crear cotizacion solo con productos/servicios existentes | `sales-service` consultando `production-service`. |
+| Crear cotizacion solo con cliente activo existente | `sales-service`, implementado en Local desde `20260818_0018`. |
+| Crear cotizacion solo con productos/servicios activos y unidad base valida | `sales-service` consultando `production-service` y Admin, implementado en Local desde `20260818_0018`. |
 | Crear tenant solo por pago o activacion auditada | `billing-service` + `provisioning-service` + `admin-service`. |
 | Validar API client, scope y cuota | `integration-service` o gateway. |
 
@@ -1599,3 +1649,52 @@ docs/arquitectura/apis_mvp.md
 ```
 
 Estado: definido en `docs/arquitectura/apis_mvp.md`.
+
+---
+
+## 20. Corte autoritativo de recursos (revision 20260818_0017)
+
+- `inventory.reservations` pertenece a Inventory y aparta cantidad/valuacion por tenant, articulo, almacen, unidad y fuente idempotente. Solo los estados activos no vencidos reducen disponible.
+- `production.production_order_resources` conserva cantidad/costo planeado y real por recurso; `production.production_order_resource_reservations` relaciona un material con una o varias reservas externas sin FK entre schemas propietarios.
+- `production.capacity_commitments` compromete minutos de puesto o maquina por fecha y orden. Los IDs laborales son referencias externas; las maquinas son internas a Production.
+- `production.machines.area_ref_id` es referencia externa estable a RH y `area_name` es snapshot historico.
+- `inventory.items.default_unit_cost` es el fallback de valuacion cuando no existe saldo valuado. El costo promedio y el importe de inventario se derivan de movimientos registrados, no se guardan como saldo mutable.
+- Bloqueos advisory transaccionales serializan movimientos/reservas por tenant-articulo-almacen y compromisos por tenant-tipo-recurso-fecha. Restricciones unicas protegen replay por fuente y evitan duplicar recursos/compromisos de una orden.
+
+---
+
+## 21. Primer corte de Ventas (revision 20260818_0018)
+
+- `sales.customers` conserva perfil comercial/fiscal, responsable RH externo y snapshot de nombre; codigo y RFC/ID fiscal son unicos por tenant.
+- `sales.customer_contacts` pertenece a Sales y limita a un contacto principal activo por cliente mediante indice parcial.
+- `sales.quotes` referencia internamente al cliente con FK compuesto tenant-safe y conserva snapshots de cliente/responsable, estados, vigencia, totales, costo y margen estimado.
+- `sales.quote_lines` conserva referencia externa a Produccion, codigo/nombre/tipo snapshot, unidad autoritativa, precio, descuento, totales y costo estandar snapshot.
+- `sales.idempotency_records` y `sales.audit_events` hacen repetibles y auditables todos los comandos. No existe FK ni escritura cruzada hacia `hr`, `production` o `admin`.
+
+## 22. Segundo corte de Ventas y configuracion documental (revision 20260818_0019)
+
+- `admin.catalog_items` contiene monedas y condiciones de pago tenant-safe con codigo estable, nombres ES/EN, metadata, estado e indicador default.
+- `admin.tenant_settings['document.template']` contiene logo y colores compartidos; es configuracion, no catalogo ni copia por documento.
+- `sales.orders` y `sales.order_lines` preservan el documento aprobado, snapshots, surtido, cantidades entregadas y costos estimados/reales.
+- `sales.order_line_reservations` conserva referencias externas a Inventory, cantidades reservadas/consumidas y costo snapshot, sin FK cruzada.
+- `sales.deliveries` y `sales.delivery_lines` registran entregas parciales/totales, evidencia y costo real por partida.
+- `production.sales_order_requests` conserva solicitudes idempotentes de Sales validadas contra producto, unidad y receta aprobada; Production sigue siendo autoridad de la futura orden liberada.
+- Inventory conserva ownership de la reserva y su movimiento. `quantity` en una reserva activa representa el remanente despues de un consumo parcial.
+- Devoluciones permanecen planeadas; pedidos, reservas comerciales y entregas existen desde 0019 solo en Local.
+
+## 23. Endurecimiento del segundo corte de Ventas (revision 20260818_0020)
+
+- `production.product_services.inventory_item_ref_id` es la referencia externa autoritativa para productos vendibles; es unica por tenant, obligatoria para `product` y prohibida para `service`. Production valida existencia, estado y unidad mediante Inventory, sin FK ni escritura cruzada.
+- `sales.order_lines` conserva codigo y nombre snapshot del articulo utilizado, ademas de sus IDs externos de producto y articulo.
+- `sales.orders.fulfillment_state` y `cancellation_state`, junto con clave/hash, representan reclamos durables `idle|processing|completed|needs_reconciliation` antes de efectos externos.
+- `sales.deliveries.confirmation_state` aplica el mismo patron a consumos. Crear un borrador bloquea Pedido/partidas y descuenta otros borradores para no comprometer el saldo dos veces.
+- `sales.delivery_lines.actual_cost_source` distingue `inventory_consumption`, `service_capture` y `production_report`; el costo estandar permanece estimado y no se convierte silenciosamente en costo real.
+- Las referencias entre dominios siguen siendo logicas y tenant-safe. Reintentos usan claves derivadas estables; `needs_reconciliation` conserva el comando original para reanudacion operativa.
+
+## 24. Normalizacion auditada de alias de unidad (revision 20260821_0023)
+
+- `LTS -> LTR` y `MT -> MTR` son las unicas equivalencias heredadas declaradas por esta revision; no existe inferencia abierta por similitud de texto.
+- La migracion valida que la unidad destino exista activa para cada tenant antes de modificar datos y aborta toda la transaccion si falta algun destino.
+- Se normalizan las columnas de unidad de Inventory, Production y Sales para conservar consistencia entre maestros, movimientos y snapshots documentales.
+- Cada fila corregida produce un evento `migration.unit_alias.normalize` en `admin.audit_events` con estado anterior, posterior, tabla y columna. El downgrade usa esa evidencia y solo restaura filas cuyo valor actual aun coincide con el valor aplicado por la migracion.
+- La normalizacion no altera identificadores, cantidades, importes, costos, almacenes, estatus ni relaciones. El bloqueo runtime de cambio de unidad base cuando existen movimientos o reservas permanece intacto para cambios semanticos reales.

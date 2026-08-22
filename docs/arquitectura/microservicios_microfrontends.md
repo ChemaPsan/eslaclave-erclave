@@ -113,7 +113,8 @@ export const manifest = {
   id: "produccion",
   title: "Produccion",
   icon: "PR",
-  permissions: ["produccion:read"],
+  implementationStatus: "implemented",
+  permissions: ["production.product_service.read"],
   routes: ["/produccion", "/produccion/recetas", "/produccion/ordenes"]
 };
 
@@ -133,6 +134,7 @@ export function unmount() {
 - `i18n`: traducciones.
 - `theme`: tokens y tema activo.
 - `permissions`: permisos del usuario.
+- `implementationStatus`: distingue `implemented` de `planned`; el manifiesto no prueba que exista runtime.
 - `navigate`: navegacion controlada por shell.
 - `toast` y `modal`: UI global sin acoplar reglas.
 
@@ -144,7 +146,7 @@ export function unmount() {
 | hr-service | areas, puestos, capacidad nominal, costo hora y elegibilidad productiva | `hr.area.updated`, `hr.position.updated` (futuro) | cambios de entitlement y permisos resueltos sin persistir copias |
 | inventory-service | almacenes, ubicaciones, existencias, reservas, movimientos, kardex | `inventory.reservation.created`, `inventory.stock.moved`, `inventory.shortage.detected` | `production.order.created`, `purchasing.receipt.completed`, `sales.order.approved` |
 | purchasing-service | proveedores, requisiciones, ordenes de compra, recepciones | `purchasing.requisition.created`, `purchasing.order.sent`, `purchasing.receipt.completed` | `inventory.shortage.detected`, `production.resource.shortage.detected` |
-| sales-service | clientes, cotizaciones, pedidos, entregas, devoluciones | `sales.order.approved`, `sales.delivery.completed`, `sales.return.created` | `inventory.reservation.confirmed`, `production.order.completed` |
+| sales-service | Local: clientes, contactos, cotizaciones, pedidos, surtido y entregas; devoluciones planeadas | Eventos comerciales siguen diferidos hasta definir outbox | Validacion sincronica de RH, Produccion, Admin e Inventory; Production recibe solicitudes, no ordenes liberadas |
 | expenses-service | XML/PDF, gastos, cuentas por pagar, pagos | `expenses.invoice.registered`, `expenses.payment.completed` | `purchasing.receipt.completed` |
 | costing-service | centros de costos, costos estimados, reales, variaciones | `costing.variance.detected`, `costing.cost.updated` | `production.order.completed`, `inventory.stock.moved`, `expenses.invoice.registered` |
 | accounting-service | cuentas, periodos, asientos, mapeos, anexos | `accounting.entry.generated`, `accounting.mapping.missing` | eventos contables de ventas, compras, gastos, inventario, costos y produccion |

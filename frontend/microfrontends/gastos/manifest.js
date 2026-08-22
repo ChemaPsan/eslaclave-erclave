@@ -4,6 +4,7 @@ export const manifest = {
   icon: "GA",
   version: "0.1.0",
   service: "expenses-service",
-  permissions: ["gastos:read"],
+  implementationStatus: "planned",
+  permissions: [],
   routes: ["/gastos", "/gastos/carga-documental", "/gastos/cuentas-por-pagar", "/gastos/pagos"]
 };

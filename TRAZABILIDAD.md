@@ -2299,9 +2299,6 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | `npm.cmd run validate:responsive`, sintaxis, trazabilidad, `git diff --check` y `npm.cmd run verify`. |
 | Observaciones | Cambio exclusivo de frontend, validadores y documentacion. No hubo despliegues, migraciones, seeds ni escrituras en QA. |
 
-## Convencion para futuros cambios
-
-Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
 ### CHG-152
 
 | Campo | Contenido |
@@ -2920,3 +2917,573 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/backoffice/tenants`, `GET /health`, `GET /ready`, `GET /version`; APIs administrativas de Cloud Run. **APIs no tocadas:** contratos de tenant, permisos, Produccion, Inventory y RH. |
 | Validacion | Diagnostico read-only de revision/env y logs 403; parser PowerShell, guardrails de workflow/configuracion, `git diff --check` y `npm.cmd run verify`. |
 | Observaciones | Implementacion `local-write`; la variable externa, revision Cloud Run y trafico QA no se modificaron. Rollback previsto: restaurar 100% a `rollback_revision` registrado antes de promover. |
+
+### CHG-192
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-12 |
+| Cambio | Optimiza agentes y corrige paridad segura Local-QA |
+| Autor | Codex |
+| Archivos | `AGENTS.md`, `AGENTES.md`, `.agents/skills/`, `.github/workflows/validate.yml`, `backend/shared/erclave_common/config.py`, `backend/services/admin-service/tests/test_config.py`, `backend/services/admin-service/tests/test_admin_api.py`, `backend/scripts/seed_admin_qa_demo.py`, `frontend/api/config.js`, `frontend/api/admin.js`, `frontend/app.js`, `frontend/data/modules.js`, `tools/verify.js`, `tools/validators/`, `tools/traceability-draft.js`, `docs/`, `modulos/README.md`, `README.md`, `package.json`, `TRAZABILIDAD.md` |
+| Secciones | Agentes / Skills / Local / QA / Seguridad / Backoffice / Frontend / Validadores / Operacion |
+| Agentes consultados | Arquitecto SaaS; Arquitecto de datos; Custodio DB; Arquitecto API; Ingeniero de Seguridad/IAM/supply chain; QA/Release; Administracion; tecnicos de Produccion, Inventory y RH. Se realizaron auditorias independientes de agentes/skills, pipeline y paridad. |
+| Descripcion | Crea `$erclave-qa-release` y el flujo canonico Local→QA, actualiza agentes y skills, elimina snapshots operativos duplicados, protege CI ante cambios de workflows QA y agrega `validate-local-qa-parity`. Corrige que Settings cargara un `.env` hibrido, bloquea URLs/bases/Firebase QA en Local, impide que `verify` herede una base remota y conserva en memoria el tenant seleccionado desde membresias en QA sin fallback demo. Retira correos Backoffice hardcodeados del seed y KPIs/reservas simuladas de superficies API. |
+| Motivo | La memoria transversal estaba desactualizada tras CHG-182/191 y los validadores aprobaban contradicciones. Dos huecos P0 permitian un Local marcado como tal consumir QA y hacian que usuarios QA de tenants nuevos enviaran el tenant demo al solicitar `session/context`. |
+| Impacto | El siguiente candidato alineara Local aislado y QA real sin sacrificar gates. No modifica contratos HTTP ni datos existentes. Un administrador Backoffice ya no se agrega implicitamente como owner en futuras ejecuciones del seed; membresias historicas no se eliminan. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/session/tenants`, `GET /v1/session/context`, `GET /health`, `GET /ready`, `GET /version`; APIs administrativas de GitHub Actions, Cloud Run y Firebase Hosting documentadas. **APIs no tocadas:** requests/responses funcionales de Admin, Produccion, Inventory y RH. |
+| Validacion | Auditorias independientes y forward-test de la nueva skill; pruebas nuevas de Settings Local; evaluacion dinamica de tenant QA; validadores de CI/seed/skills/paridad; `git diff --check`; `npm.cmd run verify`; smoke publico read-only de cuatro servicios y frontend QA vigente. |
+| Observaciones | Cambios de repositorio `local-write`; no se desplego este candidato ni hubo nuevas migraciones, seeds, datos, IAM, revisiones, trafico o frontend QA. Deuda prioritaria: promocion multi-servicio compensatoria, frontend build-once, provenance fuerte, gates DB condicionales y smoke autenticado/post-Hosting. |
+
+### CHG-193
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-17 |
+| Cambio | Expedientes RH y responsables de Produccion |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260817_0014_hr_workers.py`, `backend/services/hr-service/`, `backend/services/production-service/`, `backend/shared/erclave_common/config.py`, `backend/scripts/start_local.ps1`, `backend/services/admin-service/app/seeds/permissions.py`, `contracts/api/`, `frontend/`, `.github/workflows/qa-release.yml`, `docs/`, `modulos/10_recursos_humanos.md`, `TRAZABILIDAD.md` |
+| Secciones | RH / Trabajadores / Produccion / Ordenes / Responsables / Permisos / Datos / Local / QA |
+| Agentes consultados | Negocio y tecnico de RH; negocio y tecnico de Produccion; Arquitectura SaaS/API/datos; Custodio DB; Seguridad; Diseno/i18n; QA/Release. |
+| Descripcion | Agrega expedientes de trabajadores con un puesto vigente, identidad CURP/RFC/NSS, datos complementarios opcionales, aislamiento e idempotencia. Sustituye responsables libres de ordenes por IDs de trabajadores elegibles validados por HR y snapshots historicos. |
+| Motivo | Impedir nombres arbitrarios y conectar la responsabilidad operativa con personas reales dadas de alta en RH. |
+| Impacto | Cambio contractual incompatible para crear ordenes: `responsible_name` se sustituye por `responsible_worker_id` y cada etapa exige trabajador. Ordenes historicas conservan snapshots y referencias nulas compatibles. Datos personales se minimizan en listados visuales. |
+| APIs afectadas | **Contratos modificados:** HR `GET/POST /v1/hr/workers` (`hr.worker.read/create`), `PATCH /v1/hr/workers/{id}` (`hr.worker.update`), `GET /v1/hr/workers/production-eligible` (`production.order.create`); Production `POST /v1/production/orders` (`production.order.create`) cambia request a IDs de trabajador y response agrega referencias externas. **Endpoints consumidos sin cambio:** `GET /v1/session/context`. **APIs no tocadas:** Inventory, Admin funcional, recetas, maquinaria y transiciones de orden/etapa. |
+| Validacion | Validadores de sintaxis, i18n y OpenAPI; `36 passed`; migracion Local `20260805_0013 -> 20260817_0014`; smoke autenticado de permisos, alta de expediente y proyeccion elegible; `npm.cmd run verify`. |
+| Observaciones | Solo `local-write`. Se aplicaron migracion y seeds idempotentes exclusivamente en `127.0.0.1:5434/erclave_local` y se creo un expediente sintetico `EMP-LOCAL-001`. No hubo QA/Produccion, despliegue ni escritura externa. |
+
+### CHG-194
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-17 |
+| Cambio | Catalogo transversal de unidades de medida |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260817_0015_units_of_measure.py`, `backend/services/admin-service/`, `backend/services/production-service/`, `backend/services/inventory-service/`, `contracts/api/admin-service.openapi.yaml`, `frontend/`, `docs/catalogos_base.md`, `modulos/01_produccion.md`, `modulos/08_administracion_configuracion.md`, `TRAZABILIDAD.md` |
+| Secciones | Administracion / Catalogos / Produccion / Inventarios / Ventas / Datos / Local |
+| Agentes consultados | Administracion y Configuracion; tecnicos de Produccion e Inventarios; Arquitectura SaaS/API/datos; Custodio DB; Seguridad; Diseno/i18n; QA/Release. |
+| Descripcion | Implementa un catalogo tenant-safe con 50 unidades predeterminadas basadas en UN/CEFACT Rec. 20, soporte ES/EN, unidades personalizadas, edicion, activacion/inactivacion y provision automatica. Configuracion base conserva solo la tarjeta-resumen y abre una vista dedicada para administrar sus registros. Sustituye capturas libres visibles por selectores y valida codigos activos en Produccion e Inventarios. |
+| Motivo | Evitar variantes libres como pieza, pz o pza y establecer codigos estables para operacion, integraciones y reportes. |
+| Impacto | Los campos existentes conservan su estructura string pero ahora almacenan codigos normalizados. La migracion transforma valores historicos comunes; movimientos de inventario deben coincidir con la unidad base del articulo hasta implementar conversiones. |
+| APIs afectadas | **Contratos nuevos:** Admin `GET/POST /v1/catalogs/units-of-measure`, `GET /v1/catalogs/units-of-measure/{code}` y `PATCH /v1/catalogs/units-of-measure/{id}`. **Consumidores modificados:** altas/ediciones de productos, recetas, recursos, articulos y movimientos en Produccion e Inventory. **APIs no tocadas:** RH, Billing y transiciones documentales. |
+| Validacion | Compilacion Python, sintaxis frontend, OpenAPI, pruebas unitarias/integracion, migracion y smoke Local, `npm.cmd run verify`. |
+| Observaciones | Solo `local-write`; no se desplego ni escribio en QA/Produccion. Los defaults se crean para tenants existentes y futuros. Rollback: downgrade Alembic `20260817_0015 -> 20260817_0014`; los valores normalizados no regresan a sus alias libres. |
+
+### CHG-195
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-18 |
+| Cambio | Saneamiento integral previo a Ventas |
+| Autor | Codex |
+| Archivos | `AGENTS.md`, `AGENTES.md`, `backend/pyproject.toml`, `backend/alembic/versions/20260817_0015_units_of_measure.py`, `backend/services/admin-service/`, `backend/services/production-service/app/api.py`, `backend/services/inventory-service/app/authorization.py`, `contracts/api/`, `contracts/microfrontend.md`, `frontend/app.js`, `frontend/i18n/translations.js`, `frontend/microfrontends/`, `tools/validators/`, `docs/`, `modulos/08_administracion_configuracion.md`, `TRAZABILIDAD.md` |
+| Secciones | Administracion / Catalogos / Contratos / Microfrontends / i18n / Arquitectura / Agentes / Local |
+| Agentes consultados | Negocio y tecnico de Administracion; tecnicos de Produccion, Inventory y RH; Arquitectura SaaS/API/datos; Custodio DB; Seguridad; Diseno/i18n; QA/Release. |
+| Descripcion | Cierra la auditoria previa a Ventas: vuelve parseables y verificables los OpenAPI, documenta rutas reales y marca operaciones futuras como `planned`; normaliza manifiestos y permisos; completa ES/EN; elimina caracteres danados; actualiza estado, pendientes, decisiones, agentes y diagramas. Endurece Unidades de medida con idempotencia, correlacion, auditoria y migracion autosuficiente. |
+| Motivo | El repositorio permitia YAML invalido, drift entre contrato y runtime, permisos de manifiesto obsoletos, textos nuevos sin i18n, diagramas de julio y comandos de catalogo sin garantias backend suficientes. |
+| Impacto | No crea schema nuevo ni cambia los codigos UOM persistidos. La consulta por codigo se mueve a una ruta no ambigua; Produccion e Inventory actualizan su consumidor interno. Ventas queda explicitamente `planned` y no se presenta como servicio real antes de su corte vertical. |
+| APIs afectadas | **Contratos modificados:** Admin `GET /v1/session/tenants` (`internal.session.tenant.read`), `GET /v1/backoffice/tenants` (`internal.backoffice.tenant.read`), `PATCH /v1/backoffice/tenants/{tenant_id}/status` (`internal.backoffice.tenant.manage`), `DELETE /v1/backoffice/tenants/{tenant_id}` (`internal.backoffice.tenant.delete`) se documentan sin cambiar runtime; `POST /v1/catalogs/units-of-measure` (`admin.unit.create`) y `PATCH /v1/catalogs/units-of-measure/{unit_id}` (`admin.unit.update`) formalizan correlacion/idempotencia y auditoria sin cambiar response; `GET /v1/catalogs/units-of-measure/by-code/{code}` (`admin.unit.read`) sustituye la ruta ambigua anterior. Production/Inventory solo actualizan ese endpoint Admin consumido. Operaciones contractuales aun no implementadas en Admin, Production e Inventory y los servicios Sales/Billing/Provisioning/Integration se marcan `planned`. **APIs no tocadas:** payloads operativos de HR, Production e Inventory. |
+| Validacion | Integracion PostgreSQL real de replay/conflicto/auditoria con rollback (`2 passed`); `npm.cmd run verify` (`151 passed, 2 skipped`); OpenAPI YAML + paridad FastAPI; i18n/sintaxis/arquitectura; reinicio canonico y smoke autenticado Local de frontend, cuatro APIs, readiness, sesion y catalogo de 50 unidades. |
+| Observaciones | Alcance `local-write` sobre el tenant autorizado `ten_739ee59d765d5e14818674800d`. El arranque reejecuto el seed local idempotente; las pruebas de integracion hicieron rollback. No hubo escrituras, migraciones, seeds ni despliegues en QA/Produccion. Rollback de codigo: revertir CHG-195; no se requiere downgrade porque no agrega revision y 0015 conserva el mismo schema/datos. |
+
+### CHG-196
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-18 |
+| Cambio | Gobierno de modulos por tenant desde Backoffice |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260818_0016_tenant_module_preference.py`, `backend/services/admin-service/app/`, `backend/services/admin-service/tests/`, `contracts/api/admin-service.openapi.yaml`, `frontend/api/admin.js`, `frontend/api/backoffice.js`, `frontend/app.js`, `frontend/backoffice/`, `frontend/i18n/translations.js`, `AGENTES.md`, `docs/arquitectura/`, `docs/contexto/`, `modulos/08_administracion_configuracion.md`, `TRAZABILIDAD.md` |
+| Secciones | Backoffice / Tenants / Entitlements / Autorizacion / Datos / Frontend / Local |
+| Agentes consultados | Negocio y tecnico de Administracion; Arquitectura SaaS; Arquitectura de datos y persistencia; Custodio DB; Arquitectura API; Seguridad; Diseno/i18n; QA/Release. |
+| Descripcion | Separa el entitlement contractual gobernado por Backoffice (`status`) de la preferencia operativa del administrador del tenant (`tenant_enabled`). Backoffice ahora lista el catalogo versionado, edita datos basicos del tenant y habilita, suspende o retira modulos implementados; `admin` es obligatorio y los modulos planeados permanecen bloqueados. El tenant solo enciende o apaga modulos concedidos. `session/context`, policy, permisos y navegacion usan `effective_active = status active AND tenant_enabled`. |
+| Motivo | El unico `status` anterior permitia que un administrador del cliente modificara la misma decision comercial que Backoffice, sin distinguir contrato de preferencia local. |
+| Impacto | La revision 0016 agrega `admin.tenant_modules.tenant_enabled` con backfill compatible `true` e indice efectivo. Retirar un entitlement no borra permisos ni datos. Al conceder un modulo, el owner recibe permisos tenant asignables; la autorizacion desaparece mientras cualquiera de los dos estados este apagado. El request tenant del PUT de entitlement cambia de `status/limits/source` a `enabled`; el response agrega `source`, `tenant_enabled` y `effective_active`. |
+| APIs afectadas | **Contratos nuevos/modificados:** Admin `GET /v1/backoffice/modules` (`internal.backoffice.tenant.read`); `PATCH /v1/backoffice/tenants/{tenant_id}` (`internal.backoffice.tenant.manage`); `PUT /v1/backoffice/tenants/{tenant_id}/entitlements/{module_code}` (`internal.backoffice.entitlement.manage`); `PUT /v1/tenants/{tenant_id}/entitlements/{module_code}` (`admin.entitlement.manage`) ahora solo acepta `{enabled}`; `GET /v1/backoffice/tenants` y `GET /v1/tenants/{tenant_id}/entitlements` amplian response con el estado contractual y efectivo. **Endpoints consumidos sin cambio:** `GET /v1/session/context`, cuya forma externa conserva `active_modules` pero cambia el calculo efectivo. **APIs no tocadas:** HR, Production, Inventory, Sales, Billing, Provisioning e Integration. |
+| Validacion | Compilacion Python; sintaxis JS; OpenAPI YAML y paridad FastAPI; `66 passed` de Admin API; `4 passed` de seeds; ciclo Alembic Local upgrade/downgrade/upgrade `0015 <-> 0016`; integracion PostgreSQL real con aislamiento, replay, conflicto, policy y auditoria (`3 passed`, rollback); smoke autenticado Local de catalogo (8 modulos: 4 implementados/4 planeados) y tenant permitido; `npm.cmd run verify` (`157 passed, 3 skipped`). |
+| Observaciones | Alcance exclusivo `local-write`: PostgreSQL `127.0.0.1:5434/erclave_local`, Firebase Emulator `127.0.0.1:9099` y tenant permitido `ten_739ee59d765d5e14818674800d`. No hubo escrituras, migraciones, seeds ni despliegues en QA/Produccion. Rollback: downgrade Alembic `20260818_0016 -> 20260817_0015`; todos los registros previos recuperan el comportamiento compatible `tenant_enabled=true`. |
+
+### CHG-197
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-18 |
+| Cambio | Recursos autoritativos, reservas, capacidad y costo real |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260818_0017_authoritative_resources.py`, `backend/services/production-service/`, `backend/services/inventory-service/`, `backend/services/hr-service/`, `backend/shared/erclave_common/config.py`, `.github/workflows/qa-release.yml`, `contracts/api/`, `frontend/`, `tools/validators/`, `AGENTES.md`, `docs/`, `modulos/`, `TRAZABILIDAD.md` |
+| Secciones | Produccion / Inventarios / RH / Recursos / Reservas / Capacidad / Valuacion / Concurrencia / Integridad / Frontend / Documentacion |
+| Agentes consultados | Negocio y tecnico de Produccion, Almacenes e Inventarios y RH; Sinergia modular; Arquitectura SaaS; Arquitectura de datos y persistencia; Custodio DB; Arquitectura API; Seguridad; Diseno/i18n; QA/Release. La revision complementaria posterior de Administracion y Costos se registra, sin atribuirla retroactivamente al corte original, en CHG-198. Las skills `$erclave-feature`, `$erclave-db-migration` y `$erclave-environment-boundaries` indicadas por el repositorio no estaban disponibles en la sesion; se siguieron directamente sus guardrails documentados, sin QA ni despliegue. |
+| Descripcion | Elimina `observed_resources` y vuelve autoritativas las consultas de materiales/valuacion en Inventory, capacidad laboral basada en trabajadores activos en RH y maquinaria/capacidad comprometida en Production. Liberar una orden crea reservas por almacen y compromisos por fecha; cancelar libera y cerrar consume movimientos inmutables, exige cantidades reales temporales y calcula el costo real. Revalida referencias/unidades al editar y aprobar recetas, bloquea unidades maestras con historia y agrega controles concurrentes e idempotentes. Limpia datos mock especificos de industria y bloquea Ventas planeado como modulo funcional. |
+| Motivo | Cerrar los huecos donde el navegador podia declarar disponibilidad/costo, dos ordenes podian sobreasignar stock o capacidad, el costo real podia copiar el planeado y referencias/unidades podian quedar huerfanas o mutar sin proteccion. |
+| Impacto | Cambio incompatible en validacion/alta de orden: ya no se acepta `observed_resources`; el request agrega `planned_for`. Las ordenes exponen recursos planeados/reales y referencias de reserva. Inventory incorpora reservas, disponible neto, costo promedio e importe; RH expone capacidad productiva; Maquinaria exige area HR estable. La revision 0017 agrega tablas/indices/restricciones sin FK entre dominios propietarios. QA conserva el corte anterior hasta una promocion gobernada. |
+| APIs afectadas | **HR:** nuevo `GET /v1/hr/production-capacity` (`production.order.validate` o `production.order.create`), request por fecha/puestos y response con capacidad, costo por hora/minuto y trabajadores activos. **Inventory:** nuevos `POST /v1/inventory/availability-checks` (`production.order.validate` o `production.order.create`), `POST /v1/inventory/reservation-requests` (`production.order.create`), `POST /v1/inventory/reservations/{id}/release` y `/consume` (`production.order.status.update`); requests identifican fuente/orden, articulo, unidad, cantidad y almacenes, y responses exponen asignaciones, estados, costo snapshot y movimiento de consumo. `GET /v1/inventory/balances` (`inventory.balance.read`) agrega reservado, disponible, costo promedio e importe; alta/edicion/lectura de articulos (`inventory.item.create/update/read`) agrega `default_unit_cost`. **Production:** `POST /v1/production/resource-validations` (`production.order.validate`) elimina `observed_resources`, recibe `planned_for` y responde observaciones autoritativas; `POST /v1/production/orders` (`production.order.create`) usa responsables por ID, fecha planeada y devuelve snapshots/recursos/reservas; `PATCH /v1/production/orders/{id}/status` (`production.order.status.update`) ya no acepta costo real y orquesta liberacion/consumo; nuevo `PATCH /v1/production/orders/{id}/resources/{resource_id}` (`production.order.update`) registra cantidades reales; recetas/aprobacion (`production.recipe.create/update/approve`) exigen referencias autoritativas y maquinaria (`production.machine.create/update`) exige `area_ref_id`. **Consumidos sin cambio estructural:** Admin UOM y `session/context`, HR trabajadores elegibles/areas e Inventory articulos. **No tocadas:** APIs funcionales de Ventas, Compras, Costos, Contabilidad, Billing, Provisioning e Integraciones. |
+| Validacion | Compilacion Python; sintaxis JS; YAML y paridad OpenAPI/FastAPI; pruebas unitarias de Production, Inventory y RH; validadores de arquitectura, datos, ambientes, agentes, i18n y trazabilidad; `npm.cmd run verify` (`161 passed, 3 skipped`); upgrade Alembic Local `20260818_0016 -> 20260818_0017` y confirmacion de `head`. |
+| Observaciones | Alcance exclusivo `local-write`. La revision 0017 se aplico solo a `127.0.0.1:5434/erclave_local`; no se cargo ni modifico dato funcional. No hubo QA/Produccion, despliegues ni escrituras externas. Pendientes deliberados: producto terminado/merma, lotes/series y calendarios/turnos/ausencias/mantenimiento multi-dia. |
+
+### CHG-198
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-18 |
+| Cambio | Sincronizacion documental posterior al corte autoritativo |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `TRAZABILIDAD.md`, `modulos/README.md`, `modulos/01_produccion.md`, `modulos/02_almacenes_inventarios.md`, `modulos/10_recursos_humanos.md`, `docs/arquitectura/ownership_datos_mvp.md`, `docs/arquitectura/modelo_datos_mvp.md`, `docs/arquitectura/diagramas/`, `docs/contexto/ESTADO_ACTUAL.md`, `tools/validators/validate-agents.js` |
+| Secciones | Agentes / Produccion / Inventarios / RH / Costos / Administracion / Ownership / Datos / Diagramas / Estado por ambiente / Validadores |
+| Agentes consultados | Revision complementaria de negocio y tecnica de Produccion, Almacenes e Inventarios, RH, Costos y Administracion; Sinergia modular; Arquitectura SaaS, datos y API; Custodio DB; Seguridad; Diseno/i18n; QA/Release. |
+| Descripcion | Elimina contradicciones que aun presentaban reservas, consumo, valuacion, capacidad y backend de Produccion como futuros; separa con precision el corte implementado en Local del desplegado en QA; corrige la cabeza Alembic de diagramas; mantiene Ventas como `planned/mock`; actualiza ownership y el caracter vivo del modelo de datos. Amplia el detalle contractual historico de CHG-197 y agrega guardrails semanticos contra regresiones documentales. |
+| Motivo | Los validadores estructurales aprobaban aunque fichas de modulos, diagramas y ownership conservaran frases del corte anterior, lo que podia inducir a agentes y usuarios a decisiones incorrectas. |
+| Impacto | Solo documentacion y validadores. No cambia runtime, contratos OpenAPI, persistencia, datos, permisos, frontend ni estado de ambientes. La historia QA se conserva; las capacidades 0017 siguen siendo exclusivas de Local. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** Ninguno. **APIs no tocadas:** todas las APIs de Admin, Production, Inventory, HR, Sales, Billing, Provisioning e Integration. |
+| Validacion | `npm.cmd run validate:agents`, validacion de trazabilidad, busqueda semantica de frases obsoletas, enlaces Markdown locales y `npm.cmd run verify`. |
+| Observaciones | Revision de solo documentacion y validadores en el workspace Local. No hubo migraciones, seeds, datos funcionales, QA, Produccion, despliegues ni escrituras externas. |
+
+### CHG-199
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-18 |
+| Cambio | Gobierno y validacion automatica de documentacion viva |
+| Autor | Codex |
+| Archivos | `docs/arquitectura/gobierno_documentacion_viva.md`, `tools/validators/validate-documentation-freshness.js`, `tools/validators/validate-all.js`, `tools/validators/validate-session-context.js`, `package.json`, `AGENTS.md`, `AGENTES.md`, `docs/contexto/INICIO_SESION.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Gobierno documental / Agentes / Estado / Migraciones / Modulos / Enlaces / Automatizacion / Trazabilidad |
+| Agentes consultados | Todos los agentes quedan sujetos a la matriz de documentacion viva. Para este corte aplicaron Arquitectura SaaS, Arquitectura de datos, Custodio DB, Arquitectura API, Seguridad, QA/Release, Sinergia modular y responsables tecnicos de todos los modulos como custodios de sus fuentes; no cambio una regla funcional de negocio. |
+| Descripcion | Define fuentes vivas, evidencia historica y objetivos futuros; asigna fuente de verdad y responsabilidad por agente; establece una matriz obligatoria por tipo de cambio. Agrega `npm.cmd run validate:documentation` al `verify` para derivar y comparar cabezas Alembic Local/QA, ultimo CHG, campos de trazabilidad, indice de modulos, enlaces Markdown y presencia del gobierno en instrucciones de agentes y sesion. |
+| Motivo | Evitar que codigo, contratos, migraciones, diagramas, fichas, agentes y memoria operativa vuelvan a divergir aunque los validadores funcionales permanezcan verdes. |
+| Impacto | Solo proceso, documentacion y validadores. Todo cambio futuro debe actualizar las fuentes afectadas en el mismo corte o fallara la validacion objetiva correspondiente. No cambia runtime, UI, contratos OpenAPI, datos, permisos ni ambientes. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** Ninguno. **APIs no tocadas:** todas las APIs de Admin, Production, Inventory, HR, Sales, Billing, Provisioning e Integration. |
+| Validacion | `npm.cmd run validate:documentation`, `npm.cmd run validate:session-context`, `npm.cmd run validate:agents`, `npm.cmd run validate:traceability`, enlaces Markdown locales, `git diff --check` y `npm.cmd run verify`. |
+| Observaciones | Alcance exclusivo del workspace Local. No hubo migraciones, seeds, datos funcionales, QA, Produccion, despliegues ni escrituras externas. La automatizacion complementa, pero no sustituye, la revision semantica de negocio y tecnica. |
+
+### CHG-200
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-18 |
+| Cambio | Primer corte real de Ventas: Clientes y Cotizaciones |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260818_0018_sales_customers_quotes.py`, `backend/services/sales-service/`, `backend/services/hr-service/`, `backend/services/production-service/`, `backend/services/admin-service/`, `backend/shared/erclave_common/`, `contracts/api/`, `frontend/`, `tools/validators/`, `AGENTES.md`, `docs/`, `modulos/`, `TRAZABILIDAD.md` |
+| Secciones | Ventas / Clientes / Contactos / Cotizaciones / Referencias autoritativas / Calculo / Estados / Permisos / Frontend / Agentes / Documentacion / Pruebas |
+| Agentes consultados | Especialista comercial y Especialista tecnico de ventas; RH por responsables y minimizacion de datos; Produccion por productos/servicios y costo estandar; Administracion por unidades; Arquitectura SaaS, datos y API; Custodio DB; Seguridad; Diseno/i18n; QA/Release y Sinergia modular. Las skills de repositorio no estaban disponibles en esta sesion; se aplicaron directamente sus guardrails documentados y no se toco QA/Produccion. |
+| Descripcion | Materializa `sales-service` y el schema `sales` para Clientes/Cotizaciones. Clientes exige responsable RH activo y contacto principal; el perfil fiscal permanece opcional pero completo al iniciarse. Cotizaciones exige cliente activo, productos/servicios activos y unidad base activa, calcula subtotal/descuento/total/costo snapshot/margen estimado en backend y controla transiciones. La UI consume API y deja pedidos/entregas como planeados sin escritura mock. |
+| Motivo | Sustituir la maqueta comercial por un corte vertical verificable, evitando responsables, clientes, productos, unidades, totales o estados declarados libremente por el navegador. |
+| Impacto | Sales cambia de `planned` a implementado solo para Clientes/Cotizaciones en Local. La revision 0018 crea tablas tenant-safe, indices, checks, idempotencia y auditoria sin FK cruzadas. RH agrega una proyeccion minima de trabajadores elegibles; Production y Admin permiten validacion de lectura con permisos Sales. Pedidos, reservas, entregas, devoluciones y facturacion siguen fuera de alcance. QA permanece inactivo y en `20260805_0013`. |
+| APIs afectadas | **Sales nuevas:** `GET /v1/sales/reference-data`, CRUD acotado de `/customers` y `/quotes`, mas `/quotes/{id}/submit`, `/approve`, `/expire`, `/cancel`. **HR:** `GET /v1/hr/workers/sales-eligible` con proyeccion sin expediente sensible. **Production consumida:** lectura de `/v1/production/product-services` acepta permisos de cotizacion. **Admin consumida:** unidades activas aceptan permisos de cotizacion. **No implementadas:** pedido, fulfillment, entrega, devolucion, reserva comercial y facturacion. |
+| Validacion | `validate:sales-cycle`, paridad OpenAPI/FastAPI, sintaxis JS/Python, pruebas Sales, suite backend completa, validadores de agentes/documentacion/trazabilidad y `npm.cmd run verify` (`166 passed, 4 skipped`). Integracion PostgreSQL real `1 passed` con tenant efimero y limpieza; smoke Firebase Local confirmo Sales activo, health, 3 monedas, 6 condiciones, clientes y autoridades RH/Produccion/Admin. |
+| Observaciones | Alcance `local-write`. La revision 0018 se aplico exclusivamente a `127.0.0.1:5434/erclave_local`; el seed Local sincronizo catalogo, permisos y entitlement demo, y `sales-service` quedo escuchando en `127.0.0.1:8008`. La prueba de persistencia elimino sus datos efimeros. No se desplego, migro, activo ni escribio QA/Produccion. |
+
+### CHG-201
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-18 |
+| Cambio | Auditoria y cierre de sinergia modular de Ventas |
+| Autor | Codex |
+| Archivos | `backend/scripts/start_local.ps1`, `backend/services/admin-service/`, `backend/services/sales-service/`, `contracts/api/admin-service.openapi.yaml`, `contracts/api/sales-service.openapi.yaml`, `frontend/api/sales.js`, `frontend/app.js`, `frontend/backoffice/app.js`, `frontend/i18n/translations.js`, `tools/validators/validate-sales-cycle.js`, `tools/validators/validate-agents.js`, `AGENTES.md`, `docs/contexto/`, `frontend/backoffice/README.md`, `modulos/04_ventas_clientes.md`, `modulos/08_administracion_configuracion.md`, `TRAZABILIDAD.md` |
+| Secciones | Ventas / Administracion / Backoffice / Onboarding / Entitlements / Dependencias / Permisos / Lectura parcial / Idempotencia / Pruebas / Documentacion |
+| Agentes consultados | Especialista comercial y tecnico de Ventas; negocio y tecnico de Administracion; Sinergia modular; Arquitectura SaaS, datos y API; Custodio DB; Seguridad; Diseno/i18n y QA/Release. Se revisaron sus reglas versionadas en `AGENTES.md`; no se delegaron tareas ni se tocaron ambientes externos. |
+| Descripcion | Audita el primer corte de Ventas y corrige sus fronteras. El catalogo declara `sales -> hr, production`; Backoffice y Administracion impiden activar Ventas sin autoridades efectivas o apagar una dependencia en uso, con validacion bajo bloqueo de todas las filas modulares del tenant. Onboarding agrega dependencias seleccionadas y asigna permisos al owner despues de crear los entitlements. La UI carga documentos por permisos de lectura y catalogos de mutacion por separado, oculta acciones no autorizadas, agrega expiracion y conserva lectura ante fallas parciales. Backend amplia busqueda de clientes, valida promesa de entrega e implementa claim idempotente concurrente con `ON CONFLICT`. El arranque Local amplia la espera del emulador de 15 a 30 segundos para evitar falsos fallos en equipos donde Auth tarda mas en escuchar. |
+| Motivo | La auditoria encontro que un tenant podia quedar con Ventas efectivo pero RH/Produccion apagados, el onboarding podia crear modulos antes de que el owner recibiera sus permisos, y un usuario lector perdia toda la pantalla por llamadas a catalogos de captura no autorizadas. Tambien faltaban expiracion en UI, busqueda por contacto y proteccion del primer claim idempotente concurrente. |
+| Impacto | No agrega migracion ni cambia datos existentes. Fortalece los dos niveles de habilitacion y evita estados operativos rotos. Los lectores conservan visibilidad sin adquirir permisos de mutacion; las escrituras siguen revalidando autoridades. El tenant Local existente ya cumple las dependencias. Pedidos, entregas, reservas comerciales y facturacion permanecen planeados. |
+| APIs afectadas | **Admin modificado:** `GET /v1/backoffice/modules` agrega `dependencies`; onboarding y ambos `PUT` de entitlement pueden responder `409 module_dependencies_required` o `module_dependency_in_use`. **Sales modificado:** `GET /v1/sales/reference-data` admite cualquiera de los permisos comerciales de lectura/edicion declarados; formas de response sin cambio. **Endpoints consumidos sin cambio:** lecturas reducidas de RH, Production y Admin UOM. **APIs no tocadas:** Inventory, Billing, Provisioning e Integration. |
+| Validacion | Pruebas unitarias Sales `8 passed` y Admin API `69 passed`; `npm.cmd run verify` aprobo todos los validadores, OpenAPI, sintaxis, compilacion y `172 passed, 6 skipped`; integraciones PostgreSQL reales Sales `2 passed` y Admin `4 passed`, con concurrencia, aislamiento, dependencias, onboarding y limpieza/rollback. Reinicio canonico Local con cinco APIs saludables; smoke Firebase comprobo `dependencies=hr,production`, bloqueo `409` en ambos niveles, denegacion API `403` al apagar cada nivel y restauracion final efectiva de Sales/RH/Production. |
+| Observaciones | Alcance exclusivo `local-write` sobre codigo y PostgreSQL `erclave_local`. Las pruebas efimeras limpiaron o revirtieron sus datos; el smoke conservo la auditoria/idempotencia Local de los apagados/restauraciones solicitados y dejo el estado funcional original restaurado. No se agrego revision Alembic. No hubo migracion, seed, despliegue ni escritura en QA/Produccion. Rollback de codigo: revertir CHG-201; la cabeza Local permanece `20260818_0018`. |
+
+### CHG-202
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-18 |
+| Cambio | Segundo corte de Ventas y plantilla documental tenant-safe |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260818_0019_sales_orders_deliveries_catalogs.py`, `backend/services/admin-service/`, `backend/services/sales-service/`, `backend/services/inventory-service/`, `backend/services/production-service/`, `contracts/api/`, `frontend/`, `AGENTES.md`, `docs/`, `modulos/`, `TRAZABILIDAD.md` |
+| Secciones | Ventas / Pedidos / Surtido / Reservas / Solicitudes de Produccion / Entregas / Costo real / Catalogos comerciales / Plantillas PDF / Permisos / UI / Pruebas / Documentacion |
+| Agentes consultados | Reglas versionadas del especialista comercial y tecnico de Ventas; negocio/tecnico de Administracion, Produccion e Inventarios; Sinergia modular; Arquitectura SaaS, datos y API; Custodio DB; Seguridad; Diseno/i18n y QA/Release. Las skills `$erclave-feature`, `$erclave-db-migration` y `$erclave-environment-boundaries` referidas por el repositorio no estaban disponibles; se aplicaron directamente sus guardrails documentados. |
+| Descripcion | Convierte una cotizacion aprobada una sola vez en Pedido; configura cada partida como servicio, reserva de existencia o solicitud idempotente a Produccion; registra Entregas parciales/totales, consume parcialmente reservas y calcula costo/margen real. Admin incorpora catalogos tenant-safe de monedas/condiciones de pago y `document.template`; cotizaciones y ordenes de Produccion aplican el logo/colores al imprimir. La UI de Pedidos/Entregas deja el panel planeado y consume API real. |
+| Motivo | Cerrar el siguiente tramo comercial sin aceptar maestros libres, sin confundir solicitudes de Produccion con ordenes liberadas y sin duplicar identidad visual en cada generador PDF. |
+| Impacto | Revision 0019 Local crea catalogos comerciales, pedidos, partidas, referencias de reserva, entregas y solicitudes Production. Inventory acepta origen Sales y consumo parcial; Production valida y conserva solicitudes sin escritura cruzada. Los estados operativos siguen protegidos y no se convierten en catalogos editables. Logo data URL es solucion Local; object storage queda como gate previo a QA. |
+| APIs afectadas | **Admin:** CRUD acotado `/v1/catalogs/commercial/{currencies|payment_terms}` y `GET/PUT /v1/document-template`. **Sales:** `GET/POST /orders`, `GET /orders/{id}`, `/fulfillment`, `/cancel`; `GET/POST /deliveries`, `GET /deliveries/{id}`, `/confirm`, `/cancel`. **Inventory:** reserva/liberacion/consumo aceptan permisos Sales y consumo opcional parcial. **Production:** `GET/POST /v1/production/order-requests`. **No tocadas:** Billing, Provisioning e Integration. |
+| Validacion | `npm.cmd run verify` aprobo validadores, compilacion y `173 passed, 6 skipped`; integracion PostgreSQL Sales aprobo `11 passed` con pedido/entrega parcial/costo real; migracion Local `0018 -> 0019`; smoke Firebase autenticado confirmo frontend y cinco APIs en `200`, tres monedas, seis condiciones de pago, plantilla, Pedidos, Entregas y solicitudes Production. |
+| Observaciones | Alcance exclusivo `local-write` sobre `127.0.0.1:5434/erclave_local`. APIs locales fueron reiniciadas y permanecen escuchando en 8000/8002/8004/8006/8008. No hubo despliegue, migracion, seed ni escritura en QA/Produccion. |
+
+### CHG-203
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-18 |
+| Cambio | Auditoria integral del segundo corte de Ventas |
+| Autor | Codex |
+| Archivos | `docs/auditorias/ventas_segundo_corte_2026-08-18.md`, `AGENTES.md`, `modulos/04_ventas_clientes.md`, `modulos/README.md`, `backend/services/sales-service/README.md`, `docs/contexto/ESTADO_ACTUAL.md`, `DECISIONES.md`, `PENDIENTES.md`, `contracts/api/admin-service.openapi.yaml`, `tools/validators/validate-sales-cycle.js`, `TRAZABILIDAD.md` |
+| Secciones | Veredicto / Bloqueadores QA / UI de Entregas / Orquestacion y concurrencia / Integridad producto-articulo / XSS / Costos / Resiliencia / Validaciones / Agentes / Pendientes |
+| Agentes consultados | Especialista comercial y tecnico de Ventas; negocio/tecnico de Inventory, Production y Administracion; Sinergia modular; Arquitectura SaaS, datos y API; Custodio DB; Seguridad; Diseno/i18n; QA/Release y gobierno de documentacion viva. |
+| Descripcion | Se audito codigo, migraciones, contratos, permisos, frontend, pruebas, catalogos y plantilla documental del corte 0018/0019. Se confirmo el happy path backend, pero se corrigio la documentacion que lo presentaba como flujo integral cerrado y se registraron bloqueadores verificables antes de QA. |
+| Motivo | Evitar que rutas existentes y pruebas felices oculten huecos de operacion real, seguridad o consistencia entre Sales, Inventory y Production. |
+| Impacto | No cambia runtime ni base. La memoria vigente ahora distingue backend disponible de UI incompleta y prioriza: alta de Entregas, sanitizacion, saga/locks/reconciliacion, mapeo producto-articulo, costo por fuente, resiliencia y pruebas negativas/concurrentes. Los agentes incorporan esos guardrails. |
+| APIs afectadas | Sin cambio de rutas ni payloads. Se alineo solamente metadata `x-permissions` del OpenAPI Admin con permisos alternativos ya aceptados por runtime para catalogos comerciales. |
+| Validacion | Antes y despues de documentar, `npm.cmd run verify` aprobo `173 passed, 6 skipped`; Sales con PostgreSQL Local aprobo `11 passed`; sintaxis JS, `git diff --check` y paridad OpenAPI aprobaron. Prueba dirigida confirmo que nombre comercial/contacto/telefono aceptan espacios y que RFC con `Ñ` se rechaza, sustentando el hallazgo de validacion. |
+| Observaciones | Auditoria y documentacion exclusivamente Local; sin migraciones, seeds, datos funcionales, despliegues ni escrituras en QA/Produccion. El detalle autoritativo del hallazgo esta en `docs/auditorias/ventas_segundo_corte_2026-08-18.md`. |
+
+### CHG-204
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-18 |
+| Cambio | Correccion integral del plan de auditoria CHG-203 |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260818_0020_sales_chg203_hardening.py`, `backend/services/sales-service/`, `backend/services/production-service/`, `backend/services/inventory-service/`, `contracts/api/`, `frontend/api/sales.js`, `frontend/app.js`, `tools/run_pytest.py`, `tools/validators/`, `AGENTES.md`, `docs/`, `modulos/`, `TRAZABILIDAD.md` |
+| Secciones | Ventas / Entregas / Orquestacion durable / Concurrencia / Mapeo producto-articulo / Costos / Sanitizacion / Resiliencia / Contratos / Pruebas / Agentes / Documentacion |
+| Agentes consultados | Reglas versionadas del especialista comercial y tecnico de Ventas; negocio/tecnico de Inventory, Production y Administracion; Sinergia modular; Arquitectura SaaS, datos y API; Custodio DB; Seguridad; Diseno/i18n, QA/Release y gobierno de documentacion viva. No se delegaron tareas ni se tocaron ambientes externos. |
+| Descripcion | Aplica el plan CHG-203. Production exige para cada producto un articulo activo de Inventory con la misma unidad y conserva el mapeo autoritativo. Sales revalida esa identidad, guarda snapshots y reclama durablemente surtido, cancelacion y confirmacion antes de efectos externos; claves derivadas estables permiten reanudar estados `needs_reconciliation`. Las Entregas bloquean Pedido/partidas y descuentan borradores concurrentes. El costo real queda trazado a `inventory_consumption` o `service_capture`; Production queda pendiente hasta reportar `production_report`. La UI habilita alta de Entregas, oculta campos ignorados, conserva lecturas parciales ante fallas de referencias y escapa contenido comercial. |
+| Motivo | Cerrar los bloqueadores funcionales, de seguridad e integridad encontrados por CHG-203 sin promover un happy path incompleto como listo para QA. |
+| Impacto | Revision Local `20260818_0020`; cambia schema Production/Sales, contratos, API, UI, pruebas y fuentes vivas. Corrige la evidencia RFC de CHG-203: el patron UTF-8 aceptaba `Ñ`; el fallo observado provenia del transporte de consola. Campos obligatorios con espacios si fueron corregidos y cubiertos. Paginacion, PDF de Pedido/Entrega, object storage, devoluciones/facturacion y callback Production permanecen explicitamente fuera del corte. |
+| APIs afectadas | **Production:** ProductService agrega `inventory_item_id` y valida su autoridad; lecturas admiten permisos Sales necesarios. **Inventory:** lectura puntual de articulo admite validacion Production/Sales. **Sales:** mismos endpoints; respuestas de Pedido/Entrega agregan estados de orquestacion, snapshots de articulo y procedencia de costo; crear Entrega admite costo real de servicio. **No tocadas:** Billing, Provisioning e Integration. |
+| Validacion | `npm.cmd run verify` aprobo validadores, compilacion y `177 passed, 8 skipped`. Unitarias Sales `12 passed`; Production `29 passed`; integracion PostgreSQL Sales `4 passed` con sobrecompromiso, claim exclusivo, replay terminado y carrera cancelacion-confirmacion; sintaxis JS, contratos OpenAPI y documentacion viva aprobados. |
+| Observaciones | Alcance exclusivo `local-write`. Alembic `20260818_0020` fue aplicado solo a `127.0.0.1:5434/erclave_local`. No hubo despliegue, migracion, seed ni escritura en QA/Produccion. Reanudar el mismo payload conserva la clave durable original; la operacion visible puede quedar `needs_reconciliation` para recuperacion, nunca degradar a mock. |
+
+### CHG-205
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-20 |
+| Cambio | Endurecimiento funcional y de seguridad de identidad PDF |
+| Autor | Codex |
+| Archivos | `backend/services/admin-service/app/schemas.py`, `backend/services/admin-service/tests/test_admin_api.py`, `contracts/api/admin-service.openapi.yaml`, `frontend/app.js`, `frontend/styles.css`, `frontend/i18n/translations.js`, `tools/validators/validate-production-cycle.js`, `tools/validators/validate-sales-cycle.js`, `docs/arquitectura/plantillas_documentales.md`, `docs/contexto/`, `modulos/08_administracion_configuracion.md`, `TRAZABILIDAD.md` |
+| Secciones | Administracion / Identidad PDF / Ventas / Produccion / Seguridad / Archivos / Permisos / i18n / Responsive / Pruebas / Documentacion |
+| Agentes consultados | Negocio y tecnico de Administracion; negocio/tecnico de Ventas y Produccion; Arquitectura SaaS, datos y API; Custodio DB; Seguridad transversal; Diseno/i18n; Responsive; QA/Release y gobierno de documentacion viva. Se aplicaron `$erclave-feature` y `$erclave-environment-boundaries`; no se delegaron tareas ni se tocaron ambientes externos. |
+| Descripcion | Completa el flujo Local de `document.template`: permite reemplazar y quitar logo, valida MIME/tamano en UI y Base64/firma/tamano decodificado en backend, corrige el checkbox, mueve todos los textos a ES/EN y oculta controles mutables sin permiso. Cotizaciones y Ordenes de Produccion reintentan cargar el registro API si falta en cache y muestran un error visible si no existe. La salida de Produccion escapa datos operativos interpolados en `innerHTML`. |
+| Motivo | La revision funcional encontro deformacion visual, fallos silenciosos ante cache incompleta, ausencia de retiro de logo, textos no gobernados por i18n, validacion superficial del data URL y campos de Produccion sin escape consistente. |
+| Impacto | Sin migracion ni cambio de modelo persistente. Endurece el payload vigente y la experiencia de Administracion; conserva la cache de presentacion respaldada por API. Pedido/Entrega y object storage siguen pendientes y fuera del corte. |
+| APIs afectadas | **Contrato modificado:** Admin `PUT /v1/document-template`, permiso `admin.setting.update`; mismo request/response, pero `logo_data_url` documenta maximo, formatos, firma valida y `null` para eliminar. **Endpoints consumidos sin cambio:** Admin `GET /v1/document-template`, permisos alternativos de lectura vigentes; lecturas de Cotizaciones Sales y Ordenes Production ya cargadas por sus workspaces. **APIs no tocadas:** Inventory, HR, Billing, Provisioning e Integration. |
+| Validacion | Pruebas focalizadas Admin, validadores i18n/responsive/sintaxis/OpenAPI y guardrails documentales/funcionales; `npm.cmd run verify` aprobo validadores, compilacion y 181 pruebas con 8 omitidas. |
+| Observaciones | Alcance exclusivo de codigo `local-write`. No hubo migracion, seed, carga, despliegue ni escritura en QA/Produccion. Rollback: revertir CHG-205; `document.template` conserva compatibilidad de lectura y estructura. |
+
+### CHG-206
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-20 |
+| Cambio | Vinculacion guiada de producto terminado |
+| Autor | Codex |
+| Archivos | `backend/services/production-service/`, `backend/services/sales-service/app/authorities.py`, `contracts/api/production-service.openapi.yaml`, `frontend/api/production.js`, `frontend/app.js`, `frontend/i18n/translations.js`, `modulos/`, `TRAZABILIDAD.md` |
+| Agentes consultados | Especialistas de Almacenes, Produccion y Ventas. Se aplicaron `$erclave-feature` y `$erclave-environment-boundaries`; no se tocaron ambientes externos. |
+| Descripcion | Agrega selector opcional de producto de Produccion al alta de un terminado, crea el articulo en Inventory y conserva en Produccion el vinculo 1:1 por IDs. Permite nombres comercial y logistico distintos, filtra candidatos sin mapa y valida tipo, estado y unidad. |
+| Impacto | Sin migracion. Mantiene ownership por servicio y agrega recuperacion explicita ante alta parcial. Ventas endurece la validacion del articulo terminado al surtir. |
+| APIs afectadas | **Production:** `GET /v1/production/product-services` agrega `inventory_mapping`; nuevo `PUT /v1/production/product-services/{id}/finished-good-link`. **Inventory:** consume sin cambio `POST /v1/inventory/items` y `GET /v1/inventory/items/{id}`. **Sales:** mismos endpoints; validacion de surtido mas estricta. |
+| Validacion | Pruebas unitarias focalizadas Production/Sales, contrato OpenAPI, frontend y `npm.cmd run verify`. |
+| Observaciones | Alcance exclusivo `local-write`; sin seed, migracion, despliegue ni escritura en QA/Produccion. |
+
+### CHG-207
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-20 |
+| Cambio | Custodio y skill de manuales funcionales de solucion |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `.agents/skills/erclave-solution-manuals/`, `docs/manuales_solucion/`, `docs/contexto/ESTADO_ACTUAL.md`, `tools/validators/validate-agents.js`, `TRAZABILIDAD.md` |
+| Agentes consultados | Gobierno de documentacion viva y especialistas modulares como fuentes obligatorias del nuevo custodio. Se uso `$skill-creator`; no se tocaron ambientes externos. |
+| Descripcion | Crea un agente transversal y una skill para producir y mantener manuales de usuario por modulo, con fuente Markdown, salida DOCX, estructura funcional, registro de cobertura, consulta a agentes de negocio/tecnicos y control de alcance por ambiente. |
+| Impacto | Documental y de tooling Local. No crea aun todos los manuales; establece el proceso reproducible para que crezcan con la solucion sin convertirse en bitacoras tecnicas. |
+| APIs afectadas | Ninguna. |
+| Validacion | Validacion estructural de skill, generacion y apertura de DOCX de prueba, validador de agentes y `npm.cmd run verify`. |
+| Observaciones | Sin migracion, seed, despliegue ni escritura en QA/Produccion. Los DOCX distribuidos deben regenerarse desde sus fuentes Markdown. |
+
+### CHG-208
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-20 |
+| Cambio | Fecha de Entrega y busqueda escalable de documentos comerciales |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/i18n/translations.js`, `frontend/index.html`, `tools/validators/validate-sales-cycle.js`, `modulos/04_ventas_clientes.md`, `docs/arquitectura/seleccion_escalable_documentos.md`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Agentes consultados | Negocio y tecnico de Ventas; criterios de UX/i18n, arquitectura API, QA y gobierno documental definidos en `AGENTES.md`. Se aplicaron `$erclave-feature` y `$erclave-environment-boundaries`; no se tocaron ambientes externos. |
+| Descripcion | Corrige el campo fecha oculto por una condicion de modo mock. Sustituye selectores masivos de Cotizacion y Pedido por buscadores que filtran por folio, cliente, producto/servicio, importe o estado y limitan resultados a documentos elegibles. |
+| Impacto | UI Local, textos ES/EN, guardrail automatizado y documentacion funcional. Sin cambio de datos, contrato ni permisos. |
+| APIs afectadas | Ninguna modificada. Se consumen sin cambio `GET /v1/sales/quotes`, `GET /v1/sales/orders` y `POST /v1/sales/deliveries`. |
+| Validacion | Sintaxis, i18n, validador de Ventas, documentacion viva y `npm.cmd run verify`. |
+| Observaciones | Sin migracion, seed, despliegue ni escritura en QA/Produccion. Busqueda backend paginada queda pendiente para superar el limite preventivo actual de 200 documentos. |
+
+### CHG-209
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-20 |
+| Cambio | Selectores escalables transversales |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `frontend/i18n/translations.js`, `tools/validators/validate-scalable-selectors.js`, `tools/validators/validate-all.js`, `package.json`, `AGENTS.md`, `AGENTES.md`, `docs/arquitectura/seleccion_escalable_documentos.md`, `docs/contexto/ESTADO_ACTUAL.md`, `modulos/` y `TRAZABILIDAD.md` |
+| Secciones | Administracion / Produccion / Almacenes / Ventas / Recursos Humanos / Accesibilidad / i18n / Escalabilidad / Documentacion |
+| Agentes consultados | Reglas versionadas de especialistas modulares, UX/i18n, arquitectura API, QA y gobierno documental en `AGENTES.md`. Se aplicaron `$erclave-feature` y `$erclave-environment-boundaries`; no se delegaron tareas ni se tocaron ambientes externos. |
+| Descripcion | Incorpora un lookup reutilizable para referencias crecientes: búsqueda normalizada por texto, máximo de 20 resultados, selección por ID, validación de resultado real, teclado y sincronización ante cambios del catálogo. Lo aplica a roles, sucursales, entidades legales, artículos, almacenes, productos vinculables, recetas, recursos, áreas, puestos y responsables. Los buscadores documentales especializados de Ventas permanecen vigentes. |
+| Motivo | Evitar listas inmanejables conforme crecen los registros y fijar una regla transversal sin convertir innecesariamente los catálogos cerrados en buscadores. |
+| Impacto | UI y documentación Local. No modifica persistencia, permisos ni contratos. La consulta server-side paginada continúa siendo obligatoria antes de exceder los límites preventivos actuales. |
+| APIs afectadas | Ninguna modificada. Los catálogos siguen consumiendo sus endpoints actuales de Admin, Production, Inventory, HR y Sales sin cambio contractual. |
+| Validacion | `npm.cmd run validate:selectors`, sintaxis, i18n, responsive, documentación viva y `npm.cmd run verify`. |
+| Observaciones | Sin migración, seed, despliegue ni escritura en QA/Producción. Rollback: revertir CHG-209; los `select` fuente conservan las opciones y valores originales. |
+
+### CHG-210
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-20 |
+| Cambio | Portadas de reportes estándar por módulo |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `frontend/i18n/translations.js`, `frontend/index.html`, `tools/validators/validate-module-report-hubs.js`, `tools/validators/validate-all.js`, `package.json`, `AGENTS.md`, `AGENTES.md`, `docs/arquitectura/reportes_estandar_por_modulo.md`, `docs/contexto/ESTADO_ACTUAL.md`, `modulos/README.md`, `modulos/07_reportes_inteligencia_operativa.md` y `TRAZABILIDAD.md` |
+| Secciones | Portadas modulares / Reportes estándar / Producción / Almacenes / Recursos Humanos / Ventas / Administración / Módulos futuros / Reportes especializados / i18n / Responsive |
+| Agentes consultados | Reglas versionadas de negocio y técnica de todos los módulos, arquitectura SaaS, UX/i18n, responsive, QA y gobierno documental en `AGENTES.md`. Se aplicaron `$erclave-feature` y `$erclave-environment-boundaries`; no se delegaron tareas ni se tocaron ambientes externos. |
+| Descripcion | Convierte la raíz de cada módulo en un centro de consulta de solo lectura con indicadores, catálogo de reportes, filtros sugeridos, fuentes del módulo y vista previa. Retira de esa portada altas, captura rápida y acciones operativas, incluida la acción global superior. Declara reportes propios para los cinco módulos activos y los cuatro módulos operativos planeados; conserva una configuración fallback para módulos futuros. Reportes permanece planeado para análisis especializados. |
+| Motivo | Separar la consulta cotidiana de la operación, evitar acciones ambiguas en la primera pestaña y establecer desde ahora la frontera entre reportes propios del módulo y analítica transversal. |
+| Impacto | UI, i18n, responsive, reglas de agentes y documentación Local. Las acciones existentes siguen en sus submódulos; no cambian permisos, datos ni contratos. |
+| APIs afectadas | Ninguna modificada. Las vistas continúan leyendo los datos ya cargados desde Admin, Production, Inventory, HR y Sales mediante sus endpoints vigentes; no se agregan endpoints agregados ni exportaciones. |
+| Validacion | `npm.cmd run validate:module-reports`, sintaxis, i18n, responsive, documentación viva y `npm.cmd run verify`. |
+| Observaciones | Alcance exclusivo `local-write`; sin migración, seed, carga, despliegue ni escritura en QA/Producción. Filtros ejecutables, paginación/exportación y reportes especializados permanecen pendientes. Rollback: revertir CHG-210 para restaurar las portadas operativas anteriores. |
+
+### CHG-211
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-20 |
+| Cambio | Rollback de portada de Administración |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/index.html`, `tools/validators/validate-module-report-hubs.js`, `docs/arquitectura/reportes_estandar_por_modulo.md`, `docs/contexto/ESTADO_ACTUAL.md`, `modulos/README.md`, `modulos/08_administracion_configuracion.md`, `AGENTS.md`, `AGENTES.md` y `TRAZABILIDAD.md` |
+| Secciones | Administración / Configuración / Portadas modulares / Reportes estándar / Gobierno documental |
+| Agentes consultados | Reglas versionadas del especialista de negocio/técnico de Administración, arquitectura SaaS, UX, QA y gobierno documental en `AGENTES.md`. Se aplicaron `$erclave-feature` y `$erclave-environment-boundaries`; no se delegaron tareas ni se tocaron ambientes externos. |
+| Descripcion | Revierte solamente la raíz de Administración para que vuelva a renderizar su centro de configuración con organización, usuarios, roles, permisos, módulos activos y catálogos base. Mantiene sin cambios las portadas de reportes estándar de los módulos operativos y documenta Administración como excepción deliberada. |
+| Motivo | Administración es el lugar donde se configura y gobierna el sistema; convertir su portada en consulta impedía localizar y operar esas capacidades esenciales. |
+| Impacto | UI y documentación Local de Administración. No altera los submódulos operativos, permisos, datos ni contratos. |
+| APIs afectadas | Ninguna modificada. Administración vuelve a consumir sus endpoints vigentes de `admin-service` sin cambios de request/response ni permisos. |
+| Validacion | `npm.cmd run validate:module-reports`, sintaxis, documentación viva y `npm.cmd run verify`. |
+| Observaciones | Alcance exclusivo `local-write`; sin migración, seed, carga, despliegue ni escritura en QA/Producción. Rollback del rollback: restaurar la rama CHG-210 de Administración, aunque contradice la excepción funcional acordada. |
+
+### CHG-212
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Codigos de negocio, fases ponderadas y costo unitario |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260821_0021_production_stage_weights.py`, `backend/alembic/versions/20260821_0022_admin_code_sequences.py`, Admin/Production/Inventory/Sales services y OpenAPI, `frontend/api/admin.js`, `frontend/app.js`, `frontend/styles.css`, `frontend/i18n/translations.js`, `AGENTES.md`, arquitectura, fichas `modulos/`, manuales de solucion y `TRAZABILIDAD.md` |
+| Secciones | Administracion / Produccion / Almacenes / Recursos Humanos / Ventas / API / Datos / UI / Manuales funcionales |
+| Agentes consultados | Especialistas de Produccion, Almacenes y Ventas revisaron ownership, contratos, fases, avance, costo y efectos comerciales. Se aplicaron `$erclave-feature`, `$erclave-environment-boundaries`, `$erclave-db-migration` y `$erclave-solution-manuals`, junto con reglas transversales de arquitectura, seguridad, UX, QA y documentacion de `AGENTES.md`. |
+| Descripcion | Agrega el catalogo tenant-safe de folios administrados/manuales con reservas atomicas e idempotentes y defaults por modulo; sus consumidores UI asignan codigos a productos, recetas, ordenes, maquinaria, almacenes, articulos, areas, empleados y documentos de Ventas. Las recetas enumeran fases con pesos que suman 100%, las ordenes conservan snapshots de peso/area y exponen avance ponderado; Entregables por area muestra ese contexto. Corrige la deteccion frontend de version aprobada. Inventory expone costo por unidad base y conversion compatible de cantidad/costo. RH trata areas/puestos como generales y solo expone a Produccion la bandera productiva explicita, desmarcada por defecto. |
+| Motivo | Dar identificadores de negocio gobernados, medir avance productivo de acuerdo con la aportacion real de cada area, calcular materiales desde una unidad economica clara y evitar que toda la estructura RH se interprete como productiva. |
+| Impacto | Dos migraciones Local con backfill seguro: `0021` distribuye exactamente 100% entre etapas existentes y copia peso/area a etapas de orden; `0022` crea y provisiona secuencias por tenant. Cambian contratos y UI Local. Los documentos historicos conservan sus codigos y snapshots. QA/Produccion no fueron tocados. |
+| APIs afectadas | Modificadas: Admin `GET /v1/catalogs/code-sequences` (`admin.setting.read`), `PATCH /v1/catalogs/code-sequences/{sequence_id}` (`admin.setting.update`) y `POST /v1/catalogs/code-sequences/{document_type}/next` (permiso de alta consumidor); Production requests/reads de recetas y ordenes, etapas y progreso en rutas existentes; Inventory `POST /v1/inventory/items/{id}/unit-conversion` (`inventory.item.read`) y lecturas de items con `default_unit_cost_per_base_unit`; Sales conserva sus rutas existentes y formaliza `BusinessDocumentCode`. Consumidas sin cambio: catalogo Admin de UOM y proyecciones HR/Inventory/Production. |
+| Validacion | Pruebas dirigidas: Admin 76, Production 33, Inventory 13 y Sales 14 aprobadas; cinco DOCX validos; migraciones aplicadas de `20260818_0020` a `20260821_0022` en PostgreSQL Local; smoke autenticado con 14 secuencias y proyecciones reales de pesos, progreso y costo. `npm.cmd run verify`: todos los validadores, compilacion y `192 passed, 8 skipped`. |
+| Observaciones | Rollback tecnico disponible en orden `0022 -> 0021 -> 0020`; eliminar `0021` pierde pesos/snapshots nuevos y solo debe hacerse bajo procedimiento de ambiente. Compras debe definir despues la actualizacion automatica de costo desde adquisiciones. Clientes API externos aun deben integrar la reserva central o usar el modo manual autorizado. |
+
+### CHG-213
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Diagnostico operativo y errores accionables de Inventario, RH y Produccion |
+| Autor | Codex |
+| Archivos | Frontend e i18n; validadores de selectores, Produccion y RH; HR/Production services, pruebas y OpenAPI; manuales funcionales, contexto y `TRAZABILIDAD.md` |
+| Secciones | Almacenes / Recursos Humanos / Recetas / Ordenes / Reservas y consumo / Seguridad de errores / Manuales funcionales |
+| Agentes consultados | Especialistas de Almacenes, Produccion y revision transversal RH/API/UX/seguridad. Se aplicaron `$erclave-feature`, `$erclave-environment-boundaries` y `$erclave-solution-manuals`; alcance exclusivo Local. |
+| Diagnostico | El selector de almacen filtraba por su propia etiqueta `Todos los almacenes`: bug UI. El empleado llevaba NSS de 9 digitos: error operativo, agravado por un 422 tecnico que podia reflejar datos personales. La receta usa articulos heredados con `LTS` y `MT`, codigos ausentes del catalogo UOM activo: error de datos maestros y hueco UX. La orden aprobada requiere capacidad del puesto `Fundidor A`, pero RH reporta cero trabajadores/minutos: bloqueo operativo correcto oculto por mensaje generico. |
+| Descripcion | Al abrir un lookup se listan candidatos antes de escribir. RH responde errores estructurados sin valores personales y la UI declara 18/13/11 caracteres para CURP/RFC/NSS. Recetas marcan y bloquean materiales con unidad no activa sin eliminarlos silenciosamente de versiones existentes. Ordenes revalidan recursos antes de reservar un folio y muestran recurso, requerido, disponible y unidad. Los errores interpolados en formularios se escapan. El ciclo documenta y protege reserva al liberar, inicio sin salida, consumo/salida al completar y liberacion al cancelar. |
+| Impacto | UI y contratos Local; sin migracion ni correccion automatica de maestros. Los articulos historicos con unidad invalida deben sustituirse o corregirse conforme a su historia. Una asignacion de responsable no sustituye la capacidad del puesto requerido por la receta. |
+| APIs afectadas | **HR:** `POST /v1/hr/workers` (`hr.worker.create`) conserva request y normaliza respuestas 409/422 seguras. **Production:** `PATCH /v1/production/orders/{id}/status` (`production.order.status.update`) documenta y valida transiciones/reservas; request/response sin cambio estructural. **Consumidas sin cambio:** Inventory `GET /v1/inventory/warehouses`, `GET /v1/inventory/balances`, `GET /v1/inventory/items`; Admin UOM; Production `POST /v1/production/resource-validations` y `POST /v1/production/orders`; HR production-capacity. |
+| Validacion | `npm.cmd run verify` aprobo todos los validadores, compilacion y `196 passed, 8 skipped`; Production dirigido aprobo 35 y RH 12. Los tres DOCX generados son contenedores validos. Tras reiniciar solo Production/RH Local, ambos `/health` y el frontend respondieron correctamente. |
+| Observaciones | No se modificaron registros Local ni ambientes externos. `01_produccion.docx` estaba abierto y no pudo reemplazarse; se genero `01_produccion_CHG-213.docx`. Los Word de Almacenes y RH se regeneraron desde Markdown. |
+
+### CHG-214
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Normalizacion auditada de alias heredados de unidad |
+| Autor | Codex |
+| Archivos | `backend/alembic/versions/20260821_0023_legacy_uom_aliases.py`, `frontend/app.js`, `frontend/i18n/translations.js`, contexto, arquitectura, ficha de Almacenes, manuales funcionales y `TRAZABILIDAD.md` |
+| Secciones | Almacenes / Produccion / Ventas / Unidades de medida / Migraciones / Auditoria / UX / Manuales funcionales |
+| Agentes consultados | Diagnosticos previos de especialistas de Almacenes y Produccion, mas reglas transversales de arquitectura, seguridad, datos, QA y gobierno documental. Se aplicaron `$erclave-feature`, `$erclave-environment-boundaries`, `$erclave-db-migration` y `$erclave-solution-manuals`; alcance exclusivo Local. |
+| Diagnostico | `cera_01` se habia creado con el alias legado `LTS`, pero Administracion solo reconoce `LTR`. La pantalla proyectaba el equivalente `LTR`; al guardar, Inventory comparaba `LTR` contra el valor persistido `LTS` y activaba correctamente el bloqueo de cambio de unidad por historial. La migracion 0015 habia normalizado `L` y `M`, pero omitio los alias heredados `LTS` y `MT`. |
+| Descripcion | La revision `20260821_0023` valida por tenant que existan activas las unidades destino y normaliza solo `LTS -> LTR` y `MT -> MTR` en columnas UOM de Inventory, Production y Sales. Registra antes/despues, tabla, columna y fila en `admin.audit_events`. La UI traduce el conflicto legitimo de unidad bloqueada y explica la accion segura. |
+| Motivo | Permitir editar los demas datos de articulos historicos sin reinterpretar su inventario, conservando la proteccion contra cambios reales de unidad y eliminando una inconsistencia de codigos inequivocamente equivalentes. |
+| Impacto | Se corrigieron seis filas del tenant demo Local: dos articulos, dos movimientos y dos recursos de receta. No cambiaron IDs, cantidades, costos, almacenes, estatus ni relaciones. `cera_01` quedo en `LTR`; el conjunto de columnas UOM ya no contiene `LTS/MT`. |
+| APIs afectadas | Ninguna API ni contrato fue modificado. La UI sigue consumiendo `PATCH /v1/inventory/items/{item_id}` (`inventory.item.update`); solo mejora la presentacion del error `item_base_unit_locked_by_movements`. |
+| Validacion | Migracion compilada y guardrails aprobados. Ciclo real Local `0022 -> 0023 -> 0022 -> 0023`: seis eventos al subir, restauracion exacta y retiro de auditoria al bajar, cero alias al finalizar. `npm.cmd run verify` aprobo todos los validadores, compilacion y `196 passed, 8 skipped`; los Word de Almacenes y Produccion abren correctamente. |
+| Observaciones | Alcance `local-write` solo sobre `127.0.0.1:5434/erclave_local`. QA y Produccion permanecen en `20260805_0013`, sin conexiones, migraciones, seeds, despliegues ni escrituras. Rollback: `alembic downgrade 20260821_0022`; restaura solo filas auditadas cuyo valor actual aun coincide con el aplicado por 0023. |
+
+### CHG-215
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Recetas rechazan maquinaria sin area RH con error accionable |
+| Autor | Codex |
+| Archivos | Production API, pruebas y OpenAPI; frontend e i18n; validador de Produccion; ficha modular, contexto, manual de Produccion y `TRAZABILIDAD.md` |
+| Secciones | Produccion / Recetas / Maquinaria / Recursos Humanos / API / UX / Seguridad de errores / Manual funcional |
+| Agentes consultados | Reglas versionadas de especialistas de Produccion y RH, arquitectura de APIs, seguridad, UX/i18n, QA y gobierno documental. Se aplico `$erclave-solution-manuals`; alcance exclusivo Local y sin delegacion nueva. |
+| Diagnostico | El POST de receta si alcanzaba Production API. `h_002` estaba activa y mostraba el texto `Produccion Planta`, pero su `area_ref_id` era nulo; el area RH `P_PLANTA` existe activa. El repositorio rechazo correctamente `machine_resource_invalid`, pero el `ValueError` no estaba traducido y produjo `500` sin respuesta CORS util, por lo que el cliente lo presento como desconexion. |
+| Descripcion | Crear, crear version o actualizar version traduce errores conocidos de normalizacion autoritativa a envelopes `422` seguros. La UI solo ofrece maquinas activas con `areaId`, muestra las maquinas pendientes y traduce `machine_resource_invalid`. Abrir la maquina puede proponer el area por su nombre visible, pero el operador debe confirmar y guardar el ID estable; no existe escritura automatica por texto. |
+| Motivo | Separar un bloqueo operativo correcto de un bug de manejo de errores, evitar recetas con referencias incompletas y dar al usuario una ruta de correccion sin ocultar la causa ni relacionar maestros por similitud. |
+| Impacto | Runtime y UI Local. No se modificaron maestros ni se creo la receta fallida. La maquina `h_002` permanece sin `area_ref_id` hasta que el operador la edite. No cambia schema ni revision Alembic. |
+| APIs afectadas | `POST /v1/production/recipes` (`production.recipe.create`), `POST /v1/production/recipes/{id}/versions` y `PATCH /v1/production/recipe-versions/{version_id}` (`production.recipe.update`) documentan y devuelven `422` para recursos no elegibles; requests y respuestas exitosas no cambian. |
+| Validacion | Production API dirigida: `36 passed`; validadores de ciclo, i18n y OpenAPI aprobados. `npm.cmd run verify` aprobo todos los validadores, compilacion y `197 passed, 8 skipped`; `01_produccion_CHG-215.docx` abre correctamente. |
+| Observaciones | No se conecto, migro, desplego ni escribio QA/Produccion. Correccion operativa pendiente del usuario: editar `h_002`, seleccionar el area RH activa `P_PLANTA`, guardar la maquina y volver a crear la receta. |
+
+### CHG-216
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Salidas de materiales al iniciar produccion |
+| Autor | Codex |
+| Archivos | Production API, repositorio, pruebas, OpenAPI y README; frontend e i18n; validador de ciclo; ownership/API, decisiones, contexto, fichas y manuales de Produccion/Almacenes; `TRAZABILIDAD.md` |
+| Secciones | Produccion / Ordenes / Almacenes / Reservas / Kardex / Costeo / Estados / Idempotencia / UX / Manuales funcionales |
+| Agentes consultados | Reglas versionadas de especialistas de Produccion e Inventarios y transversales de arquitectura, APIs, seguridad, datos, UX/i18n, QA y gobierno documental. Se aplicaron `$erclave-feature`, `$erclave-environment-boundaries` y `$erclave-solution-manuals`; alcance exclusivo Local y sin delegacion nueva. |
+| Diagnostico | El flujo anterior reservaba por almacen al liberar y consumia al completar. Eso no satisfacia la regla solicitada de reconocer la salida fisica al comenzar la ejecucion. Ademas, iniciar una etapa podia cambiar la orden a `in_progress` dentro del repositorio sin pasar por el comando que coordina Inventory. |
+| Descripcion | La primera transicion `released/waiting_resources -> in_progress` consume todas las reservas mediante Inventory con claves derivadas estables; cada reserva crea una salida `exit/out` en su propio almacen y devuelve cantidad/costo para el real de materiales. Reanudar desde pausa, volver desde validacion y completar no consumen otra vez. Cancelar antes del inicio libera; cancelar despues conserva las salidas. Una etapa solo inicia si la orden ya esta `in_progress`; la UI ejecuta primero la transicion controlada. |
+| Motivo | Alinear Kardex, existencia fisica y costo real con el momento operativo en que los materiales salen del almacen, sin duplicar movimientos por reintentos, reanudaciones o cierre. |
+| Impacto | Cambio de semantica solo en codigo Local, sin schema ni migracion. Las ordenes futuras registran salidas al primer inicio. Las salidas ya registradas son inmutables y una cancelacion posterior no las revierte automaticamente; una correccion fisica debe seguir el flujo autorizado de reversa/ajuste de Inventory. |
+| APIs afectadas | **Contrato modificado:** Production `PATCH /v1/production/orders/{id}/status` (`production.order.status.update`) conserva request/response y cambia la semantica de `in_progress`, cancelacion y cierre; `PATCH /v1/production/order-stages/{stage_id}` (`production.order_stage.update`) conserva payload y exige que la orden ya este en produccion. **Consumido sin cambio:** Inventory `POST /v1/inventory/reservations/{id}/consume` y `/release` (`production.order.status.update`); Inventory sigue siendo propietario de reservas, almacenes, movimientos y valuacion. **APIs no tocadas:** contratos de Inventory y demas servicios. |
+| Validacion | Production dirigida `38 passed`; Production + Inventory `61 passed`; `npm.cmd run verify` aprobo todos los validadores, compilacion y `199 passed, 8 skipped`. Los Word `01_produccion_CHG-216.docx` y `02_almacenes_inventarios.docx` abren correctamente. |
+| Observaciones | No se mutaron ordenes, reservas ni movimientos Local existentes; no hubo conexion, migracion, seed, despliegue ni escritura en QA/Produccion. El consumo entre servicios es reintentable mediante una clave estable por orden/reserva; si una interrupcion ocurre entre Inventory y Production, se debe reintentar el mismo cambio de estatus para reconciliar. |
+
+### CHG-217
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Validacion autoritativa de recursos en ordenes |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `tools/validators/validate-production-cycle.js`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion / Ordenes / Validacion de recursos / Inventario / RH / Maquinaria / UX |
+| Agentes consultados | Reglas versionadas de Produccion, Inventarios y RH, mas arquitectura, seguridad, UX y QA. Se reviso el manual funcional vigente y no requirio cambio porque ya atribuye la decision al backend autoritativo. Alcance exclusivo Local y sin delegacion nueva. |
+| Diagnostico | En modo API, `validateOrder` ejecutaba primero `getReleaseReview`, una calculadora de maqueta basada en recursos locales. Esa prevalidacion produjo cinco falsos faltantes y detuvo el flujo antes de llamar `POST /v1/production/resource-validations`. Los tres materiales reales tienen disponibilidad suficiente: Aroma 88.8/0.12 LTR, Cera 196.5/0.35 LTR y Mecha 74/0.1 MTR; tambien existe un trabajador Fogonero y la maquina H_002 activa. |
+| Descripcion | La validacion local conserva campos obligatorios, responsables y fecha. En modo API omite faltantes de maqueta y consulta al backend autoritativo, que decide con existencias menos reservas, capacidad laboral y maquinaria. El modo mock conserva su calculadora local. El validador transversal impide reintroducir el bloqueo. |
+| Motivo | Evitar que datos simulados contradigan Almacenes/RH reales y asegurar que el operador reciba cantidades requeridas/disponibles provenientes de los servicios propietarios. |
+| Impacto | Correccion frontend Local sin cambios de schema, datos ni contrato. Tras actualizar la pagina, **Validar orden** alcanzara Production API y mostrara el resultado real. La fecha 25/05/2026 permanece permitida por la regla vigente, aunque la orden nacera vencida; no se invento una prohibicion de fechas pasadas. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Consumidas sin cambio:** Production `POST /v1/production/resource-validations` (`production.order.validate`) y `POST /v1/production/orders` (`production.order.create`); Production consulta Inventory availability y HR capacity internamente. **APIs no tocadas:** Inventory, HR, Admin, Sales y demas servicios. |
+| Validacion | `npm.cmd run verify` aprobo todos los validadores, compilacion y `199 passed, 8 skipped`. Diagnostico Local realizado con consultas `SELECT` y logs; sin mutaciones. |
+| Observaciones | No se crearon ordenes, reservas, movimientos ni folios durante el diagnostico. No hubo conexion, migracion, seed, despliegue ni escritura en QA/Produccion. |
+
+### CHG-218
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Receta aprobada vigente en validacion de orden |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `tools/validators/validate-production-cycle.js`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion / Recetas / Aprobacion / Ordenes / Snapshots / UX |
+| Agentes consultados | Reglas versionadas de Produccion, arquitectura de datos/API, UX, seguridad y QA. Se reviso el manual funcional y continua correcto: la orden usa la version vigente aprobada y conserva snapshot al crearse. Alcance exclusivo Local y sin delegacion nueva. |
+| Diagnostico | PostgreSQL confirma `rec-000004` activa, version 1 aprobada y `current_version_id=rcv_7ded645afcb24a5fa32c1c6b47`; la aprobacion se registro correctamente. La lista tambien la mostraba aprobada. El boton **Validar orden** usaba `order.recipeSnapshot`, un snapshot transitorio sin `currentVersionId`, y concluia falsamente que no existia una version vigente. |
+| Descripcion | En modo API, la vista previa/validacion obtiene la receta maestra recargada mediante `mockDb.findRecipe(order.recipeId)` y usa su `currentVersionId/currentVersionData`. El modo mock conserva el snapshot. Los PDF y ordenes persistidas siguen resolviendo sus snapshots historicos; no se reemplaza historia por el maestro actual. Un guardrail impide reintroducir la lectura incorrecta. |
+| Motivo | Distinguir el maestro vigente requerido para crear/validar una orden del snapshot historico que se conserva despues de crearla. |
+| Impacto | Correccion frontend Local sin cambio de contrato, schema ni datos. La aprobacion existente no se repitio ni modifico. Tras recarga forzada, **Validar orden** debe alcanzar la validacion autoritativa de recursos con la version aprobada. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Consumidas sin cambio:** Production `GET /v1/production/recipes` (`production.recipe.read`), `POST /v1/production/resource-validations` (`production.order.validate`) y `POST /v1/production/orders` (`production.order.create`). **APIs no tocadas:** Inventory, HR, Admin, Sales y demas servicios. |
+| Validacion | `npm.cmd run verify` aprobo todos los validadores, compilacion y `199 passed, 8 skipped`. Diagnostico de persistencia realizado exclusivamente con `SELECT`; sin mutaciones. |
+| Observaciones | No se aprobo nuevamente la receta ni se creo una orden durante el diagnostico. La fecha 25/05/2026 sigue siendo una fecha pasada permitida por la regla actual y generaria una orden vencida. No hubo conexion ni escritura en QA/Produccion. |
+
+### CHG-219
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Cierre valido de reservas al iniciar produccion |
+| Autor | Codex |
+| Archivos | Inventory repository y prueba; guardrail de movimientos; contexto y `TRAZABILIDAD.md` |
+| Secciones | Produccion / Ordenes / Almacenes / Reservas / Salidas / Kardex / Transacciones |
+| Agentes consultados | Reglas versionadas de Produccion, Inventarios, arquitectura de datos/API, seguridad y QA. Alcance exclusivo Local y sin delegacion nueva. |
+| Diagnostico | No fue un error operativo. Al pasar `OP-000003` de `waiting_resources` a `in_progress`, Inventory creo la salida dentro de la transaccion pero intento dejar la reserva con cantidad cero. El constraint `ck_inventory_reservation_quantity` exige cantidad positiva, produjo `500`, y PostgreSQL revirtio salida y estatus. La orden quedo en espera, sus tres reservas activas y no existen movimientos parciales. |
+| Descripcion | El consumo total conserva la ultima cantidad positiva reservada como snapshot historico y cambia el estatus a `consumed`; el saldo operativo devuelto es cero. El consumo parcial actualiza la cantidad al saldo positivo y conserva `active`. El movimiento de salida, la auditoria y la idempotencia no cambian. |
+| Motivo | Respetar la integridad de la tabla y conservar evidencia de la reserva sin representar una reserva activa de cantidad cero. |
+| Impacto | Correccion tecnica Local sin migracion, cambio de contrato ni mutacion automatica de la orden fallida. El operador puede reintentar el cambio a **En produccion**; cada reserva generara una sola salida en su almacen. |
+| APIs afectadas | **Contrato modificado:** Ninguno. **Implementacion corregida sin cambio de request/response:** Inventory `POST /v1/inventory/reservations/{id}/consume`, consumido por Production al ejecutar `PATCH /v1/production/orders/{id}/status`. |
+| Validacion | Inventario + Produccion: `62 passed`; guardrails de movimientos y ciclo de Produccion aprobados. `npm.cmd run verify` aprobo todos los validadores, compilacion y `200 passed, 8 skipped`. Inventory Local reinicio en `127.0.0.1:8004` y respondio `health=ok`, ambiente `local`. |
+| Observaciones | La comprobacion del intento fallido fue de solo lectura. No se cambiaron datos Local ni hubo conexion, migracion, seed, despliegue o escritura en QA/Produccion. |
+
+### CHG-220
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Cierre guiado y precondiciones visibles de orden de produccion |
+| Autor | Codex |
+| Archivos | Production repository, prueba, OpenAPI y README; frontend e i18n; guardrail; ficha modular, contexto, manual funcional y `TRAZABILIDAD.md` |
+| Secciones | Produccion / Ordenes / Etapas / Validacion / Consumos reales / Costo real / Estados / UX |
+| Agentes consultados | Reglas versionadas de Produccion, Inventarios, RH, arquitectura de datos/API, seguridad, UX/i18n, QA y gobierno documental. Se aplico `$erclave-solution-manuals`; alcance exclusivo Local y sin delegacion nueva. |
+| Diagnostico | No fue un error de Almacenes. `OP-000003` estaba persistida en `in_validation`, pero Fundicion (80%) y Produccion Planta (20%) permanecian `pending` con avance cero. El backend rechazo correctamente `completed` con `production_stages_incomplete`, pero el selector habia permitido entrar manualmente a validacion antes de cerrar fases y el cliente mostro el mensaje tecnico generico. Ademas, la captura de uso real solo era descubrible dentro de PDF/Imprimir. |
+| Descripcion | Entrar a `in_validation` exige todas las fases `completed/skipped`; la ultima fase completada realiza el cambio automaticamente. El selector muestra solo transiciones validas y ofrece `Terminada` unicamente cuando las fases y usos reales estan completos. Las tarjetas explicitan que se pulsan para avanzar; el acceso se llama **Cierre/consumos** mientras falten cantidades reales. Los errores de fases, consumos e invalid transition se presentan de forma accionable en ES/EN. |
+| Motivo | Evitar estados generales incoherentes, guiar el cierre en su orden real y conservar las validaciones autoritativas sin obligar al operador a interpretar codigos tecnicos. |
+| Impacto | Cambio funcional/UX Local sin migracion ni mutacion automatica de la orden existente. `OP-000003` se recupera seleccionando **En produccion**, avanzando ambas tarjetas, guardando consumos reales y eligiendo **Terminada**. No se repiten salidas de materiales al volver desde validacion. |
+| APIs afectadas | **Semantica endurecida sin cambiar payload/response:** Production `PATCH /v1/production/orders/{id}/status` (`production.order.status.update`): `in_validation` exige fases terminales; `completed` mantiene materiales consumidos, fases terminales y uso real. **Sin cambio:** etapas y recursos reales conservan sus endpoints actuales. |
+| Validacion | Production dirigida: `39 passed`; guardrails de ciclo, i18n y OpenAPI aprobados. `npm.cmd run verify` aprobo todos los validadores, compilacion y `201 passed, 8 skipped`; el Word `01_produccion_CHG-220.docx` es un contenedor valido. Production Local reinicio en `127.0.0.1:8002` y respondio `health=ok`, ambiente `local`. |
+| Observaciones | Diagnostico de PostgreSQL realizado exclusivamente con `SELECT`; no se modifico la orden. No hubo conexion, migracion, seed, despliegue ni escritura en QA/Produccion. |
+
+### CHG-221
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Avance porcentual de fases sin minutos obligatorios |
+| Autor | Codex |
+| Archivos | Production schemas, repository, pruebas, OpenAPI y README; frontend e i18n; guardrail; ficha modular, contexto, manual funcional y `TRAZABILIDAD.md` |
+| Secciones | Produccion / Ordenes / Etapas / Porcentaje / Validacion / Cierre / Eficiencia futura / UX |
+| Agentes consultados | Reglas versionadas de Produccion, RH, Inventarios, arquitectura de datos/API, UX/i18n, seguridad, QA y gobierno documental. Se aplico `$erclave-solution-manuals`; alcance exclusivo Local y sin delegacion nueva. |
+| Diagnostico | El prompt nativo exigia minutos exactos al terminar una fase y el cierre requeria uso real de mano de obra/maquinaria. El dato era prematuro: todavia no existe un modelo completo de turnos, pausas, incidencias y eficiencia que permita auditarlo con calidad. La necesidad vigente es medir avance ponderado por fase. |
+| Descripcion | Cada tarjeta abre un formulario propio de porcentaje. El backend exige coherencia: 0%=pending, 1..99%=in_progress y 100%=completed/skipped. Permite actualizar varias veces una fase y pasar directamente de pendiente a 100%. Todas las fases deben estar terminales y al 100% para entrar a validacion/cerrar. Minutos y consumos temporales dejan de ser obligatorios y la vista PDF los identifica como medicion futura; el cierre conserva la salida/costo real de materiales. |
+| Motivo | Capturar un dato que el operador conoce y puede sostener, sin simular precision temporal antes de definir la base de auditoria y eficiencia. |
+| Impacto | Cambio funcional/UX Local sin migracion ni mutacion automatica. La orden `OP-000003` ya tiene ambas fases `completed` al 100% y queda lista para seleccionar **Terminada** despues de recargar; los minutos previamente capturados se conservan como dato historico opcional. |
+| APIs afectadas | **Contrato modificado:** `PATCH /v1/production/order-stages/{stage_id}` (`production.order_stage.update`) requiere `progress_percent` 0..100 coherente con `status`; `actual_minutes` permanece opcional. **Semantica de cierre modificada sin payload nuevo:** `PATCH /v1/production/orders/{id}/status` ya no exige uso real de recursos temporales, pero conserva materiales consumidos y fases terminales al 100%. |
+| Validacion | Production dirigida: `40 passed`; guardrails de ciclo, i18n y OpenAPI aprobados. `npm.cmd run verify` aprobo todos los validadores, compilacion y `202 passed, 8 skipped`; el Word `01_produccion_CHG-221.docx` es un contenedor valido. Production Local reinicio en `127.0.0.1:8002` y respondio `health=ok`, ambiente `local`. |
+| Observaciones | La comprobacion de `OP-000003` se realizo con `SELECT`; no se modificaron sus datos. La medicion de tiempos, capacidad ejecutada y eficiencia queda explicitamente diferida, no eliminada del modelo futuro. No hubo conexion, migracion, seed, despliegue ni escritura en QA/Produccion. |
+
+### CHG-222
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Recepcion validada de producto terminado desde Almacenes |
+| Autor | Codex |
+| Archivos | Inventory schemas, autoridad Production, repository, API, pruebas y OpenAPI; frontend Inventory/Production e i18n; arquitectura, contexto, manuales funcionales y `TRAZABILIDAD.md` |
+| Secciones | Almacenes / Movimientos / Entradas de produccion / Produccion / Ordenes terminadas / Kardex / Costo / Recepciones parciales |
+| Agentes consultados | Reglas versionadas de Produccion, Inventarios, arquitectura de datos/API, seguridad, UX/i18n, QA y gobierno documental. Se aplicaron `$erclave-feature`, `$erclave-environment-boundaries` y `$erclave-solution-manuals`; alcance exclusivo Local y sin delegacion nueva. |
+| Diagnostico | El ciclo descontaba materiales al iniciar, pero una orden terminada no tenia un procedimiento de recepcion fisica de su producto. Registrar una entrada manual permitia elegir articulo, unidad, costo o cantidad sin verificar la orden y podia duplicar existencias. |
+| Descripcion | **Almacenes > Movimientos** consulta ordenes terminadas y cantidades ya recibidas. El almacenista confirma almacen, cantidad, fecha y notas; Inventory deriva por ID el producto comercial y articulo terminado, valida estatus/tipo/unidad, permite parciales, bloquea excedentes con lock transaccional y crea una entrada trazable `production_order_receipt`. El costo unitario usa costo real disponible o costo planeado de la orden. |
+| Motivo | Separar correctamente producir de recibir: Produccion declara el resultado terminado y Almacenes confirma el conteo fisico y conserva el Kardex autoritativo. |
+| Impacto | Nueva capacidad funcional Local sin migracion ni recepcion automatica de ordenes existentes. Las ordenes terminadas vinculadas apareceran como pendientes; cada confirmacion actualiza saldo y deja de mostrarse cuando queda totalmente recibida. |
+| APIs afectadas | **Nuevas:** Inventory `GET /v1/inventory/finished-goods-receipts` (`inventory.movement.read`) y `POST /v1/inventory/finished-goods-receipts` (`inventory.movement.create`, idempotente). **Consumidas sin cambio:** Production `GET /v1/production/orders/{id}` y `GET /v1/production/product-services/{id}` para validacion autoritativa. |
+| Validacion | Inventory dirigida: `16 passed`; OpenAPI, i18n, sintaxis y guardrails aprobados. `npm.cmd run verify` aprobo validadores, compilacion y `204 passed, 8 skipped`; ambos Word CHG-222 son contenedores validos. Inventory Local reinicio en `127.0.0.1:8004` y respondio `health=ok`, ambiente `local`. |
+| Observaciones | No se recibio ni modifico automaticamente ninguna orden. No hubo migracion, seed, despliegue ni escritura en QA/Produccion. El endpoint revalida tenant, orden terminada, vinculo, tipo, estatus, unidad y saldo pendiente; la UI nunca elige articulo/costo por texto. |
+
+### CHG-223
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Reinicio individual de Inventory con configuracion Local completa |
+| Autor | Codex |
+| Archivos | `backend/scripts/start_inventory_local.ps1`, contexto y `TRAZABILIDAD.md` |
+| Secciones | Operacion Local / Inventory / Configuracion / PostgreSQL / Firebase / Diagnostico |
+| Agentes consultados | Reglas versionadas de limites de ambiente, Inventory, seguridad y operacion Local. Se aplico `$erclave-environment-boundaries`; alcance exclusivo Local y sin delegacion nueva. |
+| Diagnostico | Inventory respondia `/health=200`, pero `GET /v1/inventory/warehouses` devolvia `500`. El reinicio manual habia creado Uvicorn sin las variables heredadas del arranque canonico; health no usa base, mientras la consulta carecia de URL efectiva. No fue un error operativo del usuario ni de los datos. |
+| Descripcion | El script de arranque individual carga la URL local desde `backend/.env`, verifica estrictamente `127.0.0.1:5434/erclave_local` y transmite ambiente, Firebase Emulator y URLs loopback de Admin, Production, Inventory y frontend antes de iniciar el proceso. |
+| Motivo | Hacer que un reinicio aislado reproduzca los limites esenciales del arranque completo y evitar falsos positivos de health con dependencias sin configurar. |
+| Impacto | Correccion operativa Local sin cambio de API, schema ni datos. Inventory se reinicio mediante el script corregido. |
+| APIs afectadas | **Contrato modificado:** Ninguno. **Validacion runtime:** `GET /health`, `GET /v1/inventory/warehouses` y `GET /v1/inventory/finished-goods-receipts`. |
+| Validacion | Parser PowerShell aprobado; arranque gobernado reporto PostgreSQL `5434` e Inventory `8004`; GET autenticado de almacenes devolvio `200` y 3 registros. Suite completa aprobada despues del cambio. |
+| Observaciones | No hubo migracion, seed, recepcion, modificacion de ordenes ni escritura en QA/Produccion. |
+
+### CHG-224
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Preparacion gobernada del candidato QA de cinco servicios |
+| Autor | Codex |
+| Archivos | Workflows QA, scripts de smoke/trafico/seed, builder frontend, configuracion runtime, plan/README IAM, pruebas, expediente de release, contexto, pendientes y `TRAZABILIDAD.md` |
+| Secciones | QA / Release / Admin / Produccion / Inventory / RH / Ventas / Migraciones / IAM / Rollback |
+| Agentes consultados | Reglas versionadas de limites de ambiente, release QA, feature y manuales funcionales. Se aplicaron `$erclave-environment-boundaries`, `$erclave-qa-release`, `$erclave-feature` y `$erclave-solution-manuals`; alcance de escritura exclusivo al repositorio y sin delegacion nueva. |
+| Diagnostico | El pipeline vigente construia y promovia cuatro servicios, dejaba Sales fuera del artefacto y del tenant QA, y no entregaba a Inventory la URL de Produccion requerida por CHG-222. Promover ese estado habria creado paridad incompleta y una recepcion de producto terminado no operativa en QA. |
+| Descripcion | El candidato incorpora Sales como quinto servicio por digest, identidad dedicada, variables/runtime HTTPS, smoke, promocion atomica de trafico y frontend sanitizado. Inventory recibe la dependencia Production; el runtime valida todas las autoridades no locales. El expediente registra alcance, migraciones `0013 -> 0023`, gates, matriz minima, rollback y bloqueos. |
+| Motivo | Preparar un release reproducible que represente el sistema Local real sin mezclar ambientes ni habilitar modulos carentes de servicio. |
+| Impacto | Solo preparacion de codigo/documentacion. QA vigente no cambia. La promocion es NO-GO hasta publicar un SHA inmutable, aprovisionar `erclave-sales-qa`/variables y obtener las aprobaciones protegidas. |
+| APIs afectadas | **Contratos funcionales modificados:** Ninguno por CHG-224. **Runtime preparado:** cinco servicios exponen `GET /health`, `GET /ready` y `GET /version`; el frontend QA consumira Admin, Production, Inventory, HR y Sales. |
+| Validacion | Health/readiness/version publicos de las cuatro APIs QA vigentes respondieron correctamente con version `4e9c6881dab61239f1abd5fff688019fdd697977`. La cuenta `gcloud` activa carece de `run.services.list`, documentado como preflight pendiente del aprobador. Validacion completa de repositorio se ejecuta antes de cerrar el corte. |
+| Observaciones | No se ejecuto workflow, migracion, seed, configuracion de tenant, Cloud Run, trafico ni Firebase Hosting. No se consultaron secretos ni se copiaron datos Local a QA. Los manuales CHG-222 siguen vigentes porque el cambio es de liberacion, no de uso funcional. |
+
+## Convencion para futuros cambios
+
+Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

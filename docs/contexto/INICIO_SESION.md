@@ -7,18 +7,19 @@ Este documento define el orden obligatorio para recuperar contexto antes de anal
 1. Ejecutar `npm.cmd run session:context` desde la raiz.
 2. Leer completamente `AGENTS.md` y las secciones aplicables de `AGENTES.md`.
 3. Leer `docs/contexto/ESTADO_ACTUAL.md`, `DECISIONES.md`, `TENANTS.md` y `PENDIENTES.md`.
-4. Leer el documento de `modulos/` correspondiente y las fuentes de arquitectura que este referencie.
+4. Leer `docs/arquitectura/gobierno_documentacion_viva.md`, el documento de `modulos/` correspondiente y las fuentes de arquitectura que este referencie.
 5. Revisar `git status --short`. Todo cambio previo se considera propiedad del usuario hasta demostrar lo contrario.
 6. Identificar microfrontend, servicio, schema, contrato, permisos y agentes especialistas afectados.
-7. Confirmar ambiente y `tenant_id` antes de cualquier escritura.
-8. Definir criterios de aceptacion y blast radius antes de implementar.
+7. Registrar `Agentes consultados`; para Local→QA usar Arquitectura, Seguridad y QA/Release como minimo.
+8. Confirmar ambiente y `tenant_id` antes de cualquier escritura.
+9. Definir criterios de aceptacion y blast radius antes de implementar.
 
 ## Cierre obligatorio
 
 Antes de declarar terminado un cambio:
 
-1. actualizar OpenAPI, consumidores, pruebas y documentacion cuando aplique;
-2. ejecutar `npm.cmd run verify`;
+1. aplicar la matriz de `gobierno_documentacion_viva.md` y actualizar OpenAPI, consumidores, pruebas, documentacion y agentes cuando aplique;
+2. ejecutar `npm.cmd run validate:documentation` y `npm.cmd run verify`;
 3. actualizar `ESTADO_ACTUAL.md` y `PENDIENTES.md` si el estado real cambio;
 4. registrar el corte en `TRAZABILIDAD.md`;
 5. indicar expresamente si hubo migraciones, seeds, despliegues o escrituras externas.

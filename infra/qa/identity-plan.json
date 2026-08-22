@@ -18,14 +18,21 @@
       "purpose": "Runtime identity for production-service-qa",
       "projectRoles": ["roles/cloudsql.client"],
       "secretAccess": ["erclave-database-url-qa"],
-      "runInvokerOn": ["admin-service-qa"]
+      "runInvokerOn": [
+        "admin-service-qa",
+        "hr-service-qa",
+        "inventory-service-qa"
+      ]
     },
     {
       "accountId": "erclave-inventory-qa",
       "purpose": "Runtime identity for inventory-service-qa",
       "projectRoles": ["roles/cloudsql.client"],
       "secretAccess": ["erclave-database-url-qa"],
-      "runInvokerOn": ["admin-service-qa"]
+      "runInvokerOn": [
+        "admin-service-qa",
+        "production-service-qa"
+      ]
     },
     {
       "accountId": "erclave-hr-qa",
@@ -33,6 +40,18 @@
       "projectRoles": ["roles/cloudsql.client"],
       "secretAccess": ["erclave-database-url-qa"],
       "runInvokerOn": ["admin-service-qa"]
+    },
+    {
+      "accountId": "erclave-sales-qa",
+      "purpose": "Runtime identity for sales-service-qa",
+      "projectRoles": ["roles/cloudsql.client"],
+      "secretAccess": ["erclave-database-url-qa"],
+      "runInvokerOn": [
+        "admin-service-qa",
+        "hr-service-qa",
+        "production-service-qa",
+        "inventory-service-qa"
+      ]
     },
     {
       "accountId": "erclave-migrator-qa",

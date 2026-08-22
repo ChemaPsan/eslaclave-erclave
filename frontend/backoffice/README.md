@@ -14,7 +14,16 @@ El backoffice usa Firebase Auth y llama:
 
 ```text
 POST /v1/provisioning/tenant-onboarding
+GET /v1/backoffice/modules
+GET /v1/backoffice/tenants
+PATCH /v1/backoffice/tenants/{tenant_id}
+PATCH /v1/backoffice/tenants/{tenant_id}/status
+PUT /v1/backoffice/tenants/{tenant_id}/entitlements/{module_code}
 ```
+
+Backoffice es la unica interfaz que concede, suspende o retira entitlements. El administrador del tenant solo modifica su preferencia de encendido sobre modulos concedidos. El editor muestra modulos planeados, pero no permite habilitarlos hasta que su runtime sea `implemented`.
+
+El catalogo devuelve dependencias por modulo. Ventas requiere RH y Produccion efectivos: el editor bloquea combinaciones invalidas y el backend vuelve a validarlas transaccionalmente. En onboarding, seleccionar Ventas agrega esas dependencias antes de crear el tenant; los permisos del owner se asignan despues de persistir todos los entitlements activos.
 
 ## Configuracion local
 

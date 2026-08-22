@@ -29,6 +29,12 @@ for (const ref of requiredReadmeRefs) {
 }
 
 const latest = matches[matches.length - 1];
+const latestHeading = latest ? `### CHG-${String(latest).padStart(3, "0")}` : "";
+const latestStart = latestHeading ? traceability.lastIndexOf(latestHeading) : -1;
+const latestEntry = latestStart >= 0 ? traceability.slice(latestStart, traceability.indexOf("\n## ", latestStart) < 0 ? undefined : traceability.indexOf("\n## ", latestStart)) : "";
+if (latestEntry && !latestEntry.includes("| Agentes consultados |")) {
+  errors.push(`${latestHeading} must record Agentes consultados.`);
+}
 if (latest && !traceability.includes("## Convencion para futuros cambios")) {
   errors.push("TRAZABILIDAD.md is missing the future changes convention section.");
 }

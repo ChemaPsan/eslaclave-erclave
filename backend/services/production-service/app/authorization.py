@@ -43,7 +43,7 @@ def get_admin_session_client(settings: Settings = Depends(get_settings)) -> Admi
     return AdminSessionClient(settings)
 
 
-def require_production_access(permission: str):
+def require_production_access(permission: str | tuple[str, ...]):
     def dependency(
         x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
         authorization: str | None = Header(default=None, alias="Authorization"),
@@ -53,8 +53,9 @@ def require_production_access(permission: str):
     ) -> AuthorizedContext:
         if not x_tenant_id:
             raise ErclaveError("tenant_required", "X-Tenant-Id header is required.", status_code=400)
+        required = (permission,) if isinstance(permission, str) else permission
         if settings.auth_mode != "firebase":
-            return AuthorizedContext(tenant_id=x_tenant_id, actor_id=x_actor_id or "usr_demo", permission=permission)
+            return AuthorizedContext(tenant_id=x_tenant_id, actor_id=x_actor_id or "usr_demo", permission=required[0])
         if not authorization or not authorization.lower().startswith("bearer ") or not authorization.split(" ", 1)[1].strip():
             raise ErclaveError("auth_required", "Authorization Bearer token is required.", status_code=401)
 
@@ -65,11 +66,12 @@ def require_production_access(permission: str):
             raise ErclaveError("tenant_access_denied", "Authenticated actor cannot access this tenant.", status_code=403)
         if "production" not in context.get("active_modules", []):
             raise ErclaveError("module_not_enabled", "Production module is not enabled for this tenant.", status_code=403)
-        if permission not in context.get("permissions", []):
-            raise ErclaveError("permission_denied", "Authenticated actor does not have the required permission.", status_code=403, details={"permission": permission})
+        if not any(item in context.get("permissions", []) for item in required):
+            details = {"permission": required[0]} if len(required) == 1 else {"permissions_any": list(required)}
+            raise ErclaveError("permission_denied", "Authenticated actor does not have the required permission.", status_code=403, details=details)
         actor_id = str(user.get("id") or "")
         if not actor_id:
             raise ErclaveError("authorization_service_unavailable", "Authorization context is incomplete.", status_code=503)
-        return AuthorizedContext(tenant_id=x_tenant_id, actor_id=actor_id, permission=permission)
+        return AuthorizedContext(tenant_id=x_tenant_id, actor_id=actor_id, permission=required[0])
 
     return dependency

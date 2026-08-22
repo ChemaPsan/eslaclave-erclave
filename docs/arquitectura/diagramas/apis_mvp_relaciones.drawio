@@ -34,13 +34,13 @@
         <mxCell id="admin" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;" value="admin-service&#xa;REAL QA: tenants, entitlements, usuarios, roles, permisos, policy, audit_events" vertex="1">
           <mxGeometry height="85" width="220" x="486" y="269" as="geometry" />
         </mxCell>
-        <mxCell id="production" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;" value="production-service&#xa;REAL parcial: product_services&#xa;OBJETIVO: recetas, ordenes, recursos" vertex="1">
+        <mxCell id="production" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;" value="production-service&#xa;REAL QA: productos, recetas, maquinaria, ordenes y etapas&#xa;Local agrega responsables RH validados" vertex="1">
           <mxGeometry height="85" width="220" x="872" y="519" as="geometry" />
         </mxCell>
-        <mxCell id="inventory" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="inventory-service&#xa;OBJETIVO: almacenes, articulos, movimientos, existencias" vertex="1">
+        <mxCell id="inventory" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;" value="inventory-service&#xa;REAL QA: almacenes, articulos, movimientos, balances y Kardex&#xa;SOLO LOCAL: reservas/consumos de Produccion, valuacion y concurrencia" vertex="1">
           <mxGeometry height="85" width="220" x="872" y="659" as="geometry" />
         </mxCell>
-        <mxCell id="sales" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="sales-service&#xa;OBJETIVO: clientes, cotizaciones, pedidos, entregas" vertex="1">
+        <mxCell id="sales" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="sales-service&#xa;LOCAL REAL: clientes y cotizaciones&#xa;PLANNED: pedidos, reservas, entregas y devoluciones" vertex="1">
           <mxGeometry height="85" width="220" x="872" y="799" as="geometry" />
         </mxCell>
         <mxCell id="billing" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="billing-service&#xa;OBJETIVO: planes, checkout, suscripciones, activacion manual" vertex="1">
@@ -52,7 +52,7 @@
         <mxCell id="integrations" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="integration-service&#xa;OBJETIVO: API clients, scopes, cuotas, uso" vertex="1">
           <mxGeometry height="365" width="140" x="1366" y="535" as="geometry" />
         </mxCell>
-        <mxCell id="cloudSql" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="Cloud SQL PostgreSQL&#xa;REAL QA: schema admin + production.product_services&#xa;OBJETIVO: inventory / sales / billing / provisioning / integrations" vertex="1">
+        <mxCell id="cloudSql" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="Cloud SQL PostgreSQL&#xa;REAL QA: schemas admin, production, inventory y hr&#xa;PLANNED: sales / billing / provisioning / integrations" vertex="1">
           <mxGeometry height="120" width="250" x="1947" y="119" as="geometry" />
         </mxCell>
         <mxCell id="outbox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="audit.outbox_events&#xa;OBJETIVO: eventos pendientes/publicados" vertex="1">
@@ -76,13 +76,13 @@
         <mxCell id="eGatewayAdmin" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;fontStyle=1;" target="admin" value="REAL QA: policy / entitlements / usuarios / roles">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eGatewayProduction" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;fontStyle=1;" target="production" value="REAL parcial: product-services">
+        <mxCell id="eGatewayProduction" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;fontStyle=1;" target="production" value="REAL: produccion operativa">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eGatewayInventory" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;fontColor=#300C57;" target="inventory" value="almacenes / movimientos">
+        <mxCell id="eGatewayInventory" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;" target="inventory" value="REAL: almacenes / movimientos / balances / Kardex">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eGatewaySales" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;fontColor=#300C57;" target="sales" value="clientes / cotizaciones / pedidos">
+        <mxCell id="eGatewaySales" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;fontColor=#300C57;dashed=1;" target="sales" value="PLANNED: clientes / cotizaciones / pedidos">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="eGatewayIntegrations" edge="1" parent="1" source="gateway" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;fontColor=#300C57;" target="integrations" value="clientes API / uso">
@@ -103,7 +103,7 @@
         <mxCell id="eSalesInventory" edge="1" parent="1" source="sales" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;fontColor=#1D4ED8;" target="inventory" value="availability / reservations">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eProductionInventory" edge="1" parent="1" source="production" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;fontColor=#1D4ED8;dashed=1;" target="inventory" value="OBJETIVO: availability / consumption / receipts">
+        <mxCell id="eProductionInventory" edge="1" parent="1" source="production" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;fontColor=#1D4ED8;" target="inventory" value="LOCAL: availability / reserve / release / consume; planned: finished goods">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="eAdminDb" edge="1" parent="1" source="admin" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;dashed=1;fontColor=#065F46;" target="cloudSql" value="schema admin">

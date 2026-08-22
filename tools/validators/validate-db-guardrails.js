@@ -41,6 +41,12 @@ for (const fileName of migrationFiles) {
   const content = readText(relativePath);
   const upgradeBlock = content.split("\ndef downgrade")[0];
 
+  for (const mutableImport of ["from app.", "import app.", "sys.path", "Path(__file__"]) {
+    if (content.includes(mutableImport)) {
+      errors.push(`${relativePath} imports mutable application code (${mutableImport}); historical migrations must be self-contained.`);
+    }
+  }
+
   const revisionMatch = content.match(/^revision:\s*str\s*=\s*"([^"]+)"/m);
   if (!revisionMatch) {
     errors.push(`${relativePath} is missing a typed revision string.`);

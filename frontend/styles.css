@@ -691,6 +691,26 @@ h3 {
   width: fit-content;
 }
 
+.standard-report-hero {
+  align-content: center;
+}
+
+.standard-report-hero small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.report-hero-label {
+  width: fit-content;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 .module-kpis {
   display: grid;
   gap: 10px;
@@ -745,6 +765,85 @@ h3 {
 
 .module-section-grid {
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.7fr) minmax(260px, 0.7fr);
+}
+
+.standard-report-layout {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.standard-report-section {
+  grid-column: 1 / -1;
+}
+
+.report-section-help {
+  margin: -4px 0 14px;
+  color: var(--muted);
+}
+
+.standard-report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 10px;
+}
+
+.standard-report-card {
+  min-height: 164px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-soft);
+}
+
+.standard-report-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--brand-strong);
+}
+
+.standard-report-card h3,
+.standard-report-card p {
+  margin: 0;
+}
+
+.standard-report-card p,
+.standard-report-card small,
+.report-source-list p {
+  color: var(--muted);
+}
+
+.report-source-list {
+  display: grid;
+  gap: 8px;
+}
+
+.report-source-list article {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.report-source-list p {
+  margin: 4px 0 0;
+}
+
+.report-scope-list .chip {
+  display: inline-flex;
+  margin-top: 8px;
+}
+
+.module-workbench .table-card:only-child {
+  grid-column: 1 / -1;
+}
+
+.report-empty-state {
+  padding: 28px 14px;
+  color: var(--muted);
+  text-align: center;
 }
 
 .section-card {
@@ -2370,6 +2469,20 @@ h3 {
   align-items: stretch;
 }
 
+.admin-catalog-entry {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-catalog-entry:hover,
+.admin-catalog-entry:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
 .admin-role-record {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -2393,6 +2506,35 @@ h3 {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.code-sequence-record {
+  container-type: inline-size;
+}
+
+.code-sequence-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(90px, 1fr));
+  gap: 8px;
+}
+
+.code-sequence-fields label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.code-sequence-fields .checkbox-field {
+  grid-column: 1 / -1;
+  display: flex;
+}
+
+@container (max-width: 420px) {
+  .code-sequence-fields {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admin-meta-line {
@@ -2976,6 +3118,11 @@ h3 {
   margin-bottom: 12px;
 }
 
+.entity-select-lookup { position: relative; display: block; width: 100%; }
+.entity-select-search { width: 100%; }
+.entity-source-select { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
+.entity-select-results { top: calc(100% + 6px); }
+
 .recipe-resource-groups {
   display: grid;
   gap: 14px;
@@ -3215,7 +3362,7 @@ h3 {
   cursor: pointer;
 }
 
-.recipe-area-option input {
+.recipe-area-option > input[type="checkbox"] {
   position: absolute;
   inline-size: 1px;
   block-size: 1px;
@@ -3271,6 +3418,22 @@ h3 {
 .recipe-area-option input:focus-visible + .recipe-area-card {
   outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
   outline-offset: 2px;
+}
+
+.recipe-stage-weight {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(72px, 100px) auto;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.recipe-area-option > input[type="checkbox"]:not(:checked) ~ .recipe-stage-weight {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 @container modal-sheet (max-width: 680px) {
@@ -3386,6 +3549,7 @@ h3 {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
+  color: var(--document-text, #190f34);
 }
 
 .print-header {
@@ -3394,7 +3558,55 @@ h3 {
   gap: 16px;
   padding-bottom: 14px;
   margin-bottom: 14px;
-  border-bottom: 2px solid var(--brand);
+  border-bottom: 2px solid var(--document-primary, var(--brand));
+}
+
+.print-company-logo,
+.document-template-preview img {
+  display: block;
+  max-width: 220px;
+  max-height: 80px;
+  object-fit: contain;
+}
+
+.document-template-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.document-template-checkbox {
+  display: inline-flex;
+  align-items: center;
+  align-self: end;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.admin-form .document-template-checkbox input[type="checkbox"] {
+  width: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 18px;
+}
+
+.print-document-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 10px;
+  border-top: 1px solid var(--document-accent, var(--line));
+  color: var(--document-text, #190f34);
+  font-size: 0.78rem;
 }
 
 .print-header strong,
@@ -3441,6 +3653,7 @@ h3 {
 }
 
 @media print {
+  .print-page-number::after { content: counter(page); }
   body {
     background: #fff;
   }

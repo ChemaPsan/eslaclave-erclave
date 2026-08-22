@@ -52,6 +52,7 @@ const draft = `### CHG-${nextId}
 | Autor | Codex |
 | Archivos | ${files.join(", ") || "Por completar"} |
 | Secciones | Por completar |
+| Agentes consultados | Por completar con agentes de negocio, tecnicos y transversales aplicables. |
 | Descripcion | Por completar con el comportamiento implementado. |
 | Motivo | Por completar con el problema resuelto. |
 | Impacto | Por completar con consumidores, compatibilidad y riesgos. |

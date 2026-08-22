@@ -11,3 +11,5 @@ export async function updateInventoryWarehouse(id,payload){return (await request
 export async function createInventoryItem(payload){return (await request("/v1/inventory/items",{method:"POST",body:JSON.stringify(payload)})).data;}
 export async function updateInventoryItem(id,payload){return (await request(`/v1/inventory/items/${id}`,{method:"PATCH",body:JSON.stringify(payload)})).data;}
 export async function createInventoryMovement(payload){return (await request("/v1/inventory/movements",{method:"POST",body:JSON.stringify(payload)})).data;}
+export async function getFinishedGoodsReceipts(){return request("/v1/inventory/finished-goods-receipts");}
+export async function createFinishedGoodsReceipt(payload){return (await request("/v1/inventory/finished-goods-receipts",{method:"POST",body:JSON.stringify(payload)})).data;}

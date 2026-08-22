@@ -20,6 +20,9 @@ import {
   updateTenantLegalEntity,
   updateTenantRole,
   updateTenantSetting
+  ,getUnitsOfMeasure, createUnitOfMeasure, updateUnitOfMeasure,
+  createCommercialCatalogItem, updateCommercialCatalogItem, updateDocumentTemplate,
+  allocateBusinessCode, updateCodeSequence
 } from "./api/admin.js";
 import {
   approveProductionRecipeVersion,
@@ -30,10 +33,11 @@ import {
   updateProductionRecipeVersion
   ,createProductionProductService, updateProductionProductService, updateProductionProductServiceStatus,
   createProductionMachine, updateProductionMachine, validateProductionResources,
-  createProductionOrder, updateProductionOrderStatus, updateProductionOrderStage
+  createProductionOrder, updateProductionOrderStatus, updateProductionOrderResource, updateProductionOrderStage, getProductionProducts, getCompletedProductionOrders, getUnlinkedProductionProducts, createAndLinkFinishedGood
 } from "./api/production.js";
-import { createInventoryItem, createInventoryMovement, createInventoryWarehouse, getInventoryBalances, getInventoryCatalog, getInventoryItems, getInventoryMovements, updateInventoryItem, updateInventoryWarehouse } from "./api/inventory.js";
-import { createHrArea, createHrPosition, getHrAreas, getHrCatalog, updateHrArea, updateHrPosition } from "./api/hr.js";
+import { createFinishedGoodsReceipt, createInventoryItem, createInventoryMovement, createInventoryWarehouse, getFinishedGoodsReceipts, getInventoryBalances, getInventoryCatalog, getInventoryItems, getInventoryMovements, updateInventoryItem, updateInventoryWarehouse } from "./api/inventory.js";
+import { createHrArea, createHrPosition, getHrAreas, getHrCatalog, updateHrArea, updateHrPosition, getHrWorkers, getProductionEligibleWorkers, getSalesEligibleWorkers, createHrWorker, updateHrWorker } from "./api/hr.js";
+import { approveSalesQuote, cancelSalesQuote, createSalesCustomer, createSalesQuote, expireSalesQuote, getSalesWorkspace, submitSalesQuote, updateSalesCustomer, updateSalesQuote, createSalesOrder, configureSalesOrderFulfillment, cancelSalesOrder, createSalesDelivery, confirmSalesDelivery, cancelSalesDelivery } from "./api/sales.js";
 import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId, getDemoTenantId, setActiveTenantId, isInventoryApiEnabled } from "./api/config.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "./auth.js";
 import {
@@ -73,15 +77,20 @@ const state = {
   inventoryApi: { status: "idle", error: "" },
   permissionEditor: null,
   inventoryMovements: { status: "idle", error: "" },
+  finishedGoodsReceipts: { status: "idle", orders: [], summaries: [], products: [], error: "" },
   inventoryItems: { status: "idle", error: "" },
   inventoryBalances: { status: "idle", data: [], page: {}, error: "", queryKey: "", cursor: "", previousCursors: [] },
-  hrApi: { status: "idle", error: "" },
+  hrApi: { status: "idle", error: "", workers: [] },
+  salesApi: { status: "idle", error: "", referenceWarnings: [], workers: [], references: { currencies: [], payment_terms: [] } },
+  unitCatalog: { status: "idle", data: [], error: "" },
   tenantResolution: {
     status: "idle",
     tenants: [],
     error: ""
   },
   adminPanel: "organization",
+  adminBaseCatalog: null,
+  adminDocumentLogo: null,
   auth: {
     status: isFirebaseAuthConfigured() ? "loading" : "disabled",
     user: null,
@@ -92,6 +101,16 @@ const state = {
 };
 
 const orderStatusCatalog = ["Liberada", "En espera de recursos", "En produccion", "Pausada", "En validacion", "Terminada", "Cancelada"];
+const fallbackUnitCatalog = Object.freeze([
+  {code:"H87",name_es:"Pieza",name_en:"Piece",symbol:"pz"},{code:"KGM",name_es:"Kilogramo",name_en:"Kilogram",symbol:"kg"},{code:"GRM",name_es:"Gramo",name_en:"Gram",symbol:"g"},{code:"LTR",name_es:"Litro",name_en:"Litre",symbol:"L"},{code:"MLT",name_es:"Mililitro",name_en:"Millilitre",symbol:"mL"},{code:"MTR",name_es:"Metro",name_en:"Metre",symbol:"m"},{code:"CMT",name_es:"Centímetro",name_en:"Centimetre",symbol:"cm"},{code:"MIN",name_es:"Minuto",name_en:"Minute",symbol:"min"},{code:"HUR",name_es:"Hora",name_en:"Hour",symbol:"h"},{code:"DAY",name_es:"Día",name_en:"Day",symbol:"d"}
+]);
+function getUnitCatalog(){return state.adminApi.data?.units?.filter((item)=>item.status==="active")||state.unitCatalog.data?.filter((item)=>item.status==="active")||fallbackUnitCatalog;}
+function normalizeUnitCode(value){const raw=String(value||"").trim();return ({pieza:"H87",pza:"H87",pz:"H87",unidad:"C62",servicio:"C62",kg:"KGM",g:"GRM",l:"LTR",ml:"MLT",m:"MTR",cm:"CMT",min:"MIN",hora:"HUR",h:"HUR"})[raw.toLowerCase()]||raw.toUpperCase();}
+function unitOptions(selected=""){const units=getUnitCatalog();const normalized=normalizeUnitCode(selected);return units.map((item)=>`<option value="${escapeAttribute(item.code)}" ${item.code.toUpperCase()===normalized?"selected":""}>${escapeHtml(state.lang==="en"?item.name_en:item.name_es)} (${escapeHtml(item.symbol)}) · ${escapeHtml(item.code)}</option>`).join("");}
+function codeSequenceConfig(documentType){return (state.adminApi.data?.codeSequences||[]).find((item)=>item.document_type===documentType&&item.status==="active")||null;}
+function codeRequestKey(documentType){const value=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;return `web-code-${documentType}-${value}`;}
+async function resolveBusinessCode(documentType,manualCode,requestKey){if(getApiMode()!=="api")return String(manualCode||"").trim().toUpperCase();const allocation=await allocateBusinessCode(documentType,String(manualCode||"").trim()||null,requestKey);return allocation.code;}
+function unitSelect(name,selected="",attributes="required"){return `<select name="${name}" ${attributes}>${unitOptions(selected||"H87")}</select>`;}
 const mvpModuleIds = ["produccion", "almacenes", "recursos-humanos", "ventas"];
 const backendModuleByUiModule = {
   administracion: "admin",
@@ -101,6 +120,7 @@ const backendModuleByUiModule = {
   ventas: "sales"
 };
 const uiModuleByBackendModule = Object.fromEntries(Object.entries(backendModuleByUiModule).map(([ui, backend]) => [backend, ui]));
+const tenantModuleDependencies = Object.freeze({ sales: ["hr", "production"] });
 const adminPermissionModuleCatalog = Object.freeze({
   admin: { es: "Administracion", en: "Administration", order: 10 },
   production: { es: "Produccion", en: "Production", order: 20 },
@@ -211,6 +231,34 @@ function getNavigationModules() {
   });
 }
 
+function enhanceEntitySelect(select) {
+  if(select.dataset.entityEnhanced==="true")return;
+  select.dataset.entityEnhanced="true";
+  const wrapper=document.createElement("span"); wrapper.className="entity-select-lookup";
+  const input=document.createElement("input"); input.type="search"; input.className="entity-select-search";
+  input.placeholder=select.dataset.searchPlaceholder||t("entitySelectorPlaceholder");
+  input.setAttribute("role","combobox"); input.setAttribute("aria-autocomplete","list"); input.setAttribute("aria-expanded","false");
+  const results=document.createElement("span"); results.className="lookup-results entity-select-results"; results.hidden=true;
+  const wasRequired=select.required; if(wasRequired){select.required=false;input.required=true;}
+  const sync=()=>{const selected=select.selectedOptions?.[0];if(document.activeElement!==input)input.value=selected&&selected.value?selected.textContent.trim():"";input.disabled=select.disabled;input.placeholder=select.dataset.searchPlaceholder||t("entitySelectorPlaceholder");input.setCustomValidity(wasRequired&&!select.value?t("entitySelectorChooseResult"):"");};
+  select.syncEntityLookup=sync;
+  select.parentNode.insertBefore(wrapper,select); wrapper.append(input,results,select); select.classList.add("entity-source-select");
+  const render=(queryValue=input.value)=>{const query=normalizeDocumentSearch(queryValue);const options=[...select.options].filter(option=>!option.disabled&&normalizeDocumentSearch(option.textContent).includes(query)).slice(0,20);results.innerHTML=options.length?options.map(option=>`<button class="lookup-option" type="button" data-entity-value="${escapeAttribute(option.value)}"><strong>${escapeHtml(option.textContent.trim())}</strong></button>`).join(""):`<span class="lookup-empty">${t("entitySelectorEmpty")}</span>`;results.hidden=false;input.setAttribute("aria-expanded","true");};
+  input.addEventListener("focus",()=>{input.select();render("");});
+  input.addEventListener("input",()=>{const previous=select.value;const query=normalizeDocumentSearch(input.value);const exact=[...select.options].find(option=>option.value&&normalizeDocumentSearch(option.textContent)===query);select.value=exact?.value||"";sync();render();if(select.value!==previous)select.dispatchEvent(new Event("change",{bubbles:true}));});
+  input.addEventListener("keydown",event=>{const buttons=[...results.querySelectorAll("button")];if(event.key==="Escape"){results.hidden=true;input.setAttribute("aria-expanded","false");return;}if(event.key==="ArrowDown"&&buttons.length){event.preventDefault();buttons[0].focus();}});
+  results.addEventListener("keydown",event=>{const buttons=[...results.querySelectorAll("button")];const index=buttons.indexOf(document.activeElement);if(event.key==="ArrowDown"&&index<buttons.length-1){event.preventDefault();buttons[index+1].focus();}if(event.key==="ArrowUp"){event.preventDefault();if(index>0)buttons[index-1].focus();else input.focus();}if(event.key==="Escape"){results.hidden=true;input.focus();}});
+  results.addEventListener("click",event=>{const button=event.target.closest("[data-entity-value]");if(!button)return;select.value=button.dataset.entityValue;input.value=select.selectedOptions[0]?.textContent.trim()||"";results.hidden=true;input.setAttribute("aria-expanded","false");sync();select.dispatchEvent(new Event("change",{bubbles:true}));});
+  select.addEventListener("change",sync);
+  sync();
+}
+
+function enhanceEntitySelectors(root=document) { root.querySelectorAll("select[data-entity-selector]").forEach(enhanceEntitySelect); }
+
+const entitySelectorObserver=new MutationObserver(records=>records.forEach(record=>{const owner=record.target.matches?.("select[data-entity-selector]")?record.target:record.target.closest?.("select[data-entity-selector]");owner?.syncEntityLookup?.();record.addedNodes.forEach(node=>{if(node.nodeType===1){if(node.matches?.("select[data-entity-selector]"))enhanceEntitySelect(node);enhanceEntitySelectors(node);}});}));
+entitySelectorObserver.observe(document.body,{childList:true,subtree:true});
+enhanceEntitySelectors();
+
 function getAdminPermissionModuleLabel(moduleCode) {
   return adminPermissionModuleCatalog[moduleCode]?.[state.lang] || moduleCode;
 }
@@ -303,7 +351,7 @@ function renderNav() {
           <button class="nav-button ${module.id === state.active && !state.activeSubmodule ? "active" : ""} ${access.enabled ? "" : "disabled-module"}" type="button" data-module-root="${module.id}" title="${access.enabled ? label : access.reason}" aria-disabled="${access.enabled ? "false" : "true"}">
             <span class="nav-icon">${module.icon}</span>
             <span>${label}</span>
-            <small class="nav-count">${module.count}</small>
+            ${getApiMode() === "api" ? "" : `<small class="nav-count">${module.count}</small>`}
           </button>
           ${renderSubnav(module)}
         </div>
@@ -353,6 +401,83 @@ function getModuleTable(module) {
   return getModuleField(module, "table") || { columns: [], rows: [] };
 }
 
+const standardReportCatalog = {
+  produccion: [
+    ["Catálogo de productos y servicios", "Product and service catalog", "Código, nombre, tipo, unidad, estatus y responsable", "Code, name, type, unit, status, and owner"],
+    ["Reporte de recetas y versiones", "Recipe and version report", "Producto, versión, vigencia, aprobación y rendimiento", "Product, version, validity, approval, and yield"],
+    ["Reporte de órdenes de producción", "Production order report", "Folio, producto, estatus, prioridad, responsable y fechas", "Number, product, status, priority, owner, and dates"],
+    ["Reporte de entregables por área", "Deliverables by area report", "Área, etapa, responsable, avance y cumplimiento", "Area, stage, owner, progress, and completion"],
+    ["Catálogo de maquinaria", "Machinery catalog", "Código, equipo, área, disponibilidad, costo y estatus", "Code, equipment, area, availability, cost, and status"],
+  ],
+  almacenes: [
+    ["Catálogo de almacenes", "Warehouse catalog", "Código, nombre, tipo, ubicación y estatus", "Code, name, type, location, and status"],
+    ["Catálogo de artículos", "Item catalog", "SKU, nombre, tipo, categoría, unidad y política", "SKU, name, type, category, unit, and policy"],
+    ["Reporte de inventario", "Inventory report", "Artículo, almacén, existencia, reservado, disponible y valuación", "Item, warehouse, on hand, reserved, available, and valuation"],
+    ["Reporte de movimientos y Kárdex", "Movements and ledger report", "Periodo, documento, artículo, almacén, movimiento y cantidad", "Period, document, item, warehouse, movement, and quantity"],
+    ["Reporte de críticos y reservas", "Critical stock and reservations report", "Faltantes, mínimos, máximos, reservas, vencimiento y origen", "Shortages, minimums, maximums, reservations, expiry, and source"],
+  ],
+  "recursos-humanos": [
+    ["Catálogo de áreas y puestos", "Area and position catalog", "Área, puesto, estatus, costo por hora y uso productivo", "Area, position, status, hourly cost, and production use"],
+    ["Reporte de trabajadores", "Worker report", "Número, nombre, puesto, área, estatus y vigencia", "Number, name, position, area, status, and validity"],
+    ["Reporte de capacidad productiva", "Production capacity report", "Fecha, trabajador, puesto, capacidad y compromiso", "Date, worker, position, capacity, and commitment"],
+    ["Reporte de elegibilidad", "Eligibility report", "Trabajador, puesto, área, estatus y motivo de elegibilidad", "Worker, position, area, status, and eligibility reason"],
+  ],
+  ventas: [
+    ["Catálogo de clientes", "Customer catalog", "Código, nombre, RFC, responsable, moneda y estatus", "Code, name, tax ID, owner, currency, and status"],
+    ["Reporte de cotizaciones", "Quote report", "Folio, cliente, producto, vigencia, importe, margen y estatus", "Number, customer, product, validity, amount, margin, and status"],
+    ["Reporte de pedidos", "Order report", "Folio, cliente, producto, surtido, fecha prometida y estatus", "Number, customer, product, fulfillment, promised date, and status"],
+    ["Reporte de entregas", "Delivery report", "Folio, pedido, cliente, fecha, cantidad y confirmación", "Number, order, customer, date, quantity, and confirmation"],
+    ["Reporte de margen comercial", "Commercial margin report", "Cliente, producto, venta, costo, margen estimado y real", "Customer, product, sales, cost, estimated and actual margin"],
+  ],
+  administracion: [
+    ["Reporte de usuarios y membresías", "Users and memberships report", "Usuario, correo, rol, sucursal, estatus y último acceso", "User, email, role, branch, status, and last access"],
+    ["Reporte de roles y permisos", "Roles and permissions report", "Rol, módulo, recurso, acción, alcance y estatus", "Role, module, resource, action, scope, and status"],
+    ["Reporte de módulos activos", "Active modules report", "Módulo, entitlement, preferencia, dependencia y disponibilidad", "Module, entitlement, preference, dependency, and availability"],
+    ["Catálogo de organización", "Organization catalog", "Razón social, sucursal, ubicación, estatus y configuración", "Legal entity, branch, location, status, and configuration"],
+    ["Catálogos base", "Base catalogs", "Unidad, moneda, condición de pago, código y estatus", "Unit, currency, payment terms, code, and status"],
+  ],
+  compras: [
+    ["Catálogo de proveedores", "Supplier catalog", "Código, nombre, condición, tiempo de entrega y estatus", "Code, name, terms, lead time, and status"],
+    ["Reporte de requisiciones", "Requisition report", "Folio, solicitante, origen, prioridad, fecha y estatus", "Number, requester, source, priority, date, and status"],
+    ["Reporte de órdenes de compra", "Purchase order report", "Folio, proveedor, importe, comprador, entrega y estatus", "Number, supplier, amount, buyer, delivery, and status"],
+    ["Reporte de recepciones", "Receipt report", "Orden, proveedor, artículo, cantidad, almacén y diferencia", "Order, supplier, item, quantity, warehouse, and variance"],
+  ],
+  gastos: [
+    ["Reporte documental", "Document report", "Folio, XML/PDF, proveedor, fecha, moneda y validación", "Number, XML/PDF, supplier, date, currency, and validation"],
+    ["Reporte de gastos", "Expense report", "Tipo, proveedor, centro, periodo, importe y estatus", "Type, supplier, center, period, amount, and status"],
+    ["Reporte de cuentas por pagar", "Accounts payable report", "Proveedor, documento, vencimiento, saldo y estatus", "Supplier, document, due date, balance, and status"],
+    ["Reporte de pagos", "Payment report", "Proveedor, documento, fecha, importe, referencia y estatus", "Supplier, document, date, amount, reference, and status"],
+  ],
+  costos: [
+    ["Catálogo de centros de costos", "Cost center catalog", "Código, nombre, responsable, módulo y estatus", "Code, name, owner, module, and status"],
+    ["Reporte de costo estimado", "Estimated cost report", "Producto, receta, orden, material, mano de obra y maquinaria", "Product, recipe, order, material, labor, and machinery"],
+    ["Reporte de costo real", "Actual cost report", "Orden, consumos, tiempos, gastos, merma y costo total", "Order, consumption, time, expenses, scrap, and total cost"],
+    ["Reporte de variaciones", "Variance report", "Objeto, estándar, estimado, real, diferencia y porcentaje", "Object, standard, estimate, actual, difference, and percentage"],
+    ["Reporte de rentabilidad", "Profitability report", "Producto, cliente, periodo, ingreso, costo y margen", "Product, customer, period, revenue, cost, and margin"],
+  ],
+  contabilidad: [
+    ["Catálogo de cuentas", "Chart of accounts", "Cuenta, nivel, naturaleza, agrupador y estatus", "Account, level, nature, grouping, and status"],
+    ["Reporte de periodos", "Period report", "Ejercicio, periodo, apertura, cierre y estatus", "Fiscal year, period, opening, closing, and status"],
+    ["Reporte de asientos y pólizas", "Entries and journals report", "Folio, fecha, origen, cargos, abonos y estatus", "Number, date, source, debits, credits, and status"],
+    ["Reporte de mapeos", "Mapping report", "Módulo, operación, cuenta, impuesto, vigencia y estatus", "Module, operation, account, tax, validity, and status"],
+    ["Reporte de anexos", "Attachments report", "Documento, origen, tipo, periodo y asociación contable", "Document, source, type, period, and accounting link"],
+  ],
+  reportes: [
+    ["Análisis especializados (planeado)", "Specialized analytics (planned)", "Cruces entre módulos, tableros, constructor, indicadores y exportaciones", "Cross-module analysis, dashboards, builder, indicators, and exports"],
+  ],
+};
+
+function getStandardReports(module) {
+  const configured = standardReportCatalog[module.id];
+  if (configured?.length) return configured;
+  return normalizeSubmodules(module).map((submodule) => [
+    `Reporte de ${submodule.name}`,
+    `${submodule.name} report`,
+    "Código, estatus, fecha y dimensiones propias del módulo",
+    "Code, status, date, and module-specific dimensions",
+  ]);
+}
+
 function renderPanel() {
   const module = { ...(modules.find((item) => item.id === state.active) || modules[0]) };
   if (!isModuleAccessible(module.id)) {
@@ -400,12 +525,22 @@ function renderPanel() {
     if (state.hrApi.status === "error") { modulePanel.innerHTML=`<section class="section-card"><strong>No se pudo cargar Recursos Humanos</strong><p>${state.hrApi.error}</p><button class="secondary-action" data-action="retry-hr-api">Reintentar</button></section>`;modulePanel.querySelector("[data-action='retry-hr-api']")?.addEventListener("click",()=>{state.hrApi.status="idle";render();});return; }
     const areas = mockDb.loadLaborAreas();
     const roles = mockDb.loadLaborRoles();
-    module.kpis = [["Areas", String(areas.length), "positive"], ["Puestos", String(roles.length), "positive"], ["Productivos", String(roles.filter((role) => role.intervenesInProduction !== false).length), "positive"]];
-    module.kpisEn = [["Areas", String(areas.length), "positive"], ["Positions", String(roles.length), "positive"], ["Production", String(roles.filter((role) => role.intervenesInProduction !== false).length), "positive"]];
+    module.kpis = [["Areas", String(areas.length), "positive"], ["Puestos", String(roles.length), "positive"], ["Productivos", String(roles.filter((role) => role.intervenesInProduction === true).length), "positive"]];
+    module.kpisEn = [["Areas", String(areas.length), "positive"], ["Positions", String(roles.length), "positive"], ["Production", String(roles.filter((role) => role.intervenesInProduction === true).length), "positive"]];
     if (state.activeSubmodule) { renderProductionSubmodulePanel(module); return; }
   } else if (module.id === "administracion") {
+    if (state.activeSubmodule) {
+      const panelBySubmodule={tenants:"organization",usuarios:"users",roles:"roles","modulos-activos":"modules"};
+      state.adminPanel=panelBySubmodule[state.activeSubmodule]||state.adminPanel;
+    }
     renderAdminApiPanel(module);
     return;
+  } else if (module.id === "ventas" && getApiMode() === "api" && state.sessionApi.status === "ready") {
+    if (state.salesApi.status === "idle") loadSalesApiData();
+    if (state.salesApi.status === "loading" && !mockDb.loadModuleRecords("ventas").length) { renderAdminLoadingPanel(module, "Cargando Ventas"); return; }
+    if (state.salesApi.status === "error") { modulePanel.innerHTML=`<section class="section-card"><strong>No se pudo cargar Ventas</strong><p>${state.salesApi.error}</p><button class="secondary-action" data-action="retry-sales-api">Reintentar</button></section>`;modulePanel.querySelector("[data-action='retry-sales-api']")?.addEventListener("click",()=>{state.salesApi.status="idle";render();});return; }
+    if (state.activeSubmodule) { renderGenericSubmodulePanel(module); return; }
+    const salesRecords=mockDb.loadModuleRecords("ventas");module.status="Clientes y cotizaciones persistidos";module.statusEn="API-persisted customers and quotes";module.kpis=[["Clientes",String(salesRecords.filter(item=>item.recordType==="customer").length),"positive"],["Cotizaciones",String(salesRecords.filter(item=>item.recordType==="quote").length),"positive"],["Pedidos","Planeado","warning"]];module.kpisEn=[["Customers",module.kpis[0][1],"positive"],["Quotes",module.kpis[1][1],"positive"],["Orders","Planned","warning"]];
   } else if (module.id === "almacenes" && getApiMode() === "api" && isInventoryApiEnabled() && state.sessionApi.status === "ready") {
     if (state.inventoryApi.status === "idle") loadInventoryApiData();
     if (state.inventoryApi.status === "loading" && !mockDb.loadModuleRecords("almacenes").length) {
@@ -418,6 +553,13 @@ function renderPanel() {
       return;
     }
     if (state.activeSubmodule) { renderGenericSubmodulePanel(module); return; }
+    const warehouseCount = mockDb.loadModuleRecords("almacenes").filter((record) => record.recordType === "warehouse").length;
+    module.primary = "Nuevo almacen";
+    module.primaryEn = "New warehouse";
+    module.status = "Datos persistidos en API";
+    module.statusEn = "API-persisted data";
+    module.kpis = [["Almacenes", String(warehouseCount), "positive"], ["Reservas", "No disponibles", "warning"], ["Fuente", "PostgreSQL", "positive"]];
+    module.kpisEn = [["Warehouses", String(warehouseCount), "positive"], ["Reservations", "Unavailable", "warning"], ["Source", "PostgreSQL", "positive"]];
   } else if (state.activeSubmodule) {
     renderGenericSubmodulePanel(module);
     return;
@@ -438,13 +580,10 @@ function renderPanel() {
   const moduleEyebrow = getModuleField(module, "eyebrow");
   const moduleStatus = getModuleField(module, "status");
   const moduleSummary = getModuleField(module, "summary");
-  const modulePrimary = getModuleField(module, "primary");
   const moduleKpis = getModuleField(module, "kpis") || [];
-  const moduleWorkflow = getModuleField(module, "workflow") || [];
-  const moduleValidations = getModuleField(module, "validations") || [];
-  const moduleForm = getModuleField(module, "form") || [];
   const moduleRecords = getModuleField(module, "records") || [];
   const moduleTable = getModuleTable(module);
+  const standardReports = getStandardReports(module);
 
   modulePanel.innerHTML = `
     <div class="panel-head">
@@ -455,14 +594,12 @@ function renderPanel() {
       <span class="chip active">${moduleStatus}</span>
     </div>
 
-    <div class="module-summary expanded">
-      <div class="module-hero">
+    <div class="module-summary expanded standard-report-summary">
+      <div class="module-hero standard-report-hero">
+        <span class="report-hero-label">${t("standardReportsTitle")}</span>
         <h1>${label}</h1>
-        <p>${moduleSummary}</p>
-        <button class="primary-action hero-action" type="button" data-action="${module.id === "produccion" ? "open-order" : module.id === "recursos-humanos" ? "open-labor-area-form" : "module-primary"}">
-          <span>＋</span>
-          <span>${modulePrimary}</span>
-        </button>
+        <p>${t("standardReportsIntro", { module: label })}</p>
+        <small>${moduleSummary}</small>
       </div>
 
       <div class="module-kpis">
@@ -479,54 +616,42 @@ function renderPanel() {
       </div>
     </div>
 
-    <div class="module-section-grid">
-      <section class="section-card wide">
+    <div class="module-section-grid standard-report-layout">
+      <section class="section-card wide standard-report-section">
         <div class="section-title">
           <span class="section-icon">▦</span>
-          <strong>${t("submodulesLabel")}</strong>
+          <strong>${t("standardReportCatalog")}</strong>
         </div>
-        <div class="submodule-grid">
-          ${module.submodules
-            .map(([name, detail, id]) => {
-              const submoduleId = id || slugify(name);
-              const copy = getSubmoduleCopy(module.id, submoduleId, name, detail);
-              return `
-                <button class="submodule-card" type="button" data-module="${module.id}" data-submodule="${submoduleId}">
-                  <strong>${copy.name}</strong>
-                  <p>${copy.detail}</p>
-                </button>
-              `;
-            })
-            .join("")}
+        <p class="report-section-help">${t("standardReportCatalogHelp")}</p>
+        <div class="standard-report-grid">
+          ${standardReports.map(([nameEs,nameEn,filtersEs,filtersEn])=>`
+            <article class="standard-report-card">
+              <div class="standard-report-card-head"><span class="chip active">${t("standardReport")}</span><span aria-hidden="true">▤</span></div>
+              <h3>${escapeHtml(state.lang==="en"?nameEn:nameEs)}</h3>
+              <p><strong>${t("suggestedFilters")}:</strong> ${escapeHtml(state.lang==="en"?filtersEn:filtersEs)}</p>
+              <small>${t("readOnlyReport")}</small>
+            </article>`).join("")}
         </div>
       </section>
 
       <section class="section-card">
         <div class="section-title">
-          <span class="section-icon">↳</span>
-          <strong>${t("operatingFlow")}</strong>
+          <span class="section-icon">◎</span>
+          <strong>${t("moduleSources")}</strong>
         </div>
-        <ol class="workflow-list">
-          ${moduleWorkflow.map((step) => `<li>${step}</li>`).join("")}
-        </ol>
+        <div class="report-source-list">
+          ${module.submodules.map(([name,detail,id])=>{const copy=getSubmoduleCopy(module.id,id||slugify(name),name,detail);return `<article><strong>${escapeHtml(copy.name)}</strong><p>${escapeHtml(copy.detail)}</p></article>`;}).join("")}
+        </div>
       </section>
 
       <section class="section-card">
         <div class="section-title">
-          <span class="section-icon">✓</span>
-          <strong>${t("compatibility")}</strong>
+          <span class="section-icon">◇</span>
+          <strong>${t("reportScope")}</strong>
         </div>
-        <div class="compat-list">
-          ${moduleValidations
-            .map(
-              ([name, detail]) => `
-                <article>
-                  <strong>${name}</strong>
-                  <p>${detail}</p>
-                </article>
-              `
-            )
-            .join("")}
+        <div class="compat-list report-scope-list">
+          <article><strong>${t("standardReportsTitle")}</strong><p>${t("standardReportScopeDetail")}</p></article>
+          <article><strong>${t("specializedReportsTitle")}</strong><p>${t("specializedReportsDetail")}</p><span class="chip warning">${t("inactiveStatus")}</span></article>
         </div>
       </section>
     </div>
@@ -535,13 +660,13 @@ function renderPanel() {
       <section class="section-card table-card">
         <div class="section-title">
           <span class="section-icon">☷</span>
-          <strong>${t("workView")}</strong>
+          <strong>${t("standardReportPreview")}</strong>
         </div>
           <div class="data-table" role="table">
             <div class="table-row table-head" role="row">
             ${moduleTable.columns.map((column) => `<span role="columnheader">${column}</span>`).join("")}
           </div>
-          ${moduleTable.rows
+          ${moduleTable.rows.length ? moduleTable.rows
             .map(
               (row) => `
                 <div class="table-row" role="row">
@@ -549,30 +674,10 @@ function renderPanel() {
                 </div>
               `
             )
-            .join("")}
+            .join("") : `<div class="report-empty-state">${t("standardReportNoData")}</div>`}
         </div>
-      </section>
-
-      <section class="section-card form-preview">
-        <div class="section-title">
-          <span class="section-icon">✎</span>
-          <strong>${t("quickCapture")}</strong>
-        </div>
-        ${moduleForm
-          .map(
-            ([labelText, value]) => `
-              <label class="preview-field">
-                <span>${labelText}</span>
-                <input type="text" value="${value}" readonly />
-              </label>
-            `
-          )
-          .join("")}
-        <button class="secondary-action full" type="button" data-action="${module.id === "produccion" ? "open-recipe" : module.id === "recursos-humanos" ? "open-labor-area-form" : "module-primary"}">${module.id === "produccion" ? t("newRecipe") : module.id === "recursos-humanos" ? t("newLaborArea") : t("openForm")}</button>
       </section>
     </div>
-
-    ${module.id === "produccion" ? renderRecipeValidationCard() : ""}
 
     <div class="records module-records">
       ${moduleRecords
@@ -591,7 +696,6 @@ function renderPanel() {
     </div>
   `;
 
-  bindProductionPanelActions();
 }
 
 function renderStatusStrip() {
@@ -707,8 +811,13 @@ function getAdminPanelData() {
   const data = getApiMode() === "api" ? state.adminApi.data : getMockAdminDashboard();
   if (!data) return data;
   const entitlements = [...(data.entitlements || [])];
-  if (!entitlements.some((item) => item.module_code === "hr")) entitlements.push({ module_code: "hr", status: "inactive", limits: {} });
-  return { ...data, entitlements: entitlements.sort((a, b) => a.module_code.localeCompare(b.module_code)) };
+  if (!entitlements.some((item) => item.module_code === "hr")) entitlements.push({ module_code: "hr", status: "inactive", tenant_enabled: false, effective_active: false, limits: {} });
+  return {
+    ...data,
+    entitlements: entitlements
+      .map((item) => ({ ...item, tenant_enabled: item.tenant_enabled ?? true, effective_active: item.effective_active ?? (item.status === "active" && item.tenant_enabled !== false) }))
+      .sort((a, b) => a.module_code.localeCompare(b.module_code))
+  };
 }
 
 function loadAdminApiDashboard() {
@@ -730,51 +839,48 @@ function loadAdminApiDashboard() {
     });
 }
 
-function getNextEntitlementStatus(status) {
-  if (status === "active") return "inactive";
-  if (status === "inactive") return "active";
-  return "active";
+function loadUnitCatalog() {
+  if (getApiMode() !== "api" || state.unitCatalog.status !== "idle" || !hasReadyApiSession() || !hasPermission("admin.unit.read")) return;
+  state.unitCatalog = {status:"loading",data:state.unitCatalog.data,error:""};
+  getUnitsOfMeasure().then((data)=>{state.unitCatalog={status:"ready",data,error:""};}).catch((error)=>{state.unitCatalog={status:"error",data:[],error:error.message||"Unit catalog unavailable"};});
 }
 
-function getEntitlementActionLabel(status) {
-  if (status === "active") return "Inactivar";
-  if (status === "inactive") return "Activar";
-  return "Reactivar";
-}
-
-function renderAdminEntitlementCard(item, apiMode, apiStatus) {
-  const nextStatus = getNextEntitlementStatus(item.status);
+function renderAdminEntitlementCard(item, apiMode, apiStatus, entitlements = []) {
   const isApiReady = apiMode === "api" && apiStatus === "ready";
+  const isContracted = item.status === "active";
+  const nextEnabled = !item.tenant_enabled;
+  const effectiveCodes = new Set(entitlements.filter((entry) => entry.effective_active).map((entry) => entry.module_code));
+  const missingDependencies = (tenantModuleDependencies[item.module_code] || []).filter((code) => !effectiveCodes.has(code));
+  const activeDependents = entitlements.filter((entry) => entry.effective_active && (tenantModuleDependencies[entry.module_code] || []).includes(item.module_code)).map((entry) => entry.module_code);
+  const blockedByDependency = nextEnabled ? missingDependencies.length > 0 : activeDependents.length > 0;
+  const canToggle = isApiReady && isContracted && item.module_code !== "admin" && !blockedByDependency;
+  const dependencyMessage = missingDependencies.length
+    ? t("moduleRequiresDependencies", { modules: missingDependencies.join(", ") })
+    : activeDependents.length ? t("moduleRequiredByDependents", { modules: activeDependents.join(", ") }) : "";
   return `
     <article class="admin-record compact-admin-record">
       <div class="admin-record-main">
         <strong>${item.module_code}</strong>
-        <span class="admin-status ${item.status}">${item.status}</span>
+        <span>${isContracted ? t("contractedModule") : t("moduleNotContracted")}</span>
+        ${dependencyMessage ? `<small>${escapeHtml(dependencyMessage)}</small>` : ""}
       </div>
       <div class="admin-actions">
-        <button class="secondary-action small-action" type="button" data-action="admin-update-entitlement" data-module-code="${item.module_code}" data-next-status="${nextStatus}" ${isApiReady ? "" : "disabled"}>
-          ${getEntitlementActionLabel(item.status)}
-        </button>
-        <button class="secondary-action small-action" type="button" data-action="admin-suspend-entitlement" data-module-code="${item.module_code}" ${isApiReady && item.status !== "suspended" ? "" : "disabled"}>
-          Suspender
+        <span class="admin-status ${item.effective_active ? "active" : "inactive"}">${item.effective_active ? t("tenantModuleOn") : t("tenantModuleOff")}</span>
+        <button class="secondary-action small-action" type="button" data-action="admin-update-entitlement" data-module-code="${item.module_code}" data-next-enabled="${String(nextEnabled)}" title="${escapeAttribute(dependencyMessage)}" ${canToggle ? "" : "disabled"}>
+          ${item.tenant_enabled ? t("deactivate") : t("activate")}
         </button>
       </div>
     </article>
   `;
 }
 
-function updateAdminEntitlement(moduleCode, status) {
+function updateAdminEntitlement(moduleCode, enabled) {
   if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
-  const current = getAdminPanelData().entitlements.find((item) => item.module_code === moduleCode);
   state.adminApi = { ...state.adminApi, status: "loading", error: "" };
   render();
-  updateTenantEntitlement(moduleCode, {
-    status,
-    limits: current?.limits || { updated_from: "frontend-admin-panel" },
-    source: "manual"
-  })
+  updateTenantEntitlement(moduleCode, { enabled })
     .then(() => {
-      showToast(`Modulo ${moduleCode} actualizado a ${status}.`);
+      showToast(t("modulePreferenceUpdated", { module: moduleCode }));
       state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
       state.sessionApi = { status: "idle", data: state.sessionApi.data, error: "" };
       loadSessionContext();
@@ -843,7 +949,7 @@ function renderAdminInviteForm(data, apiMode, apiStatus) {
       </label>
       <label>
         <span>Rol</span>
-        <select name="role_id" ${isApiReady ? "" : "disabled"}>
+        <select name="role_id" data-entity-selector ${isApiReady ? "" : "disabled"}>
           ${data.roles.map((role) => `<option value="${role.id}" ${selectedOption(role.id, defaultRoleId)}>${role.name}</option>`).join("")}
         </select>
       </label>
@@ -1376,7 +1482,7 @@ function renderContextBar() {
   if (branches.length > 1) {
     branchContext.classList.add("is-selectable");
     contextBranch.innerHTML = `
-      <select id="branchSelector" aria-label="Seleccionar sucursal activa">
+      <select id="branchSelector" data-entity-selector aria-label="Seleccionar sucursal activa">
         ${branches
           .map((branch) => `<option value="${escapeAttribute(branch.id)}" ${selectedOption(branch.id, selectedBranch.id)}>${escapeAttribute(branch.name)}${branch.code ? ` · ${escapeAttribute(branch.code)}` : ""}</option>`)
           .join("")}
@@ -1565,7 +1671,14 @@ function getAdminCards(data) {
       id: "base-config",
       title: "Configuracion base",
       detail: "Catalogos iniciales y modulos necesarios para operar.",
-      count: data.entitlements.filter((item) => item.status === "active").length,
+      count: data.entitlements.filter((item) => item.effective_active).length,
+      tone: "active"
+    },
+    {
+      id: "document-templates",
+      title: state.lang === "en" ? "Document templates" : "Plantillas documentales",
+      detail: state.lang === "en" ? "Logo and colors shared by every generated PDF." : "Logo y colores compartidos por todos los PDF generados.",
+      count: "PDF",
       tone: "active"
     },
     {
@@ -1620,6 +1733,7 @@ function renderAdminPanelContent(panelId, data, apiMode, apiStatus) {
   if (panelId === "permissions") return renderAdminPermissionsPanel(data);
   if (panelId === "organization") return renderAdminOrganizationPanel(data, apiMode, apiStatus);
   if (panelId === "base-config") return renderAdminBaseConfigPanel(data, apiMode, apiStatus);
+  if (panelId === "document-templates") return renderAdminDocumentTemplatePanel(data, apiMode, apiStatus);
   return "";
 }
 
@@ -1785,7 +1899,7 @@ function renderAdminOrganizationPanel(data, apiMode, apiStatus) {
             </label>
             <label>
               <span>Razon social</span>
-              <select name="legal_entity_id" ${isWritable && organization.legal_entities.length ? "" : "disabled"}>
+              <select name="legal_entity_id" data-entity-selector ${isWritable && organization.legal_entities.length ? "" : "disabled"}>
                 <option value="">Sin asignar</option>
                 ${organization.legal_entities.map((item) => `<option value="${escapeAttribute(item.id)}">${escapeAttribute(item.legal_name)}</option>`).join("")}
               </select>
@@ -1887,48 +2001,114 @@ function renderAdminEmptyRecord(message) {
 }
 
 function renderAdminBaseConfigPanel(data, apiMode, apiStatus) {
-  const baseCatalogs = [
-    "Centros de negocio",
-    "Areas operativas",
-    "Unidades de medida",
-    "Impuestos",
-    "Monedas",
-    "Condiciones de pago",
-    "Almacenes y ubicaciones",
-    "Estados documentales"
-  ];
+  const baseCatalogs = ["businessCenters", "operationalAreas", "unitsOfMeasure", "codeSequences", "taxes", "currencies", "paymentConditions", "warehousesLocations", "documentStatuses"];
+  const units = data.units || [];
+  if (state.adminBaseCatalog === "units-of-measure") {
+    return renderAdminUnitsCatalog(units);
+  }
+  if (state.adminBaseCatalog === "currencies") return renderAdminCommercialCatalog(data, "currencies");
+  if (state.adminBaseCatalog === "payment-terms") return renderAdminCommercialCatalog(data, "payment_terms");
+  if (state.adminBaseCatalog === "code-sequences") return renderAdminCodeSequencesCatalog(data.codeSequences || []);
   return `
     <section class="admin-section admin-detail-panel">
       <div class="admin-section-head">
         <div>
-          <h3>Configuracion base</h3>
-          <p>Catalogos iniciales y modulos contratados que habilitan la operacion diaria.</p>
+          <h3>${t("baseConfiguration")}</h3>
+          <p>${t("baseConfigurationHelp")}</p>
         </div>
         <span class="chip active">${baseCatalogs.length}</span>
       </div>
       <div class="admin-list admin-module-list">
-        ${baseCatalogs.map((catalog) => `
-          <article class="admin-record compact-admin-record">
+        ${baseCatalogs.map((catalog) => catalog === "unitsOfMeasure" ? `
+          <button class="admin-record compact-admin-record admin-catalog-entry" type="button" data-action="admin-open-base-catalog" data-catalog-id="units-of-measure">
             <div class="admin-record-main">
-              <strong>${catalog}</strong>
-              <span>Catalogo base</span>
+              <strong>${t(catalog)}</strong>
+              <span>${t("baseCatalogOpen")}</span>
             </div>
-            <span class="admin-status invited">Pendiente</span>
+            <span class="admin-status ${units.length ? "active" : "invited"}">${units.length ? t("activeUnitsCount", {count: units.filter((item)=>item.status==="active").length}) : t("pending")}</span>
+          </button>
+        ` : catalog === "codeSequences" ? `
+          <button class="admin-record compact-admin-record admin-catalog-entry" type="button" data-action="admin-open-base-catalog" data-catalog-id="code-sequences">
+            <div class="admin-record-main"><strong>${t("codeSequences")}</strong><span>${t("baseCatalogOpen")}</span></div>
+            <span class="admin-status active">${(data.codeSequences || []).length}</span>
+          </button>
+        ` : catalog === "currencies" || catalog === "paymentConditions" ? `
+          <button class="admin-record compact-admin-record admin-catalog-entry" type="button" data-action="admin-open-base-catalog" data-catalog-id="${catalog==="currencies"?"currencies":"payment-terms"}">
+            <div class="admin-record-main"><strong>${t(catalog)}</strong><span>${t("baseCatalogOpen")}</span></div>
+            <span class="admin-status active">${(data.commercialCatalogs?.[catalog==="currencies"?"currencies":"payment_terms"]||[]).filter(item=>item.status==="active").length}</span>
+          </button>
+        ` : `
+          <article class="admin-record compact-admin-record">
+            <div class="admin-record-main"><strong>${t(catalog)}</strong><span>${t("baseCatalog")}</span></div>
+            <span class="admin-status invited">${t("pending")}</span>
           </article>
         `).join("")}
       </div>
       <div class="admin-section-head admin-subsection-head">
         <div>
-          <h3>Modulos activos</h3>
-          <p>Activa, inactiva o suspende la disponibilidad del tenant.</p>
+          <h3>${t("modulesAvailableTitle")}</h3>
+          <p>${t("modulesAvailableHelp")}</p>
         </div>
-        <span class="chip active">${data.entitlements.filter((item) => item.status === "active").length}</span>
+        <span class="chip active">${data.entitlements.filter((item) => item.effective_active).length}</span>
       </div>
       <div class="admin-list admin-module-list">
-        ${data.entitlements.map((item) => renderAdminEntitlementCard(item, apiMode, apiStatus)).join("")}
+        ${data.entitlements.map((item) => renderAdminEntitlementCard(item, apiMode, apiStatus, data.entitlements)).join("")}
       </div>
     </section>
   `;
+}
+
+function renderAdminCodeSequencesCatalog(sequences) {
+  const modules = [...new Set(sequences.map((item) => item.module_code))];
+  return `<section class="admin-section admin-detail-panel">
+    <div class="admin-section-head">
+      <div><p class="eyebrow">${t("baseCatalog")}</p><h3>${t("codeSequences")}</h3><p>${t("codeSequencesHelp")}</p></div>
+      <div class="admin-actions"><span class="chip active">${sequences.length}</span><button class="secondary-action small-action" type="button" data-action="admin-close-base-catalog">${t("backToCatalogs")}</button></div>
+    </div>
+    ${modules.map((moduleCode) => `<div class="admin-section-head admin-subsection-head"><div><h4>${escapeHtml(getAdminPermissionModuleLabel(moduleCode))}</h4></div></div><div class="admin-list admin-module-list">${sequences.filter((item) => item.module_code === moduleCode).map((item) => `<form class="admin-record code-sequence-record" data-form="admin-code-sequence" data-sequence-id="${escapeAttribute(item.id)}">
+      <div class="admin-record-main"><strong>${escapeHtml(state.lang === "en" ? item.name_en : item.name_es)}</strong><span>${escapeHtml(item.document_type)} · ${item.mode === "managed" ? t("sequenceManaged") : t("sequenceManual")}</span></div>
+      <div class="code-sequence-fields">
+        <label><span>${t("sequencePrefix")}</span><input name="prefix" maxlength="24" value="${escapeAttribute(item.prefix)}" ${item.mode === "manual" ? "disabled" : "required"}></label>
+        <label><span>${t("sequenceNextNumber")}</span><input name="next_number" type="number" min="1" value="${item.next_number}" ${item.mode === "manual" ? "disabled" : "required"}></label>
+        <label><span>${t("sequencePadding")}</span><input name="padding" type="number" min="1" max="12" value="${item.padding}" ${item.mode === "manual" ? "disabled" : "required"}></label>
+        <label class="checkbox-field"><input name="managed" type="checkbox" ${item.mode === "managed" ? "checked" : ""}><span>${t("sequenceUseManaged")}</span></label>
+      </div>
+      ${hasPermission("admin.setting.update") ? `<button class="secondary-action small-action" type="submit">${t("saveChanges")}</button>` : ""}
+    </form>`).join("")}</div>`).join("")}
+  </section>`;
+}
+
+function renderAdminUnitsCatalog(units) {
+  const categories = [["count","uomCategoryCount"],["mass","uomCategoryMass"],["length","uomCategoryLength"],["area","uomCategoryArea"],["volume","uomCategoryVolume"],["time","uomCategoryTime"],["package","uomCategoryPackage"],["energy","uomCategoryEnergy"],["power","uomCategoryPower"],["electric","uomCategoryElectric"],["temperature","uomCategoryTemperature"],["pressure","uomCategoryPressure"],["ratio","uomCategoryRatio"],["other","uomCategoryOther"]];
+  const categoryLabel = (value) => t(categories.find(([code]) => code === value)?.[1] || "uomCategoryOther");
+  return `<section class="admin-section admin-detail-panel">
+    <div class="admin-section-head">
+      <div><p class="eyebrow">${t("baseCatalog")}</p><h3>${t("unitsOfMeasure")}</h3><p>${t("unitsCatalogHelp")}</p></div>
+      <div class="admin-actions"><span class="chip active">${units.length}</span><button class="secondary-action small-action" type="button" data-action="admin-close-base-catalog">${t("backToCatalogs")}</button></div>
+    </div>
+    ${hasPermission("admin.unit.create") ? `<form class="admin-inline-form" data-form="admin-create-unit">
+      <input name="code" maxlength="20" placeholder="${t("unitCodePlaceholder")}" required />
+      <input name="name_es" maxlength="120" placeholder="${t("unitNameEs")}" required />
+      <input name="name_en" maxlength="120" placeholder="${t("unitNameEn")}" required />
+      <input name="symbol" maxlength="24" placeholder="${t("unitSymbol")}" required />
+      <select name="category">${categories.map(([value,key])=>`<option value="${value}">${t(key)}</option>`).join("")}</select>
+      <input name="decimal_places" type="number" min="0" max="6" value="3" aria-label="${t("unitDecimals")}" required />
+      <button class="primary-action small-action" type="submit">${t("addUnit")}</button>
+    </form>` : ""}
+    <div class="admin-list admin-module-list">
+      ${units.map((unit)=>`<article class="admin-record compact-admin-record"><div class="admin-record-main"><strong>${escapeHtml(state.lang==="en"?unit.name_en:unit.name_es)} (${escapeHtml(unit.symbol)})</strong><span>${escapeHtml(unit.code)} · ${escapeHtml(categoryLabel(unit.category))} · ${t("unitDecimalsCount", {count: unit.decimal_places})}${unit.system_default?` · ${t("defaultUnit")}`:` · ${t("customUnit")}`}</span></div><div class="admin-actions"><span class="admin-status ${unit.status}">${unit.status==="active"?t("activeStatus"):t("inactiveStatus")}</span>${hasPermission("admin.unit.update")?`<button class="secondary-action small-action" data-action="admin-edit-unit" data-unit-id="${unit.id}">${t("edit")}</button><button class="secondary-action small-action" data-action="admin-toggle-unit" data-unit-id="${unit.id}" data-next-status="${unit.status==="active"?"inactive":"active"}">${unit.status==="active"?t("deactivate"):t("activate")}</button>`:""}</div></article>`).join("") || renderAdminEmptyRecord(t("unitCatalogEmpty"))}
+    </div>
+  </section>`;
+}
+
+function renderAdminCommercialCatalog(data,catalogCode){
+  const items=data.commercialCatalogs?.[catalogCode]||[];const label=catalogCode==="currencies"?(state.lang==="en"?"Currencies":"Monedas"):(state.lang==="en"?"Payment terms":"Condiciones de pago");
+  return `<section class="admin-section admin-detail-panel"><div class="admin-section-head"><div><p class="eyebrow">${t("baseCatalog")}</p><h3>${label}</h3><p>${state.lang==="en"?"Tenant-authoritative values used by customers, quotes and orders.":"Valores autoritativos del tenant usados por clientes, cotizaciones y pedidos."}</p></div><div class="admin-actions"><span class="chip active">${items.length}</span><button class="secondary-action small-action" type="button" data-action="admin-close-base-catalog">${t("backToCatalogs")}</button></div></div>${hasPermission("admin.catalog.create")?`<form class="admin-inline-form" data-form="admin-create-commercial-item" data-catalog-code="${catalogCode}"><input name="code" maxlength="40" placeholder="${catalogCode==="currencies"?"MXN":"credit_30"}" required><input name="name_es" maxlength="160" placeholder="Nombre en español" required><input name="name_en" maxlength="160" placeholder="Name in English" required><button class="primary-action small-action" type="submit">${state.lang==="en"?"Add":"Agregar"}</button></form>`:""}<div class="admin-list admin-module-list">${items.map(item=>`<article class="admin-record compact-admin-record"><div class="admin-record-main"><strong>${escapeHtml(state.lang==="en"?item.name_en:item.name_es)}</strong><span>${escapeHtml(item.code)}${item.system_default?" · Predeterminado":""}</span></div><div class="admin-actions"><span class="admin-status ${item.status}">${item.status}</span>${hasPermission("admin.catalog.update")?`<button class="secondary-action small-action" data-action="admin-toggle-commercial-item" data-catalog-code="${catalogCode}" data-item-id="${item.id}" data-next-status="${item.status==="active"?"inactive":"active"}">${item.status==="active"?t("deactivate"):t("activate")}</button>`:""}</div></article>`).join("")||renderAdminEmptyRecord(state.lang==="en"?"No values registered.":"Sin valores registrados.")}</div></section>`;
+}
+
+function renderAdminDocumentTemplatePanel(data,apiMode,apiStatus){
+  const value=data.documentTemplate||{};const logo=state.adminDocumentLogo===null?value.logo_data_url:state.adminDocumentLogo;const writable=(apiMode!=="api"||apiStatus==="ready")&&hasPermission("admin.setting.update");
+  return `<section class="admin-section admin-detail-panel"><div class="admin-section-head"><div><h3>${t("documentIdentityTitle")}</h3><p>${t("documentIdentityHelp")}</p></div><span class="chip active">PDF</span></div><form class="admin-form admin-organization-form document-template-form" data-form="admin-document-template"><label class="wide-field"><span>${t("documentLogoLabel")}</span><input name="logo" type="file" accept="image/png,image/jpeg,image/webp" ${writable?"":"disabled"}></label>${logo?`<div class="wide-field document-template-preview"><img src="${escapeAttribute(logo)}" alt="${escapeAttribute(t("documentLogoAlt"))}">${writable?`<button class="secondary-action small-action" type="button" data-action="remove-document-logo">${t("documentLogoRemove")}</button>`:""}</div>`:""}<label><span>${t("documentPrimaryColor")}</span><input name="primary_color" type="color" value="${escapeAttribute(value.primary_color||"#6106A0")}" ${writable?"":"disabled"}></label><label><span>${t("documentAccentColor")}</span><input name="accent_color" type="color" value="${escapeAttribute(value.accent_color||"#F557D3")}" ${writable?"":"disabled"}></label><label><span>${t("documentTextColor")}</span><input name="text_color" type="color" value="${escapeAttribute(value.text_color||"#190F34")}" ${writable?"":"disabled"}></label><label class="wide-field"><span>${t("documentFooter")}</span><input name="footer_text" maxlength="300" value="${escapeAttribute(value.footer_text||"")}" ${writable?"":"disabled"}></label><label class="document-template-checkbox"><input name="show_page_number" type="checkbox" ${value.show_page_number!==false?"checked":""} ${writable?"":"disabled"}><span>${t("documentShowPageNumber")}</span></label>${writable?`<button class="primary-action small-action" type="submit">${t("documentTemplateSave")}</button>`:""}</form></section>`;
 }
 
 function renderAdminApiPanel(module) {
@@ -2024,8 +2204,21 @@ function renderAdminApiPanel(module) {
     button.addEventListener("click", () => {
       if (button.dataset.panelId !== "roles" && !closePermissionEditorForNavigation()) return;
       state.adminPanel = button.dataset.panelId;
+      if (state.adminPanel !== "base-config") state.adminBaseCatalog = null;
       render();
     });
+  });
+
+  modulePanel.querySelectorAll("[data-action='admin-open-base-catalog']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.adminBaseCatalog = button.dataset.catalogId;
+      render();
+    });
+  });
+
+  modulePanel.querySelector("[data-action='admin-close-base-catalog']")?.addEventListener("click", () => {
+    state.adminBaseCatalog = null;
+    render();
   });
 
   modulePanel.querySelector("[data-form='admin-update-corporate']")?.addEventListener("submit", (event) => {
@@ -2057,15 +2250,45 @@ function renderAdminApiPanel(module) {
 
   modulePanel.querySelectorAll("[data-action='admin-update-entitlement']").forEach((button) => {
     button.addEventListener("click", () => {
-      updateAdminEntitlement(button.dataset.moduleCode, button.dataset.nextStatus);
+      updateAdminEntitlement(button.dataset.moduleCode, button.dataset.nextEnabled === "true");
     });
   });
 
-  modulePanel.querySelectorAll("[data-action='admin-suspend-entitlement']").forEach((button) => {
-    button.addEventListener("click", () => {
-      updateAdminEntitlement(button.dataset.moduleCode, "suspended");
+  modulePanel.querySelector("[data-form='admin-create-unit']")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    try {
+      await createUnitOfMeasure({...values, decimal_places:Number(values.decimal_places)});
+      showToast(t("unitAdded"));
+      await loadAdminApiDashboard();
+    } catch (error) { showToast(error.message || t("unitAddError")); }
+  });
+  modulePanel.querySelectorAll("[data-action='admin-toggle-unit']").forEach((button)=>button.addEventListener("click", async()=>{
+    try { await updateUnitOfMeasure(button.dataset.unitId,{status:button.dataset.nextStatus}); showToast(t("unitUpdated")); await loadAdminApiDashboard(); }
+    catch(error){ showToast(error.message || t("unitUpdateError")); }
+  }));
+  modulePanel.querySelectorAll("[data-action='admin-edit-unit']").forEach((button)=>button.addEventListener("click",()=>openAdminUnitModal(button.dataset.unitId)));
+
+  modulePanel.querySelector("[data-form='admin-create-commercial-item']")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget;try{await createCommercialCatalogItem(form.dataset.catalogCode,Object.fromEntries(new FormData(form)));showToast("Valor de catálogo agregado.");await loadAdminApiDashboard();}catch(error){showToast(error.message||"No se pudo agregar el valor.");}});
+  modulePanel.querySelectorAll("[data-action='admin-toggle-commercial-item']").forEach(button=>button.addEventListener("click",async()=>{try{await updateCommercialCatalogItem(button.dataset.catalogCode,button.dataset.itemId,{status:button.dataset.nextStatus});showToast("Catálogo actualizado.");await loadAdminApiDashboard();}catch(error){showToast(error.message||"No se pudo actualizar el catálogo.");}}));
+  modulePanel.querySelectorAll("[data-form='admin-code-sequence']").forEach(form => {
+    const managed = form.querySelector("[name='managed']");
+    const sync = () => form.querySelectorAll("[name='prefix'],[name='next_number'],[name='padding']").forEach((input) => { input.disabled = !managed.checked; });
+    managed?.addEventListener("change", sync);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const values = new FormData(form);
+      try {
+        await updateCodeSequence(form.dataset.sequenceId, { mode: managed.checked ? "managed" : "manual", ...(managed.checked ? { prefix: String(values.get("prefix") || "").trim(), next_number: Number(values.get("next_number")), padding: Number(values.get("padding")) } : {}) });
+        showToast(t("sequenceUpdated"));
+        await loadAdminApiDashboard();
+      } catch (error) { showToast(error.message || t("sequenceUpdateError")); }
     });
   });
+  modulePanel.querySelector("[data-form='admin-document-template'] [name='logo']")?.addEventListener("change",event=>{const file=event.target.files?.[0];if(!file)return;if(!["image/png","image/jpeg","image/webp"].includes(file.type)){showToast(t("documentLogoTypeError"));event.target.value="";return;}if(file.size>1_000_000){showToast(t("documentLogoSizeError"));event.target.value="";return;}const reader=new FileReader();reader.onerror=()=>showToast(t("documentLogoReadError"));reader.onload=()=>{state.adminDocumentLogo=String(reader.result);render();};reader.readAsDataURL(file);});
+  modulePanel.querySelector("[data-action='remove-document-logo']")?.addEventListener("click",()=>{state.adminDocumentLogo="";render();});
+  modulePanel.querySelector("[data-form='admin-document-template']")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget;const values=new FormData(form);try{await updateDocumentTemplate({logo_data_url:state.adminDocumentLogo===null?(safeData.documentTemplate?.logo_data_url||null):state.adminDocumentLogo||null,primary_color:values.get("primary_color"),accent_color:values.get("accent_color"),text_color:values.get("text_color"),footer_text:String(values.get("footer_text")||"").trim()||null,show_page_number:values.get("show_page_number")==="on"});state.adminDocumentLogo=null;showToast(t("documentTemplateUpdated"));await loadAdminApiDashboard();}catch(error){showToast(error.message||t("documentTemplateUpdateError"));}});
 
   modulePanel.querySelector("[data-form='admin-invite-user']")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -2157,6 +2380,8 @@ function loadSessionContext() {
       state.sessionApi = { status: "ready", data, error: "" };
       state.productionApi = { status: "idle", error: "" };
       state.inventoryApi = { status: "idle", error: "" };
+      state.finishedGoodsReceipts = { status: "idle", orders: [], summaries: [], products: [], error: "" };
+      state.salesApi = { status: "idle", error: "", workers: [], references: { currencies: [], payment_terms: [] } };
       if (!isModuleAccessible(state.active)) {
         const firstModule = getActiveUiModuleIds()[0] || "administracion";
         applyScreenSnapshot({ active: firstModule, activeSubmodule: null, laborArea: "" });
@@ -2183,19 +2408,21 @@ function mapApiProduct(item) {
     center: item.cost_center || "Produccion",
     owner: item.responsible_area || "Sin asignar",
     expectedMargin: Number(item.expected_margin || 0),
-    description: item.description || ""
+    description: item.description || "",
+    inventoryItemId: item.inventory_item_id || ""
   };
 }
 
 function mapApiRecipe(item, products) {
   const versions = [...(item.versions || [])].sort((a, b) => Number(b.version_number) - Number(a.version_number));
-  const currentVersion = versions.find((version) => version.id === item.current_version_id) || null;
+  const currentVersion = versions.find((version) => version.id === item.current_version_id) || versions.find((version) => version.status === "approved") || null;
   const draftVersion = versions.find((version) => ["draft","pending_approval"].includes(version.status)) || null;
   const version = draftVersion || currentVersion || versions[0];
   const product = products.find((entry) => entry.id === item.product_service_id);
   const approval = { draft: "Borrador", pending_approval: "Pendiente de aprobacion", approved: "Aprobada", obsolete: "Obsoleta" };
   return {
     id: item.id,
+    code: item.code,
     productServiceId: item.product_service_id,
     product: product?.name || item.name,
     version: version?.version_number || 1,
@@ -2227,16 +2454,41 @@ function mapApiRecipe(item, products) {
       laborAreaId: stage.labor_area_ref_id || "",
       laborAreaName: stage.labor_area_name || stage.name,
       name: stage.name,
-      expectedMinutes: stage.expected_minutes
+      expectedMinutes: stage.expected_minutes,
+      weightPercent: Number(stage.weight_percent || 0),
+      sortOrder: Number(stage.sort_order || 0)
     })),
     createdAt: new Date().toISOString().slice(0, 10)
   };
 }
 
-function mapApiMachine(item){return {id:item.id,code:item.code,name:item.name,area:item.area_name||"",machineType:item.machine_type,unit:"min",available:Number(item.available_minutes_per_day||0),cost:Number(item.cost_per_minute||0),type:"Maquinaria",source:"Maquinaria",status:item.status==="active"?"Activo":item.status==="maintenance"?"Mantenimiento":"Inactivo"};}
+function mapApiMachine(item){return {id:item.id,code:item.code,name:item.name,areaId:item.area_ref_id||"",area:item.area_name||"",machineType:item.machine_type,unit:"MIN",available:Number(item.available_minutes_per_day||0),cost:Number(item.cost_per_minute||0),type:"Maquinaria",source:"Maquinaria",status:item.status==="active"?"Activo":item.status==="maintenance"?"Mantenimiento":"Inactivo"};}
 function mapApiOrderStatus(status){return ({released:"Liberada",waiting_resources:"En espera de recursos",in_progress:"En produccion",paused:"Pausada",in_validation:"En validacion",completed:"Terminada",cancelled:"Cancelada"})[status]||status;}
 function toApiOrderStatus(status){return ({Liberada:"released","En espera de recursos":"waiting_resources","En produccion":"in_progress",Pausada:"paused","En validacion":"in_validation",Terminada:"completed",Cancelada:"cancelled"})[status]||status;}
 function mapApiStageStatus(status){return ({pending:"Pendiente",in_progress:"En proceso",completed:"Terminada",skipped:"Omitida",blocked:"Bloqueada"})[status]||status;}
+function getOrderCloseState(order){
+  const stagesComplete=(order.areas||[]).every((stage)=>["Terminada","Omitida"].includes(stage.status));
+  return {stagesComplete,ready:stagesComplete};
+}
+function getOrderStatusOptions(order){
+  const transitions={
+    Liberada:["En espera de recursos","En produccion","Cancelada"],
+    "En espera de recursos":["Liberada","En produccion","Cancelada"],
+    "En produccion":["Pausada","Cancelada"],
+    Pausada:["En produccion","Cancelada"],
+    "En validacion":["En produccion"],
+    Terminada:[],Cancelada:[]
+  };
+  const options=[order.status,...(transitions[order.status]||[])];
+  if(order.status==="En validacion"&&getOrderCloseState(order).ready)options.push("Terminada");
+  return [...new Set(options)];
+}
+function getOrderCloseHelp(order){
+  if(order.status!=="En validacion")return "";
+  const close=getOrderCloseState(order);
+  if(!close.stagesComplete)return t("orderCloseStagesHelp");
+  return t("orderCloseReady");
+}
 function mapApiOrderRecipeSnapshot(item, fallbackRecipe) {
   const snapshot = item.recipe_snapshot || {};
   const version = (snapshot.versions || []).find((entry) => entry.id === item.recipe_version_id);
@@ -2262,7 +2514,7 @@ function mapApiOrderRecipeSnapshot(item, fallbackRecipe) {
     steps: (version.stages || []).filter((stage) => stage.status === "active").map((stage) => stage.name)
   };
 }
-function mapApiOrder(item, recipes){const recipe=recipes.find((entry)=>entry.id===item.recipe_id);const recipeSnapshot=mapApiOrderRecipeSnapshot(item,recipe);return {id:item.id,code:item.code,recipeId:item.recipe_id,recipeVersion:recipeSnapshot.version||1,recipeSnapshot,recipeName:recipeSnapshot.product||item.product_service_id,quantity:Number(item.quantity),unit:item.unit,status:mapApiOrderStatus(item.status),priority:({high:"Alta",medium:"Media",low:"Baja"})[item.priority]||item.priority,dueDate:item.required_at?.slice(0,10)||"",center:recipeSnapshot.center||"Produccion",responsible:item.responsible_name,plannedCost:Number(item.planned_cost||0),actualCost:item.actual_cost===null?Number(item.planned_cost||0):Number(item.actual_cost),releaseStatus:"Liberada",areas:(item.stages||[]).map((stage)=>({id:stage.id,recipeStageId:stage.recipe_stage_id,area:stage.name,responsible:stage.responsible_name||"",status:mapApiStageStatus(stage.status),progress:Number(stage.progress_percent||0),actualMinutes:stage.actual_minutes,actualCostFactor:1})),createdAt:item.created_at?.slice(0,10)||""};}
+function mapApiOrder(item, recipes){const recipe=recipes.find((entry)=>entry.id===item.recipe_id);const recipeSnapshot=mapApiOrderRecipeSnapshot(item,recipe);return {id:item.id,code:item.code,productServiceId:item.product_service_id,recipeId:item.recipe_id,recipeVersion:recipeSnapshot.version||1,recipeSnapshot,recipeName:recipeSnapshot.product||item.product_service_id,quantity:Number(item.quantity),unit:item.unit,status:mapApiOrderStatus(item.status),priority:({high:"Alta",medium:"Media",low:"Baja"})[item.priority]||item.priority,dueDate:item.required_at?.slice(0,10)||"",center:recipeSnapshot.center||"Produccion",responsibleWorkerId:item.responsible_worker_id,responsible:item.responsible_name,plannedCost:Number(item.planned_cost||0),actualCost:item.actual_cost==null?null:Number(item.actual_cost),overallProgress:Number(item.overall_progress_percent||0),resources:(item.resources||[]).map((resource)=>({id:resource.id,type:resource.resource_type,refId:resource.resource_ref_id,code:resource.resource_code,name:resource.resource_name,unit:resource.unit,plannedQuantity:Number(resource.planned_quantity),actualQuantity:resource.actual_quantity==null?null:Number(resource.actual_quantity),unitCost:Number(resource.unit_cost),plannedCost:Number(resource.planned_cost),actualCost:resource.actual_cost==null?null:Number(resource.actual_cost),reservationIds:resource.reservation_ref_ids||[]})),releaseStatus:"Liberada",areas:(item.stages||[]).map((stage)=>({id:stage.id,recipeStageId:stage.recipe_stage_id,area:stage.name,phaseNumber:Number(stage.sort_order||0),weightPercent:Number(stage.weight_percent||0),responsibleWorkerId:stage.responsible_worker_id,responsible:stage.responsible_name||"",status:mapApiStageStatus(stage.status),progress:Number(stage.progress_percent||0),plannedMinutes:stage.planned_minutes,actualMinutes:stage.actual_minutes,actualCostFactor:1})),createdAt:item.created_at?.slice(0,10)||""};}
 
 function loadProductionApiData() {
   if (getApiMode() !== "api" || state.productionApi.status === "loading") return Promise.resolve();
@@ -2292,18 +2544,18 @@ function loadInventoryApiData() {
     const records = [
       ...warehouses.map((item) => ({id:item.id,code:item.code,moduleId:"almacenes",submoduleId:"almacenes",recordType:"warehouse",title:item.name,detail:item.type,status:mapInventoryStatus(item.status),owner:item.owner||"",fields:{type:item.type,businessCenter:item.business_center,location:item.location,capacity:item.capacity||"",policy:item.inventory_policy,zone:item.zone||"",aisle:item.aisle||"",rack:item.rack||"",level:item.level||"",position:item.position||"",description:item.description||""}}))
     ];
-    mockDb.saveModuleRecords("almacenes", records); state.inventoryApi={status:"ready",error:""}; state.inventoryItems={status:"idle",error:""}; state.inventoryMovements={status:"idle",error:""}; state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]}; render();
+    mockDb.saveModuleRecords("almacenes", records); state.inventoryApi={status:"ready",error:""}; state.inventoryItems={status:"idle",error:""}; state.inventoryMovements={status:"idle",error:""}; state.finishedGoodsReceipts={status:"idle",orders:[],summaries:[],products:[],error:""}; state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]}; render();
   }).catch((error)=>{state.inventoryApi={status:"error",error:error.message||"Inventory API unavailable"};render();});
 }
 
 function loadInventoryItemData() {
-  if (getApiMode() !== "api" || !isInventoryApiEnabled() || state.inventoryItems.status === "loading") return;
+  if (getApiMode() !== "api" || !isInventoryApiEnabled() || state.inventoryItems.status === "loading") return Promise.resolve();
   state.inventoryItems={status:"loading",error:""};
-  getInventoryItems().then((response) => {
+  return getInventoryItems().then((response) => {
     const records=mockDb.loadModuleRecords("almacenes");
     const warehouses=records.filter((record)=>record.recordType==="warehouse");
     const warehouseById=Object.fromEntries(warehouses.map((item)=>[item.id,item]));
-    const items=(response.data||[]).map((item)=>({id:item.id,code:item.code,moduleId:"almacenes",submoduleId:"articulos",recordType:"inventoryItem",title:item.name,detail:`${item.type} - ${item.base_unit}`,status:mapInventoryStatus(item.status),owner:warehouseById[item.suggested_warehouse_id]?.title||"",fields:{type:item.type,category:item.category||"",unit:item.base_unit,minStock:item.minimum_stock,maxStock:item.maximum_stock||"",policy:item.inventory_policy,useInRecipe:Boolean(item.use_in_recipe),defaultWarehouseId:item.suggested_warehouse_id||"",defaultWarehouseName:warehouseById[item.suggested_warehouse_id]?.title||"",description:item.description||""}}));
+    const items=(response.data||[]).map((item)=>({id:item.id,code:item.code,moduleId:"almacenes",submoduleId:"articulos",recordType:"inventoryItem",title:item.name,detail:`${item.type} - ${item.base_unit}`,status:mapInventoryStatus(item.status),owner:warehouseById[item.suggested_warehouse_id]?.title||"",fields:{type:item.type,category:item.category||"",unit:item.base_unit,defaultUnitCost:Number(item.default_unit_cost_per_base_unit??item.default_unit_cost??0),minStock:item.minimum_stock,maxStock:item.maximum_stock||"",policy:item.inventory_policy,useInRecipe:Boolean(item.use_in_recipe),defaultWarehouseId:item.suggested_warehouse_id||"",defaultWarehouseName:warehouseById[item.suggested_warehouse_id]?.title||"",description:item.description||""}}));
     mockDb.saveModuleRecords("almacenes",[...records.filter((record)=>record.recordType!=="inventoryItem"),...items]);
     state.inventoryItems={status:"ready",error:""};render();
   }).catch((error)=>{state.inventoryItems={status:"error",error:error.message||"Inventory items unavailable"};render();});
@@ -2324,14 +2576,86 @@ function loadInventoryMovementData() {
   }).catch((error) => { state.inventoryMovements={status:"error",error:error.message||"Inventory movements unavailable"}; render(); });
 }
 
+function loadFinishedGoodsReceiptData() {
+  if (getApiMode() !== "api" || !isInventoryApiEnabled() || state.finishedGoodsReceipts.status === "loading") return Promise.resolve();
+  state.finishedGoodsReceipts = { ...state.finishedGoodsReceipts, status: "loading", error: "" };
+  return Promise.all([getCompletedProductionOrders(),getProductionProducts(),getFinishedGoodsReceipts()]).then(([orders,products,response])=>{
+    state.finishedGoodsReceipts={status:"ready",orders:orders||[],products:products||[],summaries:response.data||[],error:""};render();
+  }).catch((error)=>{state.finishedGoodsReceipts={status:"error",orders:[],products:[],summaries:[],error:error.message||t("finishedGoodsReceiptLoadError")};render();});
+}
+
 function loadHrApiData() {
   if (getApiMode() !== "api" || state.hrApi.status === "loading") return Promise.resolve();
   state.hrApi={status:"loading",error:""};
-  return getHrCatalog().then(({areas,positions})=>{
+  return Promise.all([getHrCatalog(),getHrWorkers()]).then(([{areas,positions},workers])=>{
     mockDb.saveLaborAreas((areas||[]).map((area)=>({id:area.id,code:area.code,name:area.name,description:area.description||"",status:area.status==="active"?"Activo":"Inactivo"})));
     mockDb.saveLaborRoles((positions||[]).map((position)=>({id:position.id,areaId:position.labor_area_id,area:(areas||[]).find((area)=>area.id===position.labor_area_id)?.name||"",position:position.position,name:position.recipe_name,quantity:position.resource_quantity,minutesPerResource:position.minutes_per_resource,available:position.resource_quantity*position.minutes_per_resource,hourlyCost:Number(position.hourly_cost),cost:Number(position.hourly_cost)/60,unit:"min",type:"Mano de obra",source:"Recursos Humanos",intervenesInProduction:Boolean(position.intervenes_in_production),status:position.status==="active"?"Activo":"Inactivo"})));
-    state.hrApi={status:"ready",error:""};render();
+    state.hrApi={status:"ready",error:"",workers:workers||[]};render();
   }).catch((error)=>{state.hrApi={status:"error",error:error.message||"HR API unavailable"};render();});
+}
+
+const salesCustomerStatusFromApi={prospect:"Prospecto",active:"Activo",inactive:"Inactivo",blocked:"Bloqueado"};
+const salesCustomerStatusToApi={Prospecto:"prospect",Activo:"active",Inactivo:"inactive",Bloqueado:"blocked"};
+const salesQuoteStatusFromApi={draft:"Borrador",quoted:"Cotizada",approved:"Aprobado",expired:"Vencida",cancelled:"Cancelada"};
+const salesOrderStatusFromApi={confirmed:"Confirmado",fulfillment_pending:"Pendiente de surtido",ready:"Listo",partially_delivered:"Parcialmente entregado",delivered:"Entregado",cancelled:"Cancelado"};
+const salesDeliveryStatusFromApi={draft:"Pendiente de entrega",confirmed:"Entregado",cancelled:"Cancelado"};
+function formatSalesMoney(value,currency="MXN"){return new Intl.NumberFormat(state.lang==="en"?"en-US":"es-MX",{style:"currency",currency}).format(Number(value||0));}
+function mapApiSalesCustomer(item){const contact=(item.contacts||[]).find(entry=>entry.is_primary&&entry.status==="active")||(item.contacts||[])[0]||{};const address=item.billing_address||{};return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"clientes",recordType:"customer",title:item.commercial_name,detail:`${item.legal_name||item.commercial_name} - ${item.tax_id||"Sin perfil fiscal"}`,status:salesCustomerStatusFromApi[item.status]||item.status,owner:item.responsible_worker_name,fields:{customerType:item.customer_type,commercialName:item.commercial_name,contactName:contact.name||"",contactEmail:contact.email||"",contactPhone:contact.phone||"",contactRole:contact.role||"",responsibleWorkerId:item.responsible_worker_id,salesOwner:item.responsible_worker_name,paymentTerms:item.payment_terms,currency:item.currency,creditLimit:Number(item.credit_limit||0),commercialNotes:item.notes||"",billingLegalName:item.legal_name||"",taxId:item.tax_id||"",taxRegime:item.tax_regime||"",cfdiUse:item.cfdi_use||"",billingEmail:item.billing_email||"",billingPhone:item.billing_phone||"",billingStreet:address.street||"",billingExterior:address.exterior_number||"",billingInterior:address.interior_number||"",billingNeighborhood:address.neighborhood||"",billingCity:address.city||"",billingState:address.state||"",billingZipCode:address.postal_code||"",billingCountry:address.country||""},createdAt:item.created_at,updatedAt:item.updated_at};}
+function mapApiSalesQuote(item){const lines=(item.lines||[]).map(line=>({productServiceId:line.product_service_id,productServiceName:`${line.product_service_code} - ${line.product_service_name}`,quantity:Number(line.quantity),unit:line.unit,unitPrice:Number(line.unit_price),discount:Number(line.discount_percentage),subtotal:Number(line.subtotal),total:Number(line.total),estimatedCost:line.estimated_cost==null?null:Number(line.estimated_cost)}));return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"cotizaciones",recordType:"quote",title:`${item.customer_name} - ${lines.length} líneas`,detail:`${formatSalesMoney(item.total,item.currency)} - ${item.valid_until}`,status:salesQuoteStatusFromApi[item.status]||item.status,owner:item.responsible_worker_name,fields:{customerId:item.customer_id,customerName:`${item.customer_code} - ${item.customer_name}`,responsibleWorkerId:item.responsible_worker_id,lines,productServiceId:lines[0]?.productServiceId||"",productServiceName:lines[0]?.productServiceName||"",quantity:lines.reduce((sum,line)=>sum+line.quantity,0),unit:lines[0]?.unit||"",unitPrice:lines[0]?.unitPrice||0,discount:lines[0]?.discount||0,subtotal:Number(item.subtotal),total:Number(item.total),estimatedCost:item.estimated_cost==null?null:Number(item.estimated_cost),estimatedMargin:item.estimated_margin==null?null:Number(item.estimated_margin),validUntil:item.valid_until,deliveryPromise:item.promised_delivery_date||"",paymentTerms:item.payment_terms,currency:item.currency,notes:item.notes||""},createdAt:item.created_at,updatedAt:item.updated_at};}
+function mapApiSalesOrder(item){const lines=(item.lines||[]).map(line=>({id:line.id,productServiceId:line.product_service_id,productServiceName:`${line.product_service_code} - ${line.product_service_name}`,productServiceType:line.product_service_type,quantity:Number(line.ordered_quantity),deliveredQuantity:Number(line.delivered_quantity),unit:line.unit,unitPrice:Number(line.unit_price),discount:Number(line.discount_percentage),total:Number(line.total),estimatedCost:line.estimated_cost==null?null:Number(line.estimated_cost),fulfillmentMode:line.fulfillment_mode,fulfillmentStatus:line.fulfillment_status,inventoryItemId:line.inventory_item_id||"",inventoryItemCode:line.inventory_item_code||"",inventoryItemName:line.inventory_item_name||"",reservations:line.reservations||[],productionRequestId:line.production_request_id||""}));return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"pedidos",recordType:"salesOrder",title:`${item.customer_code} - ${item.customer_name}`,detail:`${item.quote_code} - ${formatSalesMoney(item.total,item.currency)}`,status:salesOrderStatusFromApi[item.status]||item.status,owner:item.responsible_worker_name,fields:{quoteId:item.quote_id,quoteCode:item.quote_code,customerId:item.customer_id,customerName:item.customer_name,lines,subtotal:Number(item.subtotal),total:Number(item.total),currency:item.currency,paymentTerms:item.payment_terms,estimatedCost:item.estimated_cost==null?null:Number(item.estimated_cost),estimatedMargin:item.estimated_margin==null?null:Number(item.estimated_margin),actualCost:item.actual_cost==null?null:Number(item.actual_cost),actualMargin:item.actual_margin==null?null:Number(item.actual_margin),deliveryPromise:item.promised_delivery_date||"",fulfillmentMode:[...new Set(lines.map(line=>line.fulfillmentMode))].join(" / "),fulfillmentState:item.fulfillment_state||"idle",cancellationState:item.cancellation_state||"idle",notes:item.notes||""},createdAt:item.created_at,updatedAt:item.updated_at};}
+function mapApiSalesDelivery(item){const lines=(item.lines||[]).map(line=>({id:line.id,orderLineId:line.order_line_id,productServiceId:line.product_service_id,productServiceName:`${line.product_service_code} - ${line.product_service_name}`,quantity:Number(line.quantity),unit:line.unit,actualCost:line.actual_cost==null?null:Number(line.actual_cost),actualCostSource:line.actual_cost_source||""}));return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"entregas",recordType:"salesDelivery",title:`${item.order_code} - ${item.customer_name}`,detail:`${salesDeliveryStatusFromApi[item.status]||item.status} - ${item.scheduled_date}`,status:salesDeliveryStatusFromApi[item.status]||item.status,owner:item.recipient_name||item.customer_name,fields:{orderId:item.order_id,orderCode:item.order_code,customerName:item.customer_name,deliveryStatus:salesDeliveryStatusFromApi[item.status]||item.status,confirmationState:item.confirmation_state||"idle",deliveryDate:item.scheduled_date,deliveredAt:item.delivered_at||"",recipient:item.recipient_name||"",deliveryReference:item.evidence_reference||"",notes:item.notes||"",lines},createdAt:item.created_at,updatedAt:item.updated_at};}
+async function loadSalesApiData() {
+  if (getApiMode() !== "api" || state.salesApi.status === "loading") return;
+  state.salesApi = { ...state.salesApi, status: "loading", error: "", referenceWarnings: [] };
+  const canReadCustomers = hasPermission("sales.customer.read");
+  const canReadQuotes = hasPermission("sales.quote.read");
+  const canReadOrders = hasPermission("sales.order.read");
+  const canReadDeliveries = hasPermission("sales.delivery.read");
+  const needsWorkers = ["sales.customer.create", "sales.customer.update", "sales.quote.create", "sales.quote.update"].some(hasPermission);
+  const needsQuoteCatalogs = ["sales.quote.create", "sales.quote.update"].some(hasPermission);
+  const needsReferences = ["sales.customer.create", "sales.customer.update", "sales.quote.create", "sales.quote.update", "sales.order.create"].some(hasPermission);
+  try {
+    const workspace = await getSalesWorkspace({ customers: canReadCustomers, quotes: canReadQuotes, orders: canReadOrders, deliveries: canReadDeliveries, references: needsReferences });
+    const [workersResult, productsResult, unitsResult] = await Promise.allSettled([
+      needsWorkers ? getSalesEligibleWorkers() : Promise.resolve([]),
+      needsQuoteCatalogs ? getProductionProducts() : Promise.resolve([]),
+      needsQuoteCatalogs ? getUnitsOfMeasure() : Promise.resolve([])
+    ]);
+    const warnings = [];
+    const workers = workersResult.status === "fulfilled" ? workersResult.value : [];
+    const products = productsResult.status === "fulfilled" ? productsResult.value : [];
+    const units = unitsResult.status === "fulfilled" ? unitsResult.value : [];
+    if (workersResult.status === "rejected") warnings.push(t("salesWorkersUnavailable"));
+    if (productsResult.status === "rejected") warnings.push(t("salesProductsUnavailable"));
+    if (unitsResult.status === "rejected") warnings.push(t("salesUnitsUnavailable"));
+    Object.entries(workspace.errors || {}).forEach(([name, message]) => warnings.push(`${name}: ${message}`));
+    const previous = mockDb.loadModuleRecords("ventas");
+    const keepOrReplace = (name, recordType, values, mapper) => workspace.errors?.[name]
+      ? previous.filter((record) => record.recordType === recordType)
+      : (values || []).map(mapper);
+    const records = [
+      ...keepOrReplace("customers", "customer", workspace.customers, mapApiSalesCustomer),
+      ...keepOrReplace("quotes", "quote", workspace.quotes, mapApiSalesQuote),
+      ...keepOrReplace("orders", "salesOrder", workspace.orders, mapApiSalesOrder),
+      ...keepOrReplace("deliveries", "salesDelivery", workspace.deliveries, mapApiSalesDelivery)
+    ];
+    mockDb.saveModuleRecords("ventas", records);
+    if (needsQuoteCatalogs) mockDb.saveProductsServices((products || []).map(mapApiProduct));
+    state.unitCatalog = unitsResult.status === "fulfilled"
+      ? { status: "ready", data: units || [], error: "" }
+      : { status: "error", data: [], error: unitsResult.reason?.message || "Unit catalog unavailable" };
+    const references = workspace.errors?.references ? state.salesApi.references : workspace.references;
+    state.salesApi = { status: "ready", error: "", referenceWarnings: warnings, workers: workers || [], references: references || { currencies: [], payment_terms: [] } };
+  } catch (error) {
+    state.salesApi = { ...state.salesApi, status: "error", error: error.message || "Sales API unavailable" };
+  }
+  render();
+}
+
+function renderSalesReferenceWarnings() {
+  return (state.salesApi.referenceWarnings || []).length
+    ? `<p class="helper-copy">${escapeHtml(state.salesApi.referenceWarnings.join(" "))}</p>`
+    : "";
 }
 
 function chooseSessionTenant(tenants) {
@@ -2803,7 +3127,9 @@ function renderWarehouseMovementsPanel(module, submodule) {
   const label = state.lang === "en" ? module.titleEn : module.title;
   if (getApiMode() === "api" && isInventoryApiEnabled() && state.inventoryItems.status === "idle") loadInventoryItemData();
   if (getApiMode() === "api" && isInventoryApiEnabled() && state.inventoryItems.status === "ready" && state.inventoryMovements.status === "idle") loadInventoryMovementData();
+  if (getApiMode() === "api" && isInventoryApiEnabled() && state.inventoryItems.status === "ready" && state.finishedGoodsReceipts.status === "idle") loadFinishedGoodsReceiptData();
   const movements = mockDb.loadModuleRecords(module.id, submodule.id).filter((record) => record.recordType === "inventoryMovement");
+  const receiptRows=getPendingFinishedGoodsReceipts();
 
   modulePanel.innerHTML = `
     <div class="panel-head">
@@ -2828,6 +3154,12 @@ function renderWarehouseMovementsPanel(module, submodule) {
 
       <section class="section-card catalog-workspace">
         ${renderFlowGuide(getWarehouseFlowTitle(submodule), getWarehouseFlowSteps(submodule))}
+        <div class="section-heading">
+          <div><h3>${t("finishedGoodsReceipts")}</h3><p class="helper-copy">${t("finishedGoodsReceiptsHelp")}</p></div>
+        </div>
+        ${state.finishedGoodsReceipts.status==="loading"?`<p class="helper-copy">${t("loading")}</p>`:state.finishedGoodsReceipts.error?`<div class="form-errors">${escapeHtml(state.finishedGoodsReceipts.error)}</div>`:receiptRows.length?`<div class="records module-records">${receiptRows.map(renderPendingFinishedGoodsReceipt).join("")}</div>`:`<article class="record-row"><div class="record-main"><strong>${t("noPendingFinishedGoods")}</strong><span>${t("noPendingFinishedGoodsHelp")}</span></div></article>`}
+        <hr />
+        <h3>${t("movementHistory")}</h3>
         <p class="helper-copy">${t("movementManualHelper")}</p>
         <div class="data-table" role="table">
           <div class="table-row table-head" role="row">
@@ -2875,6 +3207,8 @@ function getInventoryViewFilters() {
     cursor: state.inventoryBalances.cursor || ""
   };
 }
+
+function renderSalesPlannedPanel(module,submodule){const label=state.lang==="en"?module.titleEn:module.title;modulePanel.innerHTML=`<div class="panel-head"><div><p class="eyebrow">${label} / ${t("submodule")}</p><h2>${submodule.name}</h2></div><button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button></div><section class="section-card"><span class="chip warning">Planeado</span><h3>${submodule.name}</h3><p>Este flujo no forma parte del primer corte real de Ventas. Clientes y Cotizaciones ya operan contra API; pedidos, entregas, devoluciones y sus reservas se implementarán en el siguiente corte sin reutilizar datos mock.</p></section>`;modulePanel.querySelector("[data-action='back-module']").addEventListener("click",()=>navigateTo({active:state.active,activeSubmodule:null,laborArea:""}));}
 
 function inventoryQueryKey(filters) {
   return JSON.stringify(filters);
@@ -2984,7 +3318,7 @@ function renderWarehouseStockPanel(module, submodule) {
           <h1>${submodule.name}</h1>
           <p>${submodule.detail}</p>
         </div>
-        <button class="primary-action disabled-action" type="button" disabled aria-disabled="true">
+        <button class="primary-action" type="button" data-action="module-primary">
           <span>☷</span>
           <span>${t("calculatedStock")}</span>
         </button>
@@ -3000,7 +3334,7 @@ function renderWarehouseStockPanel(module, submodule) {
           </label>
           <label class="preview-field compact-filter">
             <span>${t("warehouse")}</span>
-            <select id="stockWarehouseFilter">
+            <select id="stockWarehouseFilter" data-entity-selector>
               <option value="all">${t("allWarehouses")}</option>
               ${warehouses.map((warehouse) => `<option value="${warehouse.id}" ${selectedOption(filters.warehouse_id, warehouse.id)}>${warehouse.code} - ${warehouse.title}</option>`).join("")}
             </select>
@@ -3264,14 +3598,14 @@ function renderWarehouseKardexPanel(module, submodule) {
           </label>
           <label class="preview-field compact-filter">
             <span>${t("item")}</span>
-            <select id="kardexItemFilter">
+            <select id="kardexItemFilter" data-entity-selector>
               <option value="all">${t("allItems")}</option>
               ${items.map((item) => `<option value="${item.id}" ${selectedOption(itemFilter, item.id)}>${item.code} - ${item.title}</option>`).join("")}
             </select>
           </label>
           <label class="preview-field compact-filter">
             <span>${t("warehouse")}</span>
-            <select id="kardexWarehouseFilter">
+            <select id="kardexWarehouseFilter" data-entity-selector>
               <option value="all">${t("allWarehouses")}</option>
               ${warehouses.map((warehouse) => `<option value="${warehouse.id}" ${selectedOption(warehouseFilter, warehouse.id)}>${warehouse.code} - ${warehouse.title}</option>`).join("")}
             </select>
@@ -3455,10 +3789,10 @@ function renderSalesCustomersPanel(module, submodule) {
           <h1>${submodule.name}</h1>
           <p>${submodule.detail}</p>
         </div>
-        <button class="primary-action" type="button" data-action="module-primary">
+        ${hasPermission("sales.customer.create") ? `<button class="primary-action" type="button" data-action="module-primary">
           <span>＋</span>
           <span>${t("newCustomer")}</span>
-        </button>
+        </button>` : ""}
       </div>
 
       <section class="section-card catalog-workspace">
@@ -3466,10 +3800,11 @@ function renderSalesCustomersPanel(module, submodule) {
         <div class="catalog-toolbar">
           <label class="search-field catalog-search">
             <span>S</span>
-            <input id="salesCustomerSearch" type="search" value="${search}" placeholder="${t("searchCustomers")}" />
+            <input id="salesCustomerSearch" type="search" value="${escapeAttribute(search)}" placeholder="${escapeAttribute(t("searchCustomers"))}" />
           </label>
         </div>
         <p class="helper-copy">${t("customerCatalogHelper")}</p>
+        ${renderSalesReferenceWarnings()}
         <div class="catalog-grid">
           ${filteredCustomers.length ? filteredCustomers.map(renderSalesCustomerCard).join("") : renderSalesCustomerEmptyState(Boolean(search))}
         </div>
@@ -3497,17 +3832,17 @@ function renderSalesCustomerCard(record) {
   return `
     <article class="catalog-card">
       <div class="catalog-card-main">
-        <span class="muted-label">${record.code} - ${translateCustomerType(record.fields?.customerType)}</span>
-        <strong>${record.title}</strong>
-        <p>${t("billingProfile")}: ${record.fields?.billingLegalName || t("notDefined")} - ${record.fields?.taxId || t("notDefined")}</p>
-        <span class="muted-label">${t("contact")}: ${record.fields?.contactName || t("notDefined")} · ${record.fields?.contactPhone || t("notDefined")}</span>
-        <span class="muted-label">${t("commercialEmail")}: ${record.fields?.contactEmail || t("notDefined")}</span>
-        <span class="muted-label">${t("paymentTerms")}: ${record.fields?.paymentTerms || t("notDefined")} · ${t("creditLimit")}: ${record.fields?.creditLimit || t("notDefined")}</span>
-        <span class="muted-label">${t("billingEmail")}: ${record.fields?.billingEmail || t("notDefined")}</span>
+        <span class="muted-label">${escapeHtml(record.code)} - ${escapeHtml(translateCustomerType(record.fields?.customerType))}</span>
+        <strong>${escapeHtml(record.title)}</strong>
+        <p>${t("billingProfile")}: ${escapeHtml(record.fields?.billingLegalName || t("notDefined"))} - ${escapeHtml(record.fields?.taxId || t("notDefined"))}</p>
+        <span class="muted-label">${t("contact")}: ${escapeHtml(record.fields?.contactName || t("notDefined"))} · ${escapeHtml(record.fields?.contactPhone || t("notDefined"))}</span>
+        <span class="muted-label">${t("commercialEmail")}: ${escapeHtml(record.fields?.contactEmail || t("notDefined"))}</span>
+        <span class="muted-label">${t("paymentTerms")}: ${escapeHtml(record.fields?.paymentTerms || t("notDefined"))} · ${t("creditLimit")}: ${escapeHtml(record.fields?.creditLimit || t("notDefined"))}</span>
+        <span class="muted-label">${t("billingEmail")}: ${escapeHtml(record.fields?.billingEmail || t("notDefined"))}</span>
       </div>
       <div class="catalog-card-actions">
-        <span class="chip ${record.status === "Activo" ? "active" : record.status === "Bloqueado" ? "warning" : ""}">${translateStatus(record.status)}</span>
-        <button class="secondary-action small-action" type="button" data-action="edit-sales-customer" data-record-id="${record.id}">${t("edit")}</button>
+        <span class="chip ${record.status === "Activo" ? "active" : record.status === "Bloqueado" ? "warning" : ""}">${escapeHtml(translateStatus(record.status))}</span>
+        ${hasPermission("sales.customer.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-sales-customer" data-record-id="${escapeAttribute(record.id)}">${t("edit")}</button>` : ""}
       </div>
     </article>
   `;
@@ -3566,10 +3901,10 @@ function renderSalesQuotesPanel(module, submodule) {
           <h1>${submodule.name}</h1>
           <p>${submodule.detail}</p>
         </div>
-        <button class="primary-action" type="button" data-action="module-primary">
+        ${hasPermission("sales.quote.create") && hasPermission("sales.customer.read") ? `<button class="primary-action" type="button" data-action="module-primary">
           <span>＋</span>
           <span>${t("newQuote")}</span>
-        </button>
+        </button>` : ""}
       </div>
 
       <section class="section-card catalog-workspace">
@@ -3577,10 +3912,11 @@ function renderSalesQuotesPanel(module, submodule) {
         <div class="catalog-toolbar">
           <label class="search-field catalog-search">
             <span>S</span>
-            <input id="salesQuoteSearch" type="search" value="${search}" placeholder="${t("searchQuotes")}" />
+            <input id="salesQuoteSearch" type="search" value="${escapeAttribute(search)}" placeholder="${escapeAttribute(t("searchQuotes"))}" />
           </label>
         </div>
         <p class="helper-copy">${t("quoteCatalogHelper")}</p>
+        ${renderSalesReferenceWarnings()}
         <div class="catalog-grid">
           ${filteredQuotes.length ? filteredQuotes.map(renderSalesQuoteCard).join("") : renderSalesQuoteEmptyState(Boolean(search))}
         </div>
@@ -3608,19 +3944,22 @@ function renderSalesQuoteCard(record) {
   return `
     <article class="catalog-card">
       <div class="catalog-card-main">
-        <span class="muted-label">${record.code} - ${record.fields?.validUntil || t("notDefined")} - ${getQuoteLines(record).length} ${t("quoteLines")}</span>
-        <strong>${record.title}</strong>
-        <p>${getQuoteLines(record).map((line) => line.productServiceName).filter(Boolean).slice(0, 2).join(" / ") || t("notDefined")}</p>
-        <span class="muted-label">${t("customer")}: ${record.fields?.customerName || t("notDefined")}</span>
-        <span class="muted-label">${t("quoteSubtotal")}: ${formatCurrency(Number(record.fields?.subtotal || 0))}</span>
-        <span class="muted-label">${t("quoteTotal")}: ${formatCurrency(Number(record.fields?.total || 0))}</span>
-        <span class="muted-label">${t("paymentTerms")}: ${record.fields?.paymentTerms || t("notDefined")}</span>
+        <span class="muted-label">${escapeHtml(record.code)} - ${escapeHtml(record.fields?.validUntil || t("notDefined"))} - ${getQuoteLines(record).length} ${t("quoteLines")}</span>
+        <strong>${escapeHtml(record.title)}</strong>
+        <p>${escapeHtml(getQuoteLines(record).map((line) => line.productServiceName).filter(Boolean).slice(0, 2).join(" / ") || t("notDefined"))}</p>
+        <span class="muted-label">${t("customer")}: ${escapeHtml(record.fields?.customerName || t("notDefined"))}</span>
+        <span class="muted-label">${t("quoteSubtotal")}: ${formatSalesMoney(record.fields?.subtotal,record.fields?.currency)}</span>
+        <span class="muted-label">${t("quoteTotal")}: ${formatSalesMoney(record.fields?.total,record.fields?.currency)}</span>
+        <span class="muted-label">${t("paymentTerms")}: ${escapeHtml(record.fields?.paymentTerms || t("notDefined"))}</span>
       </div>
       <div class="catalog-card-actions">
-        <span class="chip ${record.status === "Aprobado" ? "active" : record.status === "Vencida" ? "warning" : ""}">${translateStatus(record.status)}</span>
-        ${record.status === "Aprobado" ? `<button class="secondary-action small-action" type="button" data-action="create-sales-order" data-record-id="${record.id}">${t("createOrder")}</button>` : ""}
-        <button class="secondary-action small-action" type="button" data-action="print-sales-quote" data-record-id="${record.id}">${t("quotePdf")}</button>
-        <button class="secondary-action small-action" type="button" data-action="edit-sales-quote" data-record-id="${record.id}">${t("edit")}</button>
+        <span class="chip ${record.status === "Aprobado" ? "active" : record.status === "Vencida" ? "warning" : ""}">${escapeHtml(translateStatus(record.status))}</span>
+        ${getApiMode()==="api"&&record.status==="Borrador"&&hasPermission("sales.quote.submit")?`<button class="secondary-action small-action" type="button" data-action="transition-sales-quote" data-transition="submit" data-record-id="${escapeAttribute(record.id)}">Emitir</button>`:""}
+        ${getApiMode()==="api"&&record.status==="Cotizada"&&hasPermission("sales.quote.approve")?`<button class="secondary-action small-action" type="button" data-action="transition-sales-quote" data-transition="approve" data-record-id="${escapeAttribute(record.id)}">Aprobar</button>`:""}
+        ${getApiMode()==="api"&&["Borrador","Cotizada"].includes(record.status)&&hasPermission("sales.quote.expire")?`<button class="secondary-action small-action" type="button" data-action="transition-sales-quote" data-transition="expire" data-record-id="${escapeAttribute(record.id)}">Vencer</button>`:""}
+        ${getApiMode()==="api"&&["Borrador","Cotizada"].includes(record.status)&&hasPermission("sales.quote.cancel")?`<button class="secondary-action small-action" type="button" data-action="transition-sales-quote" data-transition="cancel" data-record-id="${escapeAttribute(record.id)}">Cancelar</button>`:""}
+        <button class="secondary-action small-action" type="button" data-action="print-sales-quote" data-record-id="${escapeAttribute(record.id)}">${t("quotePdf")}</button>
+        ${record.status==="Borrador"&&hasPermission("sales.quote.update")?`<button class="secondary-action small-action" type="button" data-action="edit-sales-quote" data-record-id="${escapeAttribute(record.id)}">${t("edit")}</button>`:""}
       </div>
     </article>
   `;
@@ -3677,10 +4016,10 @@ function renderSalesOrdersPanel(module, submodule) {
           <h1>${submodule.name}</h1>
           <p>${submodule.detail}</p>
         </div>
-        <button class="primary-action" type="button" data-action="module-primary">
+        ${hasPermission("sales.order.create") && hasPermission("sales.quote.read") ? `<button class="primary-action" type="button" data-action="module-primary">
           <span>＋</span>
           <span>${t("newSalesOrder")}</span>
-        </button>
+        </button>` : ""}
       </div>
 
       <section class="section-card catalog-workspace">
@@ -3688,7 +4027,7 @@ function renderSalesOrdersPanel(module, submodule) {
         <div class="catalog-toolbar">
           <label class="search-field catalog-search">
             <span>S</span>
-            <input id="salesOrderSearch" type="search" value="${search}" placeholder="${t("searchSalesOrders")}" />
+            <input id="salesOrderSearch" type="search" value="${escapeAttribute(search)}" placeholder="${escapeAttribute(t("searchSalesOrders"))}" />
           </label>
         </div>
         <p class="helper-copy">${t("salesOrderHelper")}</p>
@@ -3721,11 +4060,11 @@ function renderSalesOrderCard(record) {
   return `
     <article class="catalog-card">
       <div class="catalog-card-main">
-        <span class="muted-label">${record.code} - ${record.fields?.quoteCode || t("notDefined")} - ${getQuoteLines(record).length} ${t("quoteLines")}</span>
-        <strong>${record.title}</strong>
-        <p>${getQuoteLines(record).map((line) => line.productServiceName).filter(Boolean).slice(0, 2).join(" / ") || t("notDefined")}</p>
-        <span class="muted-label">${t("customer")}: ${record.fields?.customerName || t("notDefined")}</span>
-        <span class="muted-label">${t("deliveryPromise")}: ${record.fields?.deliveryPromise || t("notDefined")} · ${t("fulfillmentMode")}: ${record.fields?.fulfillmentMode || t("notDefined")}</span>
+        <span class="muted-label">${escapeHtml(record.code)} - ${escapeHtml(record.fields?.quoteCode || t("notDefined"))} - ${getQuoteLines(record).length} ${t("quoteLines")}</span>
+        <strong>${escapeHtml(record.title)}</strong>
+        <p>${escapeHtml(getQuoteLines(record).map((line) => line.productServiceName).filter(Boolean).slice(0, 2).join(" / ") || t("notDefined"))}</p>
+        <span class="muted-label">${t("customer")}: ${escapeHtml(record.fields?.customerName || t("notDefined"))}</span>
+        <span class="muted-label">${t("deliveryPromise")}: ${escapeHtml(record.fields?.deliveryPromise || t("notDefined"))} · ${t("fulfillmentMode")}: ${escapeHtml(record.fields?.fulfillmentMode || t("notDefined"))}</span>
         <span class="muted-label">${t("quoteTotal")}: ${formatCurrency(Number(record.fields?.total || 0))} · ${t("estimatedCost")}: ${formatCurrency(Number(record.fields?.estimatedCost || 0))}</span>
         <span class="muted-label">${t("estimatedMargin")}: ${formatNumber(Number(record.fields?.estimatedMargin || 0))}%</span>
         <div class="product-history">
@@ -3733,12 +4072,12 @@ function renderSalesOrderCard(record) {
             <span class="muted-label">${t("orderAdjustments")}</span>
             <strong>${adjustments.length}</strong>
           </div>
-          <p>${lastAdjustment ? `${formatKardexDate(lastAdjustment.changedAt)} - ${lastAdjustment.reason}` : t("noOrderAdjustments")}</p>
+          <p>${lastAdjustment ? `${escapeHtml(formatKardexDate(lastAdjustment.changedAt))} - ${escapeHtml(lastAdjustment.reason)}` : t("noOrderAdjustments")}</p>
         </div>
       </div>
       <div class="catalog-card-actions">
-        <span class="chip ${record.status === "Aprobado" ? "active" : record.status === "Cancelado" ? "warning" : ""}">${translateStatus(record.status)}</span>
-        <button class="secondary-action small-action" type="button" data-action="edit-sales-order" data-record-id="${record.id}">${t("edit")}</button>
+        <span class="chip ${record.status === "Aprobado" ? "active" : record.status === "Cancelado" ? "warning" : ""}">${escapeHtml(translateStatus(record.status))}</span>
+        ${getApiMode() !== "api" || hasPermission("sales.order.fulfill") || hasPermission("sales.order.cancel") ? `<button class="secondary-action small-action" type="button" data-action="edit-sales-order" data-record-id="${escapeAttribute(record.id)}">${getApiMode() === "api" ? "Gestionar surtido" : t("edit")}</button>` : ""}
       </div>
     </article>
   `;
@@ -3761,7 +4100,7 @@ function renderSalesDeliveriesPanel(module, submodule) {
   const search = localStorage.getItem("erclave-sales-delivery-search") || "";
   const statusFilter = localStorage.getItem("erclave-sales-delivery-status") || "all";
   const normalizedSearch = search.trim().toLowerCase();
-  const orders = mockDb.loadModuleRecords(module.id, "pedidos").filter((record) => record.recordType === "salesOrder");
+  const orders = mockDb.loadModuleRecords(module.id, "pedidos").filter((record) => record.recordType === "salesOrder" && !["Entregado", "Cancelado"].includes(record.status));
   const deliveries = mockDb.loadModuleRecords(module.id, submodule.id).filter((record) => record.recordType === "salesDelivery");
   const ordersById = new Map(orders.map((order) => [order.id, order]));
   const filteredDeliveries = deliveries
@@ -3804,10 +4143,9 @@ function renderSalesDeliveriesPanel(module, submodule) {
           <h1>${submodule.name}</h1>
           <p>${submodule.detail}</p>
         </div>
-        <button class="primary-action disabled-action" type="button" disabled aria-disabled="true">
-          <span>☷</span>
-          <span>${t("deliveryManagement")}</span>
-        </button>
+        ${hasPermission("sales.delivery.create") ? `<button class="primary-action" type="button" data-action="register-sales-delivery">
+          <span>＋</span><span>${t("newDelivery")}</span>
+        </button>` : ""}
       </div>
 
       <section class="section-card catalog-workspace">
@@ -3815,7 +4153,7 @@ function renderSalesDeliveriesPanel(module, submodule) {
         <div class="catalog-toolbar kardex-toolbar">
           <label class="search-field catalog-search">
             <span>S</span>
-            <input id="salesDeliverySearch" type="search" value="${search}" placeholder="${t("searchDeliveries")}" />
+            <input id="salesDeliverySearch" type="search" value="${escapeAttribute(search)}" placeholder="${escapeAttribute(t("searchDeliveries"))}" />
           </label>
           <label class="preview-field compact-filter">
             <span>${t("deliveryStatus")}</span>
@@ -3861,25 +4199,40 @@ function renderSalesDeliveriesPanel(module, submodule) {
       openSalesQuotePrintModal(quoteId);
     });
   });
+  modulePanel.querySelectorAll("[data-action='confirm-api-delivery']").forEach(button=>button.addEventListener("click",async event=>{event.stopPropagation();try{await confirmSalesDelivery(button.dataset.deliveryId,"Entrega confirmada con evidencia comercial.");await loadSalesApiData();showToast("Entrega confirmada y reservas consumidas.");}catch(error){showToast(error.message||"No se pudo confirmar la entrega.");}}));
+  modulePanel.querySelectorAll("[data-action='cancel-api-delivery']").forEach(button=>button.addEventListener("click",async event=>{event.stopPropagation();try{await cancelSalesDelivery(button.dataset.deliveryId,"Entrega cancelada por el usuario.");await loadSalesApiData();showToast("Entrega cancelada.");}catch(error){showToast(error.message||"No se pudo cancelar la entrega.");}}));
   bindProductionPanelActions();
+}
+
+function getPendingFinishedGoodsReceipts(){
+  const summaries=Object.fromEntries((state.finishedGoodsReceipts.summaries||[]).map((item)=>[item.production_order_id,Number(item.received_quantity||0)]));
+  const products=Object.fromEntries((state.finishedGoodsReceipts.products||[]).map((item)=>[item.id,item]));
+  const items=Object.fromEntries(mockDb.loadModuleRecords("almacenes","articulos").filter((item)=>item.recordType==="inventoryItem").map((item)=>[item.id,item]));
+  return (state.finishedGoodsReceipts.orders||[]).map((order)=>{const product=products[order.product_service_id];const item=product?.inventory_item_id?items[product.inventory_item_id]:null;const received=summaries[order.id]||0;return {order,product,item,received,remaining:Math.max(0,Number(order.quantity||0)-received)};}).filter((row)=>row.remaining>0.000001);
+}
+function renderPendingFinishedGoodsReceipt(row){
+  const blocked=!row.product?.inventory_item_id||!row.item||row.item.status!=="Activo"||row.item.fields?.type!=="finishedGood";
+  return `<article class="record-row"><div class="record-main"><strong>${escapeHtml(row.order.code)} · ${escapeHtml(row.product?.name||row.order.product_service_id)}</strong><span>${t("finishedGoodsPendingDetail",{received:formatNumber(row.received),remaining:formatNumber(row.remaining),quantity:formatNumber(row.order.quantity),unit:row.order.unit})}</span><span>${blocked?t("finishedGoodsMappingBlocked"):`${escapeHtml(row.item.code)} · ${escapeHtml(row.item.title)}`}</span></div>${blocked?`<span class="chip warning">${t("blockedStatus")}</span>`:`<button class="primary-action small-action" type="button" data-action="receive-finished-good" data-order-id="${escapeAttribute(row.order.id)}">${t("receiveFinishedGood")}</button>`}</article>`;
 }
 
 function renderSalesDeliveryCard(delivery, order = null) {
   const deliveryStatus = delivery.fields?.deliveryStatus || delivery.status;
   const quoteId = order?.fields?.quoteId || findSalesQuoteByCode(delivery.fields?.quoteCode)?.id || "";
   return `
-    <article class="catalog-card clickable-card" data-action="view-delivery-quote" data-quote-id="${quoteId}">
+    <article class="catalog-card clickable-card" data-action="view-delivery-quote" data-quote-id="${escapeAttribute(quoteId)}">
       <div class="catalog-card-main">
-        <span class="muted-label">${delivery.code} - ${delivery.fields?.orderCode || t("notDefined")} - ${delivery.fields?.quoteCode || t("notDefined")}</span>
-        <strong>${delivery.title}</strong>
-        <p>${delivery.fields?.customerName || t("notDefined")}</p>
-        <span class="muted-label">${t("deliveryStatus")}: ${translateStatus(deliveryStatus)} · ${t("salesOrderStatus")}: ${translateStatus(order?.status || t("notDefined"))}</span>
-        <span class="muted-label">${t("deliveryDate")}: ${delivery.fields?.deliveryDate || t("notDefined")} · ${t("recipient")}: ${delivery.fields?.recipient || t("notDefined")}</span>
-        <span class="muted-label">${t("deliveryReference")}: ${delivery.fields?.deliveryReference || t("notDefined")} · ${t("nextDeliveryDate")}: ${delivery.fields?.nextDeliveryDate || t("notDefined")}</span>
-        ${delivery.fields?.notes ? `<p>${delivery.fields.notes}</p>` : ""}
+        <span class="muted-label">${escapeHtml(delivery.code)} - ${escapeHtml(delivery.fields?.orderCode || t("notDefined"))} - ${escapeHtml(delivery.fields?.quoteCode || t("notDefined"))}</span>
+        <strong>${escapeHtml(delivery.title)}</strong>
+        <p>${escapeHtml(delivery.fields?.customerName || t("notDefined"))}</p>
+        <span class="muted-label">${t("deliveryStatus")}: ${escapeHtml(translateStatus(deliveryStatus))} · ${t("salesOrderStatus")}: ${escapeHtml(translateStatus(order?.status || t("notDefined")))}</span>
+        <span class="muted-label">${t("deliveryDate")}: ${escapeHtml(delivery.fields?.deliveryDate || t("notDefined"))} · ${t("recipient")}: ${escapeHtml(delivery.fields?.recipient || t("notDefined"))}</span>
+        <span class="muted-label">${t("deliveryReference")}: ${escapeHtml(delivery.fields?.deliveryReference || t("notDefined"))}</span>
+        ${delivery.fields?.notes ? `<p>${escapeHtml(delivery.fields.notes)}</p>` : ""}
       </div>
       <div class="catalog-card-actions">
         <span class="chip ${getDeliveryTone(deliveryStatus)}">${translateStatus(deliveryStatus)}</span>
+        ${getApiMode()==="api"&&deliveryStatus==="Pendiente de entrega"&&hasPermission("sales.delivery.confirm")?`<button class="primary-action small-action" type="button" data-action="confirm-api-delivery" data-delivery-id="${escapeAttribute(delivery.id)}">Confirmar</button>`:""}
+        ${getApiMode()==="api"&&deliveryStatus==="Pendiente de entrega"&&hasPermission("sales.delivery.cancel")?`<button class="secondary-action small-action" type="button" data-action="cancel-api-delivery" data-delivery-id="${escapeAttribute(delivery.id)}">Cancelar</button>`:""}
         <button class="secondary-action small-action" type="button" data-action="view-delivery-quote" data-quote-id="${quoteId}">${t("viewQuote")}</button>
       </div>
     </article>
@@ -3948,12 +4301,14 @@ function getOrderRecipe(order) {
 function formatRecipeDisplayLabel(recipe) {
   const product = recipe?.productServiceId ? mockDb.findProductService(recipe.productServiceId) : null;
   const name = product?.name || recipe?.product || t("recipeProductUnavailable");
-  return product?.sku ? `${name} - ${product.sku}` : name;
+  const productLabel = product?.sku ? `${name} - ${product.sku}` : name;
+  return recipe?.code ? `${recipe.code} · ${productLabel}` : productLabel;
 }
 
 function createRecipeSnapshot(recipe) {
   return {
     id: recipe.id,
+    code: recipe.code || "",
     productServiceId: recipe.productServiceId || "",
     product: recipe.product,
     version: recipe.version,
@@ -3966,7 +4321,8 @@ function createRecipeSnapshot(recipe) {
     changeReason: recipe.changeReason || "",
     center: recipe.center,
     resources: (recipe.resources || []).map((resource) => ({ ...resource })),
-    steps: [...(recipe.steps || [])]
+    steps: [...(recipe.steps || [])],
+    stageDefinitions: (recipe.stageDefinitions || []).map((stage) => ({ ...stage }))
   };
 }
 
@@ -4412,6 +4768,7 @@ function renderProductionSubmoduleAction(id) {
       ${hasPermission("hr.position.create") ? `<button class="secondary-action" type="button" data-action="open-labor-role"><span>+</span><span>${t("newLaborRole")}</span></button>` : ""}
     </div>`;
   }
+  if (id === "trabajadores") return hasPermission("hr.worker.create") ? `<button class="primary-action" type="button" data-action="open-worker"><span>+</span><span>${t("newWorker")}</span></button>` : "";
   if (id === "maquinaria") {
     return `<button class="primary-action" type="button" data-action="open-machine"><span>+</span><span>Nueva maquina</span></button>`;
   }
@@ -4424,6 +4781,7 @@ function renderProductionSubmoduleBody(id) {
   if (id === "productos-servicios") return renderProductsServicesCatalogScreen();
   if (id === "recetas") return renderRecipesScreen(recipes);
   if (id === "areas-puestos") return renderLaborRolesScreen();
+  if (id === "trabajadores") return renderWorkersScreen();
   if (id === "maquinaria") return renderMachinesScreen();
   if (id === "ordenes") return renderOrdersScreen(orders);
   if (id === "entregables") return renderDeliverablesScreen(orders);
@@ -4749,7 +5107,7 @@ function renderLaborAreaDetailScreen(areaId, roles = mockDb.loadLaborRoles(), ar
               <p>${role.position} - ${formatNumber(role.quantity || 1)} personas/recurso.</p>
               <span class="muted-label">${formatNumber(role.minutesPerResource || role.available)} ${role.unit} por recurso - ${formatNumber(role.available)} ${role.unit} totales por dia</span>
               <span class="muted-label">${t("laborRoleHourlyCost")}: ${formatCurrency(role.hourlyCost ?? Number(role.cost || 0) * 60)}</span>
-              <span class="muted-label">${role.intervenesInProduction !== false ? t("intervenesInProduction") : t("doesNotInterveneInProduction")}</span>
+              <span class="muted-label">${role.intervenesInProduction === true ? t("intervenesInProduction") : t("doesNotInterveneInProduction")}</span>
             </div>
             <div class="catalog-card-actions">
               <span class="chip ${role.status === "Activo" ? "active" : ""}">${role.status}</span>
@@ -4761,6 +5119,16 @@ function renderLaborAreaDetailScreen(areaId, roles = mockDb.loadLaborRoles(), ar
       ${areaRoles.length ? "" : `<p class="helper-copy">${t("laborAreaNoRoles")}</p>`}
     </section>
   `;
+}
+
+function renderWorkersScreen() {
+  const workers=state.hrApi.workers||[];
+  return `<section class="section-card catalog-workspace">
+    ${renderFlowGuide(t("workerFileFlow"),[{title:t("workerIdentity"),detail:t("workerIdentityHelp")},{title:t("workerPosition"),detail:t("workerPositionHelp")},{title:t("workerEligibility"),detail:t("workerEligibilityHelp")}])}
+    <p class="helper-copy">${t("workerPrivacyHelp")}</p>
+    <div class="catalog-grid">${workers.map(worker=>`<article class="catalog-card"><div class="catalog-card-main"><span class="muted-label">${escapeHtml(worker.employee_number)} · ${escapeHtml(worker.position_name)}</span><strong>${escapeHtml(worker.full_name)}</strong><p>${escapeHtml(worker.labor_area_name)} · NSS ••••${escapeHtml(worker.nss.slice(-4))}</p><span class="muted-label">${worker.intervenes_in_production?t("productionEligible"):t("notProductionEligible")}</span></div><div class="catalog-card-actions"><span class="chip ${worker.status==="active"?"active":""}">${translateStatus(worker.status)}</span>${hasPermission("hr.worker.update")?`<button class="secondary-action small-action" data-action="edit-worker" data-worker-id="${worker.id}">${t("editWorker")}</button>`:""}</div></article>`).join("")}</div>
+    ${workers.length?"":`<p class="helper-copy">${t("noWorkers")}</p>`}
+  </section>`;
 }
 
 function renderMachinesScreen() {
@@ -4824,7 +5192,7 @@ function renderOrdersScreen(orders) {
             : status === "En espera de recursos"
               ? "Falta material, capacidad o confirmacion."
               : status === "En produccion"
-                ? "Etapas operativas en ejecucion."
+                ? "Etapas en ejecucion; al iniciar se registran las salidas de materiales reservados."
                 : status === "Pausada"
                   ? "Detenida temporalmente con causa operativa."
                   : status === "En validacion"
@@ -4850,9 +5218,10 @@ function renderOrdersScreen(orders) {
 function renderDeliverablesScreen(orders) {
   const deliverables = orders.flatMap((order) =>
     order.areas.map((area) => ({
-      order: order.id,
+      order: order.code || order.id,
       product: order.recipeName,
       quantity: `${order.quantity} ${order.unit}`,
+      orderProgress: Number(order.overallProgress ?? getOrderProgress(order)),
       ...area
     }))
   );
@@ -4870,8 +5239,9 @@ function renderDeliverablesScreen(orders) {
         <article class="deliverable-card">
           <div>
             <span class="muted-label">${item.order} · ${item.quantity}</span>
-            <strong>${item.area}</strong>
+            <strong>${t("recipePhaseNumber")} ${item.phaseNumber || 1}: ${item.area}</strong>
             <p>${item.product}</p>
+            <span class="muted-label">${t("recipePhaseWeightLabel",{weight:item.weightPercent||0})} · ${t("orderProgressLabel",{progress:formatNumber(item.orderProgress)})}</span>
             <span class="muted-label">Etapa operativa · avance ${formatNumber(item.progress || (item.status === "Terminada" ? 100 : 0))}%</span>
           </div>
           <div>
@@ -4924,6 +5294,8 @@ function bindProductionPanelActions() {
   modulePanel.querySelectorAll("[data-action='edit-labor-role']").forEach((button) => {
     button.addEventListener("click", () => openLaborRoleModal(button.dataset.roleId));
   });
+  modulePanel.querySelectorAll("[data-action='open-worker']").forEach((button) => button.addEventListener("click",()=>openWorkerModal()));
+  modulePanel.querySelectorAll("[data-action='edit-worker']").forEach((button) => button.addEventListener("click",()=>openWorkerModal(button.dataset.workerId)));
   modulePanel.querySelectorAll("[data-action='open-machine']").forEach((button) => {
     button.addEventListener("click", () => openMachineModal());
   });
@@ -5045,6 +5417,8 @@ function bindProductionPanelActions() {
       navigateTo({ active: "produccion", activeSubmodule: "recetas", laborArea: "" });
     });
   });
+  modulePanel.querySelectorAll("[data-action='receive-finished-good']").forEach((button)=>button.addEventListener("click",()=>openFinishedGoodsReceiptModal(button.dataset.orderId)));
+  modulePanel.querySelectorAll("[data-action='transition-sales-quote']").forEach(button=>{button.addEventListener("click",async()=>{try{const action={submit:submitSalesQuote,approve:approveSalesQuote,expire:expireSalesQuote,cancel:cancelSalesQuote}[button.dataset.transition];await action(button.dataset.recordId);await loadSalesApiData();showToast("Estado de cotización actualizado.");}catch(error){showToast(error.message||"No se pudo actualizar la cotización.");}});});
   modulePanel.querySelectorAll("[data-action='view-product-orders']").forEach((button) => {
     button.addEventListener("click", () => {
       localStorage.setItem("erclave-production-orders-product", button.dataset.productId);
@@ -5149,7 +5523,7 @@ function renderRecipeValidationOnly(recipes = mockDb.loadRecipes()) {
         </div>
         <label class="quantity-control recipe-select-control">
           <span>Receta</span>
-          <select id="selectedRecipe">
+          <select id="selectedRecipe" data-entity-selector data-search-placeholder="Buscar receta por producto, versión o estatus">
             ${recipes
               .map(
                 (item) => `
@@ -5211,15 +5585,17 @@ function renderOrderList(orders, emptyMessage = "") {
             const recipe = getOrderRecipe(order);
             const cost = getOrderCostSnapshot(order, recipe);
             const progress = getOrderProgress(order);
+            const statusOptions = getOrderStatusOptions(order);
+            const closeHelp = getOrderCloseHelp(order);
             return `
             <article class="recipe-list-row order-list-row">
               <div>
                 <strong>${order.id} · ${order.recipeName}</strong>
                 <span>${order.quantity} ${order.unit} · entrega ${order.dueDate || "sin fecha"} · responsable ${order.responsible} · ${order.releaseStatus || "Liberada"}</span>
-                <span>Avance ${formatNumber(progress)}% · planeado ${formatCurrency(cost.plannedCost)} · real ${formatCurrency(cost.actualCost)} · variacion ${formatCurrency(cost.variance)} (${formatNumber(cost.variancePct)}%)</span>
+                <span>Avance ${formatNumber(progress)}% · planeado ${formatCurrency(cost.plannedCost)} · real ${cost.actualCost == null ? "Pendiente" : formatCurrency(cost.actualCost)}${cost.variance == null ? "" : ` · variacion ${formatCurrency(cost.variance)} (${formatNumber(cost.variancePct)}%)`}</span>
                 <div class="stage-progress-list">
                   ${(order.areas || []).map((stage, index) => `
-                    <button class="stage-pill ${stage.status === "Terminada" ? "done" : stage.status === "En proceso" ? "active" : ""}" type="button" data-action="advance-order-stage" data-order-id="${order.id}" data-stage-index="${index}">
+                    <button class="stage-pill ${stage.status === "Terminada" ? "done" : stage.status === "En proceso" ? "active" : ""}" type="button" data-action="advance-order-stage" data-order-id="${order.id}" data-stage-index="${index}" title="Pulsa para avanzar esta fase">
                       <strong>${stage.area}</strong>
                       <span>${stage.status} · ${formatNumber(stage.progress || (stage.status === "Terminada" ? 100 : 0))}%</span>
                     </button>
@@ -5230,13 +5606,14 @@ function renderOrderList(orders, emptyMessage = "") {
               <div class="row-actions">
                 <label class="status-control compact-status">
                   <span>Estatus</span>
-                  <select data-action="change-order-status" data-order-id="${order.id}">
-                    ${orderStatusCatalog.map((status) => `
+                  <select data-action="change-order-status" data-order-id="${order.id}" ${statusOptions.length===1?"disabled":""}>
+                    ${statusOptions.map((status) => `
                       <option value="${status}" ${order.status === status ? "selected" : ""}>${translateStatus(status)}</option>
                     `).join("")}
                   </select>
                 </label>
                 <button class="secondary-action small-action" type="button" data-action="print-order" data-order-id="${order.id}">PDF/Imprimir</button>
+                ${closeHelp?`<small class="helper-copy">${escapeHtml(closeHelp)}</small>`:""}
               </div>
             </article>
           `;
@@ -5670,7 +6047,8 @@ function openWarehouseModal(module, submodule, recordId = null) {
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="warehouseForm">
-      <input type="hidden" name="recordId" value="${existingRecord?.id || ""}" />
+      <input type="hidden" name="recordId" value="${escapeAttribute(existingRecord?.id || "")}" />
+      <input type="hidden" name="codeRequestKey" value="${escapeAttribute(codeRequestKey("inventory.warehouse"))}" />
       <div class="modal-head">
         <div>
           <p class="eyebrow">${label}</p>
@@ -5682,7 +6060,7 @@ function openWarehouseModal(module, submodule, recordId = null) {
       <div class="form-grid">
         <label class="preview-field">
           <span>${t("warehouseCode")}</span>
-          <input name="code" type="text" value="${existingRecord?.code || ""}" placeholder="ALM-MP-01" required />
+          <input name="code" type="text" value="${existingRecord?.code || ""}" placeholder="${codeSequenceConfig("inventory.warehouse")?.mode === "managed" ? t("codeAssignedAutomatically") : "ALM-MP-01"}" ${isEditing || codeSequenceConfig("inventory.warehouse")?.mode === "managed" ? "readonly" : ""} />
         </label>
         <label class="preview-field">
           <span>${t("warehouseName")}</span>
@@ -5790,7 +6168,7 @@ async function saveWarehouseForm(event, module, submodule) {
   const data = Object.fromEntries(new FormData(form).entries());
   const errors = [];
 
-  if (!data.code?.trim()) errors.push(t("warehouseCodeRequired"));
+  if (!data.code?.trim() && getApiMode() !== "api") errors.push(t("warehouseCodeRequired"));
   if (!data.name?.trim()) errors.push(t("warehouseNameRequired"));
   if (!data.businessCenter?.trim()) errors.push(t("businessCenterRequired"));
   if (!data.location?.trim()) errors.push(t("warehouseLocationRequired"));
@@ -5801,13 +6179,13 @@ async function saveWarehouseForm(event, module, submodule) {
     return;
   }
 
-  const code = data.code.trim().toUpperCase();
+  let code = data.code.trim().toUpperCase();
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
   if (getApiMode() === "api") {
     const payload = {name:data.name.trim(),type:data.type,business_center:data.businessCenter.trim(),location:data.location.trim(),owner:data.owner.trim(),capacity:data.capacity?.trim()||null,inventory_policy:data.policy,zone:data.zone?.trim()||null,aisle:data.aisle?.trim()||null,rack:data.rack?.trim()||null,level:data.level?.trim()||null,position:data.position?.trim()||null,description:data.description?.trim()||null,status:(data.status||"Activo")==="Activo"?"active":(data.status==="Bloqueado"?"blocked":"inactive")};
     try {
       if (existingRecord) await updateInventoryWarehouse(existingRecord.id,payload);
-      else await createInventoryWarehouse({code,...payload});
+      else {code=await resolveBusinessCode("inventory.warehouse",code,data.codeRequestKey);await createInventoryWarehouse({code,...payload});}
       closeModal(); await loadInventoryApiData(); showToast(t(existingRecord ? "warehouseUpdated" : "warehouseSaved", { code }));
     } catch (error) { renderFormErrors([error.message]); }
     return;
@@ -5853,16 +6231,21 @@ async function saveWarehouseForm(event, module, submodule) {
   showToast(t(existingRecord ? "warehouseUpdated" : "warehouseSaved", { code }));
 }
 
-function openInventoryItemModal(module, submodule, recordId = null) {
+async function openInventoryItemModal(module, submodule, recordId = null) {
   const label = state.lang === "en" ? module.titleEn : module.title;
   const existingRecord = recordId ? mockDb.findModuleRecord(module.id, recordId) : null;
   const fields = existingRecord?.fields || {};
   const warehouses = mockDb.loadModuleRecords(module.id, "almacenes").filter((record) => record.recordType === "warehouse");
   const isEditing = Boolean(existingRecord);
+  let productionCandidates=[];
+  if (!isEditing && getApiMode()==="api" && isInventoryApiEnabled()) {
+    try { productionCandidates=await getUnlinkedProductionProducts(); } catch (_) { productionCandidates=[]; }
+  }
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="inventoryItemForm">
-      <input type="hidden" name="recordId" value="${existingRecord?.id || ""}" />
+      <input type="hidden" name="recordId" value="${escapeAttribute(existingRecord?.id || "")}" />
+      <input type="hidden" name="codeRequestKey" value="${escapeAttribute(codeRequestKey("inventory.item"))}" />
       <div class="modal-head">
         <div>
           <p class="eyebrow">${label}</p>
@@ -5874,7 +6257,7 @@ function openInventoryItemModal(module, submodule, recordId = null) {
       <div class="form-grid">
         <label class="preview-field">
           <span>${t("itemCode")}</span>
-          <input name="code" type="text" value="${existingRecord?.code || ""}" placeholder="MAT-001" required />
+          <input name="code" type="text" value="${existingRecord?.code || ""}" placeholder="${codeSequenceConfig("inventory.item")?.mode === "managed" ? t("codeAssignedAutomatically") : "MAT-001"}" ${isEditing || codeSequenceConfig("inventory.item")?.mode === "managed" ? "readonly" : ""} />
         </label>
         <label class="preview-field">
           <span>${t("itemName")}</span>
@@ -5891,6 +6274,11 @@ function openInventoryItemModal(module, submodule, recordId = null) {
             <option value="serviceSupply" ${selectedOption(fields.type, "serviceSupply")}>${t("serviceSupplyItem")}</option>
           </select>
         </label>
+        ${!isEditing ? `<label class="preview-field wide-field" data-production-link-field hidden>
+          <span>${t("productionProductLink")}</span>
+          <select name="productionProductId" data-entity-selector><option value="">${t("productionProductLinkNone")}</option>${productionCandidates.map(product=>`<option value="${escapeAttribute(product.id)}" data-name="${escapeAttribute(product.name)}" data-category="${escapeAttribute(product.category||"")}" data-unit="${escapeAttribute(product.base_unit)}">${product.code} - ${product.name} · ${product.base_unit}</option>`).join("")}</select>
+          <small>${t("productionProductLinkHelp")}</small>
+        </label>` : ""}
         <label class="preview-field">
           <span>${t("status")}</span>
           <select name="status">
@@ -5905,7 +6293,12 @@ function openInventoryItemModal(module, submodule, recordId = null) {
         </label>
         <label class="preview-field">
           <span>${t("unit")}</span>
-          <input name="unit" type="text" value="${fields.unit || ""}" placeholder="pz" required />
+          ${unitSelect("unit", fields.unit || "H87")}
+        </label>
+        <label class="preview-field">
+          <span>${t("defaultUnitCost")}</span>
+          <input name="defaultUnitCost" type="number" min="0" step="0.000001" value="${escapeAttribute(fields.defaultUnitCost ?? 0)}" required />
+          <small>${t("defaultUnitCostHelp")}</small>
         </label>
         <label class="preview-field">
           <span>${t("minStock")}</span>
@@ -5927,7 +6320,7 @@ function openInventoryItemModal(module, submodule, recordId = null) {
         <label class="preview-field">
           <span>${t("defaultWarehouse")}</span>
           ${warehouses.length ? `
-            <select name="defaultWarehouseId">
+            <select name="defaultWarehouseId" data-entity-selector>
               <option value="">${t("notDefined")}</option>
               ${warehouses.map((warehouse) => `<option value="${warehouse.id}" ${selectedOption(fields.defaultWarehouseId, warehouse.id)}>${warehouse.code} - ${warehouse.title}</option>`).join("")}
             </select>
@@ -5955,6 +6348,16 @@ function openInventoryItemModal(module, submodule, recordId = null) {
   modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
   modalContent.querySelector("[data-action='close-inventory-item']").addEventListener("click", closeModal);
   modalContent.querySelector("#inventoryItemForm").addEventListener("submit", (event) => saveInventoryItemForm(event, module, submodule));
+  const typeSelect=modalContent.querySelector('[name="type"]');
+  const linkField=modalContent.querySelector("[data-production-link-field]");
+  const syncLinkVisibility=()=>{if(linkField)linkField.hidden=typeSelect.value!=="finishedGood";};
+  syncLinkVisibility(); typeSelect.addEventListener("change",syncLinkVisibility);
+  modalContent.querySelector('[name="productionProductId"]')?.addEventListener("change",event=>{
+    const option=event.target.selectedOptions[0]; const unit=modalContent.querySelector('[name="unit"]');
+    if(!option?.value){unit.disabled=false;return;}
+    const name=modalContent.querySelector('[name="name"]'); const category=modalContent.querySelector('[name="category"]');
+    if(!name.value)name.value=option.dataset.name||""; if(!category.value)category.value=option.dataset.category||""; unit.value=option.dataset.unit; unit.disabled=true;
+  });
 }
 
 async function saveInventoryItemForm(event, module, submodule) {
@@ -5963,9 +6366,10 @@ async function saveInventoryItemForm(event, module, submodule) {
   const data = Object.fromEntries(new FormData(form).entries());
   const errors = [];
 
-  if (!data.code?.trim()) errors.push(t("itemCodeRequired"));
+  if (!data.code?.trim() && getApiMode() !== "api") errors.push(t("itemCodeRequired"));
   if (!data.name?.trim()) errors.push(t("itemNameRequired"));
-  if (!data.unit?.trim()) errors.push(t("unitRequired"));
+  if (!(form.querySelector('[name="unit"]')?.value || data.unit || "").trim()) errors.push(t("unitRequired"));
+  if (data.productionProductId && data.status !== "Activo") errors.push(t("productionProductLinkRequiresActive"));
 
   if (errors.length) {
     renderFormErrors(errors);
@@ -5973,16 +6377,31 @@ async function saveInventoryItemForm(event, module, submodule) {
   }
 
   const warehouse = data.defaultWarehouseId ? mockDb.findModuleRecord(module.id, data.defaultWarehouseId) : null;
-  const code = data.code.trim().toUpperCase();
+  let code = data.code.trim().toUpperCase();
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
   const defaultWarehouseName = warehouse ? `${warehouse.code} - ${warehouse.title}` : data.defaultWarehouseName?.trim() || "";
   if (getApiMode() === "api" && isInventoryApiEnabled()) {
-    const payload={name:data.name.trim(),type:data.type,category:data.category?.trim()||null,base_unit:data.unit.trim(),suggested_warehouse_id:data.defaultWarehouseId||null,minimum_stock:Number(data.minStock||0),maximum_stock:data.maxStock?Number(data.maxStock):null,use_in_recipe:data.useInRecipe==="true",status:(data.status||"Activo")==="Activo"?"active":(data.status==="Bloqueado"?"blocked":"inactive"),description:data.description?.trim()||null};
+    const selectedProduct=form.querySelector('[name="productionProductId"]')?.value||"";
+    const selectedUnit=form.querySelector('[name="unit"]')?.value||data.unit;
+    const payload={name:data.name.trim(),type:data.type,category:data.category?.trim()||null,base_unit:selectedUnit.trim(),suggested_warehouse_id:data.defaultWarehouseId||null,minimum_stock:Number(data.minStock||0),maximum_stock:data.maxStock?Number(data.maxStock):0,default_unit_cost:Number(data.defaultUnitCost||0),use_in_recipe:data.useInRecipe==="true",status:(data.status||"Activo")==="Activo"?"active":(data.status==="Bloqueado"?"blocked":"inactive"),description:data.description?.trim()||null};
     try {
       if (existingRecord) await updateInventoryItem(existingRecord.id,payload);
-      else await createInventoryItem({code,inventory_policy:data.policy==="batch"?"lot":data.policy,...payload});
-      closeModal(); await loadInventoryApiData(); showToast(t(existingRecord ? "inventoryItemUpdated" : "inventoryItemSaved", { code }));
-    } catch (error) { renderFormErrors([error.message]); }
+      else if(selectedProduct) {
+        code=await resolveBusinessCode("inventory.item",code,data.codeRequestKey);
+        const linked=await createAndLinkFinishedGood(selectedProduct,{code,inventory_policy:data.policy==="batch"?"lot":data.policy,...payload});
+        mockDb.updateProductService(mapApiProduct(linked.product_service));
+        state.productionApi={status:"idle",error:""};
+        state.salesApi={...state.salesApi,status:"idle",error:""};
+      }
+      else { code=await resolveBusinessCode("inventory.item",code,data.codeRequestKey); await createInventoryItem({code,inventory_policy:data.policy==="batch"?"lot":data.policy,...payload}); }
+      closeModal();
+      await loadInventoryApiData();
+      if(selectedProduct) await loadProductionApiData();
+      showToast(t(existingRecord ? "inventoryItemUpdated" : "inventoryItemSaved", { code }));
+    } catch (error) {
+      const errorCode = error?.payload?.error?.code;
+      renderFormErrors([errorCode === "item_base_unit_locked_by_movements" ? t("itemBaseUnitLockedByHistory") : error.message]);
+    }
     return;
   }
   const record = {
@@ -5999,6 +6418,7 @@ async function saveInventoryItemForm(event, module, submodule) {
       type: data.type,
       category: data.category?.trim() || "",
       unit: data.unit.trim(),
+      defaultUnitCost: Number(data.defaultUnitCost || 0),
       minStock: data.minStock || "",
       maxStock: data.maxStock || "",
       policy: data.policy,
@@ -6068,19 +6488,19 @@ function openInventoryMovementModal(module, submodule) {
         </label>
         <label class="preview-field">
           <span>${t("unit")}</span>
-          <input name="unit" type="text" placeholder="pz" required />
+          ${unitSelect("unit", "H87")}
         </label>
         <label class="preview-field">
           <span>${t("warehouse")}</span>
           ${warehouses.length ? `
-            <select name="warehouseId" required>
+            <select name="warehouseId" data-entity-selector required>
               ${warehouses.map((warehouse) => `<option value="${warehouse.id}">${warehouse.code} - ${warehouse.title}</option>`).join("")}
             </select>
           ` : `<input name="warehouseName" type="text" placeholder="${t("warehouseNamePlaceholder")}" required />`}
         </label>
         <label class="preview-field">
           <span>Almacen destino (solo transferencia)</span>
-          <select name="destinationWarehouseId">
+          <select name="destinationWarehouseId" data-entity-selector>
             <option value="">No aplica</option>
             ${warehouses.map((warehouse) => `<option value="${warehouse.id}">${warehouse.code} - ${warehouse.title}</option>`).join("")}
           </select>
@@ -6176,7 +6596,7 @@ function selectMovementItemFromLookup(event) {
   const form = button.closest("form");
   form.querySelector("#movementItemSearch").value = formatInventoryItemOption(item);
   form.querySelector("[name='itemId']").value = item.id;
-  form.querySelector("[name='unit']").value = item.fields?.unit || "";
+  form.querySelector("[name='unit']").value = normalizeUnitCode(item.fields?.unit || "H87");
   modalContent.querySelector("#movementItemResults").hidden = true;
 }
 
@@ -6186,7 +6606,7 @@ function syncMovementItemFields(event) {
   form.querySelector("[name='itemId']").value = item?.id || "";
   renderMovementItemLookup(event);
   if (!item) return;
-  form.querySelector("[name='unit']").value = item.fields?.unit || "";
+  form.querySelector("[name='unit']").value = normalizeUnitCode(item.fields?.unit || "H87");
 }
 
 async function saveInventoryMovementForm(event, module, submodule) {
@@ -6282,14 +6702,25 @@ async function saveInventoryMovementForm(event, module, submodule) {
 }
 
 function openSalesCustomerModal(module, submodule, recordId = null) {
+  const requiredPermission = recordId ? "sales.customer.update" : "sales.customer.create";
+  if (getApiMode() === "api" && !hasPermission(requiredPermission)) {
+    showToast(t("salesActionDenied"));
+    return;
+  }
   const label = state.lang === "en" ? module.titleEn : module.title;
   const existingRecord = recordId ? mockDb.findModuleRecord(module.id, recordId) : null;
   const fields = existingRecord?.fields || {};
   const isEditing = Boolean(existingRecord);
+  const salesWorkers=state.salesApi.workers||[];const references=state.salesApi.references||{currencies:[],payment_terms:[]};
+  if (getApiMode() === "api" && (!salesWorkers.length || !references.currencies.length || !references.payment_terms.length)) {
+    showToast((state.salesApi.referenceWarnings || []).join(" ") || t("salesWorkersUnavailable"));
+    return;
+  }
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="salesCustomerForm">
-      <input type="hidden" name="recordId" value="${existingRecord?.id || ""}" />
+      <input type="hidden" name="recordId" value="${escapeAttribute(existingRecord?.id || "")}" />
+      <input type="hidden" name="codeRequestKey" value="${escapeAttribute(codeRequestKey("sales.customer"))}" />
       <div class="modal-head">
         <div>
           <p class="eyebrow">${label}</p>
@@ -6306,11 +6737,11 @@ function openSalesCustomerModal(module, submodule, recordId = null) {
       <div class="form-grid">
         <label class="preview-field">
           <span>${t("customerCode")}</span>
-          <input name="code" type="text" value="${existingRecord?.code || ""}" placeholder="CLI-001" required />
+          <input name="code" type="text" value="${escapeAttribute(existingRecord?.code || "")}" placeholder="${codeSequenceConfig("sales.customer")?.mode === "managed" ? t("codeAssignedAutomatically") : "CLI-001"}" ${isEditing || codeSequenceConfig("sales.customer")?.mode === "managed" ? "readonly" : ""} />
         </label>
         <label class="preview-field">
           <span>${t("commercialName")}</span>
-          <input name="commercialName" type="text" value="${fields.commercialName || existingRecord?.title || ""}" placeholder="${t("commercialNamePlaceholder")}" required />
+          <input name="commercialName" type="text" value="${escapeAttribute(fields.commercialName || existingRecord?.title || "")}" placeholder="${escapeAttribute(t("commercialNamePlaceholder"))}" required />
         </label>
         <label class="preview-field">
           <span>${t("customerType")}</span>
@@ -6332,31 +6763,35 @@ function openSalesCustomerModal(module, submodule, recordId = null) {
         </label>
         <label class="preview-field">
           <span>${t("contact")}</span>
-          <input name="contactName" type="text" value="${fields.contactName || ""}" placeholder="${t("contactPlaceholder")}" required />
+          <input name="contactName" type="text" value="${escapeAttribute(fields.contactName || "")}" placeholder="${escapeAttribute(t("contactPlaceholder"))}" required />
         </label>
         <label class="preview-field">
           <span>${t("commercialEmail")}</span>
-          <input name="contactEmail" type="email" value="${fields.contactEmail || ""}" placeholder="compras@cliente.com" required />
+          <input name="contactEmail" type="email" value="${escapeAttribute(fields.contactEmail || "")}" placeholder="compras@cliente.com" required />
         </label>
         <label class="preview-field">
           <span>${t("phone")}</span>
-          <input name="contactPhone" type="tel" value="${fields.contactPhone || ""}" placeholder="+52 55 0000 0000" required />
+          <input name="contactPhone" type="tel" value="${escapeAttribute(fields.contactPhone || "")}" placeholder="+52 55 0000 0000" required />
         </label>
         <label class="preview-field">
           <span>${t("salesOwner")}</span>
-          <input name="salesOwner" type="text" value="${fields.salesOwner || ""}" placeholder="${t("salesOwnerPlaceholder")}" />
+          <select name="responsibleWorkerId" data-entity-selector required><option value="">Selecciona una persona activa</option>${salesWorkers.map(worker=>`<option value="${escapeAttribute(worker.id)}" ${selectedOption(fields.responsibleWorkerId,worker.id)}>${escapeHtml(worker.full_name)} · ${escapeHtml(worker.position_name)}</option>`).join("")}</select>
         </label>
         <label class="preview-field">
           <span>${t("paymentTerms")}</span>
-          <input name="paymentTerms" type="text" value="${fields.paymentTerms || ""}" placeholder="${t("paymentTermsPlaceholder")}" />
+          <select name="paymentTerms" required>${references.payment_terms.map(item=>`<option value="${item.code}" ${selectedOption(fields.paymentTerms||"cash",item.code)}>${escapeHtml(state.lang==="en"?item.name_en:item.name_es)}</option>`).join("")}</select>
         </label>
         <label class="preview-field">
           <span>${t("creditLimit")}</span>
-          <input name="creditLimit" type="text" value="${fields.creditLimit || ""}" placeholder="$50,000 MXN" />
+          <input name="creditLimit" type="number" min="0" step="0.01" value="${fields.creditLimit || 0}" />
+        </label>
+        <label class="preview-field">
+          <span>${t("currency")}</span>
+          <select name="currency" required>${references.currencies.map(item=>`<option value="${item.code}" ${selectedOption(fields.currency||"MXN",item.code)}>${escapeHtml(item.code)} · ${escapeHtml(state.lang==="en"?item.name_en:item.name_es)}</option>`).join("")}</select>
         </label>
         <label class="preview-field wide-field">
           <span>${t("commercialNotes")}</span>
-          <textarea name="commercialNotes" rows="2" placeholder="${t("commercialNotesPlaceholder")}">${fields.commercialNotes || ""}</textarea>
+          <textarea name="commercialNotes" rows="2" placeholder="${escapeAttribute(t("commercialNotesPlaceholder"))}">${escapeHtml(fields.commercialNotes || "")}</textarea>
         </label>
 
         <div class="section-title form-section-title wide-field">
@@ -6366,59 +6801,59 @@ function openSalesCustomerModal(module, submodule, recordId = null) {
 
         <label class="preview-field">
           <span>${t("billingLegalName")}</span>
-          <input name="billingLegalName" type="text" value="${fields.billingLegalName || ""}" placeholder="${t("billingLegalNamePlaceholder")}" required />
+          <input name="billingLegalName" type="text" value="${escapeAttribute(fields.billingLegalName || "")}" placeholder="${escapeAttribute(t("billingLegalNamePlaceholder"))}" />
         </label>
         <label class="preview-field">
           <span>${t("taxId")}</span>
-          <input name="taxId" type="text" value="${fields.taxId || ""}" placeholder="XAXX010101000" required />
+          <input name="taxId" type="text" value="${escapeAttribute(fields.taxId || "")}" placeholder="XAXX010101000" />
         </label>
         <label class="preview-field">
           <span>${t("taxRegime")}</span>
-          <input name="taxRegime" type="text" value="${fields.taxRegime || ""}" placeholder="${t("taxRegimePlaceholder")}" />
+          <input name="taxRegime" type="text" value="${escapeAttribute(fields.taxRegime || "")}" placeholder="${escapeAttribute(t("taxRegimePlaceholder"))}" />
         </label>
         <label class="preview-field">
           <span>${t("cfdiUse")}</span>
-          <input name="cfdiUse" type="text" value="${fields.cfdiUse || ""}" placeholder="G03" />
+          <input name="cfdiUse" type="text" value="${escapeAttribute(fields.cfdiUse || "")}" placeholder="G03" />
         </label>
         <label class="preview-field">
           <span>${t("billingEmail")}</span>
-          <input name="billingEmail" type="email" value="${fields.billingEmail || ""}" placeholder="facturas@cliente.com" required />
+          <input name="billingEmail" type="email" value="${escapeAttribute(fields.billingEmail || "")}" placeholder="facturas@cliente.com" />
         </label>
         <label class="preview-field">
           <span>${t("billingPhone")}</span>
-          <input name="billingPhone" type="tel" value="${fields.billingPhone || ""}" placeholder="+52 55 0000 0000" />
+          <input name="billingPhone" type="tel" value="${escapeAttribute(fields.billingPhone || "")}" placeholder="+52 55 0000 0000" />
         </label>
         <label class="preview-field">
           <span>${t("billingStreet")}</span>
-          <input name="billingStreet" type="text" value="${fields.billingStreet || ""}" placeholder="${t("billingStreetPlaceholder")}" required />
+          <input name="billingStreet" type="text" value="${escapeAttribute(fields.billingStreet || "")}" placeholder="${escapeAttribute(t("billingStreetPlaceholder"))}" />
         </label>
         <label class="preview-field">
           <span>${t("billingExterior")}</span>
-          <input name="billingExterior" type="text" value="${fields.billingExterior || ""}" placeholder="123" />
+          <input name="billingExterior" type="text" value="${escapeAttribute(fields.billingExterior || "")}" placeholder="123" />
         </label>
         <label class="preview-field">
           <span>${t("billingInterior")}</span>
-          <input name="billingInterior" type="text" value="${fields.billingInterior || ""}" placeholder="4B" />
+          <input name="billingInterior" type="text" value="${escapeAttribute(fields.billingInterior || "")}" placeholder="4B" />
         </label>
         <label class="preview-field">
           <span>${t("billingNeighborhood")}</span>
-          <input name="billingNeighborhood" type="text" value="${fields.billingNeighborhood || ""}" placeholder="${t("billingNeighborhoodPlaceholder")}" />
+          <input name="billingNeighborhood" type="text" value="${escapeAttribute(fields.billingNeighborhood || "")}" placeholder="${escapeAttribute(t("billingNeighborhoodPlaceholder"))}" />
         </label>
         <label class="preview-field">
           <span>${t("billingCity")}</span>
-          <input name="billingCity" type="text" value="${fields.billingCity || ""}" placeholder="${t("billingCityPlaceholder")}" required />
+          <input name="billingCity" type="text" value="${escapeAttribute(fields.billingCity || "")}" placeholder="${escapeAttribute(t("billingCityPlaceholder"))}" />
         </label>
         <label class="preview-field">
           <span>${t("billingState")}</span>
-          <input name="billingState" type="text" value="${fields.billingState || ""}" placeholder="${t("billingStatePlaceholder")}" required />
+          <input name="billingState" type="text" value="${escapeAttribute(fields.billingState || "")}" placeholder="${escapeAttribute(t("billingStatePlaceholder"))}" />
         </label>
         <label class="preview-field">
           <span>${t("billingZipCode")}</span>
-          <input name="billingZipCode" type="text" value="${fields.billingZipCode || ""}" placeholder="00000" required />
+          <input name="billingZipCode" type="text" value="${escapeAttribute(fields.billingZipCode || "")}" placeholder="00000" />
         </label>
         <label class="preview-field">
           <span>${t("billingCountry")}</span>
-          <input name="billingCountry" type="text" value="${fields.billingCountry || "Mexico"}" required />
+          <input name="billingCountry" type="text" value="${escapeAttribute(fields.billingCountry || "Mexico")}" />
         </label>
       </div>
 
@@ -6436,32 +6871,34 @@ function openSalesCustomerModal(module, submodule, recordId = null) {
   modalContent.querySelector("#salesCustomerForm").addEventListener("submit", (event) => saveSalesCustomerForm(event, module, submodule));
 }
 
-function saveSalesCustomerForm(event, module, submodule) {
+async function saveSalesCustomerForm(event, module, submodule) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = Object.fromEntries(new FormData(form).entries());
   const errors = [];
 
-  if (!data.code?.trim()) errors.push(t("customerCodeRequired"));
+  if (!data.code?.trim() && getApiMode() !== "api") errors.push(t("customerCodeRequired"));
   if (!data.commercialName?.trim()) errors.push(t("commercialNameRequired"));
   if (!data.contactName?.trim()) errors.push(t("contactRequired"));
   if (!data.contactEmail?.trim()) errors.push(t("commercialEmailRequired"));
   if (!data.contactPhone?.trim()) errors.push(t("phoneRequired"));
-  if (!data.billingLegalName?.trim()) errors.push(t("billingLegalNameRequired"));
-  if (!data.taxId?.trim()) errors.push(t("taxIdRequired"));
-  if (!data.billingEmail?.trim()) errors.push(t("billingEmailRequired"));
-  if (!data.billingStreet?.trim()) errors.push(t("billingStreetRequired"));
-  if (!data.billingCity?.trim()) errors.push(t("billingCityRequired"));
-  if (!data.billingState?.trim()) errors.push(t("billingStateRequired"));
-  if (!data.billingZipCode?.trim()) errors.push(t("billingZipCodeRequired"));
+  if (!data.responsibleWorkerId) errors.push("Selecciona una persona responsable activa de RH.");
+  const fiscalStarted=[data.billingLegalName,data.taxId,data.taxRegime,data.cfdiUse,data.billingEmail,data.billingStreet,data.billingCity,data.billingState,data.billingZipCode].some(value=>value?.trim());
+  if(fiscalStarted&&!data.billingLegalName?.trim()) errors.push(t("billingLegalNameRequired"));
+  if(fiscalStarted&&!data.taxId?.trim()) errors.push(t("taxIdRequired"));
+  if(fiscalStarted&&!data.billingEmail?.trim()) errors.push(t("billingEmailRequired"));
 
   if (errors.length) {
     renderFormErrors(errors);
     return;
   }
 
-  const code = data.code.trim().toUpperCase();
+  let code = data.code.trim().toUpperCase();
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
+  if(getApiMode()==="api"){
+    const payload={commercial_name:data.commercialName.trim(),customer_type:data.customerType,status:salesCustomerStatusToApi[data.status]||"prospect",responsible_worker_id:data.responsibleWorkerId,primary_contact:{name:data.contactName.trim(),email:data.contactEmail.trim(),phone:data.contactPhone.trim()},payment_terms:data.paymentTerms,currency:data.currency,credit_limit:Number(data.creditLimit||0),legal_name:data.billingLegalName?.trim()||null,tax_id:data.taxId?.trim().toUpperCase()||null,tax_regime:data.taxRegime?.trim()||null,cfdi_use:data.cfdiUse?.trim()||null,billing_email:data.billingEmail?.trim()||null,billing_phone:data.billingPhone?.trim()||null,billing_address:fiscalStarted?{street:data.billingStreet?.trim()||null,exterior_number:data.billingExterior?.trim()||null,interior_number:data.billingInterior?.trim()||null,neighborhood:data.billingNeighborhood?.trim()||null,city:data.billingCity?.trim()||null,state:data.billingState?.trim()||null,postal_code:data.billingZipCode?.trim()||null,country:data.billingCountry?.trim()||null}:null,notes:data.commercialNotes?.trim()||null};
+    try{if(existingRecord)await updateSalesCustomer(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.customer",code,data.codeRequestKey);await createSalesCustomer({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"customerUpdated":"customerSaved",{code}));}catch(error){renderFormErrors([error.message||"No se pudo guardar el cliente."]);}return;
+  }
   const fields = {
     customerType: data.customerType,
     commercialName: data.commercialName.trim(),
@@ -6515,24 +6952,37 @@ function saveSalesCustomerForm(event, module, submodule) {
   showToast(t(existingRecord ? "customerUpdated" : "customerSaved", { code }));
 }
 
-function openSalesQuoteModal(module, submodule, recordId = null) {
+async function openSalesQuoteModal(module, submodule, recordId = null) {
+  const requiredPermission = recordId ? "sales.quote.update" : "sales.quote.create";
+  if (getApiMode() === "api" && (!hasPermission(requiredPermission) || !hasPermission("sales.customer.read"))) {
+    showToast(t("salesActionDenied"));
+    return;
+  }
   const label = state.lang === "en" ? module.titleEn : module.title;
   const existingRecord = recordId ? mockDb.findModuleRecord(module.id, recordId) : null;
   const fields = existingRecord?.fields || {};
-  const customers = mockDb.loadModuleRecords(module.id, "clientes").filter((record) => record.recordType === "customer");
-  const productsServices = mockDb.loadProductsServices();
+  const customers = mockDb.loadModuleRecords(module.id, "clientes").filter((record) => record.recordType === "customer" && record.status === "Activo");
+  let productsServices = mockDb.loadProductsServices().filter(isSalesProductServiceEligible);
+  if (getApiMode()==="api" && !productsServices.length) {
+    try {
+      const authoritativeProducts=await getProductionProducts();
+      mockDb.saveProductsServices(authoritativeProducts.map(mapApiProduct));
+      productsServices=mockDb.loadProductsServices().filter(isSalesProductServiceEligible);
+    } catch (_) { productsServices=[]; }
+  }
   const selectedCustomer = fields.customerId ? mockDb.findModuleRecord(module.id, fields.customerId) : null;
   const quoteLines = normalizeQuoteLines(fields);
   const isEditing = Boolean(existingRecord);
 
-  if (!customers.length || !productsServices.length) {
+  if (!customers.length || !productsServices.length || (getApiMode() === "api" && !getUnitCatalog().length)) {
     showToast(!customers.length ? t("quoteRequiresCustomers") : t("quoteRequiresProducts"));
     return;
   }
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="salesQuoteForm">
-      <input type="hidden" name="recordId" value="${existingRecord?.id || ""}" />
+      <input type="hidden" name="recordId" value="${escapeAttribute(existingRecord?.id || "")}" />
+      <input type="hidden" name="codeRequestKey" value="${escapeAttribute(codeRequestKey("sales.quote"))}" />
       <div class="modal-head">
         <div>
           <p class="eyebrow">${label}</p>
@@ -6544,11 +6994,11 @@ function openSalesQuoteModal(module, submodule, recordId = null) {
       <div class="form-grid">
         <label class="preview-field">
           <span>${t("quoteCode")}</span>
-          <input name="code" type="text" value="${existingRecord?.code || ""}" placeholder="COT-001" required />
+          <input name="code" type="text" value="${escapeAttribute(existingRecord?.code || "")}" placeholder="${codeSequenceConfig("sales.quote")?.mode === "managed" ? t("codeAssignedAutomatically") : "COT-001"}" ${isEditing || codeSequenceConfig("sales.quote")?.mode === "managed" ? "readonly" : ""} />
         </label>
         <label class="preview-field">
           <span>${t("status")}</span>
-          <select name="status">
+          <select name="status" disabled>
             <option value="Borrador" ${selectedOption(existingRecord?.status || "Borrador", "Borrador")}>${t("draftStatus")}</option>
             <option value="Cotizada" ${selectedOption(existingRecord?.status, "Cotizada")}>${t("quotedStatus")}</option>
             <option value="Aprobado" ${selectedOption(existingRecord?.status, "Aprobado")}>${t("approvedStatus")}</option>
@@ -6557,8 +7007,8 @@ function openSalesQuoteModal(module, submodule, recordId = null) {
         </label>
         <label class="preview-field product-lookup-field wide-field">
           <span>${t("customer")}</span>
-          <input id="quoteCustomerSearch" type="text" value="${selectedCustomer ? formatSalesCustomerOption(selectedCustomer) : ""}" placeholder="${t("customerLookupPlaceholder")}" autocomplete="off" required />
-          <input name="customerId" type="hidden" value="${selectedCustomer?.id || ""}" />
+          <input id="quoteCustomerSearch" type="text" value="${escapeAttribute(selectedCustomer ? formatSalesCustomerOption(selectedCustomer) : "")}" placeholder="${escapeAttribute(t("customerLookupPlaceholder"))}" autocomplete="off" required />
+          <input name="customerId" type="hidden" value="${escapeAttribute(selectedCustomer?.id || "")}" />
           <div class="lookup-results" id="quoteCustomerResults" hidden></div>
         </label>
         <div class="section-title form-section-title wide-field">
@@ -6572,23 +7022,23 @@ function openSalesQuoteModal(module, submodule, recordId = null) {
         <button class="secondary-action wide-field" type="button" data-action="add-quote-line">${t("addQuoteLine")}</button>
         <label class="preview-field">
           <span>${t("validUntil")}</span>
-          <input name="validUntil" type="date" value="${fields.validUntil || ""}" required />
+          <input name="validUntil" type="date" value="${escapeAttribute(fields.validUntil || "")}" required />
         </label>
         <label class="preview-field">
           <span>${t("deliveryPromise")}</span>
-          <input name="deliveryPromise" type="date" value="${fields.deliveryPromise || ""}" />
+          <input name="deliveryPromise" type="date" value="${escapeAttribute(fields.deliveryPromise || "")}" />
         </label>
         <label class="preview-field">
           <span>${t("paymentTerms")}</span>
-          <input name="paymentTerms" type="text" value="${fields.paymentTerms || selectedCustomer?.fields?.paymentTerms || ""}" placeholder="${t("paymentTermsPlaceholder")}" />
+          <select name="paymentTerms">${(state.salesApi.references?.payment_terms||[]).map(item=>`<option value="${item.code}" ${selectedOption(fields.paymentTerms||selectedCustomer?.fields?.paymentTerms||"cash",item.code)}>${escapeHtml(state.lang==="en"?item.name_en:item.name_es)}</option>`).join("")}</select>
         </label>
         <label class="preview-field">
           <span>${t("currency")}</span>
-          <input name="currency" type="text" value="${fields.currency || "MXN"}" required />
+          <select name="currency" required>${(state.salesApi.references?.currencies||[]).map(item=>`<option value="${item.code}" ${selectedOption(fields.currency||selectedCustomer?.fields?.currency||"MXN",item.code)}>${escapeHtml(item.code)} · ${escapeHtml(state.lang==="en"?item.name_en:item.name_es)}</option>`).join("")}</select>
         </label>
         <label class="preview-field wide-field">
           <span>${t("notes")}</span>
-          <textarea name="notes" rows="3" placeholder="${t("quoteNotesPlaceholder")}">${fields.notes || ""}</textarea>
+          <textarea name="notes" rows="3" placeholder="${escapeAttribute(t("quoteNotesPlaceholder"))}">${escapeHtml(fields.notes || "")}</textarea>
         </label>
       </div>
 
@@ -6651,9 +7101,9 @@ function renderQuoteCustomerLookup(event) {
   results.innerHTML = matches.length
     ? matches
         .map((customer) => `
-          <button class="lookup-option" type="button" data-sales-customer-id="${customer.id}">
-            <strong>${customer.title}</strong>
-            <span>${customer.code} - ${customer.fields?.billingLegalName || t("notDefined")} - ${customer.fields?.taxId || t("notDefined")}</span>
+          <button class="lookup-option" type="button" data-sales-customer-id="${escapeAttribute(customer.id)}">
+            <strong>${escapeHtml(customer.title)}</strong>
+            <span>${escapeHtml(customer.code)} - ${escapeHtml(customer.fields?.billingLegalName || t("notDefined"))} - ${escapeHtml(customer.fields?.taxId || t("notDefined"))}</span>
           </button>
         `)
         .join("")
@@ -6702,31 +7152,56 @@ function getQuoteLines(record) {
   return normalizeQuoteLines(record?.fields || {});
 }
 
+function openFinishedGoodsReceiptModal(orderId){
+  const row=getPendingFinishedGoodsReceipts().find((entry)=>entry.order.id===orderId);if(!row||!row.item){showToast(t("finishedGoodsReceiptUnavailable"));return;}
+  const warehouses=mockDb.loadModuleRecords("almacenes","almacenes").filter((record)=>record.recordType==="warehouse"&&record.status==="Activo");
+  const preferred=row.item.fields?.defaultWarehouseId||warehouses[0]?.id||"";
+  modalContent.innerHTML=`<form class="recipe-form" id="finishedGoodsReceiptForm"><div class="modal-head"><div><p class="eyebrow">${t("inventory")}</p><h2>${t("receiveFinishedGood")}</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div>
+    <input type="hidden" name="productionOrderId" value="${escapeAttribute(row.order.id)}" />
+    <section class="section-card"><strong>${escapeHtml(row.order.code)} · ${escapeHtml(row.product.name)}</strong><p>${escapeHtml(row.item.code)} · ${escapeHtml(row.item.title)}</p><p>${t("finishedGoodsPendingDetail",{received:formatNumber(row.received),remaining:formatNumber(row.remaining),quantity:formatNumber(row.order.quantity),unit:row.order.unit})}</p></section>
+    <div class="form-grid"><label class="preview-field"><span>${t("warehouse")}</span><select name="warehouseId" data-entity-selector required>${warehouses.map((warehouse)=>`<option value="${escapeAttribute(warehouse.id)}" ${warehouse.id===preferred?"selected":""}>${escapeHtml(warehouse.code)} - ${escapeHtml(warehouse.title)}</option>`).join("")}</select></label>
+    <label class="preview-field"><span>${t("receivedQuantity")}</span><input name="quantity" type="number" min="0.000001" max="${row.remaining}" step="any" value="${row.remaining}" required /></label>
+    <label class="preview-field"><span>${t("receiptDate")}</span><input name="receivedAt" type="date" value="${new Date().toISOString().slice(0,10)}" required /></label>
+    <label class="preview-field wide-field"><span>${t("notes")}</span><textarea name="notes" rows="3" placeholder="${t("finishedGoodsReceiptNotes")}"></textarea></label></div>
+    <div class="form-errors" id="formErrors" hidden></div><div class="modal-actions"><button class="secondary-action" type="button" data-action="close-finished-receipt">${t("cancel")}</button><button class="primary-action" type="submit">${t("confirmReceipt")}</button></div></form>`;
+  modalBackdrop.hidden=false;modalContent.querySelector(".modal-close").addEventListener("click",closeModal);modalContent.querySelector("[data-action='close-finished-receipt']").addEventListener("click",closeModal);modalContent.querySelector("#finishedGoodsReceiptForm").addEventListener("submit",saveFinishedGoodsReceiptForm);
+}
+
+async function saveFinishedGoodsReceiptForm(event){
+  event.preventDefault();const form=event.currentTarget;const data=Object.fromEntries(new FormData(form).entries());const quantity=Number(data.quantity||0);
+  if(!data.warehouseId||quantity<=0||!data.receivedAt){renderFormErrors([t("finishedGoodsReceiptRequired")]);return;}
+  try{const receipt=await createFinishedGoodsReceipt({production_order_id:data.productionOrderId,warehouse_id:data.warehouseId,quantity,received_at:`${data.receivedAt}T12:00:00Z`,notes:data.notes?.trim()||null});state.finishedGoodsReceipts={status:"idle",orders:[],products:[],summaries:[],error:""};state.inventoryMovements={status:"idle",error:""};state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]};closeModal();await Promise.all([loadInventoryMovementData(),loadFinishedGoodsReceiptData()]);showToast(t("finishedGoodsReceiptSaved",{code:receipt.movement.movement_code}));}catch(error){renderFormErrors([error.message||t("finishedGoodsReceiptSaveError")]);}
+}
+
+function isSalesProductServiceEligible(item) {
+  return getApiMode() !== "api" || item?.kind === "Servicio" || Boolean(item?.inventoryItemId);
+}
+
 function renderQuoteLineRow(line = {}, index = 0) {
   const productService = line.productServiceId ? mockDb.findProductService(line.productServiceId) : null;
   return `
     <div class="quote-line-row" data-quote-line>
       <label class="preview-field product-lookup-field quote-line-product">
         <span>${t("productOrService")}</span>
-        <input class="quote-product-search" type="text" value="${productService ? formatProductServiceOption(productService) : line.productServiceName || ""}" placeholder="${t("productLookupPlaceholder")}" autocomplete="off" required />
-        <input name="lineProductServiceId" type="hidden" value="${line.productServiceId || ""}" />
+        <input class="quote-product-search" type="text" value="${escapeAttribute(productService ? formatProductServiceOption(productService) : line.productServiceName || "")}" placeholder="${escapeAttribute(t("productLookupPlaceholder"))}" autocomplete="off" required />
+        <input name="lineProductServiceId" type="hidden" value="${escapeAttribute(line.productServiceId || "")}" />
         <div class="lookup-results quote-product-results" hidden></div>
       </label>
       <label class="preview-field">
         <span>${t("quantity")}</span>
-        <input name="lineQuantity" type="number" min="0.01" step="0.01" value="${line.quantity || 1}" required />
+        <input name="lineQuantity" type="number" min="0.01" step="0.01" value="${escapeAttribute(line.quantity || 1)}" required />
       </label>
       <label class="preview-field">
         <span>${t("unit")}</span>
-        <input name="lineUnit" type="text" value="${line.unit || productService?.unit || ""}" required />
+        ${unitSelect("lineUnit", line.unit || productService?.unit || "H87")}
       </label>
       <label class="preview-field">
         <span>${t("unitPrice")}</span>
-        <input name="lineUnitPrice" type="number" min="0" step="0.01" value="${line.unitPrice || productService?.targetPrice || 0}" required />
+        <input name="lineUnitPrice" type="number" min="0" step="0.01" value="${escapeAttribute(line.unitPrice || productService?.targetPrice || 0)}" required />
       </label>
       <label class="preview-field">
         <span>${t("discount")}</span>
-        <input name="lineDiscount" type="number" min="0" max="100" step="0.01" value="${line.discount || 0}" />
+        <input name="lineDiscount" type="number" min="0" max="100" step="0.01" value="${escapeAttribute(line.discount || 0)}" />
       </label>
       <button class="icon-button remove-resource" type="button" data-action="remove-quote-line" aria-label="${t("removeQuoteLine")}">x</button>
     </div>
@@ -6766,14 +7241,14 @@ function renderQuoteProductLookup(event) {
   const input = event.target;
   const row = input.closest("[data-quote-line]");
   const results = row.querySelector(".quote-product-results");
-  const matches = getProductServiceMatches(input.value);
+  const matches = getProductServiceMatches(input.value).filter(isSalesProductServiceEligible);
   results.hidden = false;
   results.innerHTML = matches.length
     ? matches
         .map((item) => `
-          <button class="lookup-option" type="button" data-product-id="${item.id}">
-            <strong>${item.name}</strong>
-            <span>${item.sku} · ${item.kind} · ${item.unit}</span>
+          <button class="lookup-option" type="button" data-product-id="${escapeAttribute(item.id)}">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span>${escapeHtml(item.sku)} · ${escapeHtml(item.kind)} · ${escapeHtml(item.unit)}</span>
           </button>
         `)
         .join("")
@@ -6784,32 +7259,33 @@ function selectQuoteProductFromLookup(event) {
   const button = event.target.closest("[data-product-id]");
   if (!button) return;
   const item = mockDb.findProductService(button.dataset.productId);
-  if (!item) return;
+  if (!item || !isSalesProductServiceEligible(item)) return;
   const row = button.closest("[data-quote-line]");
   row.querySelector(".quote-product-search").value = formatProductServiceOption(item);
   row.querySelector("[name='lineProductServiceId']").value = item.id;
-  row.querySelector("[name='lineUnit']").value = item.unit || "";
+  row.querySelector("[name='lineUnit']").value = normalizeUnitCode(item.unit || "H87");
   row.querySelector("[name='lineUnitPrice']").value = item.targetPrice || 0;
   row.querySelector(".quote-product-results").hidden = true;
 }
 
 function syncQuoteProductFields(event) {
   const row = event.target.closest("[data-quote-line]");
-  const item = findProductServiceByOption(event.target.value);
+  const candidate = findProductServiceByOption(event.target.value);
+  const item = isSalesProductServiceEligible(candidate) ? candidate : null;
   row.querySelector("[name='lineProductServiceId']").value = item?.id || "";
   renderQuoteProductLookup(event);
   if (!item) return;
-  row.querySelector("[name='lineUnit']").value = item.unit || "";
+  row.querySelector("[name='lineUnit']").value = normalizeUnitCode(item.unit || "H87");
   row.querySelector("[name='lineUnitPrice']").value = item.targetPrice || 0;
 }
 
-function saveSalesQuoteForm(event, module, submodule) {
+async function saveSalesQuoteForm(event, module, submodule) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = Object.fromEntries(new FormData(form).entries());
   const errors = [];
 
-  if (!data.code?.trim()) errors.push(t("quoteCodeRequired"));
+  if (!data.code?.trim() && getApiMode() !== "api") errors.push(t("quoteCodeRequired"));
   if (!data.customerId) errors.push(t("quoteCustomerRequired"));
   if (!data.validUntil) errors.push(t("validUntilRequired"));
 
@@ -6823,8 +7299,12 @@ function saveSalesQuoteForm(event, module, submodule) {
 
   const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0);
   const total = lines.reduce((sum, line) => sum + line.total, 0);
-  const code = data.code.trim().toUpperCase();
+  let code = data.code.trim().toUpperCase();
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
+  if(getApiMode()==="api"){
+    const payload={customer_id:customer.id,currency:data.currency,payment_terms:data.paymentTerms,valid_until:data.validUntil,promised_delivery_date:data.deliveryPromise||null,notes:data.notes?.trim()||null,lines:lines.map(line=>({product_service_id:line.productServiceId,quantity:line.quantity,unit:line.unit,unit_price:line.unitPrice,discount_percentage:line.discount}))};
+    try{if(existingRecord)await updateSalesQuote(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.quote",code,data.codeRequestKey);await createSalesQuote({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"quoteUpdated":"quoteSaved",{code}));}catch(error){renderFormErrors([error.message||"No se pudo guardar la cotización."]);}return;
+  }
   const fields = {
     customerId: customer.id,
     customerName: `${customer.code} - ${customer.title}`,
@@ -6902,8 +7382,9 @@ function buildQuoteLinesFromForm(form, errors) {
 
 function openSalesOrderModal(module, submodule, quoteId = null) {
   const label = state.lang === "en" ? module.titleEn : module.title;
+  const usedQuoteIds=new Set(mockDb.loadModuleRecords(module.id,"pedidos").filter(record=>record.recordType==="salesOrder"&&record.status!=="Cancelado").map(record=>record.fields?.quoteId).filter(Boolean));
   const approvedQuotes = mockDb.loadModuleRecords(module.id, "cotizaciones")
-    .filter((record) => record.recordType === "quote" && record.status === "Aprobado");
+    .filter((record) => record.recordType === "quote" && record.status === "Aprobado" && !usedQuoteIds.has(record.id));
   const selectedQuote = quoteId
     ? approvedQuotes.find((quote) => quote.id === quoteId)
     : approvedQuotes[0];
@@ -6915,7 +7396,8 @@ function openSalesOrderModal(module, submodule, quoteId = null) {
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="salesOrderForm">
-      <input type="hidden" name="quoteId" value="${selectedQuote.id}" />
+      <input type="hidden" name="quoteId" value="${escapeAttribute(selectedQuote.id)}" />
+      <input type="hidden" name="codeRequestKey" value="${escapeAttribute(codeRequestKey("sales.order"))}" />
       <div class="modal-head">
         <div>
           <p class="eyebrow">${label}</p>
@@ -6927,41 +7409,41 @@ function openSalesOrderModal(module, submodule, quoteId = null) {
       <div class="form-grid">
         <label class="preview-field">
           <span>${t("salesOrderCode")}</span>
-          <input name="code" type="text" value="" placeholder="PED-001" required />
+          <input name="code" type="text" value="" placeholder="${codeSequenceConfig("sales.order")?.mode === "managed" ? t("codeAssignedAutomatically") : "PED-001"}" ${codeSequenceConfig("sales.order")?.mode === "managed" ? "readonly" : ""} />
         </label>
-        <label class="preview-field wide-field">
+        <label class="preview-field wide-field product-lookup-field">
           <span>${t("quoteDocument")}</span>
-          <select name="selectedQuoteId" required>
-            ${approvedQuotes.map((quote) => `<option value="${quote.id}" ${selectedOption(selectedQuote.id, quote.id)}>${quote.code} - ${quote.fields?.customerName || quote.title} - ${formatCurrency(Number(quote.fields?.total || 0))}</option>`).join("")}
-          </select>
+          <input name="quoteSearch" type="search" value="${escapeAttribute(`${selectedQuote.code} - ${selectedQuote.fields?.customerName||selectedQuote.title}`)}" placeholder="${escapeAttribute(t("quoteLookupPlaceholder"))}" autocomplete="off" required />
+          <div class="lookup-results" id="salesOrderQuoteResults" hidden></div>
+          <small>${t("quoteLookupHelp")}</small>
         </label>
-        <label class="preview-field">
+        ${getApiMode() !== "api" ? `<label class="preview-field">
           <span>${t("status")}</span>
           <select name="status">
             <option value="Aprobado">${t("approvedStatus")}</option>
             <option value="En preparacion">${t("preparingStatus")}</option>
             <option value="Cancelado">${t("canceledStatus")}</option>
           </select>
-        </label>
+        </label>` : ""}
         <label class="preview-field">
           <span>${t("deliveryPromise")}</span>
-          <input name="deliveryPromise" type="date" value="${selectedQuote.fields?.deliveryPromise || ""}" />
+          <input name="deliveryPromise" type="date" value="${escapeAttribute(selectedQuote.fields?.deliveryPromise || "")}" />
         </label>
-        <label class="preview-field">
+        ${getApiMode() !== "api" ? `<label class="preview-field">
           <span>${t("fulfillmentMode")}</span>
           <select name="fulfillmentMode">
-            <option value="${t("pendingInventoryReview")}">${t("pendingInventoryReview")}</option>
-            <option value="${t("stockFulfillment")}">${t("stockFulfillment")}</option>
-            <option value="${t("productionFulfillment")}">${t("productionFulfillment")}</option>
+            <option value="${escapeAttribute(t("pendingInventoryReview"))}">${t("pendingInventoryReview")}</option>
+            <option value="${escapeAttribute(t("stockFulfillment"))}">${t("stockFulfillment")}</option>
+            <option value="${escapeAttribute(t("productionFulfillment"))}">${t("productionFulfillment")}</option>
           </select>
         </label>
         <label class="preview-field">
           <span>${t("owner")}</span>
-          <input name="owner" type="text" value="${selectedQuote.owner || ""}" />
-        </label>
+          <input name="owner" type="text" value="${escapeAttribute(selectedQuote.owner || "")}" />
+        </label>` : ""}
         <label class="preview-field wide-field">
           <span>${t("notes")}</span>
-          <textarea name="notes" rows="3" placeholder="${t("salesOrderNotesPlaceholder")}"></textarea>
+          <textarea name="notes" rows="3" placeholder="${escapeAttribute(t("salesOrderNotesPlaceholder"))}"></textarea>
         </label>
       </div>
 
@@ -6976,17 +7458,26 @@ function openSalesOrderModal(module, submodule, quoteId = null) {
   modalBackdrop.hidden = false;
   modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
   modalContent.querySelector("[data-action='close-sales-order']").addEventListener("click", closeModal);
-  modalContent.querySelector("[name='selectedQuoteId']").addEventListener("change", (event) => {
-    const quote = approvedQuotes.find((item) => item.id === event.target.value);
+  const quoteSearch=modalContent.querySelector("[name='quoteSearch']");
+  const quoteResults=modalContent.querySelector("#salesOrderQuoteResults");
+  const showQuotes=()=>renderSalesDocumentLookup(quoteResults,approvedQuotes,quoteSearch.value,"quote");
+  quoteSearch.addEventListener("focus",showQuotes);
+  quoteSearch.addEventListener("input",()=>{modalContent.querySelector("[name='quoteId']").value="";showQuotes();});
+  quoteResults.addEventListener("click",event=>{
+    const button=event.target.closest("[data-document-id]"); if(!button)return;
+    const quote = approvedQuotes.find((item) => item.id === button.dataset.documentId);
     if (!quote) return;
     modalContent.querySelector("[name='quoteId']").value = quote.id;
+    quoteSearch.value=`${quote.code} - ${quote.fields?.customerName||quote.title}`;
+    quoteResults.hidden=true;
     modalContent.querySelector("[name='deliveryPromise']").value = quote.fields?.deliveryPromise || "";
-    modalContent.querySelector("[name='owner']").value = quote.owner || "";
+    const ownerInput=modalContent.querySelector("[name='owner']");
+    if(ownerInput)ownerInput.value=quote.owner||"";
   });
   modalContent.querySelector("#salesOrderForm").addEventListener("submit", (event) => saveSalesOrderForm(event, module, submodule));
 }
 
-function saveSalesOrderForm(event, module, submodule) {
+async function saveSalesOrderForm(event, module, submodule) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = Object.fromEntries(new FormData(form).entries());
@@ -6995,12 +7486,21 @@ function saveSalesOrderForm(event, module, submodule) {
   const existingOrder = mockDb.loadModuleRecords(module.id, submodule.id)
     .find((record) => record.recordType === "salesOrder" && record.fields?.quoteId === data.quoteId);
 
-  if (!data.code?.trim()) errors.push(t("salesOrderCodeRequired"));
+  if (!data.code?.trim() && getApiMode() !== "api") errors.push(t("salesOrderCodeRequired"));
   if (!quote || quote.status !== "Aprobado") errors.push(t("salesOrderRequiresApprovedQuote"));
   if (existingOrder) errors.push(t("salesOrderQuoteAlreadyUsed"));
 
   if (errors.length) {
     renderFormErrors(errors);
+    return;
+  }
+
+  if (getApiMode() === "api") {
+    try {
+      const businessCode=await resolveBusinessCode("sales.order",data.code,data.codeRequestKey);
+      await createSalesOrder({code:businessCode,quote_id:data.quoteId,promised_delivery_date:data.deliveryPromise||null,notes:data.notes?.trim()||null});
+      closeModal(); await loadSalesApiData(); navigateTo({active:"ventas",activeSubmodule:"pedidos",laborArea:""}); showToast(t("salesOrderSaved",{code:businessCode}));
+    } catch (error) { renderFormErrors([error.message||"No se pudo crear el pedido."]); }
     return;
   }
 
@@ -7043,6 +7543,7 @@ function saveSalesOrderForm(event, module, submodule) {
 }
 
 function openSalesOrderEditModal(module, submodule, orderId) {
+  if (getApiMode() === "api") { openSalesOrderFulfillmentModal(module, orderId); return; }
   const label = state.lang === "en" ? module.titleEn : module.title;
   const order = mockDb.findModuleRecord(module.id, orderId);
   if (!order || order.recordType !== "salesOrder") return;
@@ -7050,7 +7551,7 @@ function openSalesOrderEditModal(module, submodule, orderId) {
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="salesOrderEditForm">
-      <input type="hidden" name="orderId" value="${order.id}" />
+      <input type="hidden" name="orderId" value="${escapeAttribute(order.id)}" />
       <div class="modal-head">
         <div>
           <p class="eyebrow">${label}</p>
@@ -7062,7 +7563,7 @@ function openSalesOrderEditModal(module, submodule, orderId) {
       <div class="form-grid">
         <label class="preview-field">
           <span>${t("salesOrderCode")}</span>
-          <input name="code" type="text" value="${order.code || ""}" required />
+          <input name="code" type="text" value="${escapeAttribute(order.code || "")}" required />
         </label>
         <label class="preview-field">
           <span>${t("status")}</span>
@@ -7072,7 +7573,7 @@ function openSalesOrderEditModal(module, submodule, orderId) {
         </label>
         <label class="preview-field">
           <span>${t("deliveryPromise")}</span>
-          <input name="deliveryPromise" type="date" value="${fields.deliveryPromise || ""}" />
+          <input name="deliveryPromise" type="date" value="${escapeAttribute(fields.deliveryPromise || "")}" />
         </label>
         <label class="preview-field">
           <span>${t("fulfillmentMode")}</span>
@@ -7082,15 +7583,15 @@ function openSalesOrderEditModal(module, submodule, orderId) {
         </label>
         <label class="preview-field">
           <span>${t("owner")}</span>
-          <input name="owner" type="text" value="${order.owner || ""}" />
+          <input name="owner" type="text" value="${escapeAttribute(order.owner || "")}" />
         </label>
         <label class="preview-field wide-field">
           <span>${t("notes")}</span>
-          <textarea name="notes" rows="3" placeholder="${t("salesOrderNotesPlaceholder")}">${fields.notes || ""}</textarea>
+          <textarea name="notes" rows="3" placeholder="${escapeAttribute(t("salesOrderNotesPlaceholder"))}">${escapeHtml(fields.notes || "")}</textarea>
         </label>
         <label class="preview-field wide-field">
           <span>${t("adjustmentReason")}</span>
-          <textarea name="adjustmentReason" rows="3" placeholder="${t("adjustmentReasonPlaceholder")}" required></textarea>
+          <textarea name="adjustmentReason" rows="3" placeholder="${escapeAttribute(t("adjustmentReasonPlaceholder"))}" required></textarea>
         </label>
       </div>
 
@@ -7238,12 +7739,50 @@ function calculateSalesEstimatedCost(lines = []) {
   }, 0);
 }
 
+function normalizeDocumentSearch(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+function getSalesDocumentMatches(records, query) {
+  const terms=normalizeDocumentSearch(query).split(/\s+/).filter(Boolean);
+  return records.filter(record=>{
+    const products=(record.fields?.lines||[]).map(line=>line.productServiceName).join(" ");
+    const haystack=normalizeDocumentSearch([record.code,record.title,record.status,record.owner,record.fields?.customerName,record.fields?.quoteCode,products,record.fields?.total].join(" "));
+    return terms.every(term=>haystack.includes(term));
+  }).slice(0,20);
+}
+
+function renderSalesDocumentLookup(results, records, query, kind) {
+  const matches=getSalesDocumentMatches(records,query);
+  results.hidden=false;
+  results.innerHTML=matches.length?matches.map(record=>{
+    const products=[...new Set((record.fields?.lines||[]).map(line=>line.productServiceName).filter(Boolean))].slice(0,2).join(" · ");
+    const customer=record.fields?.customerName||record.owner||record.title;
+    const detail=kind==="quote"?`${customer} · ${formatCurrency(Number(record.fields?.total||0))}`:`${customer} · ${translateStatus(record.status)}`;
+    return `<button class="lookup-option" type="button" data-document-id="${escapeAttribute(record.id)}"><strong>${escapeHtml(record.code)} · ${escapeHtml(customer)}</strong><span>${escapeHtml(detail)}${products?` · ${escapeHtml(products)}`:""}</span></button>`;
+  }).join(""):`<div class="lookup-empty">${t("documentLookupEmpty")}</div>`;
+}
+
 function openSalesDeliveryModal(module, submodule, orderId = null) {
   const label = state.lang === "en" ? module.titleEn : module.title;
-  const orders = mockDb.loadModuleRecords(module.id, "pedidos").filter((record) => record.recordType === "salesOrder");
+  const deliveries = mockDb.loadModuleRecords(module.id, "entregas").filter((record) => record.recordType === "salesDelivery" && record.status !== "Cancelada");
+  const committedByLine = new Map();
+  deliveries.forEach((delivery) => (delivery.fields?.lines || []).forEach((line) => {
+    committedByLine.set(line.orderLineId, (committedByLine.get(line.orderLineId) || 0) + Number(line.quantity || 0));
+  }));
+  const orders = mockDb.loadModuleRecords(module.id, "pedidos").filter((record) =>
+    record.recordType === "salesOrder"
+      && !["Cancelado", "Entregado"].includes(record.status)
+      && record.fields?.cancellationState !== "processing"
+      && (record.fields?.lines||[]).some(line=>Number(line.quantity)>Number(line.deliveredQuantity||0)+Number(committedByLine.get(line.id)||0)&&["ready","reserved","partially_delivered"].includes(line.fulfillmentStatus))
+  );
   const selectedOrder = orderId
     ? orders.find((order) => order.id === orderId)
     : orders[0];
+  const deliverableLines = (selectedOrder?.fields?.lines || []).filter(
+    (line) => Number(line.quantity) > Number(line.deliveredQuantity || 0) + Number(committedByLine.get(line.id) || 0)
+      && ["ready", "reserved", "partially_delivered"].includes(line.fulfillmentStatus)
+  );
 
   if (!orders.length || !selectedOrder) {
     showToast(t("deliveryRequiresSalesOrder"));
@@ -7252,7 +7791,8 @@ function openSalesDeliveryModal(module, submodule, orderId = null) {
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="salesDeliveryForm">
-      <input type="hidden" name="orderId" value="${selectedOrder.id}" />
+      <input type="hidden" name="orderId" value="${escapeAttribute(selectedOrder.id)}" />
+      <input type="hidden" name="codeRequestKey" value="${escapeAttribute(codeRequestKey("sales.delivery"))}" />
       <div class="modal-head">
         <div>
           <p class="eyebrow">${label}</p>
@@ -7262,38 +7802,46 @@ function openSalesDeliveryModal(module, submodule, orderId = null) {
       </div>
 
       <div class="form-grid">
-        <label class="preview-field wide-field">
-          <span>${t("salesOrder")}</span>
-          <select name="selectedOrderId" required>
-            ${orders.map((order) => `<option value="${order.id}" ${selectedOption(selectedOrder.id, order.id)}>${order.code} - ${order.fields?.customerName || order.owner} - ${translateStatus(order.status)}</option>`).join("")}
-          </select>
-        </label>
         <label class="preview-field">
+          <span>${t("deliveryCode")}</span>
+          <input name="code" type="text" maxlength="60" placeholder="${codeSequenceConfig("sales.delivery")?.mode === "managed" ? t("codeAssignedAutomatically") : "ENT-001"}" ${codeSequenceConfig("sales.delivery")?.mode === "managed" ? "readonly" : ""} />
+        </label>
+        <label class="preview-field wide-field product-lookup-field">
+          <span>${t("salesOrder")}</span>
+          <input name="orderSearch" type="search" value="${escapeAttribute(`${selectedOrder.code} - ${selectedOrder.fields?.customerName||selectedOrder.owner}`)}" placeholder="${escapeAttribute(t("orderLookupPlaceholder"))}" autocomplete="off" required />
+          <div class="lookup-results" id="deliveryOrderResults" hidden></div>
+          <small>${t("orderLookupHelp")}</small>
+        </label>
+        ${getApiMode() !== "api" ? `<label class="preview-field">
           <span>${t("deliveryStatus")}</span>
           <select name="deliveryStatus">
             ${getDeliveryStatusOptions().map((status) => `<option value="${status}">${translateStatus(status)}</option>`).join("")}
           </select>
-        </label>
+        </label>` : ""}
         <label class="preview-field">
           <span>${t("deliveryDate")}</span>
           <input name="deliveryDate" type="date" value="${new Date().toISOString().slice(0, 10)}" required />
         </label>
         <label class="preview-field">
           <span>${t("recipient")}</span>
-          <input name="recipient" type="text" value="${selectedOrder.fields?.customerName || selectedOrder.owner || ""}" placeholder="${t("recipientPlaceholder")}" />
+          <input name="recipient" type="text" value="${escapeAttribute(selectedOrder.fields?.customerName || selectedOrder.owner || "")}" placeholder="${escapeAttribute(t("recipientPlaceholder"))}" />
         </label>
         <label class="preview-field">
           <span>${t("deliveryReference")}</span>
           <input name="deliveryReference" type="text" placeholder="REM-001 / guia / evidencia" />
         </label>
-        <label class="preview-field">
+        ${getApiMode() !== "api" ? `<label class="preview-field">
           <span>${t("nextDeliveryDate")}</span>
           <input name="nextDeliveryDate" type="date" />
-        </label>
+        </label>` : ""}
         <label class="preview-field wide-field">
           <span>${t("deliveryNotes")}</span>
-          <textarea name="notes" rows="3" placeholder="${t("deliveryNotesPlaceholder")}"></textarea>
+          <textarea name="notes" rows="3" placeholder="${escapeAttribute(t("deliveryNotesPlaceholder"))}"></textarea>
         </label>
+        ${getApiMode() === "api" ? `<div class="wide-field records"><strong>Partidas a entregar</strong>${deliverableLines.map((line) => {
+          const remaining = Number(line.quantity) - Number(line.deliveredQuantity || 0) - Number(committedByLine.get(line.id) || 0);
+          return `<article class="record-row"><div class="record-main"><strong>${escapeHtml(line.productServiceName)}</strong><span>${formatNumber(remaining)} ${escapeHtml(line.unit)} sin comprometer</span></div><label class="preview-field"><span>Cantidad de esta entrega</span><input name="deliveryQuantity-${escapeAttribute(line.id)}" type="number" min="0" max="${remaining}" step="any" value="${remaining}" required /></label>${line.productServiceType === "service" ? `<label class="preview-field"><span>Costo unitario real</span><input name="deliveryActualCost-${escapeAttribute(line.id)}" type="number" min="0" step="0.000001" required /></label>` : ""}</article>`;
+        }).join("")}</div>` : ""}
       </div>
 
       <div class="form-errors" id="formErrors" hidden></div>
@@ -7307,10 +7855,23 @@ function openSalesDeliveryModal(module, submodule, orderId = null) {
   modalBackdrop.hidden = false;
   modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
   modalContent.querySelector("[data-action='close-sales-delivery']").addEventListener("click", closeModal);
-  modalContent.querySelector("[name='selectedOrderId']").addEventListener("change", (event) => {
-    const order = orders.find((item) => item.id === event.target.value);
+  const orderSearch=modalContent.querySelector("[name='orderSearch']");
+  const orderResults=modalContent.querySelector("#deliveryOrderResults");
+  const showOrders=()=>renderSalesDocumentLookup(orderResults,orders,orderSearch.value,"order");
+  orderSearch.addEventListener("focus",showOrders);
+  orderSearch.addEventListener("input",()=>{modalContent.querySelector("[name='orderId']").value="";showOrders();});
+  orderResults.addEventListener("click",event=>{
+    const button=event.target.closest("[data-document-id]");
+    if(!button)return;
+    const order = orders.find((item) => item.id === button.dataset.documentId);
     if (!order) return;
+    if (getApiMode() === "api") {
+      openSalesDeliveryModal(module, submodule, order.id);
+      return;
+    }
     modalContent.querySelector("[name='orderId']").value = order.id;
+    orderSearch.value=`${order.code} - ${order.fields?.customerName||order.owner}`;
+    orderResults.hidden=true;
     modalContent.querySelector("[name='recipient']").value = order.fields?.customerName || order.owner || "";
   });
   modalContent.querySelector("#salesDeliveryForm").addEventListener("submit", (event) => saveSalesDeliveryForm(event, module, submodule));
@@ -7328,7 +7889,7 @@ function getDeliveryStatusOptions() {
   ];
 }
 
-function saveSalesDeliveryForm(event, module, submodule) {
+async function saveSalesDeliveryForm(event, module, submodule) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = Object.fromEntries(new FormData(form).entries());
@@ -7337,14 +7898,22 @@ function saveSalesDeliveryForm(event, module, submodule) {
 
   if (!order || order.recordType !== "salesOrder") errors.push(t("deliveryRequiresSalesOrder"));
   if (!data.deliveryDate) errors.push(t("deliveryDateRequired"));
-  if (!getDeliveryStatusOptions().includes(data.deliveryStatus)) errors.push(t("deliveryStatusRequired"));
-  if (data.deliveryStatus === "Entrega parcial" && !data.notes?.trim()) errors.push(t("partialDeliveryNotesRequired"));
-  if (data.deliveryStatus === "No entregado" && !data.notes?.trim()) errors.push(t("failedDeliveryNotesRequired"));
-  if (data.deliveryStatus === "Reprogramado" && !data.nextDeliveryDate) errors.push(t("nextDeliveryDateRequired"));
+  if (getApiMode() !== "api" && !getDeliveryStatusOptions().includes(data.deliveryStatus)) errors.push(t("deliveryStatusRequired"));
+  if (getApiMode() !== "api" && data.deliveryStatus === "Entrega parcial" && !data.notes?.trim()) errors.push(t("partialDeliveryNotesRequired"));
+  if (getApiMode() !== "api" && data.deliveryStatus === "No entregado" && !data.notes?.trim()) errors.push(t("failedDeliveryNotesRequired"));
+  if (getApiMode() !== "api" && data.deliveryStatus === "Reprogramado" && !data.nextDeliveryDate) errors.push(t("nextDeliveryDateRequired"));
 
   if (errors.length) {
     renderFormErrors(errors);
     return;
+  }
+
+  if (getApiMode() === "api") {
+    const lines=(order.fields?.lines||[]).filter(line=>line.quantity>line.deliveredQuantity&&["ready","reserved","partially_delivered"].includes(line.fulfillmentStatus)).map(line=>({order_line_id:line.id,quantity:Number(data[`deliveryQuantity-${line.id}`]||0),actual_unit_cost:line.productServiceType==="service"?Number(data[`deliveryActualCost-${line.id}`]):null})).filter(line=>line.quantity>0);
+    if(!lines.length){renderFormErrors(["El pedido no tiene partidas listas o reservadas para entregar."]);return;}
+    const invalidLine=lines.find(line=>{const source=(order.fields?.lines||[]).find(item=>item.id===line.order_line_id);return !Number.isFinite(line.quantity)||line.quantity<=0||line.quantity>(Number(source?.quantity||0)-Number(source?.deliveredQuantity||0))||(source?.productServiceType==="service"&&(!Number.isFinite(line.actual_unit_cost)||line.actual_unit_cost<0));});
+    if(invalidLine){renderFormErrors(["La cantidad a entregar debe ser mayor a cero y no exceder el pendiente de la partida."]);return;}
+    try{const businessCode=await resolveBusinessCode("sales.delivery",data.code,data.codeRequestKey);await createSalesDelivery({code:businessCode,order_id:order.id,scheduled_date:data.deliveryDate,recipient_name:data.recipient?.trim()||null,evidence_reference:data.deliveryReference?.trim()||null,notes:data.notes?.trim()||null,lines});closeModal();await loadSalesApiData();navigateTo({active:"ventas",activeSubmodule:"entregas",laborArea:""});showToast("Entrega registrada como borrador. Confírmala para consumir las reservas.");}catch(error){renderFormErrors([error.message||"No se pudo registrar la entrega."]);}return;
   }
 
   const code = `ENT-${String(Date.now()).slice(-5)}`;
@@ -7406,11 +7975,21 @@ function getSalesOrderStatusFromDelivery(deliveryStatus, currentStatus) {
 }
 
 function openProductServiceModal(productServiceId = null) {
+  if (getApiMode() === "api" && isInventoryApiEnabled() && state.inventoryItems.status === "idle") {
+    loadInventoryApiData().then(loadInventoryItemData).then(() => openProductServiceModal(productServiceId));
+    return;
+  }
   const existingItem = productServiceId ? mockDb.findProductService(productServiceId) : null;
   const isEditing = Boolean(existingItem);
+  const inventoryItems = mockDb.loadModuleRecords("almacenes", "articulos").filter((item) => item.recordType === "inventoryItem" && item.status !== "Inactivo");
+  const renderInventoryMappingOptions = (unit, selectedId = "") => {
+    const matching = inventoryItems.filter((item) => normalizeUnitCode(item.fields?.unit || "") === normalizeUnitCode(unit || ""));
+    return `<option value="">${matching.length ? "Seleccionar artículo autoritativo" : "No hay artículos activos con esta unidad"}</option>${matching.map((item) => `<option value="${escapeAttribute(item.id)}" ${selectedOption(selectedId, item.id)}>${escapeHtml(item.code)} - ${escapeHtml(item.title)} (${escapeHtml(item.fields?.unit || "")})</option>`).join("")}`;
+  };
   modalContent.innerHTML = `
     <form class="recipe-form" id="productServiceForm">
-      <input type="hidden" name="productServiceId" value="${existingItem?.id || ""}" />
+      <input type="hidden" name="productServiceId" value="${escapeAttribute(existingItem?.id || "")}" />
+      <input type="hidden" name="codeRequestKey" value="${escapeAttribute(codeRequestKey("production.product_service"))}" />
       <div class="modal-head">
         <div>
           <p class="eyebrow">Produccion</p>
@@ -7429,35 +8008,41 @@ function openProductServiceModal(productServiceId = null) {
         </label>
         <label class="preview-field">
           <span>Nombre</span>
-          <input name="name" type="text" value="${existingItem?.name || ""}" placeholder="Ej. Producto o servicio premium" required />
+          <input name="name" type="text" value="${escapeAttribute(existingItem?.name || "")}" placeholder="Ej. Producto o servicio premium" required />
         </label>
         <label class="preview-field">
           <span>SKU / codigo interno</span>
-          <input name="sku" type="text" value="${existingItem?.sku || ""}" placeholder="Ej. PROD-INT-001" required />
+          <input name="sku" type="text" value="${escapeAttribute(existingItem?.sku || "")}" placeholder="${codeSequenceConfig("production.product_service")?.mode === "managed" ? t("codeAssignedAutomatically") : "Ej. PROD-INT-001"}" ${isEditing || codeSequenceConfig("production.product_service")?.mode === "managed" ? "readonly" : ""} />
         </label>
         <label class="preview-field">
           <span>Unidad base</span>
-          <input name="unit" type="text" value="${existingItem?.unit || "pieza"}" required />
+          ${unitSelect("unit", existingItem?.unit || "H87")}
+        </label>
+        <label class="preview-field" data-product-inventory-field>
+          <span>Artículo de inventario vinculado</span>
+          <select name="inventoryItemId" data-entity-selector>
+            ${renderInventoryMappingOptions(existingItem?.unit || "H87", existingItem?.inventoryItemId || "")}
+          </select>
         </label>
         <label class="preview-field">
           <span>Categoria</span>
-          <input name="category" type="text" value="${existingItem?.category || "Produccion"}" required />
+          <input name="category" type="text" value="${escapeAttribute(existingItem?.category || "Produccion")}" required />
         </label>
         <label class="preview-field wide-field">
           <span>Centro de costos</span>
-          <input name="center" type="text" value="${existingItem?.center || "Produccion / General"}" required />
+          <input name="center" type="text" value="${escapeAttribute(existingItem?.center || "Produccion / General")}" required />
         </label>
         <label class="preview-field">
           <span>Responsable</span>
-          <input name="owner" type="text" value="${existingItem?.owner || "Operacion"}" required />
+          <input name="owner" type="text" value="${escapeAttribute(existingItem?.owner || "Operacion")}" required />
         </label>
         <label class="preview-field">
           <span>Precio objetivo</span>
-          <input name="targetPrice" type="number" min="0" step="0.01" value="${existingItem?.targetPrice || 0}" required />
+          <input name="targetPrice" type="number" min="0" step="0.01" value="${escapeAttribute(existingItem?.targetPrice || 0)}" required />
         </label>
         <label class="preview-field">
           <span>Margen esperado %</span>
-          <input name="expectedMargin" type="number" min="0" max="100" step="0.01" value="${existingItem?.expectedMargin || 0}" required />
+          <input name="expectedMargin" type="number" min="0" max="100" step="0.01" value="${escapeAttribute(existingItem?.expectedMargin || 0)}" required />
         </label>
         <label class="preview-field">
           <span>Estatus</span>
@@ -7469,7 +8054,7 @@ function openProductServiceModal(productServiceId = null) {
         </label>
         <label class="preview-field wide-field">
           <span>Descripcion</span>
-          <input name="description" type="text" value="${existingItem?.description || ""}" placeholder="Uso operativo del producto o servicio" required />
+          <input name="description" type="text" value="${escapeAttribute(existingItem?.description || "")}" placeholder="Uso operativo del producto o servicio" required />
         </label>
       </div>
 
@@ -7485,6 +8070,26 @@ function openProductServiceModal(productServiceId = null) {
   modalBackdrop.hidden = false;
   modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
   modalContent.querySelector("[data-action='close-product-service']").addEventListener("click", closeModal);
+  const kindSelect = modalContent.querySelector("[name='kind']");
+  const baseUnitSelect = modalContent.querySelector("[name='unit']");
+  const inventorySelect = modalContent.querySelector("[name='inventoryItemId']");
+  const syncInventoryMappingOptions = () => {
+    const selectedId = inventorySelect.value || existingItem?.inventoryItemId || "";
+    inventorySelect.innerHTML = renderInventoryMappingOptions(baseUnitSelect.value, selectedId);
+  };
+  const syncMappingRequirement = () => {
+    const isProduct = kindSelect.value === "Producto";
+    inventorySelect.required = isProduct;
+    inventorySelect.closest("label").hidden = !isProduct;
+    if (!isProduct) inventorySelect.value = "";
+  };
+  kindSelect.addEventListener("change", syncMappingRequirement);
+  baseUnitSelect.addEventListener("change", () => {
+    syncInventoryMappingOptions();
+    syncMappingRequirement();
+  });
+  syncInventoryMappingOptions();
+  syncMappingRequirement();
   modalContent.querySelector("#productServiceForm").addEventListener("submit", saveProductServiceForm);
 }
 
@@ -7499,6 +8104,7 @@ function buildProductServiceFromForm(form) {
     name: String(data.get("name") || "").trim(),
     kind,
     sku: String(data.get("sku") || "").trim(),
+    codeRequestKey: String(data.get("codeRequestKey") || ""),
     unit: String(data.get("unit") || "").trim(),
     category: String(data.get("category") || "").trim(),
     center: String(data.get("center") || "").trim(),
@@ -7508,6 +8114,7 @@ function buildProductServiceFromForm(form) {
     expectedMargin: Number(data.get("expectedMargin") || 0),
     status: String(data.get("status") || existingItem?.status || "Activo"),
     description: String(data.get("description") || "").trim(),
+    inventoryItemId: String(data.get("inventoryItemId") || "").trim(),
     createdAt: existingItem?.createdAt || new Date().toISOString().slice(0, 10),
     updatedAt: productServiceId ? new Date().toISOString().slice(0, 10) : ""
   };
@@ -7516,12 +8123,13 @@ function buildProductServiceFromForm(form) {
 function validateProductService(item) {
   const errors = [];
   if (!item.name) errors.push("Captura el nombre.");
-  if (!item.sku) errors.push("Captura el SKU o codigo interno.");
+  if (!item.sku && getApiMode() !== "api") errors.push("Captura el SKU o codigo interno.");
   if (!item.unit) errors.push("Captura la unidad base.");
   if (!item.category) errors.push("Captura la categoria.");
   if (!item.center) errors.push("Captura el centro de costos.");
   if (!item.owner) errors.push("Captura el responsable.");
   if (!item.description) errors.push("Captura la descripcion.");
+  if (item.kind === "Producto" && !item.inventoryItemId) errors.push("Vincula el producto con un artículo activo de Inventario.");
   return errors;
 }
 
@@ -7543,11 +8151,12 @@ async function saveProductServiceForm(event) {
         responsible_area: item.owner,
         cost_center: item.center,
         expected_margin: item.expectedMargin,
-        description: item.description
+        description: item.description,
+        inventory_item_id: item.kind === "Producto" ? item.inventoryItemId : null
       };
       const saved = exists
         ? await updateProductionProductService(item.id, payload)
-        : await createProductionProductService({ ...payload, code: item.sku, type: item.kind === "Servicio" ? "service" : "product" });
+        : await createProductionProductService({ ...payload, code: await resolveBusinessCode("production.product_service",item.sku,item.codeRequestKey), type: item.kind === "Servicio" ? "service" : "product" });
       const statuses = { Activo: "active", Inactivo: "inactive", "En espera de aprobacion": "pending_approval" };
       if (statuses[item.status] && saved.status !== statuses[item.status]) {
         await updateProductionProductServiceStatus(saved.id, { status: statuses[item.status], reason: "Estatus inicial del catalogo" });
@@ -7599,17 +8208,18 @@ function openLaborAreaModal(areaId = null) {
   modalContent.innerHTML = `
     <form class="recipe-form" id="laborAreaForm">
       <input type="hidden" name="areaId" value="${existingArea?.id || ""}" />
+      <input type="hidden" name="codeRequestKey" value="${escapeAttribute(codeRequestKey("hr.area"))}" />
       <div class="modal-head">
         <div>
-          <p class="eyebrow">${t("production")} - ${t("laborAreaCatalog")}</p>
+          <p class="eyebrow">${t("humanResources")} - ${t("laborAreaCatalog")}</p>
           <h2 id="modalTitle">${isEditing ? t("editLaborArea") : t("newLaborArea")}</h2>
         </div>
         <button class="icon-button modal-close" type="button" aria-label="Cerrar">x</button>
       </div>
       <p class="helper-copy">${t("laborAreaFormHelp")}</p>
       <div class="form-grid">
-        <label class="preview-field"><span>${t("laborAreaCode")}</span><input name="code" type="text" value="${escapeAttribute(existingArea?.code || "")}" placeholder="Ej. COSTURA" required /></label>
-        <label class="preview-field"><span>${t("laborAreaName")}</span><input name="name" type="text" value="${escapeAttribute(existingArea?.name || "")}" placeholder="Ej. Costura" required /></label>
+        <label class="preview-field"><span>${t("laborAreaCode")}</span><input name="code" type="text" value="${escapeAttribute(existingArea?.code || "")}" placeholder="${codeSequenceConfig("hr.area")?.mode === "managed" ? t("codeAssignedAutomatically") : "Ej. PROCESO"}" ${isEditing || codeSequenceConfig("hr.area")?.mode === "managed" ? "readonly" : ""} /></label>
+        <label class="preview-field"><span>${t("laborAreaName")}</span><input name="name" type="text" value="${escapeAttribute(existingArea?.name || "")}" placeholder="Ej. Proceso" required /></label>
         <label class="preview-field wide-field"><span>${t("laborAreaDescription")}</span><textarea name="description" rows="3" placeholder="Objetivo y alcance operativo del area">${escapeHtml(existingArea?.description || "")}</textarea></label>
         <label class="preview-field"><span>${t("laborAreaStatus")}</span><select name="status"><option ${existingArea?.status === "Activo" ? "selected" : ""}>Activo</option><option ${existingArea?.status === "Inactivo" ? "selected" : ""}>Inactivo</option></select></label>
       </div>
@@ -7625,6 +8235,47 @@ function openLaborAreaModal(areaId = null) {
   modalContent.querySelector("#laborAreaForm").addEventListener("submit", saveLaborAreaForm);
 }
 
+function openSalesOrderFulfillmentModal(module, orderId) {
+  if(getApiMode()==="api"&&(state.inventoryApi.status==="idle"||state.inventoryItems.status==="idle")){loadInventoryApiData().then(()=>loadInventoryItemData()).then(()=>openSalesOrderFulfillmentModal(module,orderId));return;}
+  const order=mockDb.findModuleRecord(module.id,orderId); if(!order)return;
+  const lines=(order.fields?.lines||[]).filter(line=>line.fulfillmentMode==="pending"&&line.fulfillmentStatus==="pending");
+  if(!lines.length){showToast("Todas las partidas ya tienen un modo de surtido autoritativo.");return;}
+  const inventoryItems=mockDb.loadModuleRecords("almacenes","articulos").filter(record=>record.recordType==="inventoryItem"&&record.status!=="Inactivo");
+  const warehouses=mockDb.loadModuleRecords("almacenes","almacenes").filter(record=>record.recordType==="warehouse"&&record.status!=="Inactivo");
+  modalContent.innerHTML=`<form class="recipe-form" id="salesOrderFulfillmentForm"><input type="hidden" name="orderId" value="${escapeAttribute(order.id)}"><div class="modal-head"><div><p class="eyebrow">${t("salesOrder")}</p><h2>${escapeHtml(order.code)} · Surtido</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div><p class="helper-copy">Cada producto usa exclusivamente el artículo de Inventario vinculado en su ficha. Una partida configurada ya no puede reasignarse.</p><div class="records">${lines.map(line=>{const product=mockDb.findProductService(line.productServiceId);const mappedId=product?.inventoryItemId||"";const mappedItem=inventoryItems.find(item=>item.id===mappedId);return `<article class="record-row fulfillment-line" data-line-id="${escapeAttribute(line.id)}"><div class="record-main"><strong>${escapeHtml(line.productServiceName)}</strong><span>${formatNumber(line.quantity-line.deliveredQuantity)} ${escapeHtml(line.unit)} pendientes</span></div><label class="preview-field"><span>Modo</span><select name="mode-${escapeAttribute(line.id)}">${line.productServiceType==="service"?`<option value="service">Servicio</option>`:`<option value="stock">Existencia</option><option value="production">Producción</option>`}</select></label>${line.productServiceType==="product"?`<label class="preview-field"><span>Artículo vinculado</span><select name="item-${escapeAttribute(line.id)}" required><option value="${escapeAttribute(mappedId)}">${mappedItem?`${escapeHtml(mappedItem.code)} - ${escapeHtml(mappedItem.title)}`:"Producto sin mapeo vigente"}</option></select></label><label class="preview-field"><span>Almacén</span><select name="warehouse-${escapeAttribute(line.id)}"><option value="">Seleccionar</option>${warehouses.map(item=>`<option value="${escapeAttribute(item.id)}">${escapeHtml(item.code)} - ${escapeHtml(item.title)}</option>`).join("")}</select></label>`:""}</article>`;}).join("")}</div><label class="preview-field wide-field"><span>Motivo de cancelación</span><textarea name="cancelReason" rows="2" placeholder="Solo se usa al cancelar"></textarea></label><div class="form-errors" id="formErrors" hidden></div><div class="modal-actions">${hasPermission("sales.order.cancel")?`<button class="secondary-action" type="button" data-action="cancel-api-order">Cancelar pedido</button>`:""}<button class="secondary-action" type="button" data-action="close-api-order">${t("cancel")}</button>${hasPermission("sales.order.fulfill")?`<button class="primary-action" type="submit">Configurar surtido</button>`:""}</div></form>`;
+  modalContent.querySelectorAll('select[name^="warehouse-"]').forEach(select=>{select.dataset.entitySelector="";select.dataset.searchPlaceholder="Buscar almacén por código o nombre";enhanceEntitySelect(select);});
+  modalBackdrop.hidden=false; modalContent.querySelector(".modal-close").addEventListener("click",closeModal); modalContent.querySelector("[data-action='close-api-order']").addEventListener("click",closeModal);
+  modalContent.querySelector("#salesOrderFulfillmentForm").addEventListener("submit",async event=>{event.preventDefault();const form=new FormData(event.currentTarget);const payload={lines:lines.map(line=>{const mode=form.get(`mode-${line.id}`);const remaining=line.quantity-line.deliveredQuantity;return {order_line_id:line.id,mode,allocations:mode==="stock"?[{inventory_item_id:form.get(`item-${line.id}`),warehouse_id:form.get(`warehouse-${line.id}`),quantity:remaining}]:[]};})};if(payload.lines.some(line=>line.mode==="stock"&&(!line.allocations[0].inventory_item_id||!line.allocations[0].warehouse_id))){renderFormErrors(["Selecciona artículo y almacén para cada partida surtida desde existencia."]);return;}try{await configureSalesOrderFulfillment(order.id,payload);closeModal();await loadSalesApiData();showToast("Surtido configurado.");}catch(error){renderFormErrors([error.message||"No se pudo configurar el surtido."]);}});
+  modalContent.querySelector("[data-action='cancel-api-order']")?.addEventListener("click",async()=>{const reason=modalContent.querySelector("[name='cancelReason']").value.trim();if(reason.length<3){renderFormErrors(["Captura el motivo de cancelación."]);return;}try{await cancelSalesOrder(order.id,reason);closeModal();await loadSalesApiData();showToast("Pedido cancelado.");}catch(error){renderFormErrors([error.message||"No se pudo cancelar el pedido."]);}});
+}
+
+function openAdminUnitModal(unitId) {
+  const unit = (getAdminPanelData()?.units || []).find((item) => item.id === unitId);
+  if (!unit) return;
+  const categories = [["count","uomCategoryCount"],["mass","uomCategoryMass"],["length","uomCategoryLength"],["area","uomCategoryArea"],["volume","uomCategoryVolume"],["time","uomCategoryTime"],["package","uomCategoryPackage"],["energy","uomCategoryEnergy"],["power","uomCategoryPower"],["electric","uomCategoryElectric"],["temperature","uomCategoryTemperature"],["pressure","uomCategoryPressure"],["ratio","uomCategoryRatio"],["other","uomCategoryOther"]];
+  modalContent.innerHTML = `<form class="recipe-form" id="adminUnitForm">
+    <div class="modal-head"><div><p class="eyebrow">${t("baseCatalog")}</p><h2 id="modalTitle">${t("editUnit")}</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div>
+    <div class="form-grid">
+      <label class="preview-field"><span>${t("stableCode")}</span><input value="${escapeAttribute(unit.code)}" disabled /></label>
+      <label class="preview-field"><span>${t("unitNameEs")}</span><input name="name_es" maxlength="120" value="${escapeAttribute(unit.name_es)}" required /></label>
+      <label class="preview-field"><span>${t("unitNameEn")}</span><input name="name_en" maxlength="120" value="${escapeAttribute(unit.name_en)}" required /></label>
+      <label class="preview-field"><span>${t("unitSymbol")}</span><input name="symbol" maxlength="24" value="${escapeAttribute(unit.symbol)}" required /></label>
+      <label class="preview-field"><span>${t("unitCategory")}</span><select name="category">${categories.map(([value,key])=>`<option value="${value}" ${selectedOption(unit.category,value)}>${t(key)}</option>`).join("")}</select></label>
+      <label class="preview-field"><span>${t("unitDecimals")}</span><input name="decimal_places" type="number" min="0" max="6" value="${unit.decimal_places}" required /></label>
+    </div>
+    <div class="modal-actions"><button class="secondary-action" type="button" data-action="close-admin-unit">${t("cancel")}</button><button class="primary-action" type="submit">${t("saveChanges")}</button></div>
+  </form>`;
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-admin-unit']").addEventListener("click", closeModal);
+  modalContent.querySelector("#adminUnitForm").addEventListener("submit", async(event)=>{
+    event.preventDefault();
+    const values=Object.fromEntries(new FormData(event.currentTarget));
+    try { await updateUnitOfMeasure(unit.id,{...values,decimal_places:Number(values.decimal_places)}); closeModal(); showToast(t("unitUpdated")); await loadAdminApiDashboard(); }
+    catch(error){ showToast(error.message || t("unitUpdateError")); }
+  });
+}
+
 async function saveLaborAreaForm(event) {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
@@ -7634,7 +8285,7 @@ async function saveLaborAreaForm(event) {
     renderFormErrors(["No tienes permiso para guardar esta area."]);
     return;
   }
-  const code = String(data.get("code") || "").trim().toUpperCase();
+  let code = String(data.get("code") || "").trim().toUpperCase();
   const name = String(data.get("name") || "").trim();
   const normalizedCode = code.toLowerCase();
   const normalizedName = name.toLowerCase();
@@ -7642,7 +8293,7 @@ async function saveLaborAreaForm(event) {
     area.id !== areaId && (area.code.toLowerCase() === normalizedCode || area.name.toLowerCase() === normalizedName)
   );
   const errors = [];
-  if (!code) errors.push("Captura el codigo del area.");
+  if (!code && getApiMode() !== "api") errors.push("Captura el codigo del area.");
   if (!name) errors.push("Captura el nombre del area.");
   if (duplicate) errors.push(t("laborAreaDuplicate"));
   renderFormErrors(errors);
@@ -7659,7 +8310,7 @@ async function saveLaborAreaForm(event) {
     try {
       const payload={name:item.name,description:item.description||null,status:item.status==="Activo"?"active":"inactive"};
       if (areaId) await updateHrArea(areaId,payload);
-      else await createHrArea({code:item.code,name:item.name,description:item.description||null});
+      else {code=await resolveBusinessCode("hr.area",code,String(data.get("codeRequestKey")||""));item.code=code;await createHrArea({code:item.code,name:item.name,description:item.description||null});}
       closeModal();await loadHrApiData();navigateTo({active:"recursos-humanos",activeSubmodule:"areas-puestos",laborArea:areaId||""});showToast(`Area ${item.name} ${areaId?"actualizada":"guardada"}.`);
     } catch(error) { renderFormErrors([error.message]); }
     return;
@@ -7698,13 +8349,13 @@ function openLaborRoleModal(roleId = null, defaultAreaId = "") {
         <button class="icon-button modal-close" type="button" aria-label="Cerrar">x</button>
       </div>
       <div class="form-grid">
-        <label class="preview-field"><span>${t("laborAreaExisting")}</span><select name="areaId" required>${selectableAreas.map((area) => `<option value="${area.id}" ${area.id === selectedAreaId ? "selected" : ""}>${area.code} - ${area.name}</option>`).join("")}</select></label>
-        <label class="preview-field"><span>${t("laborRolePosition")}</span><input name="position" type="text" value="${existingRole?.position || ""}" placeholder="Ej. Costurero" required /></label>
-        <label class="preview-field"><span>${t("laborRoleName")}</span><input name="name" type="text" value="${existingRole?.name || ""}" placeholder="Ej. Costurero senior" required /></label>
+        <label class="preview-field"><span>${t("laborAreaExisting")}</span><select name="areaId" data-entity-selector required>${selectableAreas.map((area) => `<option value="${area.id}" ${area.id === selectedAreaId ? "selected" : ""}>${area.code} - ${area.name}</option>`).join("")}</select></label>
+        <label class="preview-field"><span>${t("laborRolePosition")}</span><input name="position" type="text" value="${existingRole?.position || ""}" placeholder="Ej. Operador" required /></label>
+        <label class="preview-field"><span>${t("laborRoleName")}</span><input name="name" type="text" value="${existingRole?.name || ""}" placeholder="Ej. Operador de proceso" required /></label>
         <label class="preview-field"><span>${t("laborRoleQuantity")}</span><input name="quantity" type="number" min="1" value="${existingRole?.quantity || 1}" required /></label>
         <label class="preview-field"><span>${t("laborRoleMinutes")}</span><input name="minutesPerResource" type="number" min="1" value="${existingRole?.minutesPerResource || existingRole?.available || 480}" required /></label>
         <label class="preview-field"><span>${t("laborRoleHourlyCost")}</span><input name="hourlyCost" type="number" min="0" step="0.01" value="${existingRole?.hourlyCost ?? Number(existingRole?.cost || 0) * 60}" required /></label>
-        <label class="preview-field checkbox-field"><input name="intervenesInProduction" type="checkbox" value="true" ${existingRole?.intervenesInProduction !== false ? "checked" : ""} /><span>${t("intervenesInProductionQuestion")}</span></label>
+        <label class="preview-field checkbox-field"><input name="intervenesInProduction" type="checkbox" value="true" ${existingRole?.intervenesInProduction ? "checked" : ""} /><span>${t("intervenesInProductionQuestion")}</span></label>
         <label class="preview-field"><span>Estatus</span><select name="status"><option ${existingRole?.status === "Activo" ? "selected" : ""}>Activo</option><option ${existingRole?.status === "Inactivo" ? "selected" : ""}>Inactivo</option></select></label>
       </div>
       <div class="form-errors" id="formErrors" hidden></div>
@@ -7785,6 +8436,31 @@ async function saveLaborRoleForm(event) {
   showToast(`Puesto ${item.name} ${roleId ? "actualizado" : "guardado"}.`);
 }
 
+function openWorkerModal(workerId=null){
+  const worker=(state.hrApi.workers||[]).find(item=>item.id===workerId);const editing=Boolean(worker);const permission=editing?"hr.worker.update":"hr.worker.create";
+  if(!hasPermission(permission)){showToast(t("workerPermissionDenied"));return;}
+  const positions=mockDb.loadLaborRoles().filter(item=>item.status==="Activo");
+  modalContent.innerHTML=`<form class="recipe-form" id="workerForm"><input type="hidden" name="workerId" value="${worker?.id||""}"/><div class="modal-head"><div><p class="eyebrow">${t("humanResources")}</p><h2>${editing?t("editWorker"):t("newWorker")}</h2></div><button class="modal-close" type="button">×</button></div>
+  <fieldset><legend>${t("requiredWorkerData")}</legend><div class="form-grid">
+  <label class="preview-field"><span>${t("employeeNumber")}</span><input name="employee_number" value="${escapeAttribute(worker?.employee_number||"")}" placeholder="${codeSequenceConfig("hr.worker")?.mode === "managed" ? t("codeAssignedAutomatically") : "EMP-001"}" ${editing?"disabled":codeSequenceConfig("hr.worker")?.mode === "managed"?"readonly":"required"}/></label>
+  <label class="preview-field"><span>${t("firstNames")}</span><input name="first_names" value="${escapeAttribute(worker?.first_names||"")}" required/></label>
+  <label class="preview-field"><span>${t("firstLastName")}</span><input name="first_last_name" value="${escapeAttribute(worker?.first_last_name||"")}" required/></label>
+  <label class="preview-field"><span>${t("secondLastName")}</span><input name="second_last_name" value="${escapeAttribute(worker?.second_last_name||"")}"/></label>
+  <label class="preview-field"><span>CURP</span><input name="curp" minlength="18" maxlength="18" pattern="[A-Za-z0-9]{18}" autocapitalize="characters" value="${escapeAttribute(worker?.curp||"")}" ${editing?"disabled":"required"}/><small>${t("workerCurpHelp")}</small></label>
+  <label class="preview-field"><span>RFC</span><input name="rfc" minlength="13" maxlength="13" pattern="[A-Za-z&\u00d1\u00f10-9]{13}" autocapitalize="characters" value="${escapeAttribute(worker?.rfc||"")}" ${editing?"disabled":"required"}/><small>${t("workerRfcHelp")}</small></label>
+  <label class="preview-field"><span>NSS</span><input name="nss" inputmode="numeric" minlength="11" maxlength="11" pattern="[0-9]{11}" value="${escapeAttribute(worker?.nss||"")}" ${editing?"disabled":"required"}/><small>${t("workerNssHelp")}</small></label>
+  <label class="preview-field"><span>${t("hireDate")}</span><input name="hire_date" type="date" value="${worker?.hire_date||""}" ${editing?"disabled":"required"}/></label>
+  <label class="preview-field"><span>${t("workerPosition")}</span><select name="labor_position_id" data-entity-selector required><option value="">${t("selectPosition")}</option>${positions.map(item=>`<option value="${item.id}" ${worker?.labor_position_id===item.id?"selected":""}>${escapeHtml(item.position)} · ${escapeHtml(item.area)}</option>`).join("")}</select></label>
+  ${editing?`<label class="preview-field"><span>${t("status")}</span><select name="status"><option value="active" ${worker.status==="active"?"selected":""}>${t("activeStatus")}</option><option value="inactive" ${worker.status==="inactive"?"selected":""}>${t("inactiveStatus")}</option><option value="terminated" ${worker.status==="terminated"?"selected":""}>${t("terminatedStatus")}</option></select></label>`:""}
+  </div></fieldset><fieldset><legend>${t("optionalWorkerData")}</legend><div class="form-grid">
+  ${[["personal_email",t("personalEmail"),"email"],["phone",t("phone"),"tel"],["birth_date",t("birthDate"),"date"],["nationality",t("nationality"),"text"],["marital_status",t("maritalStatus"),"text"],["address",t("address"),"text"],["emergency_contact_name",t("emergencyContact"),"text"],["emergency_contact_phone",t("emergencyPhone"),"tel"]].map(([name,label,type])=>`<label class="preview-field"><span>${label}</span><input name="${name}" type="${type}" value="${escapeAttribute(worker?.[name]||"")}"/></label>`).join("")}</div></fieldset>
+  <div class="form-errors" id="formErrors" hidden></div><div class="modal-actions"><button class="secondary-action" type="button" data-action="close-worker">${t("cancel")}</button><button class="primary-action" type="submit">${editing?t("updateWorker"):t("saveWorker")}</button></div></form>`;
+  modalBackdrop.hidden=false;modalContent.querySelector("#workerForm").dataset.codeRequestKey=codeRequestKey("hr.worker");modalContent.querySelector(".modal-close").addEventListener("click",closeModal);modalContent.querySelector("[data-action='close-worker']").addEventListener("click",closeModal);modalContent.querySelector("#workerForm").addEventListener("submit",saveWorkerForm);
+}
+async function saveWorkerForm(event){event.preventDefault();const data=new FormData(event.currentTarget);const workerId=String(data.get("workerId")||"");const value=name=>String(data.get(name)||"").trim();
+  const common={first_names:value("first_names"),first_last_name:value("first_last_name"),second_last_name:value("second_last_name")||null,labor_position_id:value("labor_position_id"),personal_email:value("personal_email")||null,phone:value("phone")||null,nationality:value("nationality")||null,marital_status:value("marital_status")||null,address:value("address")||null,emergency_contact_name:value("emergency_contact_name")||null,emergency_contact_phone:value("emergency_contact_phone")||null};
+  try{if(workerId)await updateHrWorker(workerId,{...common,status:value("status")});else {const employeeNumber=await resolveBusinessCode("hr.worker",value("employee_number"),event.currentTarget.dataset.codeRequestKey);await createHrWorker({...common,employee_number:employeeNumber,curp:value("curp"),rfc:value("rfc"),nss:value("nss"),hire_date:value("hire_date"),birth_date:value("birth_date")||null});}closeModal();await loadHrApiData();showToast(t(workerId?"workerUpdated":"workerSaved"));}catch(error){renderFormErrors([error.message]);}}
+
 async function openMachineModal(machineId = null) {
   const existingMachine = machineId ? mockDb.findMachine(machineId) : null;
   const isEditing = Boolean(existingMachine);
@@ -7797,11 +8473,12 @@ async function openMachineModal(machineId = null) {
     showToast(error.message || t("machineAreasLoadError"));
     return;
   }
-  const selectedArea = activeAreas.find((area) => area.name === existingMachine?.area);
+  const selectedArea = activeAreas.find((area) => area.id === existingMachine?.areaId) || activeAreas.find((area) => area.name === existingMachine?.area);
   const hasActiveAreas = activeAreas.length > 0;
   modalContent.innerHTML = `
     <form class="recipe-form" id="machineForm">
       <input type="hidden" name="machineId" value="${existingMachine?.id || ""}" />
+      <input type="hidden" name="codeRequestKey" value="${escapeAttribute(codeRequestKey("production.machine"))}" />
       <div class="modal-head">
         <div>
           <p class="eyebrow">Produccion</p>
@@ -7811,12 +8488,13 @@ async function openMachineModal(machineId = null) {
       </div>
       <p class="helper-copy">${t("machineAreaCatalogHelp")}</p>
       <div class="form-grid">
-        <label class="preview-field"><span>${t("laborAreaExisting")}</span><select name="area" required ${hasActiveAreas ? "" : "disabled"}>
+        <label class="preview-field"><span>${t("stableCode")}</span><input name="code" type="text" value="${escapeAttribute(existingMachine?.code || "")}" placeholder="${codeSequenceConfig("production.machine")?.mode === "managed" ? t("codeAssignedAutomatically") : "MAQ-001"}" ${isEditing || codeSequenceConfig("production.machine")?.mode === "managed" ? "readonly" : ""}></label>
+        <label class="preview-field"><span>${t("laborAreaExisting")}</span><select name="area" data-entity-selector required ${hasActiveAreas ? "" : "disabled"}>
           <option value="">${t("machineAreaPlaceholder")}</option>
           ${activeAreas.map((area) => `<option value="${escapeAttribute(area.name)}" data-area-id="${area.id}" ${selectedArea?.id === area.id ? "selected" : ""}>${escapeHtml(area.code)} - ${escapeHtml(area.name)}</option>`).join("")}
         </select></label>
-        <label class="preview-field"><span>Tipo de maquina</span><input name="machineType" type="text" value="${existingMachine?.machineType || ""}" placeholder="Ej. Costura" required /></label>
-        <label class="preview-field"><span>Nombre de maquina</span><input name="name" type="text" value="${existingMachine?.name || ""}" placeholder="Ej. Maquina recta 02" required /></label>
+        <label class="preview-field"><span>Tipo de maquina</span><input name="machineType" type="text" value="${existingMachine?.machineType || ""}" placeholder="Ej. Equipo de proceso" required /></label>
+        <label class="preview-field"><span>Nombre de maquina</span><input name="name" type="text" value="${existingMachine?.name || ""}" placeholder="Ej. Equipo operativo 02" required /></label>
         <label class="preview-field"><span>Minutos disponibles por dia</span><input name="available" type="number" min="1" value="${existingMachine?.available || 480}" required /></label>
         <label class="preview-field"><span>Costo hora/minuto maquina</span><input name="cost" type="number" min="0" step="0.01" value="${existingMachine?.cost || "1.80"}" required /></label>
         <label class="preview-field"><span>Estatus</span><select name="status"><option ${existingMachine?.status === "Activo" ? "selected" : ""}>Activo</option><option ${existingMachine?.status === "Inactivo" ? "selected" : ""}>Inactivo</option><option ${existingMachine?.status === "Mantenimiento" ? "selected" : ""}>Mantenimiento</option></select></label>
@@ -7858,6 +8536,7 @@ async function saveMachineForm(event) {
   const item = {
     id: machineId || `maq_${slugify(name)}_${Date.now().toString().slice(-4)}`,
     name,
+    areaId,
     area,
     machineType,
     unit: "min",
@@ -7870,9 +8549,9 @@ async function saveMachineForm(event) {
   if (getApiMode() === "api") {
     try {
       const status={Activo:"active",Inactivo:"inactive",Mantenimiento:"maintenance"}[item.status];
-      const payload={name:item.name,machine_type:item.machineType,area_name:item.area,available_minutes_per_day:item.available,cost_per_minute:item.cost,status};
+      const payload={name:item.name,machine_type:item.machineType,area_ref_id:item.areaId,area_name:item.area,available_minutes_per_day:item.available,cost_per_minute:item.cost,status};
       if (machineId) await updateProductionMachine(machineId,payload);
-      else { const {status:ignored,...createPayload}=payload;await createProductionMachine({...createPayload,code:slugify(item.name)}); }
+      else { const {status:ignored,...createPayload}=payload;const code=await resolveBusinessCode("production.machine",String(data.get("code")||""),String(data.get("codeRequestKey")||""));await createProductionMachine({...createPayload,code}); }
       closeModal();await loadProductionApiData();navigateTo({active:"produccion",activeSubmodule:"maquinaria",laborArea:""});showToast(`Maquina ${item.name} ${machineId?"actualizada":"guardada"} en Production API.`);
     } catch(error) { renderFormErrors([error.message||"No se pudo guardar la maquina."]); }
     return;
@@ -7889,8 +8568,10 @@ async function saveMachineForm(event) {
 
 async function prepareRecipeResourceCatalog() {
   if (getApiMode() !== "api") return { areas: [] };
-  setMachineRecipeResources(mockDb.loadMachines()
-    .filter((machine) => machine.status === "Activo")
+  const activeMachines = mockDb.loadMachines().filter((machine) => machine.status === "Activo");
+  const invalidMachineResources = activeMachines.filter((machine) => !machine.areaId);
+  setMachineRecipeResources(activeMachines
+    .filter((machine) => machine.areaId)
     .map((machine) => ({
       ...machine,
       unit: "min",
@@ -7920,7 +8601,7 @@ async function prepareRecipeResourceCatalog() {
     })));
   if (!isInventoryApiEnabled()) {
     setInventoryRecipeResources([]);
-    return { areas: selectableAreas, positions: eligiblePositions };
+    return { areas: selectableAreas, positions: eligiblePositions, invalidMachineResources };
   }
   const [itemsResponse, balancesResponse] = await Promise.all([
     getInventoryItems({ use_in_recipe: true, status: "active" }),
@@ -7933,20 +8614,24 @@ async function prepareRecipeResourceCatalog() {
     if (Number(balance.available_quantity || 0) !== 0) current.warehouses.add(balance.warehouse_name);
     balancesByItem.set(balance.inventory_item_id, current);
   });
-  setInventoryRecipeResources((itemsResponse.data || []).map((item) => {
+  const activeUnitCodes = new Set(getUnitCatalog().map((unit) => normalizeUnitCode(unit.code)));
+  const inventoryResources = (itemsResponse.data || []).map((item) => {
     const balance = balancesByItem.get(item.id) || { available: 0, warehouses: new Set() };
+    const unit = normalizeUnitCode(item.base_unit);
     return {
       id: item.id,
       name: item.name,
-      unit: item.base_unit,
+      unit,
+      unitActive: activeUnitCodes.has(unit),
       available: balance.available,
-      cost: 0,
+      cost: Number(item.default_unit_cost_per_base_unit ?? item.default_unit_cost ?? 0),
       type: translateInventoryItemType(item.type),
       resourceType: "material",
       source: balance.warehouses.size ? `Almacenes: ${[...balance.warehouses].join(", ")}` : "Almacenes"
     };
-  }));
-  return { areas: selectableAreas, positions: eligiblePositions };
+  });
+  setInventoryRecipeResources(inventoryResources);
+  return { areas: selectableAreas, positions: eligiblePositions, invalidMachineResources, invalidInventoryResources: inventoryResources.filter((item) => !item.unitActive) };
 }
 
 async function openRecipeModal(recipeId = null) {
@@ -7973,7 +8658,7 @@ async function openRecipeModal(recipeId = null) {
   const availableResourceIds = new Set(getRecipeResourceCatalog().map((resource) => resource.id));
   const recipeResources = existingRecipe?.resources?.length
     ? existingRecipe.resources.filter((resource) => getApiMode() !== "api" || availableResourceIds.has(resource.resourceId))
-    : getApiMode() === "api" ? [] : ["tela_algodon", "hilo_morado", "etiqueta", "maquina_recta", "costurero"].map((id) => ({
+    : getApiMode() === "api" ? [] : ["componente_a", "componente_b", "equipo_proceso_a", "operador_proceso"].map((id) => ({
         resourceId: id,
         quantity: suggestedQuantity(id)
       }));
@@ -7986,6 +8671,7 @@ async function openRecipeModal(recipeId = null) {
   modalContent.innerHTML = `
     <form class="recipe-form" id="recipeForm">
       <input type="hidden" name="recipeId" value="${existingRecipe?.id || ""}" />
+      <input type="hidden" name="codeRequestKey" value="${escapeAttribute(codeRequestKey("production.recipe"))}" />
       <div class="modal-head">
         <div>
           <p class="eyebrow">Produccion</p>
@@ -7995,6 +8681,11 @@ async function openRecipeModal(recipeId = null) {
       </div>
 
       <div class="form-grid">
+        <label class="preview-field">
+          <span>${t("recipeBusinessCode")}</span>
+          <input name="code" type="text" maxlength="60" value="${escapeAttribute(existingRecipe?.code || "")}" placeholder="${codeSequenceConfig("production.recipe")?.mode === "managed" ? t("codeAssignedAutomatically") : "REC-001"}" ${isEditing || codeSequenceConfig("production.recipe")?.mode === "managed" ? "readonly" : ""} />
+          <small>${t("businessCodeHelp")}</small>
+        </label>
         <label class="preview-field product-lookup-field">
           <span>Producto o servicio</span>
           <input id="recipeProductSearch" type="text" value="${activeProductLabel}" placeholder="Busca por clave, nombre o tipo" autocomplete="off" required />
@@ -8011,14 +8702,14 @@ async function openRecipeModal(recipeId = null) {
         </label>
         <label class="preview-field">
           <span>Unidad</span>
-          <input name="unit" type="text" value="${existingRecipe?.unit || activeProductService?.unit || "pieza"}" required />
+          ${unitSelect("unit", existingRecipe?.unit || activeProductService?.unit || "H87")}
         </label>
         <label class="preview-field wide-field">
           <span>Centro de costos</span>
-          <input name="center" type="text" value="${existingRecipe?.center || activeProductService?.center || "Produccion / Costura"}" required />
+          <input name="center" type="text" value="${existingRecipe?.center || activeProductService?.center || "Produccion / General"}" required />
         </label>
         <label class="preview-field wide-field">
-          <span>Cantidad para validar lote simulado</span>
+          <span>Cantidad para vista previa</span>
           <input name="simulationQuantity" type="number" min="1" value="${localStorage.getItem("erclave-validation-qty") || 100}" required />
         </label>
         <label class="preview-field">
@@ -8042,6 +8733,10 @@ async function openRecipeModal(recipeId = null) {
 
       <p class="helper-copy">${t("recipeEligibleResourcesHelp")}</p>
 
+      ${recipeCatalog?.invalidInventoryResources?.length ? `<div class="validation-card warning"><strong>${t("recipeInactiveUnitTitle")}</strong><p>${t("recipeInactiveUnitHelp")}</p><p>${recipeCatalog.invalidInventoryResources.map((item) => `${escapeHtml(item.name)} (${escapeHtml(item.unit)})`).join(", ")}</p></div>` : ""}
+
+      ${recipeCatalog?.invalidMachineResources?.length ? `<div class="validation-card warning"><strong>${t("recipeMachineAreaMissingTitle")}</strong><p>${t("recipeMachineAreaMissingHelp")}</p><p>${recipeCatalog.invalidMachineResources.map((item) => escapeHtml(item.name)).join(", ")}</p></div>` : ""}
+
       <div class="recipe-resource-groups">
         ${renderRecipeResourceGroup("material", recipeResources)}
         ${renderRecipeResourceGroup("labor", recipeResources)}
@@ -8058,6 +8753,7 @@ async function openRecipeModal(recipeId = null) {
               <span class="recipe-area-check" aria-hidden="true">✓</span>
               <span><strong>${escapeHtml(area.name)}</strong><small>${escapeHtml(area.code || area.id)}</small></span>
             </span>
+            <span class="recipe-stage-weight"><span>${t("recipePhaseWeight")}</span><input data-stage-weight type="number" min="0.01" max="100" step="0.01" value="${escapeAttribute(existingRecipe?.stageDefinitions?.find((stage)=>stage.laborAreaId===area.id||stage.laborAreaName===area.name)?.weightPercent || "")}"><small>%</small></span>
           </label>
         `).join("")}</div>` : `<p class="validation-card warning">${t("recipeAreasEmpty")}</p>`}
       </fieldset>
@@ -8081,6 +8777,7 @@ async function openRecipeModal(recipeId = null) {
   modalContent.querySelectorAll("[data-action='add-resource']").forEach((button) => button.addEventListener("click", addResourceRow));
   modalContent.querySelector("[data-action='preview-recipe']").addEventListener("click", previewRecipeForm);
   modalContent.querySelector("#recipeForm").addEventListener("submit", saveRecipeForm);
+  modalContent.querySelectorAll('input[name="stageAreaId"]').forEach((checkbox)=>checkbox.addEventListener("change",()=>{const selected=[...modalContent.querySelectorAll('input[name="stageAreaId"]:checked')];const base=selected.length?Math.floor(10000/selected.length)/100:0;selected.forEach((entry,index)=>{entry.closest(".recipe-area-option").querySelector("[data-stage-weight]").value=index===selected.length-1?(100-base*(selected.length-1)).toFixed(2):base.toFixed(2);});modalContent.querySelectorAll('input[name="stageAreaId"]:not(:checked)').forEach((entry)=>{entry.closest(".recipe-area-option").querySelector("[data-stage-weight]").value="";});}));
   bindResourceRowActions();
 }
 
@@ -8133,7 +8830,7 @@ function selectRecipeProductFromLookup(event) {
   const form = button.closest("form");
   form.querySelector("#recipeProductSearch").value = formatProductServiceOption(item);
   form.querySelector("[name='productServiceId']").value = item.id;
-  form.querySelector("[name='unit']").value = item.unit;
+  form.querySelector("[name='unit']").value = normalizeUnitCode(item.unit);
   form.querySelector("[name='center']").value = item.center;
   modalContent.querySelector("#recipeProductResults").hidden = true;
 }
@@ -8144,7 +8841,7 @@ function syncRecipeProductFields(event) {
   form.querySelector("[name='productServiceId']").value = item?.id || "";
   renderRecipeProductLookup(event);
   if (!item) return;
-  form.querySelector("[name='unit']").value = item.unit;
+  form.querySelector("[name='unit']").value = normalizeUnitCode(item.unit);
   form.querySelector("[name='center']").value = item.center;
 }
 
@@ -8160,6 +8857,7 @@ function renderRecipeResourceGroup(resourceType, recipeResources) {
     machine: { icon: "HM", title: t("recipeMachinesTitle"), help: t("recipeMachinesHelp"), add: t("recipeAddMachine"), empty: t("recipeMachinesEmpty") }
   }[resourceType];
   const catalog = getRecipeResourceCatalog().filter((resource) => getRecipeResourceType(resource) === resourceType);
+  const selectableCatalog = catalog.filter((resource) => resourceType !== "material" || resource.unitActive !== false);
   const selected = recipeResources.filter((resource) => getRecipeResourceType(resource) === resourceType);
   return `
     <section class="recipe-resource-group recipe-resource-group-${resourceType}" aria-labelledby="recipe-resource-${resourceType}-title">
@@ -8168,10 +8866,10 @@ function renderRecipeResourceGroup(resourceType, recipeResources) {
         <div><strong id="recipe-resource-${resourceType}-title">${config.title}</strong><p>${config.help}</p></div>
       </div>
       <div class="resource-picker">
-        <select id="resourceSelect-${resourceType}" aria-label="${config.title}" ${catalog.length ? "" : "disabled"}>
-          ${catalog.map((resource) => `<option value="${resource.id}">${resource.name} · ${resource.source}</option>`).join("")}
+        <select id="resourceSelect-${resourceType}" data-entity-selector aria-label="${config.title}" ${selectableCatalog.length ? "" : "disabled"}>
+          ${catalog.map((resource) => `<option value="${escapeAttribute(resource.id)}" ${resourceType === "material" && resource.unitActive === false ? "disabled" : ""}>${escapeHtml(resource.name)} · ${escapeHtml(resource.source)}${resourceType === "material" && resource.unitActive === false ? ` · ${t("recipeInactiveUnitOption")}` : ""}</option>`).join("")}
         </select>
-        <button class="secondary-action" type="button" data-action="add-resource" data-resource-type="${resourceType}" ${catalog.length ? "" : "disabled"}>${config.add}</button>
+        <button class="secondary-action" type="button" data-action="add-resource" data-resource-type="${resourceType}" ${selectableCatalog.length ? "" : "disabled"}>${config.add}</button>
       </div>
       <div class="selected-resource-list" id="selectedResourceList-${resourceType}">
         ${selected.length ? selected.map((item) => renderSelectedResourceRow(item.resourceId, item.quantity, item)).join("") : `<p class="recipe-resource-empty">${config.empty}</p>`}
@@ -8198,14 +8896,14 @@ function renderSelectedResourceRow(resourceId, quantity = 0, fallback = {}) {
   const displayUnit = resourceType === "labor" ? t("recipeLaborUnit") : resourceType === "machine" ? t("recipeMachineUnit") : resource.unit;
   const quantityLabel = resourceType === "labor" ? t("recipeLaborQuantity") : resourceType === "machine" ? t("recipeMachineQuantity") : `${t("recipeMaterialQuantity")} (${resource.unit})`;
   return `
-    <div class="selected-resource-row" data-resource-row="${resource.id}" data-resource-type="${resourceType}" data-storage-factor="${storageFactor}">
+    <div class="selected-resource-row" data-resource-row="${escapeAttribute(resource.id)}" data-resource-type="${resourceType}" data-storage-factor="${storageFactor}">
       <div>
-        <strong>${resource.name}</strong>
-        <span>${resource.type} · ${resource.source} · ${t("recipeAvailable")} ${formatNumber(displayAvailable)} ${displayUnit}</span>
+        <strong>${escapeHtml(resource.name)}</strong>
+        <span>${escapeHtml(resource.type)} · ${escapeHtml(resource.source)} · ${t("recipeAvailable")} ${formatNumber(displayAvailable)} ${escapeHtml(displayUnit)}${resourceType === "material" && resource.unitActive === false ? ` · ${t("recipeInactiveUnitOption")}` : ""}</span>
       </div>
       <label>
         <span>${quantityLabel}</span>
-        <input name="resource_${resource.id}" type="number" min="0" step="${isTimed ? "any" : "0.01"}" value="${displayQuantity}" />
+        <input name="resource_${escapeAttribute(resource.id)}" type="number" min="0" step="${isTimed ? "any" : "0.01"}" value="${displayQuantity}" />
         ${isTimed ? `<small class="recipe-time-hint">${t("recipeTimeDecimalHelp")}</small>` : ""}
       </label>
       <button class="icon-button remove-resource" type="button" data-action="remove-resource" aria-label="Quitar recurso">×</button>
@@ -8237,12 +8935,11 @@ function bindResourceRowActions() {
 
 function suggestedQuantity(resourceId) {
   const defaults = {
-    tela_algodon: 2,
-    hilo_morado: 0.18,
-    etiqueta: 1,
-    tijeras: 0,
-    maquina_recta: 30,
-    costurero: 45
+    componente_a: 2,
+    componente_b: 1,
+    empaque_estandar: 1,
+    equipo_proceso_a: 30,
+    operador_proceso: 45
   };
   return defaults[resourceId] ?? 0;
 }
@@ -8257,7 +8954,8 @@ function buildRecipeFromForm(form) {
   const stageDefinitions = [...form.querySelectorAll('input[name="stageAreaId"]:checked')].map((input) => ({
     laborAreaId: input.value,
     laborAreaName: input.dataset.areaName,
-    name: input.dataset.areaName
+    name: input.dataset.areaName,
+    weightPercent: Number(input.closest(".recipe-area-option").querySelector("[data-stage-weight]")?.value || 0)
   }));
   const resources = selectedRows
     .map((row) => {
@@ -8277,6 +8975,8 @@ function buildRecipeFromForm(form) {
 
   return {
     id: recipeId || `REC-${Date.now().toString().slice(-5)}`,
+    code: String(data.get("code") || "").trim().toUpperCase(),
+    codeRequestKey: String(data.get("codeRequestKey") || ""),
     productServiceId,
     product: productService?.name || "",
     version: Number(data.get("version") || 1),
@@ -8298,7 +8998,7 @@ function buildRecipeFromForm(form) {
 function toApiRecipeVersionPayload(recipe) {
   return {
     base_quantity: recipe.quantityBase,
-    base_unit: recipe.unit,
+    base_unit: normalizeUnitCode(recipe.unit),
     change_reason: recipe.changeReason || null,
     resources: recipe.resources.map((item, index) => {
       const catalogItem = getResource(item.resourceId);
@@ -8308,7 +9008,7 @@ function toApiRecipeVersionPayload(recipe) {
         resource_code: item.resourceCode || catalogItem?.id || item.resourceId,
         resource_name: item.resourceName || catalogItem?.name || item.resourceId,
         quantity: Number(item.quantity),
-        unit: item.unit || catalogItem?.unit || recipe.unit,
+        unit: normalizeUnitCode(item.unit || catalogItem?.unit || recipe.unit),
         unit_cost: Number(item.unitCost ?? catalogItem?.cost ?? 0),
         sort_order: index + 1
       };
@@ -8319,6 +9019,7 @@ function toApiRecipeVersionPayload(recipe) {
       name: stage.name,
       expected_minutes: stage.expectedMinutes || null,
       sort_order: index + 1,
+      weight_percent: Number(stage.weightPercent),
       status: "active"
     }))
   };
@@ -8330,7 +9031,11 @@ function validateRecipe(recipe) {
   if (!recipe.unit) errors.push("Captura la unidad base.");
   if (!recipe.center) errors.push("Selecciona o captura centro de costos.");
   if (!recipe.resources.length) errors.push("Agrega al menos un recurso con cantidad mayor a cero.");
+  const invalidMaterialUnits = recipe.resources.map((resource) => getResource(resource.resourceId)).filter((resource) => resource?.resourceType === "material" && resource.unitActive === false);
+  if (invalidMaterialUnits.length) errors.push(t("recipeInactiveUnitError").replace("{items}", invalidMaterialUnits.map((item) => `${item.name} (${item.unit})`).join(", ")));
   if (!recipe.steps.length) errors.push("Captura al menos una etapa.");
+  const stageWeight = recipe.stageDefinitions.reduce((sum, stage) => sum + Number(stage.weightPercent || 0), 0);
+  if (recipe.steps.length && Math.abs(stageWeight - 100) > 0.001) errors.push(t("recipePhaseWeightTotal"));
   return errors;
 }
 
@@ -8342,7 +9047,7 @@ function renderFormErrors(errors) {
     return;
   }
   box.hidden = false;
-  box.innerHTML = errors.map((error) => `<p>${error}</p>`).join("");
+  box.innerHTML = errors.map((error) => `<p>${escapeHtml(String(error))}</p>`).join("");
 }
 
 function previewRecipeForm() {
@@ -8358,7 +9063,7 @@ function previewRecipeForm() {
   modalContent.querySelector("#recipePreview").innerHTML = `
     <div class="validator-head">
       <div>
-        <span class="muted-label">Lote simulado</span>
+        <span class="muted-label">Vista previa del lote</span>
         <strong>${formatNumber(simulationQuantity)} ${recipe.unit} · ${formatCurrency(validation.totalCost)}</strong>
       </div>
       <span class="chip ${validation.missing.length ? "warning" : "active"}">
@@ -8397,10 +9102,11 @@ async function saveRecipeForm(event) {
       const versionPayload = toApiRecipeVersionPayload(recipe);
       let savedVersion;
       if (!exists) {
+        const businessCode = await resolveBusinessCode("production.recipe", recipe.code, recipe.codeRequestKey);
         const created = await createProductionRecipe({
           ...versionPayload,
           product_service_id: recipe.productServiceId,
-          code: recipe.id,
+          code: businessCode,
           name: `Receta ${recipe.product}`
         });
         savedVersion = created.versions?.[0];
@@ -8428,7 +9134,7 @@ async function saveRecipeForm(event) {
       navigateTo({ active: "produccion", activeSubmodule: "recetas", laborArea: "" });
       showToast(`${formatRecipeDisplayLabel(recipe)}: receta ${exists ? "actualizada" : "guardada"} en Production API.`);
     } catch (error) {
-      renderFormErrors([error.message || "No se pudo guardar la receta en Production API."]);
+      renderFormErrors([error?.payload?.error?.code === "machine_resource_invalid" ? t("recipeMachineAreaMissingError") : (error.message || "No se pudo guardar la receta en Production API.")]);
     }
     return;
   }
@@ -8503,7 +9209,7 @@ function deleteRecipe(recipeId) {
   showToast(`${formatRecipeDisplayLabel(recipe)}: receta eliminada.`);
 }
 
-function openOrderModal() {
+async function openOrderModal() {
   const recipes = mockDb.loadRecipes();
   const selectedRecipeId = localStorage.getItem("erclave-selected-recipe") || recipes[0]?.id;
   const recipe = recipes.find((item) => item.id === selectedRecipeId) || recipes[0] || (shouldUseSeedModuleData() ? defaultRecipes[0] : null);
@@ -8512,9 +9218,15 @@ function openOrderModal() {
     return;
   }
   const defaultQuantity = Number(localStorage.getItem("erclave-validation-qty") || 100);
+  let eligibleWorkers=[];
+  try{eligibleWorkers=getApiMode()==="api"?await getProductionEligibleWorkers():(state.hrApi.workers||[]).filter(item=>item.status==="active"&&item.intervenes_in_production);}catch(error){showToast(error.message||"No se pudo cargar el personal elegible.");return;}
+  if(!eligibleWorkers.length){showToast("Da de alta trabajadores activos en puestos habilitados para produccion antes de generar una orden.");return;}
+  state.hrApi.workers=eligibleWorkers;
+  const workerOptions=eligibleWorkers.map(worker=>`<option value="${worker.id}">${escapeHtml(worker.full_name)} · ${escapeHtml(worker.position_name)}</option>`).join("");
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="orderForm">
+      <input type="hidden" name="codeRequestKey" value="${escapeAttribute(codeRequestKey("production.order"))}" />
       <div class="modal-head">
         <div>
           <p class="eyebrow">Produccion</p>
@@ -8524,9 +9236,14 @@ function openOrderModal() {
       </div>
 
       <div class="form-grid">
+        <label class="preview-field">
+          <span>${t("productionOrderBusinessCode")}</span>
+          <input name="code" type="text" maxlength="60" placeholder="${codeSequenceConfig("production.order")?.mode === "managed" ? t("codeAssignedAutomatically") : "OP-001"}" ${codeSequenceConfig("production.order")?.mode === "managed" ? "readonly" : ""} />
+          <small>${t("businessCodeHelp")}</small>
+        </label>
         <label class="preview-field wide-field">
           <span>Receta</span>
-          <select name="recipeId" id="orderRecipeSelect" required>
+          <select name="recipeId" id="orderRecipeSelect" data-entity-selector required>
             ${recipes
               .map(
                 (item) => `
@@ -8556,7 +9273,7 @@ function openOrderModal() {
         </label>
         <label class="preview-field">
           <span>Responsable general</span>
-          <input name="responsible" type="text" value="Mariana Torres" required />
+          <select name="responsibleWorkerId" data-entity-selector required><option value="">Selecciona una persona</option>${workerOptions}</select>
         </label>
       </div>
 
@@ -8565,7 +9282,7 @@ function openOrderModal() {
         <strong>Responsables por etapa operativa</strong>
       </div>
       <div class="area-assignment-list" id="areaAssignmentList">
-        ${renderAreaAssignments(recipe)}
+        ${renderAreaAssignments(recipe,eligibleWorkers)}
       </div>
 
       <div class="form-errors" id="formErrors" hidden></div>
@@ -8583,21 +9300,21 @@ function openOrderModal() {
   modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
   modalContent.querySelector("#orderRecipeSelect").addEventListener("change", (event) => {
     const nextRecipe = mockDb.findRecipe(event.target.value) || recipe;
-    modalContent.querySelector("#areaAssignmentList").innerHTML = renderAreaAssignments(nextRecipe);
+    modalContent.querySelector("#areaAssignmentList").innerHTML = renderAreaAssignments(nextRecipe,eligibleWorkers);
   });
   modalContent.querySelector("[data-action='preview-order']").addEventListener("click", previewOrderForm);
   modalContent.querySelector("#orderForm").addEventListener("submit", saveOrderForm);
 }
 
-function renderAreaAssignments(recipe) {
-  const defaults = ["Luis Perez", "Ana Ruiz", "Sofia Mendez", "Carlos Diaz", "Mariana Torres"];
-  return (recipe.steps.length ? recipe.steps : ["Produccion"]).map((step, index) => `
+function renderAreaAssignments(recipe,workers=[]) {
+  const options=workers.map(worker=>`<option value="${worker.id}">${escapeHtml(worker.full_name)} · ${escapeHtml(worker.position_name)}</option>`).join("");
+  return (recipe.steps.length ? recipe.steps : ["Produccion"]).map((step,index) => `
     <label class="selected-resource-row area-assignment-row" data-area="${step}">
       <div>
-        <strong>${step}</strong>
-        <span>Etapa operativa generica de la orden</span>
+        <strong>${t("recipePhaseNumber")} ${index+1}: ${step}</strong>
+        <span>${t("recipePhaseWeightLabel",{weight:recipe.stageDefinitions?.[index]?.weightPercent||0})}</span>
       </div>
-      <input name="area_${slugify(step)}" type="text" value="${defaults[index] || "Responsable"}" required />
+      <select name="area_${slugify(step)}" data-entity-selector required><option value="">Selecciona una persona</option>${options}</select>
     </label>
   `).join("");
 }
@@ -8616,9 +9333,10 @@ function buildOrderFromForm(form) {
   const recipe = mockDb.findRecipe(String(data.get("recipeId"))) || (shouldUseSeedModuleData() ? defaultRecipes[0] : null);
   if (!recipe) return null;
   const quantity = Math.max(1, Number(data.get("quantity") || 1));
+  const workers=state.hrApi.workers||[];const workerName=id=>workers.find(item=>item.id===id)?.full_name||id;
   const areas = (recipe.steps.length ? recipe.steps : ["Produccion"]).map((step) => ({
     area: step,
-    responsible: String(data.get(`area_${slugify(step)}`) || "").trim(),
+    responsibleWorkerId:String(data.get(`area_${slugify(step)}`)||"").trim(),responsible:workerName(String(data.get(`area_${slugify(step)}`)||"")),
     status: "Pendiente",
     progress: 0,
     actualCostFactor: 1
@@ -8628,6 +9346,8 @@ function buildOrderFromForm(form) {
 
   return {
     id: `OP-${Date.now().toString().slice(-5)}`,
+    code: String(data.get("code") || "").trim().toUpperCase(),
+    codeRequestKey: String(data.get("codeRequestKey") || ""),
     recipeId: recipe.id,
     recipeVersion: recipe.version,
     recipeSnapshot: createRecipeSnapshot(recipe),
@@ -8638,9 +9358,9 @@ function buildOrderFromForm(form) {
     priority: String(data.get("priority") || "Media"),
     dueDate: String(data.get("dueDate") || ""),
     center: recipe.center,
-    responsible: String(data.get("responsible") || "").trim(),
+    responsibleWorkerId:String(data.get("responsibleWorkerId")||"").trim(),responsible:workerName(String(data.get("responsibleWorkerId")||"")),
     plannedCost,
-    actualCost: plannedCost,
+    actualCost: null,
     releaseStatus: release.canRelease ? "Liberada" : "Bloqueada",
     areas,
     createdAt: new Date().toISOString().slice(0, 10)
@@ -8651,14 +9371,31 @@ function validateOrder(order) {
   const errors = [];
   if (!order) return ["Primero crea una receta para generar ordenes de produccion."];
   const recipe = getOrderRecipe(order);
-  const release = getReleaseReview(recipe, order.quantity || 1);
   if (!order.recipeId) errors.push("Selecciona una receta.");
   if (!order.quantity) errors.push("Captura la cantidad.");
   if (!order.dueDate) errors.push("Captura fecha requerida.");
-  if (!order.responsible) errors.push("Captura responsable general.");
-  if (order.areas.some((area) => !area.responsible)) errors.push("Asigna responsable a cada etapa.");
-  release.issues.forEach((issue) => errors.push(issue));
+  if (!order.responsibleWorkerId) errors.push("Selecciona responsable general.");
+  if (order.areas.some((area) => !area.responsibleWorkerId)) errors.push("Asigna una persona a cada etapa.");
+  if (getApiMode() !== "api") {
+    const release = getReleaseReview(recipe, order.quantity || 1);
+    release.issues.forEach((issue) => errors.push(issue));
+  }
   return errors;
+}
+
+function productionValidationErrors(validation) {
+  if (validation?.can_release) return [];
+  const unavailable = (validation?.rows || []).filter((row) => !row.ok);
+  if (!unavailable.length) return [t("orderResourcesUnavailable")];
+  return [t("orderResourcesUnavailable"), ...unavailable.map((row) => t("orderResourceShortage")
+    .replace("{resource}", row.resource_name || row.resource_code || (state.lang === "en" ? "Resource" : "Recurso"))
+    .replace("{required}", formatNumber(row.required_quantity))
+    .replace("{available}", formatNumber(row.available_quantity))
+    .replaceAll("{unit}", row.unit || ""))];
+}
+
+function renderRemoteOrderValidation(order, validation) {
+  modalContent.querySelector("#orderPreview").innerHTML=`<div class="validator-head"><div><span class="muted-label">${t("orderAuthoritativeValidation")}</span><strong>${formatNumber(order.quantity)} ${escapeHtml(order.unit)} · ${formatCurrency(validation.planned_cost)}</strong></div><span class="chip ${validation.can_release?"active":"warning"}">${validation.can_release?t("orderReadyToRelease"):t("orderBlocked")}</span></div><div class="resource-check-grid compact">${(validation.rows||[]).map((row)=>`<article class="resource-check ${row.ok?"ok":"risk"}"><div><strong>${escapeHtml(row.resource_name)}</strong><span>${escapeHtml(row.resource_type)} · ${escapeHtml(row.source)}</span></div><p>${formatNumber(row.required_quantity)} / ${formatNumber(row.available_quantity)} ${escapeHtml(row.unit)}</p></article>`).join("")}</div>`;
 }
 
 async function previewOrderForm() {
@@ -8667,12 +9404,13 @@ async function previewOrderForm() {
   const errors = validateOrder(order);
   renderFormErrors(errors);
   if (errors.length) return;
-  const recipe = getOrderRecipe(order);
+  const recipe = getApiMode() === "api" ? mockDb.findRecipe(order.recipeId) : getOrderRecipe(order);
   if (getApiMode() === "api") {
     if (!recipe?.currentVersionId) { renderFormErrors(["La validacion requiere una receta aprobada vigente."]);return; }
     try {
-      const remote=await validateProductionResources({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,observed_resources:buildObservedProductionResources(recipe)});
-      modalContent.querySelector("#orderPreview").innerHTML=`<div class="validator-head"><div><span class="muted-label">Validacion backend observada</span><strong>${order.quantity} ${order.unit} Â· ${formatCurrency(remote.planned_cost)}</strong></div><span class="chip ${remote.can_release?"active":"warning"}">${remote.can_release?"Lista para liberar":"Bloqueada"}</span></div>${remote.blockers?.length?`<p class="helper-copy">Pendientes: ${remote.blockers.join(", ")}.</p>`:""}<div class="resource-check-grid compact">${(remote.rows||[]).map((row)=>`<article class="resource-check ${row.ok?"ok":"risk"}"><div><strong>${row.resource_name}</strong><span>${row.resource_type} Â· ${row.source}</span></div><p>${formatNumber(row.required_quantity)} / ${formatNumber(row.available_quantity)} ${row.unit}</p></article>`).join("")}</div>`;
+      const remote=await validateProductionResources({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_for:order.dueDate||null});
+      renderRemoteOrderValidation(order,remote);
+      renderFormErrors(productionValidationErrors(remote));
     } catch(error) { renderFormErrors([error.message||"No se pudo validar recursos."]); }
     return;
   }
@@ -8681,7 +9419,7 @@ async function previewOrderForm() {
   modalContent.querySelector("#orderPreview").innerHTML = `
     <div class="validator-head">
       <div>
-        <span class="muted-label">Orden simulada</span>
+        <span class="muted-label">Vista previa de la orden</span>
         <strong>${order.quantity} ${order.unit} · ${formatCurrency(validation.totalCost)}</strong>
       </div>
       <span class="chip ${release.canRelease ? "active" : "warning"}">
@@ -8705,22 +9443,6 @@ async function previewOrderForm() {
   `;
 }
 
-function buildObservedProductionResources(recipe) {
-  const versionResources = recipe.currentVersionData?.resources || recipe.resources || [];
-  return versionResources.map((resource) => {
-    const resourceId = resource.resource_ref_id || resource.resourceId || resource.resource_code;
-    const catalog = getResource(resourceId);
-    return {
-      resource_ref_id: resourceId,
-      resource_type: resource.resource_type || resource.resourceType || "other",
-      available_quantity: Number(catalog?.available || 0),
-      unit: resource.unit,
-      unit_cost: Number(catalog?.cost ?? resource.unit_cost ?? resource.unitCost ?? 0),
-      source: catalog?.source || "catalogo no disponible"
-    };
-  });
-}
-
 function formatRecipeValidationQuantity(quantity, resourceType) {
   return formatNumber(resourceType === "Mano de obra" || resourceType === "Maquinaria" ? Number(quantity) / 60 : quantity);
 }
@@ -8736,9 +9458,15 @@ async function saveOrderForm(event) {
     if (!recipe?.currentVersionId) { renderFormErrors(["La orden requiere una version de receta aprobada vigente."]);return; }
     const currentStages=recipe.currentVersionData?.stages?.filter((stage)=>stage.status==="active")||[];
     try {
-      const saved=await createProductionOrder({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,observed_resources:buildObservedProductionResources(recipe),required_at:order.dueDate?`${order.dueDate}T23:59:59Z`:null,priority:({Alta:"high",Media:"medium",Baja:"low"})[order.priority]||"medium",responsible_name:order.responsible,stage_assignments:currentStages.map((stage,index)=>({recipe_stage_id:stage.id,responsible_name:order.areas[index]?.responsible||null})),source_type:"manual"});
+      const remote=await validateProductionResources({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_for:order.dueDate||null});
+      renderRemoteOrderValidation(order,remote);
+      const availabilityErrors=productionValidationErrors(remote);
+      renderFormErrors(availabilityErrors);
+      if (availabilityErrors.length) return;
+      const businessCode=await resolveBusinessCode("production.order",order.code,order.codeRequestKey);
+      const saved=await createProductionOrder({code:businessCode,recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_for:order.dueDate||null,required_at:order.dueDate?`${order.dueDate}T23:59:59Z`:null,priority:({Alta:"high",Media:"medium",Baja:"low"})[order.priority]||"medium",responsible_worker_id:order.responsibleWorkerId,stage_assignments:currentStages.map((stage,index)=>({recipe_stage_id:stage.id,responsible_worker_id:order.areas[index]?.responsibleWorkerId})),source_type:"manual"});
       localStorage.setItem("erclave-selected-recipe",order.recipeId);localStorage.setItem("erclave-validation-qty",order.quantity);closeModal();await loadProductionApiData();showToast(`Orden ${saved.code} generada en Production API.`);openOrderPrintModal(saved.id);
-    } catch(error) { renderFormErrors([error.message||"No se pudo generar la orden."]); }
+    } catch(error) { renderFormErrors([error?.payload?.error?.code==="resources_unavailable"?t("orderResourcesChanged"):(error.message||"No se pudo generar la orden.")]); }
     return;
   }
   mockDb.addOrder(order);
@@ -8750,21 +9478,16 @@ async function saveOrderForm(event) {
   openOrderPrintModal(order.id);
 }
 
-function advanceOrderStatus(orderId) {
-  const order = mockDb.findOrder(orderId);
-  if (!order) return;
-  const next = orderStatusCatalog[(orderStatusCatalog.indexOf(order.status) + 1) % orderStatusCatalog.length];
-  mockDb.updateOrder({ ...order, status: next });
-  render();
-  showToast(`Orden ${order.id} ahora esta en ${next}.`);
-}
-
 async function changeOrderStatus(orderId, status) {
   const order = mockDb.findOrder(orderId);
   if (!order || !orderStatusCatalog.includes(status)) return;
   if (getApiMode() === "api") {
-    try { await updateProductionOrderStatus(orderId,{status:toApiOrderStatus(status),reason:"Cambio operativo desde la orden"});await loadProductionApiData();showToast(`Orden ${order.id} ahora esta en ${status}.`); }
-    catch(error){showToast(error.message||"La transicion de orden no es valida.");}
+    try { await updateProductionOrderStatus(orderId,{status:toApiOrderStatus(status),reason:"Cambio operativo desde la orden"});await loadProductionApiData();showToast(status==="En produccion"?t("orderMaterialIssueRegistered",{code:order.code||order.id}):`Orden ${order.id} ahora esta en ${status}.`); }
+    catch(error){
+      const code=error?.payload?.error?.code;
+      const messages={material_consumption_required:t("orderMaterialIssueFailed"),production_stages_incomplete:t("orderStagesIncomplete"),invalid_order_transition:t("orderInvalidTransition")};
+      showToast(messages[code]||(error.message||t("orderInvalidTransition")));
+    }
     return;
   }
   mockDb.updateOrder({ ...order, status });
@@ -8772,42 +9495,53 @@ async function changeOrderStatus(orderId, status) {
   showToast(`Orden ${order.id} ahora esta en ${status}.`);
 }
 
-async function advanceOrderStage(orderId, stageIndex) {
+function advanceOrderStage(orderId, stageIndex) {
   const order = mockDb.findOrder(orderId);
   if (!order || !order.areas?.[stageIndex]) return;
-  if (getApiMode() === "api") {
-    const stage=order.areas[stageIndex];
-    const next=stage.status==="Pendiente"?"in_progress":stage.status==="En proceso"?"completed":stage.status==="Bloqueada"?"in_progress":null;
-    if (!next) { showToast("La etapa ya es terminal y no puede reiniciarse.");return; }
-    try { await updateProductionOrderStage(stage.id,{status:next,notes:"Avance registrado desde Produccion"});await loadProductionApiData();showToast(`${order.id} actualizo la etapa ${stage.area}.`); }
-    catch(error){showToast(error.message||"La transicion de etapa no es valida.");}
-    return;
-  }
-  const stages = order.areas.map((stage, index) => {
-    if (index !== stageIndex) return stage;
-    const nextStatus = stage.status === "Pendiente" ? "En proceso" : stage.status === "En proceso" ? "Terminada" : "Pendiente";
-    const progress = nextStatus === "Terminada" ? 100 : nextStatus === "En proceso" ? Math.max(50, Number(stage.progress || 0)) : 0;
-    return {
-      ...stage,
-      status: nextStatus,
-      progress,
-      actualCostFactor: Number(stage.actualCostFactor || 1)
-    };
-  });
-  const allDone = stages.every((stage) => stage.status === "Terminada");
-  const anyActive = stages.some((stage) => stage.status === "En proceso");
-  mockDb.updateOrder({
-    ...order,
-    areas: stages,
-    status: allDone ? "Terminada" : anyActive ? "En produccion" : order.status
-  });
-  render();
-  showToast(`${order.id} actualizo la etapa ${order.areas[stageIndex].area}.`);
+  const stage=order.areas[stageIndex];
+  if(["Terminada","Omitida"].includes(stage.status)){showToast(t("orderStageTerminal"));return;}
+  modalContent.innerHTML=`
+    <form class="recipe-form" data-form="order-stage-progress" data-order-id="${escapeAttribute(orderId)}" data-stage-index="${stageIndex}">
+      <div class="modal-head"><div><p class="eyebrow">${t("production")}</p><h2>${t("orderStageProgressTitle")}</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div>
+      <p class="helper-copy"><strong>${escapeHtml(stage.area)}</strong> · ${t("orderStageProgressHelp")}</p>
+      <label class="full-field"><span>${t("orderStageProgressLabel")}</span><input name="progressPercent" type="number" min="0" max="100" step="1" value="${escapeAttribute(String(Number(stage.progress||0)))}" required><small>${t("orderStageProgressScale")}</small></label>
+      <div class="modal-actions"><button class="secondary-action" type="button" data-action="cancel-stage-progress">${t("cancel")}</button><button class="primary-action" type="submit">${t("orderStageProgressSave")}</button></div>
+    </form>`;
+  modalBackdrop.hidden=false;
+  modalContent.querySelector(".modal-close").addEventListener("click",closeModal);
+  modalContent.querySelector("[data-action='cancel-stage-progress']").addEventListener("click",closeModal);
+  modalContent.querySelector("[data-form='order-stage-progress']").addEventListener("submit",saveOrderStageProgressForm);
+  modalContent.querySelector("[name='progressPercent']").focus();
 }
 
-function openOrderPrintModal(orderId) {
-  const order = mockDb.findOrder(orderId);
-  if (!order) return;
+async function saveOrderStageProgressForm(event){
+  event.preventDefault();
+  const form=event.currentTarget;const order=mockDb.findOrder(form.dataset.orderId);const stageIndex=Number(form.dataset.stageIndex);const stage=order?.areas?.[stageIndex];
+  if(!order||!stage)return;
+  const progress=Number(new FormData(form).get("progressPercent"));
+  if(!Number.isFinite(progress)||progress<0||progress>100){showToast(t("orderStageProgressInvalid"));return;}
+  const status=progress===100?"completed":progress===0?"pending":"in_progress";
+  if(getApiMode()==="api"){
+    try{
+      if(progress>0&&order.status!=="En produccion")await updateProductionOrderStatus(order.id,{status:"in_progress",reason:"Actualizacion de avance por etapa"});
+      await updateProductionOrderStage(stage.id,{status,progress_percent:progress,notes:"Porcentaje de avance registrado desde Produccion"});
+      closeModal();await loadProductionApiData();showToast(t("orderStageProgressUpdated",{stage:stage.area,progress:formatNumber(progress)}));
+    }catch(error){showToast(error?.payload?.error?.code==="material_consumption_required"?t("orderMaterialIssueFailed"):(error.message||t("orderStageProgressSaveError")));}
+    return;
+  }
+  const stages=order.areas.map((item,index)=>index===stageIndex?{...item,status:progress===100?"Terminada":progress===0?"Pendiente":"En proceso",progress}:item);
+  const allDone=stages.every((item)=>item.status==="Terminada");
+  mockDb.updateOrder({...order,areas:stages,status:allDone?"En validacion":progress>0?"En produccion":order.status});closeModal();render();showToast(t("orderStageProgressUpdated",{stage:stage.area,progress:formatNumber(progress)}));
+}
+
+function getDocumentBranding(){const value=state.adminApi.data?.documentTemplate||{};return {logo:value.logo_data_url||"",primary:value.primary_color||"#6106A0",accent:value.accent_color||"#F557D3",text:value.text_color||"#190F34",footer:value.footer_text||"",showPage:value.show_page_number!==false,company:state.adminApi.data?.tenant?.commercial_name||"ERClave"};}
+function renderDocumentBrandingHeader(moduleLabel){const brand=getDocumentBranding();return `<div>${brand.logo?`<img class="print-company-logo" src="${escapeAttribute(brand.logo)}" alt="${escapeAttribute(brand.company)}">`:`<strong>${escapeHtml(brand.company)}</strong>`}<span>${escapeHtml(moduleLabel)}</span></div>`;}
+function renderDocumentBrandingFooter(){const brand=getDocumentBranding();return brand.footer||brand.showPage?`<footer class="print-document-footer">${escapeHtml(brand.footer)}${brand.showPage?`<span>${state.lang==="en"?"Page":"Página"} <span class="print-page-number"></span></span>`:""}</footer>`:"";}
+
+async function openOrderPrintModal(orderId) {
+  let order = mockDb.findOrder(orderId);
+  if (!order && getApiMode()==="api") { await loadProductionApiData(); order=mockDb.findOrder(orderId); }
+  if (!order) { showToast(t("documentRecordUnavailable")); return; }
   const recipe = getOrderRecipe(order);
   const validation = calculateRecipe(recipe, order.quantity);
   const cost = getOrderCostSnapshot(order, recipe);
@@ -8821,33 +9555,34 @@ function openOrderPrintModal(orderId) {
         <button class="icon-button modal-close" type="button" aria-label="Cerrar">×</button>
       </div>
 
-      <section class="print-area" id="printArea">
+      <section class="print-area" id="printArea" style="--document-primary:${getDocumentBranding().primary};--document-accent:${getDocumentBranding().accent};--document-text:${getDocumentBranding().text}">
         <div class="print-header">
-          <div>
-            <strong>ERClave Produccion</strong>
-            <span>Orden de produccion</span>
-          </div>
-          <h1>${order.id}</h1>
+          ${renderDocumentBrandingHeader("Producción · Orden de producción")}
+          <h1>${escapeHtml(order.code||order.id)}</h1>
         </div>
         <div class="print-grid">
-          <p><strong>Producto:</strong> ${order.recipeName}</p>
-          <p><strong>Receta:</strong> ${formatRecipeDisplayLabel(recipe)} · v${recipe.version}</p>
-          <p><strong>Cantidad:</strong> ${order.quantity} ${order.unit}</p>
-          <p><strong>Estado:</strong> ${order.status}</p>
-          <p><strong>Prioridad:</strong> ${order.priority}</p>
-          <p><strong>Fecha requerida:</strong> ${order.dueDate}</p>
-          <p><strong>Responsable:</strong> ${order.responsible}</p>
-          <p><strong>Centro:</strong> ${order.center}</p>
+          <p><strong>Producto:</strong> ${escapeHtml(order.recipeName)}</p>
+          <p><strong>Receta:</strong> ${escapeHtml(formatRecipeDisplayLabel(recipe))} · v${escapeHtml(recipe.version)}</p>
+          <p><strong>Cantidad:</strong> ${formatNumber(order.quantity)} ${escapeHtml(order.unit)}</p>
+          <p><strong>Estado:</strong> ${escapeHtml(order.status)}</p>
+          <p><strong>Prioridad:</strong> ${escapeHtml(order.priority)}</p>
+          <p><strong>Fecha requerida:</strong> ${escapeHtml(order.dueDate)}</p>
+          <p><strong>Responsable:</strong> ${escapeHtml(order.responsible)}</p>
+          <p><strong>Centro:</strong> ${escapeHtml(order.center)}</p>
           <p><strong>Costo planeado:</strong> ${formatCurrency(cost.plannedCost)}</p>
-          <p><strong>Costo real:</strong> ${formatCurrency(cost.actualCost)}</p>
+          <p><strong>Costo real:</strong> ${cost.actualCost == null ? "Pendiente de cierre" : formatCurrency(cost.actualCost)}</p>
         </div>
+        ${(order.resources||[]).length?`<h3>Consumo y costo por recurso</h3>
+        <table><thead><tr><th>Recurso</th><th>Tipo</th><th>Planeado</th><th>Real</th><th>Costo real</th></tr></thead><tbody>
+          ${(order.resources||[]).map((resource)=>`<tr><td>${escapeHtml(resource.name)}</td><td>${escapeHtml(resource.type)}</td><td>${formatNumber(resource.plannedQuantity)} ${escapeHtml(resource.unit)}</td><td>${resource.type==="material"?(resource.actualQuantity==null?"Pendiente":`${formatNumber(resource.actualQuantity)} ${escapeHtml(resource.unit)}`):t("orderTimeMeasurementDeferred")}</td><td>${resource.actualCost==null?"Pendiente":formatCurrency(resource.actualCost)}</td></tr>`).join("")}
+        </tbody></table>`:""}
         <h3>Seguimiento por etapa operativa</h3>
         <table>
           <thead>
             <tr><th>Etapa</th><th>Responsable</th><th>Estado</th><th>Avance</th></tr>
           </thead>
           <tbody>
-            ${order.areas.map((area) => `<tr><td>${area.area}</td><td>${area.responsible}</td><td>${area.status}</td><td>${formatNumber(area.progress || (area.status === "Terminada" ? 100 : 0))}%</td></tr>`).join("")}
+            ${order.areas.map((area) => `<tr><td>${escapeHtml(area.area)}</td><td>${escapeHtml(area.responsible)}</td><td>${escapeHtml(area.status)}</td><td>${formatNumber(area.progress || (area.status === "Terminada" ? 100 : 0))}%</td></tr>`).join("")}
           </tbody>
         </table>
         <h3>Recursos calculados</h3>
@@ -8856,10 +9591,11 @@ function openOrderPrintModal(orderId) {
             <tr><th>Recurso</th><th>Tipo</th><th>Requerido</th><th>Disponible</th></tr>
           </thead>
           <tbody>
-            ${validation.rows.map((row) => `<tr><td>${row.name}</td><td>${row.type}</td><td>${formatNumber(row.required)} ${row.unit}</td><td>${formatNumber(row.available)} ${row.unit}</td></tr>`).join("")}
+            ${validation.rows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.type)}</td><td>${formatNumber(row.required)} ${escapeHtml(row.unit)}</td><td>${formatNumber(row.available)} ${escapeHtml(row.unit)}</td></tr>`).join("")}
           </tbody>
         </table>
         <p class="print-total"><strong>Costo estimado:</strong> ${formatCurrency(validation.totalCost)}</p>
+        ${renderDocumentBrandingFooter()}
       </section>
 
       <div class="modal-actions no-print">
@@ -8876,9 +9612,10 @@ function openOrderPrintModal(orderId) {
   });
 }
 
-function openSalesQuotePrintModal(quoteId) {
-  const quote = mockDb.findModuleRecord("ventas", quoteId);
-  if (!quote) return;
+async function openSalesQuotePrintModal(quoteId) {
+  let quote = mockDb.findModuleRecord("ventas", quoteId);
+  if (!quote && getApiMode()==="api") { await loadSalesApiData(); quote=mockDb.findModuleRecord("ventas",quoteId); }
+  if (!quote) { showToast(t("documentRecordUnavailable")); return; }
   const customer = quote.fields?.customerId ? mockDb.findModuleRecord("ventas", quote.fields.customerId) : null;
   const lines = getQuoteLines(quote);
   modalContent.innerHTML = `
@@ -8886,28 +9623,25 @@ function openSalesQuotePrintModal(quoteId) {
       <div class="modal-head no-print">
         <div>
           <p class="eyebrow">${t("newQuote")}</p>
-          <h2>${quote.code}</h2>
+          <h2>${escapeHtml(quote.code)}</h2>
         </div>
         <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
       </div>
 
-      <section class="print-area" id="printArea">
+      <section class="print-area" id="printArea" style="--document-primary:${getDocumentBranding().primary};--document-accent:${getDocumentBranding().accent};--document-text:${getDocumentBranding().text}">
         <div class="print-header">
-          <div>
-            <strong>ERClave Ventas</strong>
-            <span>${t("quoteDocument")}</span>
-          </div>
-          <h1>${quote.code}</h1>
+          ${renderDocumentBrandingHeader(`${state.lang==="en"?"Sales":"Ventas"} · ${t("quoteDocument")}`)}
+          <h1>${escapeHtml(quote.code)}</h1>
         </div>
         <div class="print-grid">
-          <p><strong>${t("customer")}:</strong> ${quote.fields?.customerName || t("notDefined")}</p>
-          <p><strong>${t("status")}:</strong> ${translateStatus(quote.status)}</p>
-          <p><strong>${t("validUntil")}:</strong> ${quote.fields?.validUntil || t("notDefined")}</p>
-          <p><strong>${t("deliveryPromise")}:</strong> ${quote.fields?.deliveryPromise || t("notDefined")}</p>
-          <p><strong>${t("paymentTerms")}:</strong> ${quote.fields?.paymentTerms || t("notDefined")}</p>
-          <p><strong>${t("currency")}:</strong> ${quote.fields?.currency || "MXN"}</p>
-          <p><strong>${t("billingLegalName")}:</strong> ${customer?.fields?.billingLegalName || t("notDefined")}</p>
-          <p><strong>${t("taxId")}:</strong> ${customer?.fields?.taxId || t("notDefined")}</p>
+          <p><strong>${t("customer")}:</strong> ${escapeHtml(quote.fields?.customerName || t("notDefined"))}</p>
+          <p><strong>${t("status")}:</strong> ${escapeHtml(translateStatus(quote.status))}</p>
+          <p><strong>${t("validUntil")}:</strong> ${escapeHtml(quote.fields?.validUntil || t("notDefined"))}</p>
+          <p><strong>${t("deliveryPromise")}:</strong> ${escapeHtml(quote.fields?.deliveryPromise || t("notDefined"))}</p>
+          <p><strong>${t("paymentTerms")}:</strong> ${escapeHtml(quote.fields?.paymentTerms || t("notDefined"))}</p>
+          <p><strong>${t("currency")}:</strong> ${escapeHtml(quote.fields?.currency || "MXN")}</p>
+          <p><strong>${t("billingLegalName")}:</strong> ${escapeHtml(customer?.fields?.billingLegalName || t("notDefined"))}</p>
+          <p><strong>${t("taxId")}:</strong> ${escapeHtml(customer?.fields?.taxId || t("notDefined"))}</p>
         </div>
         <h3>${t("quoteLines")}</h3>
         <table>
@@ -8923,18 +9657,19 @@ function openSalesQuotePrintModal(quoteId) {
           <tbody>
             ${lines.map((line) => `
               <tr>
-                <td>${line.productServiceName}</td>
-                <td>${formatNumber(line.quantity)} ${line.unit}</td>
-                <td>${formatCurrency(Number(line.unitPrice || 0))}</td>
+                <td>${escapeHtml(line.productServiceName)}</td>
+                <td>${formatNumber(line.quantity)} ${escapeHtml(line.unit)}</td>
+                <td>${formatSalesMoney(line.unitPrice,quote.fields?.currency)}</td>
                 <td>${formatNumber(Number(line.discount || 0))}%</td>
-                <td>${formatCurrency(Number(line.total || 0))}</td>
+                <td>${formatSalesMoney(line.total,quote.fields?.currency)}</td>
               </tr>
             `).join("")}
           </tbody>
         </table>
-        ${quote.fields?.notes ? `<p><strong>${t("notes")}:</strong> ${quote.fields.notes}</p>` : ""}
-        <p class="print-total"><strong>${t("quoteSubtotal")}:</strong> ${formatCurrency(Number(quote.fields?.subtotal || 0))}</p>
-        <p class="print-total"><strong>${t("quoteTotal")}:</strong> ${formatCurrency(Number(quote.fields?.total || 0))}</p>
+        ${quote.fields?.notes ? `<p><strong>${t("notes")}:</strong> ${escapeHtml(quote.fields.notes)}</p>` : ""}
+        <p class="print-total"><strong>${t("quoteSubtotal")}:</strong> ${formatSalesMoney(quote.fields?.subtotal,quote.fields?.currency)}</p>
+        <p class="print-total"><strong>${t("quoteTotal")}:</strong> ${formatSalesMoney(quote.fields?.total,quote.fields?.currency)}</p>
+        ${renderDocumentBrandingFooter()}
       </section>
 
       <div class="modal-actions no-print">
@@ -9178,6 +9913,7 @@ function render() {
   document.body.dataset.theme = state.theme;
   backButton.disabled = !state.history.length;
   adminShortcut.classList.toggle("active", state.active === "administracion");
+  topbarPrimary.hidden = !state.activeSubmodule;
   topbarPrimary.querySelector("[data-i18n]").dataset.i18n = state.active === "produccion" ? "newOrder" : "newModuleRecord";
   renderNav();
   renderStatusStrip();
@@ -9188,6 +9924,7 @@ function render() {
   renderAuthGate();
   applyI18n();
   ensureSessionContext();
+  loadUnitCatalog();
 }
 
 backButton.addEventListener("click", goBack);
@@ -9217,6 +9954,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 topbarPrimary.addEventListener("click", () => {
+  if (!state.activeSubmodule) return;
   if (state.active === "produccion") {
     openOrderModal();
     return;

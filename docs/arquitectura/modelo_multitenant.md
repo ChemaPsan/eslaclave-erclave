@@ -91,8 +91,8 @@ El `session/context` debe incluir como minimo:
 | `user` | Identidad visible y estatus dentro del tenant. |
 | `roles` | Roles asignados a la membresia dentro del tenant. |
 | `permissions` | Permisos efectivos calculados desde roles activos. |
-| `entitlements` | Modulos contratados o habilitados para el tenant. |
-| `active_modules` | Codigos de modulos disponibles para navegacion. |
+| `entitlements` | Derecho contractual (`status`), preferencia del cliente (`tenant_enabled`) y disponibilidad calculada (`effective_active`). |
+| `active_modules` | Codigos con entitlement activo y preferencia del tenant encendida, disponibles para navegacion y autorizacion. |
 | `entitlement_limits` | Limites comerciales por modulo: usuarios, almacenes, API calls, etc. |
 | `scope` | Alcance operativo resuelto para la sesion, iniciando por sucursales disponibles. |
 
@@ -156,7 +156,7 @@ Roles iniciales sugeridos:
 
 | Rol | Alcance |
 |---|---|
-| `owner` | Control total del tenant, usuarios, roles, modulos contratados y configuracion. |
+| `owner` | Control del tenant, usuarios, roles, configuracion y encendido de modulos ya concedidos; no cambia el contrato. |
 | `admin` | Administracion operativa sin poder cancelar contrato ni cambiar owner principal. |
 | `supervisor` | Operacion y aprobaciones de uno o varios modulos. |
 | `operator` | Captura y consulta limitada. |

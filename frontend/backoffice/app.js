@@ -1,16 +1,80 @@
 import { getApiBaseUrl } from "../api/config.js";
-import { deleteBackofficeTenant, listBackofficeTenants, listBackofficeUsage, onboardTenant, setBackofficeTenantStatus } from "../api/backoffice.js";
+import { deleteBackofficeTenant, listBackofficeModules, listBackofficeTenants, listBackofficeUsage, onboardTenant, setBackofficeTenantEntitlement, setBackofficeTenantStatus, updateBackofficeTenant } from "../api/backoffice.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "../auth.js";
 
 
 const app = document.getElementById("backofficeApp");
+const backofficeLanguage = navigator.language?.toLowerCase().startsWith("en") ? "en" : "es";
+document.documentElement.lang = backofficeLanguage;
+const backofficeCopy = {
+  es: {
+    manage: "Administrar",
+    close: "Cerrar",
+    tenantDetails: "Datos del tenant",
+    saveTenant: "Guardar cambios",
+    contractedModules: "Modulos habilitados para el tenant",
+    contractedHelp: "Backoffice define cuales modulos puede usar el tenant. El cliente solo puede encender o apagar los habilitados aqui.",
+    enable: "Habilitar",
+    disable: "Deshabilitar",
+    contracted: "Habilitado",
+    notContracted: "No habilitado",
+    tenantOn: "Cliente: encendido",
+    tenantOff: "Cliente: apagado",
+    planned: "Planeado",
+    moduleUpdated: "Modulo actualizado.",
+    tenantUpdated: "Tenant actualizado.",
+    commercialName: "Nombre comercial",
+    legalName: "Razon social",
+    plan: "Plan",
+    timezone: "Zona horaria",
+    locale: "Idioma regional",
+    module_admin: "Administracion",
+    module_production: "Produccion",
+    module_hr: "Recursos Humanos",
+    module_inventory: "Almacenes e inventarios",
+    module_sales: "Ventas",
+    module_billing: "Facturacion SaaS",
+    module_provisioning: "Aprovisionamiento",
+    module_integrations: "Integraciones"
+  },
+  en: {
+    manage: "Manage",
+    close: "Close",
+    tenantDetails: "Tenant details",
+    saveTenant: "Save changes",
+    contractedModules: "Modules enabled for the tenant",
+    contractedHelp: "Backoffice defines which modules the tenant may use. The customer can only turn enabled modules on or off.",
+    enable: "Enable",
+    disable: "Disable",
+    contracted: "Enabled",
+    notContracted: "Not enabled",
+    tenantOn: "Customer: on",
+    tenantOff: "Customer: off",
+    planned: "Planned",
+    moduleUpdated: "Module updated.",
+    tenantUpdated: "Tenant updated.",
+    commercialName: "Commercial name",
+    legalName: "Legal name",
+    plan: "Plan",
+    timezone: "Time zone",
+    locale: "Locale",
+    module_admin: "Administration",
+    module_production: "Production",
+    module_hr: "Human Resources",
+    module_inventory: "Warehouses and inventory",
+    module_sales: "Sales",
+    module_billing: "SaaS billing",
+    module_provisioning: "Provisioning",
+    module_integrations: "Integrations"
+  }
+};
+const bt = (key) => backofficeCopy[backofficeLanguage][key] || key;
 const moduleOptions = [
   { code: "admin", label: "Administracion", required: true },
   { code: "production", label: "Produccion" },
   { code: "hr", label: "Recursos Humanos" },
   { code: "inventory", label: "Almacenes" },
-  { code: "sales", label: "Ventas" },
-  { code: "integrations", label: "Integraciones" }
+  { code: "sales", label: "Ventas", dependencies: ["hr", "production"] }
 ];
 const defaultUsageToDate = new Date().toISOString().slice(0, 10);
 const defaultUsageFromDate = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -38,6 +102,9 @@ const state = {
     search: "",
     error: "",
     tenants: [],
+    modules: [],
+    selectedTenantId: "",
+    notice: "",
     actionTenantId: ""
   },
   usage: {
@@ -111,8 +178,12 @@ function buildOnboardingPayload(form) {
   const legalEntityName = readFormValue(formData, "legal_entity_name") || legalName;
   const legalEntityId = legalEntityName ? createLocalId("rso", legalEntityName) : "";
   const branchId = branchName ? createLocalId("suc", branchName) : "";
+  const selectedModuleCodes = new Set(moduleOptions.filter((item) => item.required || formData.get(`module_${item.code}`) === "on").map((item) => item.code));
+  for (const item of moduleOptions) {
+    if (selectedModuleCodes.has(item.code)) (item.dependencies || []).forEach((code) => selectedModuleCodes.add(code));
+  }
   const modules = moduleOptions
-    .filter((item) => item.required || formData.get(`module_${item.code}`) === "on")
+    .filter((item) => selectedModuleCodes.has(item.code))
     .map((item) => ({
       module_code: item.code,
       status: "active",
@@ -451,6 +522,7 @@ function renderTenantAdminPanel() {
           ${tenants.map(renderTenantRow).join("")}
         </div>
         ${!isLoading && !tenants.length ? `<p class="empty-state">No hay tenants que coincidan con la busqueda.</p>` : ""}
+        ${renderTenantEditor()}
       </section>
 
       <aside class="result-panel">
@@ -572,6 +644,7 @@ function renderTenantRow(tenant) {
         <span>${escapeHtml(modules)}</span>
       </div>
       <div class="tenant-actions" data-label="Acciones">
+        <button class="secondary-button inline" type="button" data-action="manage-tenant" data-tenant-id="${escapeHtml(tenant.id)}" ${isBusy ? "disabled" : ""}>${bt("manage")}</button>
         <button class="secondary-button inline" type="button" data-action="toggle-tenant-status" data-tenant-id="${escapeHtml(tenant.id)}" data-status="${isSuspended ? "active" : "suspended"}" ${isBusy ? "disabled" : ""}>
           ${isSuspended ? "Reactivar" : "Suspender"}
         </button>
@@ -580,6 +653,57 @@ function renderTenantRow(tenant) {
         </button>
       </div>
     </article>
+  `;
+}
+
+
+function renderTenantEditor() {
+  const tenant = state.tenantAdmin.tenants.find((item) => item.id === state.tenantAdmin.selectedTenantId);
+  if (!tenant) return "";
+  const entitlements = new Map((tenant.entitlements || []).map((item) => [item.module_code, item]));
+  const busy = state.tenantAdmin.actionTenantId === tenant.id;
+  return `
+    <section class="tenant-editor" aria-label="${bt("tenantDetails")}">
+      <header class="section-header tenant-editor-header">
+        <div><p class="eyebrow">${bt("tenantDetails")}</p><h3>${escapeHtml(tenant.commercial_name)}</h3></div>
+        <button class="secondary-button inline" type="button" data-action="close-tenant-editor">${bt("close")}</button>
+      </header>
+      ${state.tenantAdmin.notice ? `<p class="notice-box">${escapeHtml(state.tenantAdmin.notice)}</p>` : ""}
+      <form class="tenant-editor-form" data-form="tenant-editor" data-tenant-id="${escapeHtml(tenant.id)}">
+        <label><span>${bt("commercialName")}</span><input name="commercial_name" maxlength="240" value="${escapeHtml(tenant.commercial_name)}" required></label>
+        <label><span>${bt("legalName")}</span><input name="legal_name" maxlength="240" value="${escapeHtml(tenant.legal_name || "")}"></label>
+        <label><span>${bt("plan")}</span><input name="plan_id" maxlength="40" value="${escapeHtml(tenant.plan_id || "")}"></label>
+        <label><span>${bt("timezone")}</span><input name="timezone" maxlength="80" value="${escapeHtml(tenant.timezone)}" required></label>
+        <label><span>${bt("locale")}</span><input name="locale" maxlength="20" value="${escapeHtml(tenant.locale)}" required></label>
+        <button class="primary-button tenant-editor-save" type="submit" ${busy ? "disabled" : ""}>${bt("saveTenant")}</button>
+      </form>
+      <div class="tenant-module-heading"><h3>${bt("contractedModules")}</h3><p>${bt("contractedHelp")}</p></div>
+      <div class="tenant-module-grid">
+        ${state.tenantAdmin.modules.map((module) => {
+          const entitlement = entitlements.get(module.code);
+          const contracted = entitlement?.status === "active";
+          const planned = module.implementation_status !== "implemented";
+          const immutable = module.code === "admin";
+          const missingDependencies = (module.dependencies || []).filter((code) => !entitlements.get(code)?.effective_active);
+          const activeDependents = state.tenantAdmin.modules
+            .filter((candidate) => (candidate.dependencies || []).includes(module.code) && entitlements.get(candidate.code)?.effective_active)
+            .map((candidate) => candidate.code);
+          const activatesImmediately = !contracted && entitlement?.tenant_enabled !== false;
+          const dependencyBlocked = contracted ? activeDependents.length > 0 : activatesImmediately && missingDependencies.length > 0;
+          const dependencyHint = missingDependencies.length
+            ? `Requiere activos: ${missingDependencies.join(", ")}.`
+            : activeDependents.length ? `Lo requiere: ${activeDependents.join(", ")}.` : "";
+          return `<article class="tenant-module-card ${contracted ? "contracted" : ""}">
+            <div><strong>${escapeHtml(bt(`module_${module.code}`))}</strong><small>${escapeHtml(module.code)} · ${escapeHtml(module.owner_service)}</small>${dependencyHint ? `<small>${escapeHtml(dependencyHint)}</small>` : ""}</div>
+            <div class="tenant-module-state">
+              <span class="status-pill ${contracted ? "active" : "suspended"}">${planned ? bt("planned") : contracted ? bt("contracted") : bt("notContracted")}</span>
+              ${entitlement ? `<small>${entitlement.tenant_enabled ? bt("tenantOn") : bt("tenantOff")}</small>` : ""}
+            </div>
+            <button class="secondary-button inline" type="button" data-action="toggle-tenant-entitlement" data-tenant-id="${escapeHtml(tenant.id)}" data-module-code="${escapeHtml(module.code)}" data-next-status="${contracted ? "inactive" : "active"}" title="${escapeHtml(dependencyHint)}" ${busy || planned || immutable || dependencyBlocked ? "disabled" : ""}>${contracted ? bt("disable") : bt("enable")}</button>
+          </article>`;
+        }).join("")}
+      </div>
+    </section>
   `;
 }
 
@@ -681,10 +805,10 @@ function handleLogout() {
 function verifyBackofficeAccess() {
   state.access = { status: "checking", error: "" };
   render();
-  listBackofficeTenants("", 1)
-    .then((tenants) => {
+  Promise.all([listBackofficeTenants("", 1), listBackofficeModules()])
+    .then(([tenants, modules]) => {
       state.access = { status: "authorized", error: "" };
-      state.tenantAdmin = { ...state.tenantAdmin, status: "ready", tenants, error: "", actionTenantId: "" };
+      state.tenantAdmin = { ...state.tenantAdmin, status: "ready", tenants, modules, error: "", actionTenantId: "" };
       render();
       if (state.activeTab === "tenant-admin") loadTenantAdmin();
       if (state.activeTab === "usage") loadUsage();
@@ -712,9 +836,10 @@ function setBackofficeTab(tab) {
 function loadTenantAdmin(search = state.tenantAdmin.search) {
   state.tenantAdmin = { ...state.tenantAdmin, status: "loading", search, error: "" };
   render();
-  listBackofficeTenants(search)
-    .then((tenants) => {
-      state.tenantAdmin = { ...state.tenantAdmin, status: "ready", tenants, error: "", actionTenantId: "" };
+  Promise.all([listBackofficeTenants(search), state.tenantAdmin.modules.length ? Promise.resolve(state.tenantAdmin.modules) : listBackofficeModules()])
+    .then(([tenants, modules]) => {
+      const selectedTenantId = tenants.some((item) => item.id === state.tenantAdmin.selectedTenantId) ? state.tenantAdmin.selectedTenantId : "";
+      state.tenantAdmin = { ...state.tenantAdmin, status: "ready", tenants, modules, selectedTenantId, error: "", actionTenantId: "" };
       render();
     })
     .catch((error) => {
@@ -737,6 +862,62 @@ function bindTenantAdminActions() {
   app.querySelectorAll("[data-action='delete-tenant']").forEach((button) => {
     button.addEventListener("click", () => removeTenant(button.dataset.tenantId, button.dataset.name));
   });
+  app.querySelectorAll("[data-action='manage-tenant']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.tenantAdmin = { ...state.tenantAdmin, selectedTenantId: button.dataset.tenantId, notice: "", error: "" };
+      render();
+    });
+  });
+  app.querySelector("[data-action='close-tenant-editor']")?.addEventListener("click", () => {
+    state.tenantAdmin = { ...state.tenantAdmin, selectedTenantId: "", notice: "" };
+    render();
+  });
+  app.querySelector("[data-form='tenant-editor']")?.addEventListener("submit", handleTenantEditorSubmit);
+  app.querySelectorAll("[data-action='toggle-tenant-entitlement']").forEach((button) => {
+    button.addEventListener("click", () => updateTenantEntitlementFromBackoffice(button.dataset.tenantId, button.dataset.moduleCode, button.dataset.nextStatus));
+  });
+}
+
+
+function handleTenantEditorSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const tenantId = event.currentTarget.dataset.tenantId;
+  const payload = {
+    commercial_name: readFormValue(formData, "commercial_name"),
+    legal_name: readFormValue(formData, "legal_name") || null,
+    plan_id: readFormValue(formData, "plan_id") || null,
+    timezone: readFormValue(formData, "timezone"),
+    locale: readFormValue(formData, "locale")
+  };
+  state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: tenantId, notice: "", error: "" };
+  render();
+  updateBackofficeTenant(tenantId, payload)
+    .then(() => {
+      state.tenantAdmin = { ...state.tenantAdmin, notice: bt("tenantUpdated") };
+      return loadTenantAdmin();
+    })
+    .catch((error) => {
+      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: error.message || "No se pudo actualizar el tenant." };
+      render();
+    });
+}
+
+
+function updateTenantEntitlementFromBackoffice(tenantId, moduleCode, status) {
+  const tenant = state.tenantAdmin.tenants.find((item) => item.id === tenantId);
+  const current = (tenant?.entitlements || []).find((item) => item.module_code === moduleCode);
+  state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: tenantId, notice: "", error: "" };
+  render();
+  setBackofficeTenantEntitlement(tenantId, moduleCode, { status, source: "manual", limits: current?.limits || {} })
+    .then(() => {
+      state.tenantAdmin = { ...state.tenantAdmin, notice: bt("moduleUpdated") };
+      return loadTenantAdmin();
+    })
+    .catch((error) => {
+      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: error.message || "No se pudo actualizar el modulo." };
+      render();
+    });
 }
 
 

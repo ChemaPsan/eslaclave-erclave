@@ -14,6 +14,7 @@ description: Implementar funcionalidades verticales completas de ERClave desde c
 3. Inspeccionar `git status --short`; preservar trabajo ajeno.
 4. Expresar criterios de aceptación verificables.
 5. Identificar tenant y actor; dueños de UI, servicio y datos; contratos, permisos, i18n, dependencias, fallos parciales, auditoría y rollback.
+6. Registrar los agentes de negocio, tecnicos y transversales consultados; para liberar a QA usar `$erclave-qa-release`.
 
 Detenerse y pedir decisión sólo si falta una regla de negocio que cambiaría materialmente el resultado.
 

@@ -515,6 +515,86 @@ input {
   gap: 8px !important;
 }
 
+.tenant-editor {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.tenant-editor-header {
+  margin-bottom: 16px;
+}
+
+.tenant-editor-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.tenant-editor-form label,
+.tenant-module-card > div,
+.tenant-module-state {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.tenant-editor-form input {
+  width: 100%;
+  min-width: 0;
+}
+
+.tenant-editor-save {
+  align-self: end;
+}
+
+.tenant-module-heading {
+  margin-top: 22px;
+}
+
+.tenant-module-heading h3,
+.tenant-module-heading p {
+  margin: 0;
+}
+
+.tenant-module-heading p {
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+.tenant-module-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.tenant-module-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.tenant-module-card.contracted {
+  border-color: rgba(27, 143, 91, 0.42);
+}
+
+.tenant-module-state {
+  justify-items: end;
+}
+
+.tenant-module-card button {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
 .result-stack {
   display: grid;
   gap: 12px;
@@ -599,6 +679,21 @@ input {
   .tenant-row,
   .usage-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tenant-editor-form,
+  .tenant-module-grid,
+  .tenant-module-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tenant-module-state {
+    justify-items: start;
+  }
+
+  .tenant-module-card button {
+    grid-column: auto;
+    justify-self: stretch;
   }
 
   .section-header,

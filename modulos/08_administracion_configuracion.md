@@ -22,6 +22,7 @@ Este módulo será transversal y deberá soportar el crecimiento modular de ERCl
 - unidades de medida;
 - idiomas;
 - monedas;
+- condiciones de pago;
 - configuraciones por módulo;
 - bitácora de cambios;
 - parámetros por tenant.
@@ -130,6 +131,10 @@ Los catalogos base son configuraciones transversales que deberan administrarse d
 
 La referencia ampliada se documenta en `docs/catalogos_base.md`.
 
+En Local, `currencies` y `payment_terms` ya son catalogos tenant-safe administrables desde una vista dedicada. Ventas acepta solo valores activos; los defaults iniciales pueden inactivarse y el cliente puede agregar valores propios. Estados de cotizacion, pedido y entrega no son catalogos editables: son maquinas de estado protegidas por cada backend.
+
+Administracion tambien es propietaria de `document.template`: logo, color primario, acento, texto, pie y numeracion. Cotizaciones y ordenes de Produccion consumen la misma configuracion al imprimir/guardar como PDF; todo generador documental futuro debe leer este contrato. El administrador puede reemplazar o quitar el logo. El data URL de logo (PNG/JPEG/WebP, maximo decodificado de 1 MB y firma binaria validada) es una solucion Local; antes de promover a QA se sustituira por una referencia de object storage sin cambiar el contrato consumidor. La regla transversal vive en [`docs/arquitectura/plantillas_documentales.md`](../docs/arquitectura/plantillas_documentales.md).
+
 | Grupo | Catalogos iniciales |
 |---|---|
 | Transversales | centros de negocio, areas, roles, permisos, unidades de medida, monedas, impuestos, prioridades, idiomas. |
@@ -140,6 +145,25 @@ La referencia ampliada se documenta en `docs/catalogos_base.md`.
 | Gastos | tipos de gasto, categorias de gasto, metodos de pago, estados de gasto, tipos de comprobante, motivos de rechazo. |
 | Costos | centros de costo, drivers de prorrateo, metodos de costeo, tipos de variacion, tipos de costo. |
 | Contabilidad | cuentas contables, periodos contables, tipos de poliza, tipos de documento origen, tipos de operacion, estados contables, reglas de mapeo contable. |
+
+### 8.1 Unidades de medida
+
+Estado: implementado en Local. El catalogo pertenece a Administracion, se aisla por tenant y se provisiona con 50 unidades UN/CEFACT Rec. 20. La tarjeta de Configuracion base abre una vista dedicada, sin extender indefinidamente el panel principal. Soporta consulta bilingue, alta de unidades propias, edicion e inactivacion; cada comando exige `Idempotency-Key`, conserva `X-Correlation-Id` y genera auditoria. Produccion e Inventarios resuelven `GET /v1/catalogs/units-of-measure/by-code/{code}`, validan el codigo activo y sus formularios usan seleccion en lugar de captura libre.
+
+### 8.2 Folios y consecutivos
+
+Estado: implementado en Local. Cada tenant recibe configuraciones iniciales para productos, recetas, ordenes de produccion, maquinaria, almacenes, articulos, movimientos, areas, puestos, empleados, clientes, cotizaciones, pedidos y entregas.
+
+| Campo | Significado |
+|---|---|
+| Prefijo | Texto estable anterior al numero, por ejemplo `REC`, `OP` o `COT`. |
+| Separador | Caracter entre prefijo y numero. |
+| Siguiente numero | Consecutivo que se reservara en la proxima alta; no puede retroceder. |
+| Longitud | Cantidad de digitos con ceros a la izquierda. |
+| Modo administrado | ERClave reserva el siguiente folio de forma atomica e idempotente. |
+| Modo manual | El usuario captura el codigo; el servicio propietario valida formato y unicidad. |
+
+Cambiar una configuracion no renombra documentos historicos. La reserva de un folio requiere el permiso de alta del documento consumidor; consultar o editar el catalogo requiere `admin.setting.read` o `admin.setting.update` respectivamente.
 
 ---
 
@@ -186,8 +210,21 @@ Administración deberá permitir configurar dependencias como:
 - Definir catálogo de módulos y submódulos.
 - Definir qué configuraciones serán por tenant.
 - Definir bitácora de cambios administrativos.
-- Construir la pantalla `Administracion > Catalogos base`.
-- Migrar opciones fijas del MVP a catalogos administrables cuando el flujo lo requiera.
+- Implementar los catalogos pendientes desde su tarjeta en `Administracion > Catalogos base`; Unidades de medida ya esta completo en una vista dedicada.
+- Migrar las opciones fijas restantes del MVP a catalogos administrables cuando el flujo lo requiera.
+
+## 11.1 Gobierno de modulos por tenant
+
+Estado: implementado en Local.
+
+La disponibilidad de un modulo se resuelve en dos niveles que no pueden sustituirse entre si:
+
+1. Backoffice interno controla el entitlement contractual mediante `status`: `active`, `inactive` o `suspended`.
+2. El administrador del tenant controla solamente `tenant_enabled` sobre un entitlement `active` concedido previamente por Backoffice.
+
+Un modulo es efectivo cuando `status = active` y `tenant_enabled = true`. El catalogo `admin` es obligatorio y no puede retirarse ni apagarse. Backoffice puede editar nombre comercial, razon social, plan, zona horaria e idioma regional del tenant, y solo habilita modulos con runtime `implemented`; los modulos `planned` se muestran bloqueados. Cada cambio exige idempotencia, correlacion, aislamiento por `tenant_id` y auditoria. Retirar un entitlement no elimina datos ni permisos configurados: bloquea su ejecucion y permite recuperarlos al rehabilitarlo.
+
+El catalogo declara dependencias efectivas. En el corte actual `sales` requiere `hr` y `production`: Backoffice, onboarding y Administracion rechazan activar Ventas si falta alguna, y rechazan apagar RH o Produccion mientras Ventas siga efectivo. La validacion se repite dentro de la transaccion que bloquea los entitlements del tenant para evitar combinaciones invalidas por concurrencia. Durante onboarding se insertan primero los modulos y despues se asignan al owner sus permisos, de modo que el primer `session/context` coincide con lo contratado.
 
 ---
 
@@ -221,3 +258,11 @@ Responsive y accesibilidad:
 - En contenedor amplio se usa matriz por recurso y accion.
 - En contenedor estrecho cada recurso se transforma en tarjeta etiquetada sin scroll horizontal de pagina.
 - Checkboxes nativos, labels completos, foco visible, controles de modulo con estado mixto y resumen `aria-live`.
+
+## CHG-209: seleccion escalable
+
+Rol, sucursal activa y entidad legal usan búsqueda por identidad visible. Permisos conservan su buscador especializado y selección por matriz. Categorías, estados y opciones estructurales breves permanecen como listas directas; activar módulos no es un catálogo operativo masivo.
+
+## CHG-211: excepcion de portada
+
+Administración conserva en su primera vista el centro de configuración de organización, usuarios, roles, permisos, módulos activos y catálogos base. No adopta la portada de reportes estándar de los módulos operativos porque es el lugar donde se gobierna el sistema. La excepción es funcional y está protegida por el validador transversal.

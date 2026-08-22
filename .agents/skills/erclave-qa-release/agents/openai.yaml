@@ -1,0 +1,4 @@
+interface:
+  display_name: "ERClave QA Release"
+  short_description: "Promueve candidatos a QA con gates y rollback"
+  default_prompt: "Usa $erclave-qa-release para preparar y promover este cambio de Local a QA de forma segura."
