@@ -4,7 +4,7 @@ Ultima actualizacion: 2026-08-21.
 
 ## Preparacion del release QA
 
-0. Publicar por PR un SHA inmutable que incluya las revisiones Local `20260817_0014` a `20260821_0023`, CHG-195/CHG-204 y los cierres CHG-222/CHG-223/CHG-224. El pipeline ya esta preparado para cinco servicios y Ventas, pero antes de construir el candidato deben aprovisionarse `erclave-sales-qa`, `QA_SALES_RUNTIME_SERVICE_ACCOUNT` y `QA_SALES_API_URL` mediante autorizacion separada. Probar migraciones, permisos, dependencias modulares, referencias, reservas/consumos, recepcion de producto terminado, capacidad, valuacion, concurrencia, proteccion de datos e idempotencia antes de promoverlo.
+0. Construir desde el SHA inmutable de `main` `adb134f7ac8b33b4a842d07db10c9b5f88525f2f` el candidato QA de cinco servicios mediante el gate protegido `qa-build`. La identidad `erclave-sales-qa` y las variables `QA_SALES_RUNTIME_SERVICE_ACCOUNT`/`QA_SALES_API_URL` ya quedaron aprovisionadas y verificadas en CHG-225. Despues de construir, conservar run ID y digests, y probar migraciones, permisos, dependencias modulares, referencias, reservas/consumos, recepcion de producto terminado, capacidad, valuacion, concurrencia, proteccion de datos e idempotencia antes de promoverlo.
 
 1. Promover el candidato posterior a CHG-191 que corrige el aislamiento del arranque Local y la resolucion dinamica del tenant QA; antes, completar PR, CI, candidato inmutable y gates separados.
 2. Renovar la sesion Firebase QA y comprobar que el administrador allowlisted accede a Backoffice mientras un owner ordinario conserva `403`, sin persistir tokens ni contraseñas.

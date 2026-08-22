@@ -1,12 +1,12 @@
 # Preparacion del candidato QA - 2026-08-21
 
-> Estado: **PREPARADO EN REPOSITORIO / NO DESPLEGADO**. Este expediente no autoriza migraciones, configuracion del tenant, publicacion de imagenes, despliegues, cambios de trafico, Firebase Hosting ni carga de datos en QA.
+> Estado: **LISTO PARA SOLICITAR `qa-build` / NO CONSTRUIDO / NO DESPLEGADO**. Este expediente no autoriza migraciones, configuracion del tenant, despliegues, cambios de trafico, Firebase Hosting ni carga de datos en QA.
 
 ## Resultado ejecutivo
 
 El corte Local acumulado hasta CHG-224 queda preparado para convertirse en un candidato QA inmutable. El pipeline contempla cinco servicios reales: Admin, Produccion, Inventory, RH y Ventas. Tambien transporta las dependencias HTTPS necesarias para que Inventory valide recepciones de producto terminado contra Produccion y para que Ventas consulte sus autoridades.
 
-La promocion aun es **NO-GO**. Antes de construir el candidato deben existir un commit SHA completo publicado, la identidad `erclave-sales-qa`, las variables `QA_SALES_RUNTIME_SERVICE_ACCOUNT` y `QA_SALES_API_URL`, y las aprobaciones separadas de los environments protegidos.
+La promocion aun es **NO-GO**. El SHA inmutable de `main`, la identidad `erclave-sales-qa` y las variables `QA_SALES_RUNTIME_SERVICE_ACCOUNT`/`QA_SALES_API_URL` ya existen y fueron verificados en CHG-225. El siguiente gate independiente es construir el candidato mediante `qa-candidate.yml`; migracion, configuracion, revisiones, trafico y frontend conservan aprobaciones separadas.
 
 ## Alcance del candidato
 
@@ -34,7 +34,7 @@ Comprobacion publica no destructiva del 2026-08-21:
 | Ventas | No existe en el artefacto frontend QA vigente; se incorpora por primera vez en este candidato |
 | Esquema | Revision documentada `20260805_0013`; no se consulto ni modifico Cloud SQL en esta actividad |
 
-La cuenta `gcloud` activa no tiene permiso `run.services.list` sobre el proyecto `erclave`; por ello el inventario de revisiones e IAM debe repetirse con el actor aprobador antes del gate `qa-build`. Los healthchecks publicos si fueron exitosos.
+La configuracion activa de `gcloud` apunta a otro proyecto y no tiene acceso a `erclave`; CHG-225 uso explicitamente la cuenta QA ya autenticada `eslaclavecaf@gmail.com` y `--project=erclave`, sin cambiar la configuracion activa. Con ese actor se verificaron proyecto, IAM y URLs estables. Los healthchecks publicos tambien fueron exitosos.
 
 ## Cambios de preparacion CHG-224
 
@@ -49,9 +49,9 @@ La cuenta `gcloud` activa no tiene permiso `run.services.list` sobre el proyecto
 
 | Paso | Requisito | Tipo de autorizacion | Estado |
 |---|---|---|---|
-| Consolidar codigo | PR revisado, CI verde y SHA de 40 caracteres | Git/PR | Pendiente |
-| Aprovisionar identidad Sales | Crear `erclave-sales-qa` y grants declarados | `qa-write` IAM | Pendiente |
-| Variables GitHub | `QA_SALES_RUNTIME_SERVICE_ACCOUNT` y `QA_SALES_API_URL` | Configuracion QA | Pendiente |
+| Consolidar codigo | PR revisado, CI verde y SHA de 40 caracteres | Git/PR | Completo: `adb134f7ac8b33b4a842d07db10c9b5f88525f2f` |
+| Aprovisionar identidad Sales | Crear `erclave-sales-qa` y grants declarados | `qa-write` IAM | Completo y verificado; sin llaves de usuario |
+| Variables GitHub | `QA_SALES_RUNTIME_SERVICE_ACCOUNT` y `QA_SALES_API_URL` | Configuracion QA | Completo y verificado |
 | Construir imagenes | Ejecutar `qa-candidate.yml` con `BUILD_ERCLAVE_QA` | environment `qa-build` | No autorizado |
 | Migrar base | Backup/checkpoint verificado y Alembic `0013 -> 0023` | environment `qa-database` | No autorizado |
 | Configurar tenant | Sincronizar permisos y cinco entitlements reales | environment `qa-database` | No autorizado |

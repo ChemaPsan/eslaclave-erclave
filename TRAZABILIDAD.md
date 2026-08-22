@@ -3484,6 +3484,25 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Validacion | Health/readiness/version publicos de las cuatro APIs QA vigentes respondieron correctamente con version `4e9c6881dab61239f1abd5fff688019fdd697977`. La cuenta `gcloud` activa carece de `run.services.list`, documentado como preflight pendiente del aprobador. Validacion completa de repositorio se ejecuta antes de cerrar el corte. |
 | Observaciones | No se ejecuto workflow, migracion, seed, configuracion de tenant, Cloud Run, trafico ni Firebase Hosting. No se consultaron secretos ni se copiaron datos Local a QA. Los manuales CHG-222 siguen vigentes porque el cambio es de liberacion, no de uso funcional. |
 
+### CHG-225
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-21 |
+| Cambio | Aprovisionamiento minimo de identidad y variables Sales QA |
+| Autor | Codex |
+| Archivos | Plan IAM y expediente QA consultados; contexto, pendientes y `TRAZABILIDAD.md` actualizados |
+| Secciones | QA / IAM / GitHub Actions / Ventas / Supply chain / Release |
+| Agentes consultados | Arquitecto senior de plataforma SaaS, Ingeniero senior de seguridad IAM/supply chain e Ingeniero senior de QA/validadores/release conforme a `AGENTES.md`. Se aplicaron `$erclave-environment-boundaries` y `$erclave-qa-release`. |
+| Diagnostico | La cuenta activa `chemapadillasanchez@gmail.com` no tenia acceso al proyecto `erclave`; el preflight se detuvo antes de escribir. La cuenta QA `eslaclavecaf@gmail.com` ya estaba autenticada y si resolvio el proyecto `erclave` numero `370105017372`. La identidad Sales y las dos variables aun no existian. |
+| Descripcion | Se creo `erclave-sales-qa@erclave.iam.gserviceaccount.com` sin llaves administradas por usuario. Se concedio `roles/cloudsql.client`, acceso `roles/secretmanager.secretAccessor` solo sobre `erclave-database-url-qa` y `roles/run.invoker` sobre `admin-service-qa`, `hr-service-qa`, `production-service-qa` e `inventory-service-qa`. Se crearon las variables no secretas `QA_SALES_RUNTIME_SERVICE_ACCOUNT` y `QA_SALES_API_URL` en `ChemaPsan/eslaclave-erclave`. |
+| Motivo | Cerrar el prerrequisito minimo de identidad/configuracion para construir un candidato QA de cinco servicios sin llaves JSON, permisos de secreto a nivel proyecto ni despliegue prematuro. |
+| Impacto | Escritura externa acotada de IAM/configuracion QA. No se creo `sales-service-qa`, no se construyo imagen, no se leyo el secreto, no se ejecuto migracion o configuracion de tenant, no se movio trafico ni se publico frontend. El siguiente gate es `qa-build`. |
+| APIs afectadas | **Contratos funcionales modificados:** Ninguno. **APIs operativas usadas:** Google Cloud IAM/Secret Manager/Cloud Run IAM y GitHub Actions repository variables. No se invocaron APIs ERClave. |
+| Validacion | Identidad activa y sin llaves de usuario; roles de proyecto/secreto verificados; los cuatro bindings `run.invoker` verificados; ambas variables releidas con sus valores esperados. `main` remoto verificado en `adb134f7ac8b33b4a842d07db10c9b5f88525f2f`; su CI previo finalizo correctamente. |
+| Rollback | Eliminar las dos variables; retirar los cuatro bindings `run.invoker`, el binding del secreto y `roles/cloudsql.client`; finalmente eliminar la cuenta de servicio. No hay datos ni revision Cloud Run que revertir. |
+| Observaciones | La URL Sales se derivo del nombre estable `sales-service-qa` y del sufijo QA comprobado en los cuatro servicios existentes: `https://sales-service-qa-kgnfw5neua-uc.a.run.app`. La configuracion activa de `gcloud` no se cambio; todos los comandos QA declararon cuenta y proyecto explicitamente. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
