@@ -43,8 +43,8 @@ Complemento recomendado:
 |---|---|---|
 | `admin-service` | Administracion | Tenants, usuarios, roles, permisos, unidades de negocio, modulos activos y configuracion por tenant. |
 | `production-service` | Produccion | Productos/servicios, recetas, versiones de receta, recursos productivos, maquinaria, ordenes y avance por etapas. |
-| `inventory-service` | Almacenes | Almacenes, articulos inventariables, ubicaciones, movimientos, existencias, kardex y reservas futuras. |
-| `sales-service` | Ventas | Clientes, contactos, cotizaciones, pedidos, partidas, entregas y devoluciones comerciales. |
+| `inventory-service` | Almacenes | Almacenes, articulos inventariables, ubicaciones, movimientos, existencias, kardex, reservas y valuacion de materiales. |
+| `sales-service` | Ventas | Local real: clientes, contactos, cotizaciones, pedidos, surtido y entregas. Devoluciones permanecen planeadas. |
 | `billing-service` | Billing / SaaS | Planes comerciales, suscripciones, eventos de pago, activaciones manuales y estado de cobro. |
 | `provisioning-service` | Provisioning | Orquestacion de alta de tenant, activacion de modulos e invitacion del administrador inicial. |
 | `integration-service` | Integraciones | Clientes API, scopes, cuotas, llaves, uso de API y politicas de integracion. |
@@ -104,15 +104,20 @@ token -> tenant_id autorizado -> permisos -> modulos activos -> accion permitida
 | `user` | `admin-service` | Usuarios autorizados del tenant y flujos de invitacion | Servicios para autorizacion | `user.invited`, `user.activated`, `user.disabled` |
 | `role` | `admin-service` | Administradores del tenant | Todos para validar permisos | `role.created`, `role.updated` |
 | `permission` | `admin-service` | EsLaClave como catalogo global | Todos | `permission.catalog.updated` |
-| `module_entitlement` | `admin-service` | `admin-service`, por Billing/Provisioning | Todos | `tenant.modules.updated` |
+| `module_entitlement` | `admin-service` | Backoffice interno; Billing/Provisioning por contrato futuro | Administrador tenant para cambiar solo su preferencia; todos los servicios para autorizar | `tenant.modules.updated` |
 | `business_unit` | `admin-service` | Administradores del tenant | Servicios operativos | `business_unit.created`, `business_unit.updated` |
 | `tenant_setting` | `admin-service` | Administradores autorizados | Servicios segun parametro | `tenant.setting.updated` |
+| `code_sequence` | `admin-service` | Administradores con `admin.setting.update`; consumidores reservan con su permiso de alta | Todos los modulos con documento configurable | `business_code.allocated` auditable |
 
 Reglas:
 
 - ningun usuario cliente accede a consola interna de EsLaClave;
 - ningun servicio debe asumir permisos sin validar contra `admin-service` o token autorizado;
 - suspender un tenant debe bloquear acciones de escritura y permitir solo accesos definidos por politica.
+- Backoffice gobierna `module_entitlement.status`; un administrador del tenant nunca concede, suspende ni retira modulos contratados.
+- El tenant solo cambia `tenant_enabled` cuando el entitlement esta `active`; la autorizacion efectiva exige ambas condiciones.
+- Retirar un entitlement conserva permisos y datos historicos, pero los excluye de `session/context`, policy y navegacion efectiva.
+- Cada modulo conserva ownership de su documento y unicidad de codigo; Admin es propietario exclusivo de la configuracion y reserva atomica del consecutivo. No se comparte una secuencia global entre tenants.
 
 ### 5.2 Produccion
 
@@ -131,6 +136,7 @@ Reglas:
 
 - Ventas no crea ordenes directamente; solicita orden bajo pedido.
 - Almacenes no modifica recetas ni ordenes.
+- Produccion es dueno del mapeo estable entre un producto vendible y su articulo de Inventory; valida el ID externo, estado y unidad por API y no escribe el schema `inventory`.
 - Si una receta cambia, las ordenes en curso conservan snapshot de la version con la que fueron liberadas.
 - Un producto/servicio sin receta aprobada puede venderse solo si la politica del tenant lo permite.
 
@@ -140,12 +146,14 @@ Reglas:
 |---|---|---|---|---|
 | `labor_area` | `hr-service` | RH con permisos `hr.area.*` | RH, Produccion y Costos por contrato | `hr.area.updated` futuro |
 | `labor_position` | `hr-service` | RH con permisos `hr.position.*` | RH, Produccion y Costos por contrato | `hr.position.updated` futuro |
+| `worker` | `hr-service` | RH con permisos `hr.worker.*` | RH; Produccion mediante proyeccion elegible | `hr.worker.updated` futuro |
 
 Reglas:
 
 - El entitlement `hr` debe estar activo para toda operacion del servicio.
 - Produccion y Costos nunca escriben tablas del esquema `hr`.
 - Las recetas conservan snapshots; los IDs de RH son referencias externas, no FKs entre esquemas de servicio.
+- Produccion valida responsables contra la proyeccion HTTP de trabajadores elegibles y conserva `worker_ref_id` mas nombre snapshot; nunca lee ni escribe `hr.workers` directamente.
 
 ### 5.3 Almacenes
 
@@ -165,7 +173,7 @@ Reglas:
 - Kardex y existencias no se editan manualmente.
 - Todo cambio de saldo nace de un movimiento.
 - Salidas y ajustes negativos no deben exceder existencia disponible.
-- Reservas quedan como contrato futuro si el MVP inicial no las ejecuta todavia.
+- Reservas para ordenes de Produccion y Pedidos de Ventas estan implementadas en codigo Local mediante comandos de reserva, liberacion y consumo parcial/total; QA conserva el corte anterior hasta su promocion.
 
 ### 5.4 Ventas
 
@@ -175,17 +183,19 @@ Reglas:
 | `customer_contact` | `sales-service` | Ventas autorizadas | Ventas | `customer_contact.updated` |
 | `quote` | `sales-service` | Ventas autorizadas | Ventas, Reportes | `quote.created`, `quote.approved`, `quote.expired` |
 | `quote_line` | `sales-service` | Ventas autorizadas | Ventas | Incluido en eventos de `quote` |
-| `sales_order` | `sales-service` | Ventas autorizadas | Ventas, Produccion, Almacenes, Reportes | `sales_order.created`, `sales_order.status_changed`, `sales_order.fulfillment_requested` |
-| `sales_order_line` | `sales-service` | Ventas autorizadas | Ventas, Produccion, Almacenes | Incluido en eventos de `sales_order` |
-| `delivery_view` | `sales-service` | Vista operativa desde pedido e integraciones futuras | Ventas, Almacenes futuro | No aplica como entidad fuente |
-| `return_request` | `sales-service` | Ventas autorizadas | Ventas, Almacenes futuro | `return_request.created`, `return_request.approved` |
+| `sales_order` | `sales-service` | Ventas autorizadas; una por cotizacion aprobada; estados durables de surtido/cancelacion | Ventas, Produccion, Almacenes, Reportes | Auditoria Local; eventos outbox futuros |
+| `sales_order_line` | `sales-service` | Ventas; snapshots y referencias externas de producto/articulo | Ventas, Produccion, Almacenes | Incluido en auditoria del pedido |
+| `delivery` | `sales-service` | Ventas autorizadas; reserva cantidad de la partida y confirma bajo reclamo durable | Ventas, Almacenes | Auditoria Local; eventos outbox futuros |
+| `return_request` | `sales-service` futuro | Planeado | Ventas, Almacenes futuro | Eventos planeados |
 
 Reglas:
 
 - Una cotizacion debe relacionarse con cliente existente.
 - Una cotizacion debe usar productos/servicios existentes de Produccion.
-- Un pedido puede solicitar produccion o inventario, pero no modifica directamente ordenes ni movimientos.
-- Entregas en MVP son vista de gestion; el impacto real de inventario se hara por contrato con Almacenes.
+- Un pedido puede solicitar produccion o inventario, pero no modifica directamente ordenes ni movimientos; usa comandos HTTP idempotentes del dueno.
+- Una partida de producto solo puede reservar el articulo mapeado por Production. Sales conserva snapshots, mientras Inventory mantiene ownership del maestro, reserva, movimiento y costo de consumo.
+- Entregas Local reservan cantidad comercial al crear el borrador y consumen reservas mediante Inventory al confirmar. Servicio exige captura de costo real; Production queda pendiente hasta su callback.
+- Surtido, cancelacion y confirmacion guardan reclamo, clave y hash antes del efecto externo; una interrupcion queda visible como `needs_reconciliation` y reanuda con la clave original.
 
 ### 5.5 Billing / SaaS
 
@@ -278,8 +288,12 @@ Payload minimo de `POST /v1/policy/evaluate`:
 | Contrato | Tipo | Quien llama | Dueno ejecutor | Proposito |
 |---|---|---|---|---|
 | `POST /v1/inventory/availability-checks` | Query HTTP | Produccion | Almacenes | Validar materiales para receta u orden. |
-| `POST /v1/inventory/consumption-requests` | Command HTTP | Produccion | Almacenes | Solicitar consumo de materiales por orden. |
-| `POST /v1/inventory/finished-goods-receipts` | Command HTTP | Produccion | Almacenes | Solicitar entrada de producto terminado al cerrar orden. |
+| `POST /v1/inventory/reservation-requests` | Command HTTP Local | Produccion | Almacenes | Reservar material disponible por almacen para una orden. |
+| `POST /v1/inventory/reservations/{id}/release` | Command HTTP Local | Produccion | Almacenes | Liberar una reserva al cancelar o compensar una orden. |
+| `POST /v1/inventory/reservations/{id}/consume` | Command HTTP Local | Produccion | Almacenes | Convertir la reserva en salida inmutable y conservar su valuacion. |
+| `POST /v1/inventory/consumption-requests` | Command HTTP planeado | Produccion | Almacenes | Solicitar consumo directo sin reserva; no implementado. |
+| `GET /v1/inventory/finished-goods-receipts` | Query HTTP Local | Almacenes UI | Almacenes | Consultar cantidades recibidas por orden terminada. |
+| `POST /v1/inventory/finished-goods-receipts` | Command HTTP Local | Almacenes UI | Almacenes | Confirmar recepcion fisica total o parcial de una orden terminada. |
 | `inventory_movement.recorded` | Event Pub/Sub | Almacenes | Almacenes | Notificar movimiento registrado. |
 | `production_order.completed` | Event Pub/Sub | Produccion | Produccion | Notificar orden completada para flujos futuros. |
 
@@ -305,6 +319,7 @@ Reglas:
 - Produccion no descuenta inventario.
 - Almacenes no decide si una orden se libera; solo responde disponibilidad o registra movimientos solicitados.
 - Toda solicitud debe incluir `source`, `source_id` e idempotency key.
+- La primera entrada de la orden a `in_progress` solicita el consumo de cada reserva; Inventory conserva ownership, usa el almacen de esa reserva y crea una sola salida inmutable. Reanudar o completar no repite la solicitud.
 
 ### 6.4 Ventas y Produccion
 
@@ -341,7 +356,7 @@ Reglas:
 | Contrato | Tipo | Quien llama | Dueno ejecutor | Proposito |
 |---|---|---|---|---|
 | `POST /v1/inventory/availability-checks` | Query HTTP | Ventas | Almacenes | Validar producto terminado disponible. |
-| `POST /v1/inventory/reservation-requests` | Command HTTP futuro | Ventas | Almacenes | Solicitar reserva de producto terminado. |
+| `POST /v1/inventory/reservation-requests` | Command HTTP Local | Ventas | Almacenes | Solicitar reserva de producto terminado. |
 | `POST /v1/inventory/shipment-requests` | Command HTTP futuro | Ventas | Almacenes | Solicitar salida por entrega. |
 | `POST /v1/inventory/return-receipts` | Command HTTP futuro | Ventas | Almacenes | Solicitar entrada por devolucion. |
 | `inventory_reservation.created` | Event Pub/Sub futuro | Almacenes | Almacenes | Notificar reserva generada. |

@@ -104,7 +104,7 @@ warehouses.items.block
 
 En MVP, Almacenes debera permitir registrar movimientos manuales para cubrir operaciones que no vengan aun de otros modulos. Esto es elemental para operacion real, ajustes iniciales, correcciones autorizadas, entradas extraordinarias y salidas no automatizadas.
 
-Los movimientos deberan usar articulos dados de alta en el catalogo maestro cuando existan. Para evitar listas desplegables pesadas con cientos de registros, la seleccion debera hacerse mediante busqueda rapida por codigo, nombre, tipo o categoria. El campo manual solo debera funcionar como apoyo temporal mientras se configura el MVP o para casos excepcionales controlados.
+Los movimientos usan exclusivamente articulos dados de alta en el catalogo maestro. Para evitar listas desplegables pesadas con cientos de registros, la seleccion se realiza mediante busqueda rapida por codigo, nombre, tipo o categoria; el backend vuelve a validar articulo, almacen, unidad y estatus antes de registrar el movimiento.
 
 | Movimiento | Descripción |
 |---|---|
@@ -117,20 +117,22 @@ Los movimientos deberan usar articulos dados de alta en el catalogo maestro cuan
 | Merma | Registra desperdicio o pérdida. |
 | Devolución de cliente | Regresa producto vendido. |
 | Devolución a proveedor | Reduce inventario recibido. |
-| Reserva | Aparta inventario para una operación futura. Fuera del MVP funcional inicial. |
-| Liberación de reserva | Regresa inventario apartado a disponible. Fuera del MVP funcional inicial. |
+| Reserva | Aparta inventario para una orden de Produccion. Implementada en codigo Local; aun no desplegada en QA. |
+| Liberación de reserva | Regresa inventario apartado a disponible cuando una orden se cancela. Implementada para Produccion en codigo Local. |
+| Consumo de reserva | Convierte una reserva de Produccion en una salida inmutable cuando la orden inicia por primera vez. Implementado en codigo Local. |
 
-### Reservas en MVP
+### Reservas por ambiente
 
-El submodulo Reservas queda documentado como flujo futuro, pero deshabilitado en el MVP. No debera crear, editar ni apartar inventario todavia.
+El corte Local autoritativo permite a Produccion consultar disponibilidad neta, reservar por almacen, liberar y consumir reservas mediante contratos de `inventory-service`. La disponibilidad descuenta reservas activas no vencidas y las operaciones se serializan por tenant, articulo y almacen.
 
-Motivo:
+Limites actuales:
 
-- evitar apartados de inventario sin recalculo real de existencias;
-- evitar prometer disponibilidad cuando aun no existe consumo contra movimientos reales;
-- mantener el MVP enfocado en alta de almacenes, catalogo de articulos y movimientos manuales.
+- QA conserva el corte anterior hasta una promocion gobernada;
+- no existe todavia una interfaz independiente para administrar reservas manuales;
+- Las reservas de pedidos de Ventas estan implementadas en Local y admiten consumo parcial; lotes y otros origenes permanecen futuros;
+- la recepcion total o parcial de producto terminado desde ordenes terminadas esta implementada en Local; merma, bloqueos, transito, lotes y series siguen fuera de este corte.
 
-Cuando se active en fases posteriores, Reservas debera conectarse con existencias, movimientos, kardex, ventas y produccion.
+Produccion es consumidor del contrato; Inventory conserva ownership de reservas, movimientos, disponibilidad y valuacion.
 
 ### Kardex en MVP
 
@@ -194,6 +196,10 @@ En el MVP, Existencias debera permitir:
 - La merma deberá conservar relación con orden, área, producto o insumo.
 - Las existencias podrán manejar unidades de compra, almacenamiento y consumo.
 - Todo movimiento con impacto económico deberá poder alimentar Costos y Contabilidad.
+- El **costo unitario base** del articulo representa el costo manual de una unidad en la UOM base configurada: por kilogramo si la base es kg, por litro si es L, por pieza si es H87, etcetera.
+- Produccion toma ese costo autoritativo para estimar materiales de receta. El frontend no inventa un costo si el articulo no lo tiene.
+- La conversion de cantidad y costo solo procede entre UOM activas de la misma categoria y con un factor estandar inequivoco. Kilogramo/gramo y litro/mililitro son ejemplos validos; caja, paquete o unidad personalizada requieren una equivalencia empresarial futura.
+- El codigo de almacen y el codigo de articulo se asignan desde el catalogo de folios de Administracion cuando su modo es administrado; en modo manual siguen sujetos a unicidad por tenant.
 
 ---
 
@@ -287,13 +293,13 @@ Cuando Producción solicite validar una receta u orden, Almacenes deberá respon
 
 ## 12. Pendientes
 
-- Definir si se manejarán lotes desde MVP o fase posterior.
-- Definir método de costeo inicial.
+- Definir e implementar lotes, series, cuarentena, bloqueos y transito.
 - Definir si ubicaciones fisicas creceran a catalogo independiente en fases posteriores.
-- Definir permisos finales para alta, edicion y bloqueo de articulos.
 - Definir proceso de conteo físico.
 - Definir permisos para ajustes y cancelaciones.
-- Definir transferencias con origen y destino completos para afectar saldos por almacen.
+- Implementar recepcion de merma desde Produccion.
+- Extender reservas a Ventas solo cuando exista su corte vertical real.
+- Ejecutar pruebas de contencion paralela con carga antes de promover la revision Local a QA.
 
 ---
 
@@ -305,9 +311,28 @@ Existencias debe buscar parcialmente por codigo o nombre de articulo y almacen. 
 
 Los indicadores bajo minimo y sobre maximo se calculan usando los campos guardados del articulo. No se persistiran como estados independientes.
 
-Hasta implementar Reservas, `available_quantity` sera igual a `on_hand_quantity`. La interfaz debera explicar esta limitacion y no comunicar inventario reservado o comprometido como real.
+En el corte Local autoritativo, `available_quantity = max(on_hand_quantity - reserved_quantity, 0)`. Reservar y consumir se serializa mediante bloqueo transaccional por tenant, articulo y almacen; los reintentos usan fuente e idempotencia estables. La valuacion usa costo promedio derivado de movimientos y un costo predeterminado solo cuando no existe saldo valuado.
 
 El criterio inicial de volumen es consultar correctamente un tenant sintetico con al menos 10,000 articulos, sin duplicados u omisiones al paginar y sin acceder a QA. La especificacion tecnica y el procedimiento reproducible viven en:
 
 - `docs/arquitectura/inventario_consulta_escalable.md`;
 - `docs/operaciones/validacion_volumen_inventario_local.md`.
+# CHG-206: alta guiada de terminado
+
+Al crear un producto terminado, Almacenes puede seleccionar opcionalmente un producto activo de Producción aún no vinculado. El flujo crea el artículo y solicita a Producción el vínculo autoritativo; no se guardan referencias inversas ni se empata por nombre.
+
+## CHG-209: seleccion escalable
+
+Artículos y almacenes son referencias crecientes: alta, movimientos, Inventario y Kárdex permiten buscarlos por código o nombre y guardan IDs estables. Tipo, estatus, política y estado del saldo permanecen como filtros cerrados. La búsqueda local acotada no sustituye la paginación server-side ya especificada para volumen alto.
+
+## CHG-213: apertura y unidad valida
+
+Al abrir un selector buscable se muestra el catalogo completo antes de aplicar texto de busqueda; la etiqueta seleccionada no debe convertirse en un filtro involuntario. Produccion solo puede usar articulos cuya unidad base exista y este activa en Administracion. La unidad queda bloqueada cuando existe historia de movimientos o reservas; una correccion posterior requiere articulo sustituto y regularizacion autorizada, nunca equivalencia automatica por similitud de codigo.
+
+## CHG-222: recepcion de producto terminado
+
+Almacenes consulta ordenes terminadas y confirma la recepcion fisica total o parcial. Inventory deriva por ID el articulo, unidad y costo, impide exceder la cantidad producida y registra una entrada `production_order_receipt` en Kardex. Una orden totalmente recibida deja de mostrarse como pendiente. Produccion no escribe movimientos ni da por recibido automaticamente el producto.
+
+## CHG-214: alias heredados de unidad
+
+La revision Local `20260821_0023` reconoce exclusivamente dos equivalencias empresariales inequivocas heredadas: `LTS` como `LTR` y `MT` como `MTR`. La normalizacion actualiza de forma atomica el articulo, sus movimientos y los snapshots relacionados, sin cambiar cantidad, costo, identidad ni almacen, y registra una auditoria por fila. Cualquier otro cambio de unidad conserva la regla general: si existen movimientos o reservas, no se permite reinterpretar la historia y se requiere un articulo sustituto con regularizacion autorizada.

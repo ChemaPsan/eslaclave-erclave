@@ -2,7 +2,7 @@ const vm = require("vm");
 const { fail, ok, readText } = require("./shared");
 
 const checks = [
-  ["frontend/data/resources.js", ["defaultLaborAreas", 'areaId: "area_corte"']],
+  ["frontend/data/resources.js", ["defaultLaborAreas", 'areaId: "area_preparacion"']],
   ["frontend/data/mockDb.js", ["loadLaborAreas()", "addLaborArea(item)", "updateLaborArea(item)", "role.areaId === item.id"]],
   ["frontend/app.js", [
     'name="areaId"',
@@ -43,6 +43,10 @@ for (const [file, fragments] of checks) {
 }
 
 const roleModal = readText("frontend/app.js").split("function openLaborRoleModal", 2)[1]?.split("function saveLaborRoleForm", 1)[0] || "";
+const workerModal = readText("frontend/app.js").split("function openWorkerModal", 2)[1]?.split("async function saveWorkerForm", 1)[0] || "";
+for (const token of ['name="curp" minlength="18" maxlength="18"', 'name="rfc" minlength="13" maxlength="13"', 'name="nss" inputmode="numeric" minlength="11" maxlength="11"']) {
+  if (!workerModal.includes(token)) errors.push(`frontend/app.js: worker identity guardrail is missing ${token}.`);
+}
 if (/name=["']area["']/.test(roleModal)) {
   errors.push("frontend/app.js: labor role form must not accept a free-text area.");
 }

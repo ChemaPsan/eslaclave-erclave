@@ -11,6 +11,8 @@ from app.schemas import (
     BackofficeTenantRead,
     BackofficeUsageDailyRead,
     BackofficeUsageSummaryRead,
+    CodeSequenceAllocationRead,
+    CodeSequenceRead,
     EntitlementRead,
     PermissionRead,
     PolicyDecision,
@@ -21,6 +23,7 @@ from app.schemas import (
     SettingRead,
     TenantRead,
     UserRead,
+    UnitOfMeasureRead,
 )
 
 
@@ -70,6 +73,10 @@ class FakeAdminRepository:
         "admin.role.update",
         "admin.role.permissions.manage",
         "production.product_service.read",
+        "admin.unit.read",
+        "admin.unit.create",
+        "admin.unit.update",
+        "production.order.create",
     ]
 
     def get_tenant(self, tenant_id: str):
@@ -85,6 +92,32 @@ class FakeAdminRepository:
             timezone="America/Mexico_City",
             locale="es-MX",
         )
+
+    def list_units_of_measure(self, tenant_id, include_inactive=False, q=None):
+        return [UnitOfMeasureRead(id="uom_h87",code="H87",name_es="Pieza",name_en="Piece",symbol="pz",category="count",decimal_places=0,system_default=True,status="active")] if tenant_id==TENANT_ID else []
+
+    def get_unit_of_measure(self, tenant_id, code, active_only=False):
+        items=self.list_units_of_measure(tenant_id)
+        return items[0] if items and code.upper()=="H87" else None
+
+    def create_unit_of_measure(self, tenant_id, payload, idempotency_key, correlation_id, actor_email=None):
+        return UnitOfMeasureRead(id="uom_custom",system_default=False,status="active",**payload.model_dump())
+
+    def update_unit_of_measure(self, tenant_id, unit_id, payload, idempotency_key, correlation_id, actor_email=None):
+        if unit_id!="uom_h87": return None
+        return UnitOfMeasureRead(id="uom_h87",code="H87",name_es="Pieza",name_en="Piece",symbol="pz",category="count",decimal_places=0,system_default=True,status=payload.status or "active")
+
+    def list_code_sequences(self, tenant_id):
+        return [CodeSequenceRead(id="seq_op",document_type="production.order",module_code="production",name_es="Orden de produccion",name_en="Production order",prefix="OP",separator="-",next_number=7,padding=6,mode="managed",system_default=True,status="active")]
+
+    def update_code_sequence(self, tenant_id, sequence_id, payload, idempotency_key, correlation_id, actor_email=None):
+        if sequence_id != "seq_op": return None
+        current=self.list_code_sequences(tenant_id)[0]
+        return current.model_copy(update=payload.model_dump(exclude_none=True))
+
+    def allocate_business_code(self, tenant_id, document_type, payload, idempotency_key, correlation_id, actor_email=None):
+        if document_type != "production.order": return None
+        return CodeSequenceAllocationRead(document_type=document_type,mode="managed",code="OP-000007",sequence_number=7)
 
     def create_tenant(
         self,
@@ -162,8 +195,8 @@ class FakeAdminRepository:
 
     def list_entitlements(self, tenant_id: str):
         return [
-            EntitlementRead(module_code="admin", status="active", limits={}),
-            EntitlementRead(module_code="production", status="active", limits={}),
+            EntitlementRead(module_code="admin", status="active", tenant_enabled=True, effective_active=True, limits={}),
+            EntitlementRead(module_code="production", status="active", tenant_enabled=True, effective_active=True, limits={}),
         ]
 
     def get_session_context(self, tenant_id: str, actor_id: str):
@@ -225,10 +258,29 @@ class FakeAdminRepository:
                 active_memberships=1,
                 total_memberships=1,
                 modules=["admin", "production"],
+                entitlements=self.list_entitlements(TENANT_ID),
                 legal_entities_count=1,
                 branches_count=1,
             )
         ]
+
+    def update_backoffice_tenant(self, tenant_id, changes, idempotency_key, correlation_id, actor_email=None):
+        tenant = self.get_tenant(tenant_id)
+        if tenant is None:
+            return None
+        return TenantRead(**{**tenant.model_dump(), **changes})
+
+    def set_backoffice_entitlement(self, tenant_id, module_code, status, limits, source, idempotency_key, correlation_id, actor_email=None):
+        if tenant_id != TENANT_ID:
+            return None
+        return EntitlementRead(
+            module_code=module_code,
+            status=status,
+            source=source,
+            tenant_enabled=True,
+            effective_active=status == "active",
+            limits=limits,
+        )
 
     def set_backoffice_tenant_status(
         self,
@@ -295,19 +347,18 @@ class FakeAdminRepository:
             estimated_cost_mxn="19.75",
         )
 
-    def upsert_entitlement(
+    def update_entitlement_preference(
         self,
         tenant_id: str,
         module_code: str,
-        status: str,
-        limits: dict,
-        source: str,
+        enabled: bool,
         idempotency_key: str,
         correlation_id: str,
+        actor_email: str | None = None,
     ):
         if tenant_id != TENANT_ID:
             return None
-        return EntitlementRead(module_code=module_code, status=status, limits=limits)
+        return EntitlementRead(module_code=module_code, status="active", tenant_enabled=enabled, effective_active=enabled, limits={})
 
     def list_settings(self, tenant_id: str, module_code: str | None = None):
         if tenant_id != TENANT_ID:
@@ -552,6 +603,14 @@ class FakeAdminRepositoryWithPolicyPermission(FakeAdminRepository):
     session_permissions = ["admin.tenant.read", "internal.policy.evaluate", "production.product_service.read"]
 
 
+class FakeAdminRepositoryWithModuleDependencyError(FakeAdminRepository):
+    def set_backoffice_entitlement(self, *args, **kwargs):
+        raise ValueError("module_dependencies_required:hr,production")
+
+    def update_entitlement_preference(self, *args, **kwargs):
+        raise ValueError("module_dependency_in_use:sales")
+
+
 def teardown_function():
     app.dependency_overrides.clear()
 
@@ -572,6 +631,42 @@ def test_get_tenant_returns_404_for_missing_tenant():
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "tenant_not_found"
+
+
+def test_unit_catalog_lists_active_tenant_units():
+    response = client_with_fake_repo().get("/v1/catalogs/units-of-measure", headers={"X-Tenant-Id": TENANT_ID})
+    assert response.status_code == 200
+    assert response.json()["data"][0]["code"] == "H87"
+
+
+def test_unit_catalog_creates_custom_unit():
+    response = client_with_fake_repo().post("/v1/catalogs/units-of-measure", headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "test-unit-create-001"}, json={"code":"SVC","name_es":"Servicio","name_en":"Service","symbol":"svc","category":"other","decimal_places":2})
+    assert response.status_code == 201
+    assert response.json()["data"]["system_default"] is False
+
+
+def test_unit_catalog_rejects_unknown_active_code():
+    response = client_with_fake_repo().get("/v1/catalogs/units-of-measure/by-code/NOPE", headers={"X-Tenant-Id": TENANT_ID})
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "unit_of_measure_not_found"
+
+
+def test_unit_catalog_create_requires_idempotency_key():
+    response = client_with_fake_repo().post("/v1/catalogs/units-of-measure", headers={"X-Tenant-Id": TENANT_ID}, json={"code":"SVC","name_es":"Servicio","name_en":"Service","symbol":"svc","category":"other","decimal_places":2})
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "idempotency_key_required"
+
+
+def test_unit_catalog_updates_with_idempotency_key():
+    response = client_with_fake_repo().patch("/v1/catalogs/units-of-measure/uom_h87", headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "test-unit-update-001"}, json={"status": "inactive"})
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "inactive"
+
+
+def test_unit_catalog_update_requires_idempotency_key():
+    response = client_with_fake_repo().patch("/v1/catalogs/units-of-measure/uom_h87", headers={"X-Tenant-Id": TENANT_ID}, json={"status": "inactive"})
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "idempotency_key_required"
 
 
 def test_get_tenant_requires_bearer_token_in_firebase_mode():
@@ -685,6 +780,26 @@ def test_onboard_tenant_requires_idempotency_key():
     assert response.json()["error"]["code"] == "idempotency_key_required"
 
 
+def test_onboard_tenant_rejects_sales_without_active_dependencies():
+    response = client_with_fake_repo().post(
+        "/v1/provisioning/tenant-onboarding",
+        headers={"Idempotency-Key": "test-onboarding-sales-dependencies"},
+        json={
+            "slug": "Cliente-Ventas",
+            "commercial_name": "Cliente Ventas",
+            "source": {"type": "manual", "id": "sales-dependencies"},
+            "owner": {"email": "owner.ventas@cliente.com", "display_name": "Owner Ventas"},
+            "modules": [
+                {"module_code": "admin", "status": "active"},
+                {"module_code": "sales", "status": "active"},
+            ],
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "module_dependencies_required"
+    assert response.json()["error"]["details"]["dependencies"] == ["hr", "production"]
+
+
 def test_onboard_tenant_sends_firebase_invitation_when_enabled(monkeypatch):
     app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
     app.dependency_overrides[get_settings] = lambda: Settings(
@@ -771,6 +886,75 @@ def test_backoffice_lists_tenants_with_search():
     assert response.json()["data"][0]["slug"] == "demo-qa"
     assert response.json()["data"][0]["owner_email"] == "admin.qa@erclave.local"
     assert response.json()["data"][0]["modules"] == ["admin", "production"]
+
+
+def test_backoffice_lists_module_catalog_with_runtime_status():
+    response = client_with_fake_repo().get("/v1/backoffice/modules")
+
+    assert response.status_code == 200
+    modules = {item["code"]: item for item in response.json()["data"]}
+    assert modules["production"]["implementation_status"] == "implemented"
+    assert modules["sales"]["implementation_status"] == "implemented"
+    assert modules["sales"]["dependencies"] == ["hr", "production"]
+
+
+def test_backoffice_module_catalog_requires_internal_allowlist():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase", backoffice_admin_emails="internal@erclave.local")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(uid="tenant-owner", email="admin.qa@erclave.local", name="Tenant owner")
+
+    response = TestClient(app).get("/v1/backoffice/modules")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "backoffice_admin_required"
+
+
+def test_backoffice_updates_tenant_profile():
+    response = client_with_fake_repo().patch(
+        f"/v1/backoffice/tenants/{TENANT_ID}",
+        headers={"Idempotency-Key": "test-backoffice-update-001"},
+        json={"commercial_name": "ERClave Demo Editado", "plan_id": "premium"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["commercial_name"] == "ERClave Demo Editado"
+    assert response.json()["data"]["plan_id"] == "premium"
+
+
+def test_backoffice_grants_implemented_module():
+    response = client_with_fake_repo().put(
+        f"/v1/backoffice/tenants/{TENANT_ID}/entitlements/inventory",
+        headers={"Idempotency-Key": "test-backoffice-entitlement-001"},
+        json={"status": "active", "source": "manual", "limits": {"warehouses": 3}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["effective_active"] is True
+    assert response.json()["data"]["limits"] == {"warehouses": 3}
+
+
+def test_backoffice_reports_missing_sales_dependencies():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepositoryWithModuleDependencyError()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="demo")
+    response = TestClient(app).put(
+        f"/v1/backoffice/tenants/{TENANT_ID}/entitlements/sales",
+        headers={"Idempotency-Key": "test-sales-dependencies-001"},
+        json={"status": "active"},
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "module_dependencies_required"
+    assert response.json()["error"]["details"]["dependencies"] == ["hr", "production"]
+
+
+def test_backoffice_rejects_enabling_planned_module():
+    response = client_with_fake_repo().put(
+        f"/v1/backoffice/tenants/{TENANT_ID}/entitlements/billing",
+        headers={"Idempotency-Key": "test-backoffice-entitlement-planned"},
+        json={"status": "active"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "module_not_implemented"
 
 
 def test_backoffice_suspends_tenant():
@@ -913,21 +1097,43 @@ def test_list_tenant_entitlements_allows_firebase_tenant_reader():
     assert [item["module_code"] for item in response.json()["data"]] == ["admin", "production"]
 
 
-def test_upsert_tenant_entitlement_returns_updated_module():
+def test_update_tenant_entitlement_preference_returns_updated_module():
     client = client_with_fake_repo()
 
     response = client.put(
         f"/v1/tenants/{TENANT_ID}/entitlements/inventory",
         headers={"Idempotency-Key": "test-entitlement-001"},
-        json={"status": "inactive", "limits": {"locations": 2}, "source": "manual"},
+        json={"enabled": False},
     )
 
     assert response.status_code == 200
-    assert response.json()["data"] == {
-        "module_code": "inventory",
-        "status": "inactive",
-        "limits": {"locations": 2},
-    }
+    assert response.json()["data"]["module_code"] == "inventory"
+    assert response.json()["data"]["status"] == "active"
+    assert response.json()["data"]["tenant_enabled"] is False
+    assert response.json()["data"]["effective_active"] is False
+
+
+def test_tenant_cannot_disable_module_required_by_active_sales():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepositoryWithModuleDependencyError()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="demo")
+    response = TestClient(app).put(
+        f"/v1/tenants/{TENANT_ID}/entitlements/production",
+        headers={"Idempotency-Key": "test-sales-dependent-001"},
+        json={"enabled": False},
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "module_dependency_in_use"
+    assert response.json()["error"]["details"]["dependents"] == ["sales"]
+
+
+def test_tenant_cannot_change_contractual_entitlement_fields():
+    response = client_with_fake_repo().put(
+        f"/v1/tenants/{TENANT_ID}/entitlements/inventory",
+        headers={"Idempotency-Key": "test-entitlement-contract-denied"},
+        json={"status": "active", "source": "manual", "limits": {}},
+    )
+
+    assert response.status_code == 422
 
 
 def test_upsert_tenant_entitlement_requires_idempotency_key():
@@ -935,7 +1141,7 @@ def test_upsert_tenant_entitlement_requires_idempotency_key():
 
     response = client.put(
         f"/v1/tenants/{TENANT_ID}/entitlements/inventory",
-        json={"status": "inactive", "limits": {"locations": 2}, "source": "manual"},
+        json={"enabled": False},
     )
 
     assert response.status_code == 400
@@ -948,7 +1154,7 @@ def test_upsert_tenant_entitlement_returns_404_for_missing_tenant():
     response = client.put(
         "/v1/tenants/ten_missing/entitlements/inventory",
         headers={"Idempotency-Key": "test-entitlement-404"},
-        json={"status": "active", "limits": {}, "source": "manual"},
+        json={"enabled": True},
     )
 
     assert response.status_code == 404
@@ -968,7 +1174,7 @@ def test_upsert_tenant_entitlement_denies_missing_firebase_permission():
     response = client.put(
         f"/v1/tenants/{TENANT_ID}/entitlements/inventory",
         headers={"Idempotency-Key": "test-entitlement-denied"},
-        json={"status": "inactive", "limits": {"locations": 2}, "source": "manual"},
+        json={"enabled": False},
     )
 
     assert response.status_code == 403
@@ -988,11 +1194,11 @@ def test_upsert_tenant_entitlement_allows_firebase_permission():
     response = client.put(
         f"/v1/tenants/{TENANT_ID}/entitlements/inventory",
         headers={"Idempotency-Key": "test-entitlement-allowed"},
-        json={"status": "inactive", "limits": {"locations": 2}, "source": "manual"},
+        json={"enabled": False},
     )
 
     assert response.status_code == 200
-    assert response.json()["data"]["status"] == "inactive"
+    assert response.json()["data"]["tenant_enabled"] is False
 
 
 def test_list_settings_returns_admin_settings():
@@ -1024,6 +1230,102 @@ def test_upsert_setting_returns_updated_setting():
     assert response.status_code == 200
     assert response.json()["data"]["module_code"] == "admin"
     assert response.json()["data"]["value"]["corporate"]["contact_name"] == "Administracion"
+
+
+def test_document_template_returns_tenant_defaults():
+    client = client_with_fake_repo()
+
+    response = client.get("/v1/document-template", headers={"X-Tenant-Id": TENANT_ID})
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "logo_data_url": None,
+        "primary_color": "#6106A0",
+        "accent_color": "#F557D3",
+        "text_color": "#190F34",
+        "footer_text": None,
+        "show_page_number": True,
+    }
+
+
+def test_document_template_updates_valid_logo_and_can_remove_it():
+    client = client_with_fake_repo()
+    valid_logo = "data:image/png;base64,iVBORw0KGgo="
+    payload = {
+        "logo_data_url": valid_logo,
+        "primary_color": "#112233",
+        "accent_color": "#445566",
+        "text_color": "#778899",
+        "footer_text": "Documento del tenant",
+        "show_page_number": False,
+    }
+
+    response = client.put(
+        "/v1/document-template",
+        headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "test-document-template-001"},
+        json=payload,
+    )
+    remove_response = client.put(
+        "/v1/document-template",
+        headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "test-document-template-002"},
+        json={**payload, "logo_data_url": None},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["logo_data_url"] == valid_logo
+    assert remove_response.status_code == 200
+    assert remove_response.json()["data"]["logo_data_url"] is None
+
+
+def test_document_template_rejects_missing_idempotency_and_fake_image_content():
+    client = client_with_fake_repo()
+    payload = {
+        "logo_data_url": "data:image/png;base64,bm90IGEgcG5n",
+        "primary_color": "#112233",
+        "accent_color": "#445566",
+        "text_color": "#778899",
+        "footer_text": None,
+        "show_page_number": True,
+    }
+
+    invalid_logo = client.put(
+        "/v1/document-template",
+        headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "test-document-template-invalid"},
+        json=payload,
+    )
+    missing_idempotency = client.put(
+        "/v1/document-template",
+        headers={"X-Tenant-Id": TENANT_ID},
+        json={**payload, "logo_data_url": None},
+    )
+
+    assert invalid_logo.status_code == 422
+    assert missing_idempotency.status_code == 400
+
+
+def test_document_template_update_denies_missing_firebase_permission():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-user", email="admin.qa@erclave.local", name="Admin QA"
+    )
+    client = TestClient(app)
+
+    response = client.put(
+        "/v1/document-template",
+        headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "test-document-template-denied"},
+        json={
+            "logo_data_url": None,
+            "primary_color": "#112233",
+            "accent_color": "#445566",
+            "text_color": "#778899",
+            "footer_text": None,
+            "show_page_number": True,
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "permission_denied"
 
 
 def test_create_legal_entity_returns_created_item():
@@ -1345,3 +1647,29 @@ def test_replace_role_permissions_accepts_legacy_payload_with_server_revision():
 
     assert response.status_code == 200
     assert response.json()["data"]["permission_revision"] == 2
+
+
+def test_list_code_sequences_returns_tenant_catalog():
+    response = client_with_fake_repo().get("/v1/catalogs/code-sequences", headers={"X-Tenant-Id": TENANT_ID})
+    assert response.status_code == 200
+    assert response.json()["data"][0]["document_type"] == "production.order"
+
+
+def test_update_code_sequence_switches_to_manual_mode():
+    response = client_with_fake_repo().patch(
+        "/v1/catalogs/code-sequences/seq_op",
+        headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "test-sequence-update-001"},
+        json={"mode": "manual"},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["mode"] == "manual"
+
+
+def test_allocate_business_code_returns_managed_folio():
+    response = client_with_fake_repo().post(
+        "/v1/catalogs/code-sequences/production.order/next",
+        headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "test-sequence-next-001"},
+        json={"manual_code": None},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["code"] == "OP-000007"

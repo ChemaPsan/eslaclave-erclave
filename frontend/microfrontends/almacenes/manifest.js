@@ -4,6 +4,7 @@ export const manifest = {
   icon: "AL",
   version: "0.1.0",
   service: "inventory-service",
-  permissions: ["almacenes:read"],
+  implementationStatus: "implemented",
+  permissions: ["inventory.warehouse.read", "inventory.item.read", "inventory.balance.read", "inventory.movement.read", "inventory.kardex.read"],
   routes: ["/almacenes", "/almacenes/movimientos", "/almacenes/reservas", "/almacenes/kardex"]
 };

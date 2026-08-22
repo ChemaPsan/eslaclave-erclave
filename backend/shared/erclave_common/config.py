@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     version: str = "0.1.0"
     api_public_base_url: str = "http://localhost:8000"
     admin_service_url: str = "http://localhost:8000"
+    hr_service_url: str = "http://localhost:8006"
+    inventory_service_url: str = "http://localhost:8004"
+    production_service_url: str = "http://localhost:8002"
     authorization_timeout_seconds: float = 5.0
     app_public_base_url: str = "http://localhost:4173"
     cors_origins: str = "http://127.0.0.1:4173,http://localhost:4173"
@@ -32,6 +35,7 @@ class Settings(BaseSettings):
     database_url: str | None = None
     inventory_database_url: str | None = None
     hr_database_url: str | None = None
+    sales_database_url: str | None = None
     log_level: str = Field(default="INFO")
 
     @model_validator(mode="after")
@@ -42,6 +46,9 @@ class Settings(BaseSettings):
                 (self.api_public_base_url, "ERCLAVE_API_PUBLIC_BASE_URL"),
                 (self.app_public_base_url, "ERCLAVE_APP_PUBLIC_BASE_URL"),
                 (self.admin_service_url, "ERCLAVE_ADMIN_SERVICE_URL"),
+                (self.hr_service_url, "ERCLAVE_HR_SERVICE_URL"),
+                (self.inventory_service_url, "ERCLAVE_INVENTORY_SERVICE_URL"),
+                (self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL"),
             ]:
                 if urlparse(value).hostname not in local_hosts:
                     raise ValueError(f"{variable} must remain on loopback in Local isolated mode.")
@@ -49,6 +56,7 @@ class Settings(BaseSettings):
                 (self.database_url, "ERCLAVE_DATABASE_URL"),
                 (self.inventory_database_url, "ERCLAVE_INVENTORY_DATABASE_URL"),
                 (self.hr_database_url, "ERCLAVE_HR_DATABASE_URL"),
+                (self.sales_database_url, "ERCLAVE_SALES_DATABASE_URL"),
             ]:
                 if not value:
                     continue
@@ -71,6 +79,15 @@ class Settings(BaseSettings):
             require_public_https(self.app_public_base_url, "ERCLAVE_APP_PUBLIC_BASE_URL")
         else:
             require_public_https(self.admin_service_url, "ERCLAVE_ADMIN_SERVICE_URL")
+            if self.service_name == "production-service":
+                require_public_https(self.hr_service_url, "ERCLAVE_HR_SERVICE_URL")
+                require_public_https(self.inventory_service_url, "ERCLAVE_INVENTORY_SERVICE_URL")
+            if self.service_name == "inventory-service":
+                require_public_https(self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL")
+            if self.service_name == "sales-service":
+                require_public_https(self.hr_service_url, "ERCLAVE_HR_SERVICE_URL")
+                require_public_https(self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL")
+                require_public_https(self.inventory_service_url, "ERCLAVE_INVENTORY_SERVICE_URL")
 
         if self.auth_mode != "firebase" or not self.firebase_project_id:
             raise ValueError("QA and production require Firebase auth and ERCLAVE_FIREBASE_PROJECT_ID.")
@@ -94,6 +111,8 @@ class Settings(BaseSettings):
             return self.inventory_database_url or self.database_url
         if self.service_name == "hr-service":
             return self.hr_database_url or self.database_url
+        if self.service_name == "sales-service":
+            return self.sales_database_url or self.database_url
         return self.database_url
 
 

@@ -9,7 +9,9 @@ class ModuleSeed:
     status: str
     owner_service: str
     public_feature: bool
+    implementation_status: str
     sort_order: int
+    dependencies: tuple[str, ...] = ()
 
 
 MVP_MODULE_SEEDS: tuple[ModuleSeed, ...] = (
@@ -20,6 +22,7 @@ MVP_MODULE_SEEDS: tuple[ModuleSeed, ...] = (
         status="active",
         owner_service="admin-service",
         public_feature=False,
+        implementation_status="implemented",
         sort_order=10,
     ),
     ModuleSeed(
@@ -29,6 +32,7 @@ MVP_MODULE_SEEDS: tuple[ModuleSeed, ...] = (
         status="active",
         owner_service="production-service",
         public_feature=True,
+        implementation_status="implemented",
         sort_order=20,
     ),
     ModuleSeed(
@@ -38,6 +42,7 @@ MVP_MODULE_SEEDS: tuple[ModuleSeed, ...] = (
         status="active",
         owner_service="hr-service",
         public_feature=True,
+        implementation_status="implemented",
         sort_order=25,
     ),
     ModuleSeed(
@@ -47,6 +52,7 @@ MVP_MODULE_SEEDS: tuple[ModuleSeed, ...] = (
         status="active",
         owner_service="inventory-service",
         public_feature=True,
+        implementation_status="implemented",
         sort_order=30,
     ),
     ModuleSeed(
@@ -56,7 +62,9 @@ MVP_MODULE_SEEDS: tuple[ModuleSeed, ...] = (
         status="active",
         owner_service="sales-service",
         public_feature=True,
+        implementation_status="implemented",
         sort_order=40,
+        dependencies=("hr", "production"),
     ),
     ModuleSeed(
         code="billing",
@@ -65,6 +73,7 @@ MVP_MODULE_SEEDS: tuple[ModuleSeed, ...] = (
         status="active",
         owner_service="billing-service",
         public_feature=False,
+        implementation_status="planned",
         sort_order=50,
     ),
     ModuleSeed(
@@ -74,6 +83,7 @@ MVP_MODULE_SEEDS: tuple[ModuleSeed, ...] = (
         status="active",
         owner_service="provisioning-service",
         public_feature=False,
+        implementation_status="planned",
         sort_order=60,
     ),
     ModuleSeed(
@@ -83,6 +93,7 @@ MVP_MODULE_SEEDS: tuple[ModuleSeed, ...] = (
         status="active",
         owner_service="integration-service",
         public_feature=True,
+        implementation_status="planned",
         sort_order=70,
     ),
 )

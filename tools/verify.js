@@ -29,6 +29,7 @@ const localTestEnvironment = {
   ERCLAVE_DATABASE_URL: "",
   ERCLAVE_INVENTORY_DATABASE_URL: "",
   ERCLAVE_HR_DATABASE_URL: ""
+  ,ERCLAVE_SALES_DATABASE_URL: ""
 };
 const steps = [
   {
@@ -47,7 +48,7 @@ const steps = [
   {
     name: "Pruebas backend",
     command: python,
-    args: ["-m", "pytest", "-q"],
+    args: [path.join(repoRoot, "tools", "run_pytest.py")],
     cwd: path.join(repoRoot, "backend"),
     env: localTestEnvironment
   }

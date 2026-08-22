@@ -11,14 +11,14 @@
 
 Los movimientos `recorded` no reversados son la fuente de verdad. Existencias es una consulta calculada y nunca se captura ni edita directamente.
 
-Mientras Reservas no este implementado, se adopta explicitamente:
+Desde la revision Local `20260818_0017`, se adopta explicitamente:
 
 ```text
-available_quantity = on_hand_quantity
-reserved_quantity = 0
+available_quantity = max(on_hand_quantity - reserved_quantity, 0)
+reserved_quantity = sum(reservas activas no vencidas)
 ```
 
-La interfaz no debe presentar `available_quantity` como una promesa de surtido concurrente ni mostrar reservas ficticias. Cuando Reservas se implemente, el contrato, el calculo, la migracion y las pruebas deben cambiar en el mismo corte.
+La interfaz no debe inventar reservas ni tratar una lectura previa como garantia. La promesa concurrente se confirma al crear la reserva bajo bloqueo transaccional; contrato, calculo, migracion y pruebas cambian juntos en este corte.
 
 ## Busqueda, filtros y orden
 

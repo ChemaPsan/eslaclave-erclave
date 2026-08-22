@@ -34,6 +34,32 @@ export async function listBackofficeTenants(search = "", limit = 50) {
 }
 
 
+export async function listBackofficeModules() {
+  const response = await apiRequest("/v1/backoffice/modules");
+  return response.data;
+}
+
+
+export async function updateBackofficeTenant(tenantId, payload) {
+  const response = await apiRequest(`/v1/backoffice/tenants/${encodeURIComponent(tenantId)}`, {
+    method: "PATCH",
+    headers: commandHeaders(),
+    body: JSON.stringify(payload)
+  });
+  return response.data;
+}
+
+
+export async function setBackofficeTenantEntitlement(tenantId, moduleCode, payload) {
+  const response = await apiRequest(`/v1/backoffice/tenants/${encodeURIComponent(tenantId)}/entitlements/${encodeURIComponent(moduleCode)}`, {
+    method: "PUT",
+    headers: commandHeaders(),
+    body: JSON.stringify(payload)
+  });
+  return response.data;
+}
+
+
 export async function listBackofficeUsage({ fromDate = "", toDate = "", tenantId = "", limit = 200 } = {}) {
   const params = new URLSearchParams();
   if (fromDate) params.set("from_date", fromDate);

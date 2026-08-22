@@ -26,7 +26,7 @@ Este documento aterriza el primer modelo fisico real de `admin-service` en Postg
 | `admin.permissions` | Catalogo global de permisos del sistema. | No. |
 | `admin.role_permissions` | Permisos asignados a cada rol. | Si. |
 | `admin.membership_roles` | Roles asignados a una membresia. | Si. |
-| `admin.tenant_modules` | Modulos activos, suspendidos o inactivos por tenant. | Si. |
+| `admin.tenant_modules` | Entitlement contractual y preferencia operativa de modulos por tenant. | Si. |
 | `admin.tenant_settings` | Parametros por tenant; incluye `organization.profile`. | Si. |
 | `admin.audit_events` | Bitacora de acciones criticas y cambios administrativos. | Puede ser global o por tenant. |
 
@@ -77,7 +77,9 @@ El editor matricial implementa esa tabla para `role.permissions.replace`, con al
 
 `admin.permissions` incorpora metadata versionada para presentacion y policy: clasificacion, indicador asignable a rol tenant, riesgo, etiquetas/descripciones ES/EN y orden. El codigo tecnico sigue siendo la identidad estable.
 
-`GET /v1/permissions` requiere tenant, Firebase y `admin.role.read`; nunca expone permisos internos/publicos a un rol de cliente. La disponibilidad se calcula con los entitlements del tenant.
+`GET /v1/permissions` requiere tenant, Firebase y `admin.role.read`; nunca expone permisos internos/publicos a un rol de cliente. La disponibilidad se calcula con `tenant_modules.status = active` y `tenant_modules.tenant_enabled = true`.
+
+`tenant_modules.status` es gobernado por Backoffice interno y representa el derecho contratado. `tenant_modules.tenant_enabled` conserva la preferencia del administrador del tenant. `session/context`, policy y permisos efectivos exigen ambos; retirar el entitlement no borra configuracion historica.
 
 `admin.roles.permission_revision` protege contra ultimo-escritor-gana. El reemplazo bloquea la fila, compara `expected_revision`, aplica un diff y aumenta la revision. Las asignaciones existentes conservan su `scope`; el payload legado se mantiene solo por compatibilidad temporal.
 
@@ -115,12 +117,12 @@ El primer seed versionado define estos codigos de modulo:
 | `admin` | `admin-service` | No |
 | `production` | `production-service` | Si |
 | `inventory` | `inventory-service` | Si |
-| `sales` | `sales-service` | Si |
+| `sales` | `sales-service` | Si; Clientes/Cotizaciones implementados solo en Local, resto `planned` |
 | `billing` | `billing-service` | No |
 | `provisioning` | `provisioning-service` | No |
-| `integrations` | `integration-service` | Si |
+| `integrations` | `integration-service` | Si; `planned` hasta que exista runtime validado |
 
-Este archivo no escribe datos en base porque el modelo fisico inicial aun no incluye una tabla global `admin.modules`. Los codigos de modulo se usan como catalogo versionado para validar permisos y entitlements por `module_code`.
+Este archivo no escribe datos en base porque el modelo fisico inicial aun no incluye una tabla global `admin.modules`. Los codigos y su `implementation_status` se mantienen como catalogo versionado para validar permisos y entitlements por `module_code`; Backoffice no puede habilitar un modulo `planned`.
 
 ## Seeds de permisos MVP
 

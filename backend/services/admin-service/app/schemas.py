@@ -1,8 +1,10 @@
+import base64
+import binascii
 from datetime import date
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class TenantRead(BaseModel):
@@ -20,11 +22,21 @@ class TenantResponse(BaseModel):
     data: TenantRead
 
 
+class EntitlementRead(BaseModel):
+    module_code: str
+    status: str
+    source: str = "manual"
+    tenant_enabled: bool = True
+    effective_active: bool = False
+    limits: dict[str, Any] = Field(default_factory=dict)
+
+
 class BackofficeTenantRead(TenantRead):
     owner_email: str | None = None
     active_memberships: int = 0
     total_memberships: int = 0
     modules: list[str] = Field(default_factory=list)
+    entitlements: list[EntitlementRead] = Field(default_factory=list)
     legal_entities_count: int = 0
     branches_count: int = 0
 
@@ -61,6 +73,14 @@ class BackofficeUsageListResponse(BaseModel):
 
 class BackofficeTenantStatusRequest(BaseModel):
     status: Literal["active", "suspended"]
+
+
+class BackofficeTenantUpdateRequest(BaseModel):
+    commercial_name: str | None = Field(default=None, min_length=1, max_length=240)
+    legal_name: str | None = Field(default=None, max_length=240)
+    plan_id: str | None = Field(default=None, max_length=40)
+    timezone: str | None = Field(default=None, min_length=1, max_length=80)
+    locale: str | None = Field(default=None, min_length=2, max_length=20)
 
 
 class BackofficeTenantDeleteResponse(BaseModel):
@@ -116,17 +136,15 @@ class TenantOnboardingRequest(BaseModel):
     modules: list[TenantOnboardingModuleRequest] = Field(default_factory=lambda: [TenantOnboardingModuleRequest(module_code="admin")])
 
 
-class EntitlementRead(BaseModel):
-    module_code: str
-    status: str
-    limits: dict[str, Any] = Field(default_factory=dict)
-
-
 class EntitlementListResponse(BaseModel):
     data: list[EntitlementRead]
 
 
-class EntitlementUpsertRequest(BaseModel):
+class EntitlementPreferenceUpdateRequest(BaseModel):
+    enabled: bool
+
+
+class BackofficeEntitlementUpdateRequest(BaseModel):
     status: Literal["active", "inactive", "suspended"]
     limits: dict[str, Any] = Field(default_factory=dict)
     source: Literal["subscription", "manual", "trial"] = "manual"
@@ -134,6 +152,20 @@ class EntitlementUpsertRequest(BaseModel):
 
 class EntitlementResponse(BaseModel):
     data: EntitlementRead
+
+
+class ModuleCatalogRead(BaseModel):
+    code: str
+    name: str
+    description: str
+    owner_service: str
+    public_feature: bool
+    implementation_status: Literal["implemented", "planned"]
+    dependencies: list[str] = Field(default_factory=list)
+
+
+class ModuleCatalogListResponse(BaseModel):
+    data: list[ModuleCatalogRead]
 
 
 class SettingRead(BaseModel):
@@ -367,3 +399,161 @@ class SessionTenantListResponse(BaseModel):
 
 class TenantOnboardingResponse(BaseModel):
     data: dict[str, Any]
+
+
+class UnitOfMeasureRead(BaseModel):
+    id: str
+    code: str
+    name_es: str
+    name_en: str
+    symbol: str
+    category: str
+    decimal_places: int
+    system_default: bool
+    status: Literal["active", "inactive"]
+
+
+class UnitOfMeasureCreateRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=20, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    name_es: str = Field(min_length=1, max_length=120)
+    name_en: str = Field(min_length=1, max_length=120)
+    symbol: str = Field(min_length=1, max_length=24)
+    category: str = Field(min_length=1, max_length=40)
+    decimal_places: int = Field(default=3, ge=0, le=6)
+
+
+class UnitOfMeasureUpdateRequest(BaseModel):
+    name_es: str | None = Field(default=None, min_length=1, max_length=120)
+    name_en: str | None = Field(default=None, min_length=1, max_length=120)
+    symbol: str | None = Field(default=None, min_length=1, max_length=24)
+    category: str | None = Field(default=None, min_length=1, max_length=40)
+    decimal_places: int | None = Field(default=None, ge=0, le=6)
+    status: Literal["active", "inactive"] | None = None
+
+
+class UnitOfMeasureResponse(BaseModel):
+    data: UnitOfMeasureRead
+
+
+class UnitOfMeasureListResponse(BaseModel):
+    data: list[UnitOfMeasureRead]
+
+
+CatalogCode = Literal["currencies", "payment_terms"]
+
+
+class CatalogItemRead(BaseModel):
+    id: str
+    catalog_code: CatalogCode
+    code: str
+    name_es: str
+    name_en: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    system_default: bool
+    status: Literal["active", "inactive"]
+
+
+class CatalogItemCreateRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=40, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    name_es: str = Field(min_length=1, max_length=160)
+    name_en: str = Field(min_length=1, max_length=160)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CatalogItemUpdateRequest(BaseModel):
+    name_es: str | None = Field(default=None, min_length=1, max_length=160)
+    name_en: str | None = Field(default=None, min_length=1, max_length=160)
+    metadata: dict[str, Any] | None = None
+    status: Literal["active", "inactive"] | None = None
+
+
+class CatalogItemResponse(BaseModel):
+    data: CatalogItemRead
+
+
+class CatalogItemListResponse(BaseModel):
+    data: list[CatalogItemRead]
+
+
+class CodeSequenceRead(BaseModel):
+    id: str
+    document_type: str
+    module_code: str
+    name_es: str
+    name_en: str
+    prefix: str
+    separator: str
+    next_number: int
+    padding: int
+    mode: Literal["managed", "manual"]
+    system_default: bool
+    status: Literal["active", "inactive"]
+
+
+class CodeSequenceUpdateRequest(BaseModel):
+    prefix: str | None = Field(default=None, min_length=1, max_length=24, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    separator: str | None = Field(default=None, max_length=3, pattern=r"^[._/-]*$")
+    next_number: int | None = Field(default=None, ge=1)
+    padding: int | None = Field(default=None, ge=1, le=12)
+    mode: Literal["managed", "manual"] | None = None
+    status: Literal["active", "inactive"] | None = None
+
+
+class CodeSequenceNextRequest(BaseModel):
+    manual_code: str | None = Field(default=None, min_length=1, max_length=60, pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+
+
+class CodeSequenceAllocationRead(BaseModel):
+    document_type: str
+    mode: Literal["managed", "manual"]
+    code: str
+    sequence_number: int | None = None
+
+
+class CodeSequenceResponse(BaseModel):
+    data: CodeSequenceRead
+
+
+class CodeSequenceListResponse(BaseModel):
+    data: list[CodeSequenceRead]
+
+
+class CodeSequenceAllocationResponse(BaseModel):
+    data: CodeSequenceAllocationRead
+
+
+class DocumentTemplateRead(BaseModel):
+    logo_data_url: str | None = None
+    primary_color: str = Field(default="#6106A0", pattern=r"^#[0-9A-Fa-f]{6}$")
+    accent_color: str = Field(default="#F557D3", pattern=r"^#[0-9A-Fa-f]{6}$")
+    text_color: str = Field(default="#190F34", pattern=r"^#[0-9A-Fa-f]{6}$")
+    footer_text: str | None = Field(default=None, max_length=300)
+    show_page_number: bool = True
+
+    @field_validator("logo_data_url")
+    @classmethod
+    def validate_logo(cls, value):
+        if value is None or value == "":
+            return None
+        prefixes = {
+            "data:image/png;base64,": b"\x89PNG\r\n\x1a\n",
+            "data:image/jpeg;base64,": b"\xff\xd8\xff",
+            "data:image/webp;base64,": b"RIFF",
+        }
+        prefix = next((candidate for candidate in prefixes if value.startswith(candidate)), None)
+        if prefix is None or len(value) > 1_500_000:
+            raise ValueError("invalid_document_logo")
+        try:
+            decoded = base64.b64decode(value[len(prefix) :], validate=True)
+        except (ValueError, binascii.Error):
+            raise ValueError("invalid_document_logo") from None
+        signature = prefixes[prefix]
+        if len(decoded) > 1_000_000 or not decoded.startswith(signature):
+            raise ValueError("invalid_document_logo")
+        if prefix == "data:image/webp;base64," and (len(decoded) < 12 or decoded[8:12] != b"WEBP"):
+            raise ValueError("invalid_document_logo")
+        return value
+
+
+class DocumentTemplateResponse(BaseModel):
+    data: DocumentTemplateRead

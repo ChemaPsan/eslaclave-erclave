@@ -1,792 +1,372 @@
 openapi: 3.1.0
+x-implementation-status: implemented
 info:
   title: ERClave Sales Service API
-  version: 0.1.0
-  summary: Customer, quote, order, delivery and return APIs.
-servers:
-  - url: https://api.eslaclave.com
-security:
-  - bearerAuth: []
-tags:
-  - name: Customers
-  - name: Quotes
-  - name: Orders
-  - name: Deliveries
-  - name: Returns
+  version: 0.5.0
+  summary: Corte Local autoritativo de Clientes, Cotizaciones, Pedidos, surtido y Entregas.
+servers: [{ url: 'http://127.0.0.1:8008' }]
+security: [{ bearerAuth: [] }]
 paths:
+  /v1/sales/reference-data:
+    get:
+      operationId: getSalesReferenceData
+      x-required-module: sales
+      x-permissions: [sales.customer.read, sales.customer.create, sales.customer.update, sales.quote.read, sales.quote.create, sales.quote.update]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
+      responses: { '200': { description: Monedas y condiciones de pago versionadas., content: { application/json: { schema: { $ref: '#/components/schemas/SalesReferenceDataResponse' } } } } }
   /v1/sales/customers:
     get:
-      tags: [Customers]
       operationId: listCustomers
-      summary: Search customers.
       x-required-module: sales
       x-permissions: [sales.customer.read]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Search'
-        - $ref: '#/components/parameters/Status'
-      responses:
-        '200':
-          description: Customers.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomerListResponse'
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { name: status, in: query, schema: { type: string, enum: [prospect, active, inactive, blocked] } }, { name: q, in: query, schema: { type: string, maxLength: 120 } }]
+      responses: { '200': { description: Clientes del tenant., content: { application/json: { schema: { $ref: '#/components/schemas/CustomerListResponse' } } } } }
     post:
-      tags: [Customers]
       operationId: createCustomer
-      summary: Create customer.
       x-required-module: sales
       x-permissions: [sales.customer.create]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CustomerCreateRequest'
-      responses:
-        '201':
-          description: Customer created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomerResponse'
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CustomerCreateRequest' } } } }
+      responses: { '201': { description: Cliente creado., content: { application/json: { schema: { $ref: '#/components/schemas/CustomerResponse' } } } } }
   /v1/sales/customers/{id}:
     get:
-      tags: [Customers]
       operationId: getCustomer
-      summary: Get customer.
       x-required-module: sales
       x-permissions: [sales.customer.read]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Customer detail.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomerResponse'
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdPath' }]
+      responses: { '200': { description: Cliente., content: { application/json: { schema: { $ref: '#/components/schemas/CustomerResponse' } } } } }
     patch:
-      tags: [Customers]
       operationId: updateCustomer
-      summary: Update customer.
       x-required-module: sales
       x-permissions: [sales.customer.update]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CustomerUpdateRequest'
-      responses:
-        '200':
-          description: Customer updated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomerResponse'
-  /v1/sales/customers/{id}/contacts:
-    post:
-      tags: [Customers]
-      operationId: createCustomerContact
-      summary: Add customer contact.
-      x-required-module: sales
-      x-permissions: [sales.customer.update]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CustomerContactCreateRequest'
-      responses:
-        '201':
-          description: Contact created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomerContactResponse'
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CustomerUpdateRequest' } } } }
+      responses: { '200': { description: Cliente actualizado., content: { application/json: { schema: { $ref: '#/components/schemas/CustomerResponse' } } } } }
   /v1/sales/quotes:
     get:
-      tags: [Quotes]
       operationId: listQuotes
-      summary: Search quotes.
       x-required-module: sales
       x-permissions: [sales.quote.read]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Search'
-        - $ref: '#/components/parameters/Status'
-      responses:
-        '200':
-          description: Quotes.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QuoteListResponse'
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { name: status, in: query, schema: { type: string, enum: [draft, quoted, approved, expired, cancelled] } }, { name: customer_id, in: query, schema: { type: string } }]
+      responses: { '200': { description: Cotizaciones del tenant., content: { application/json: { schema: { $ref: '#/components/schemas/QuoteListResponse' } } } } }
     post:
-      tags: [Quotes]
       operationId: createQuote
-      summary: Create quote using existing customer and product/service catalog.
       x-required-module: sales
       x-permissions: [sales.quote.create]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/QuoteCreateRequest'
-      responses:
-        '201':
-          description: Quote created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QuoteResponse'
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/QuoteCreateRequest' } } } }
+      responses: { '201': { description: Cotización calculada y creada como borrador., content: { application/json: { schema: { $ref: '#/components/schemas/QuoteResponse' } } } } }
   /v1/sales/quotes/{id}:
     get:
-      tags: [Quotes]
       operationId: getQuote
-      summary: Get quote detail.
       x-required-module: sales
       x-permissions: [sales.quote.read]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Quote detail.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QuoteResponse'
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdPath' }]
+      responses: { '200': { description: Cotización., content: { application/json: { schema: { $ref: '#/components/schemas/QuoteResponse' } } } } }
     patch:
-      tags: [Quotes]
       operationId: updateQuote
-      summary: Update draft quote.
       x-required-module: sales
       x-permissions: [sales.quote.update]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/QuoteUpdateRequest'
-      responses:
-        '200':
-          description: Quote updated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QuoteResponse'
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/QuoteUpdateRequest' } } } }
+      responses: { '200': { description: Borrador recalculado., content: { application/json: { schema: { $ref: '#/components/schemas/QuoteResponse' } } } } }
   /v1/sales/quotes/{id}/submit:
-    post:
-      tags: [Quotes]
-      operationId: submitQuote
-      summary: Mark quote as sent/quoted.
-      x-required-module: sales
-      x-permissions: [sales.quote.submit]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Quote submitted.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QuoteResponse'
+    post: { operationId: submitQuote, x-required-module: sales, x-permissions: [sales.quote.submit], parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }], responses: { '200': { description: Cotización emitida., content: { application/json: { schema: { $ref: '#/components/schemas/QuoteResponse' } } } } } }
   /v1/sales/quotes/{id}/approve:
-    post:
-      tags: [Quotes]
-      operationId: approveQuote
-      summary: Approve quote.
-      x-required-module: sales
-      x-permissions: [sales.quote.approve]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Quote approved.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QuoteResponse'
+    post: { operationId: approveQuote, x-required-module: sales, x-permissions: [sales.quote.approve], parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }], responses: { '200': { description: Cotización aprobada., content: { application/json: { schema: { $ref: '#/components/schemas/QuoteResponse' } } } } } }
   /v1/sales/quotes/{id}/expire:
-    post:
-      tags: [Quotes]
-      operationId: expireQuote
-      summary: Expire quote.
-      x-required-module: sales
-      x-permissions: [sales.quote.expire]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Quote expired.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QuoteResponse'
-  /v1/sales/quotes/{id}/convert-to-order:
-    post:
-      tags: [Quotes, Orders]
-      operationId: convertQuoteToOrder
-      summary: Convert approved quote to sales order.
-      x-required-module: sales
-      x-permissions: [sales.order.create]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '201':
-          description: Sales order created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalesOrderResponse'
+    post: { operationId: expireQuote, x-required-module: sales, x-permissions: [sales.quote.expire], parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }], responses: { '200': { description: Cotización expirada., content: { application/json: { schema: { $ref: '#/components/schemas/QuoteResponse' } } } } } }
+  /v1/sales/quotes/{id}/cancel:
+    post: { operationId: cancelQuote, x-required-module: sales, x-permissions: [sales.quote.cancel], parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }], responses: { '200': { description: Cotización cancelada., content: { application/json: { schema: { $ref: '#/components/schemas/QuoteResponse' } } } } } }
   /v1/sales/orders:
     get:
-      tags: [Orders]
       operationId: listSalesOrders
-      summary: Search sales orders.
       x-required-module: sales
       x-permissions: [sales.order.read]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Search'
-        - $ref: '#/components/parameters/Status'
-      responses:
-        '200':
-          description: Sales orders.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalesOrderListResponse'
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { name: status, in: query, schema: { type: string } }, { name: customer_id, in: query, schema: { type: string } }]
+      responses: { '200': { description: Sales orders., content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrderListResponse' } } } } }
+    post:
+      operationId: createSalesOrder
+      x-required-module: sales
+      x-permissions: [sales.order.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrderCreateRequest' } } } }
+      responses: { '201': { description: Approved quote converted once to a sales order., content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrderResponse' } } } } }
   /v1/sales/orders/{id}:
     get:
-      tags: [Orders]
       operationId: getSalesOrder
-      summary: Get sales order detail.
       x-required-module: sales
       x-permissions: [sales.order.read]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Sales order.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalesOrderResponse'
-    patch:
-      tags: [Orders]
-      operationId: updateSalesOrder
-      summary: Update editable sales order fields.
-      x-required-module: sales
-      x-permissions: [sales.order.update]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SalesOrderUpdateRequest'
-      responses:
-        '200':
-          description: Sales order updated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalesOrderResponse'
-  /v1/sales/orders/{id}/request-fulfillment:
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdPath' }]
+      responses: { '200': { description: Sales order., content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrderResponse' } } } } }
+  /v1/sales/orders/{id}/fulfillment:
     post:
-      tags: [Orders]
-      operationId: requestSalesOrderFulfillment
-      summary: Request inventory or production fulfillment.
+      operationId: configureSalesOrderFulfillment
       x-required-module: sales
       x-permissions: [sales.order.fulfill]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FulfillmentRequest'
-      responses:
-        '202':
-          description: Fulfillment requested.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalesOrderResponse'
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrderFulfillmentRequest' } } } }
+      responses: { '200': { description: Inventory reservations or Production requests configured., content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrderResponse' } } } } }
+  /v1/sales/orders/{id}/cancel:
+    post:
+      operationId: cancelSalesOrder
+      x-required-module: sales
+      x-permissions: [sales.order.cancel]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ActionReasonRequest' } } } }
+      responses: { '200': { description: Sales order cancelled and active reservations released., content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrderResponse' } } } } }
   /v1/sales/deliveries:
     get:
-      tags: [Deliveries]
-      operationId: listDeliveries
-      summary: Search delivery records.
+      operationId: listSalesDeliveries
       x-required-module: sales
       x-permissions: [sales.delivery.read]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Search'
-        - $ref: '#/components/parameters/Status'
-      responses:
-        '200':
-          description: Deliveries.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeliveryListResponse'
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { name: status, in: query, schema: { type: string } }, { name: order_id, in: query, schema: { type: string } }]
+      responses: { '200': { description: Deliveries., content: { application/json: { schema: { $ref: '#/components/schemas/DeliveryListResponse' } } } } }
     post:
-      tags: [Deliveries]
-      operationId: createDelivery
-      summary: Create delivery tracking record for MVP.
+      operationId: createSalesDelivery
       x-required-module: sales
       x-permissions: [sales.delivery.create]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DeliveryCreateRequest'
-      responses:
-        '201':
-          description: Delivery created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeliveryResponse'
-  /v1/sales/deliveries/{id}/status:
-    patch:
-      tags: [Deliveries]
-      operationId: updateDeliveryStatus
-      summary: Change delivery status.
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DeliveryCreateRequest' } } } }
+      responses: { '201': { description: Draft full or partial delivery., content: { application/json: { schema: { $ref: '#/components/schemas/DeliveryResponse' } } } } }
+  /v1/sales/deliveries/{id}:
+    get:
+      operationId: getSalesDelivery
       x-required-module: sales
-      x-permissions: [sales.delivery.update]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StatusChangeRequest'
-      responses:
-        '200':
-          description: Delivery updated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeliveryResponse'
-  /v1/sales/returns:
+      x-permissions: [sales.delivery.read]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdPath' }]
+      responses: { '200': { description: Delivery., content: { application/json: { schema: { $ref: '#/components/schemas/DeliveryResponse' } } } } }
+  /v1/sales/deliveries/{id}/confirm:
     post:
-      tags: [Returns]
-      operationId: createReturnRequest
-      summary: Create return request.
+      operationId: confirmSalesDelivery
       x-required-module: sales
-      x-permissions: [sales.return.create]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReturnCreateRequest'
-      responses:
-        '201':
-          description: Return request created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReturnResponse'
+      x-permissions: [sales.delivery.confirm]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ActionReasonRequest' } } } }
+      responses: { '200': { description: Delivery confirmed, reservations consumed and actual cost recalculated., content: { application/json: { schema: { $ref: '#/components/schemas/DeliveryResponse' } } } } }
+  /v1/sales/deliveries/{id}/cancel:
+    post:
+      operationId: cancelSalesDelivery
+      x-required-module: sales
+      x-permissions: [sales.delivery.cancel]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ActionReasonRequest' } } } }
+      responses: { '200': { description: Draft delivery cancelled., content: { application/json: { schema: { $ref: '#/components/schemas/DeliveryResponse' } } } } }
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   parameters:
-    TenantHeader:
-      name: X-Tenant-Id
-      in: header
-      required: true
-      schema:
-        type: string
-    CorrelationId:
-      name: X-Correlation-Id
-      in: header
-      required: false
-      schema:
-        type: string
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: true
-      schema:
-        type: string
-    IdPath:
-      name: id
-      in: path
-      required: true
-      schema:
-        type: string
-    Limit:
-      name: limit
-      in: query
-      schema:
-        type: integer
-        default: 50
-        maximum: 200
-    Cursor:
-      name: cursor
-      in: query
-      schema:
-        type: string
-    Search:
-      name: q
-      in: query
-      schema:
-        type: string
-    Status:
-      name: status
-      in: query
-      schema:
-        type: string
+    TenantHeader: { name: X-Tenant-Id, in: header, required: true, schema: { type: string } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8 } }
+    IdPath: { name: id, in: path, required: true, schema: { type: string } }
   schemas:
-    Page:
-      type: object
-      properties:
-        limit:
-          type: integer
-        next_cursor:
-          type: [string, 'null']
-        has_more:
-          type: boolean
-    Customer:
-      type: object
-      properties:
-        id:
-          type: string
-        code:
-          type: string
-        commercial_name:
-          type: string
-        customer_type:
-          type: string
-        status:
-          type: string
-    CustomerResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/Customer'
-    CustomerListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/Customer'
-        page:
-          $ref: '#/components/schemas/Page'
+    ContactInput: { type: object, required: [name, email, phone], properties: { name: { type: string }, email: { type: string, format: email }, phone: { type: string }, role: { type: [string, 'null'] } } }
     CustomerCreateRequest:
       type: object
-      required: [code, commercial_name, customer_type]
-      properties:
-        code:
-          type: string
-        commercial_name:
-          type: string
-        customer_type:
-          type: string
-        payment_terms:
-          type: string
-        currency:
-          type: string
-        billing_profile:
-          type: object
-          additionalProperties: true
-        commercial_profile:
-          type: object
-          additionalProperties: true
+      required: [code, commercial_name, customer_type, responsible_worker_id, primary_contact, payment_terms]
+      properties: { code: { type: string }, commercial_name: { type: string }, customer_type: { type: string, enum: [company, individual, government, internal] }, status: { type: string, enum: [prospect, active, inactive, blocked] }, responsible_worker_id: { type: string }, primary_contact: { $ref: '#/components/schemas/ContactInput' }, payment_terms: { type: string }, currency: { type: string }, legal_name: { type: [string, 'null'] }, tax_id: { type: [string, 'null'] }, billing_email: { type: [string, 'null'] } }
     CustomerUpdateRequest:
       type: object
+      minProperties: 1
+      additionalProperties: false
       properties:
-        commercial_name:
-          type: string
-        status:
-          type: string
-        payment_terms:
-          type: string
-        billing_profile:
-          type: object
-          additionalProperties: true
-        commercial_profile:
-          type: object
-          additionalProperties: true
-    CustomerContactCreateRequest:
-      type: object
-      required: [name]
-      properties:
-        name:
-          type: string
-        email:
-          type: string
-        phone:
-          type: string
-        role:
-          type: string
-        is_primary:
-          type: boolean
-    CustomerContactResponse:
-      type: object
-      properties:
-        data:
-          type: object
-          additionalProperties: true
-    Quote:
-      type: object
-      properties:
-        id:
-          type: string
-        code:
-          type: string
-        customer_id:
-          type: string
-        status:
-          type: string
-          enum: [draft, quoted, approved, expired, cancelled]
-        currency:
-          type: string
-        total:
-          type: number
-    QuoteResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/Quote'
-    QuoteListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/Quote'
-        page:
-          $ref: '#/components/schemas/Page'
-    QuoteCreateRequest:
-      type: object
-      required: [customer_id, currency, lines]
-      properties:
-        customer_id:
-          type: string
-        currency:
-          type: string
-        valid_until:
-          type: string
-          format: date
-        lines:
-          type: array
-          items:
-            $ref: '#/components/schemas/QuoteLineInput'
+        commercial_name: {type: [string, 'null'], minLength: 1, maxLength: 200}
+        customer_type: {type: [string, 'null'], enum: [company, individual, government, internal, null]}
+        status: {type: [string, 'null'], enum: [prospect, active, inactive, blocked, null]}
+        responsible_worker_id: {type: [string, 'null'], minLength: 1, maxLength: 40}
+        primary_contact: {oneOf: [{$ref: '#/components/schemas/ContactInput'}, {type: 'null'}]}
+        payment_terms: {type: [string, 'null']}
+        currency: {type: [string, 'null']}
+        credit_limit: {type: [number, 'null'], minimum: 0}
+        legal_name: {type: [string, 'null'], maxLength: 240}
+        tax_id: {type: [string, 'null'], maxLength: 20}
+        tax_regime: {type: [string, 'null'], maxLength: 120}
+        cfdi_use: {type: [string, 'null'], maxLength: 10}
+        billing_email: {type: [string, 'null'], format: email}
+        billing_phone: {type: [string, 'null'], maxLength: 30}
+        billing_address: {oneOf: [{$ref: '#/components/schemas/BillingAddress'}, {type: 'null'}]}
+        notes: {type: [string, 'null'], maxLength: 2000}
+    QuoteLineInput: { type: object, required: [product_service_id, quantity, unit, unit_price], properties: { product_service_id: { type: string }, quantity: { type: number, exclusiveMinimum: 0 }, unit: { type: string }, unit_price: { type: number, minimum: 0 }, discount_percentage: { type: number, minimum: 0, maximum: 100 } } }
+    QuoteCreateRequest: { type: object, required: [code, customer_id, valid_until, lines], properties: { code: { $ref: '#/components/schemas/BusinessDocumentCode' }, customer_id: { type: string }, responsible_worker_id: { type: [string, 'null'] }, currency: { type: [string, 'null'] }, payment_terms: { type: [string, 'null'] }, valid_until: { type: string, format: date }, promised_delivery_date: { type: [string, 'null'] }, lines: { type: array, minItems: 1, items: { $ref: '#/components/schemas/QuoteLineInput' } } } }
     QuoteUpdateRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        customer_id: {type: [string, 'null'], minLength: 1, maxLength: 40}
+        responsible_worker_id: {type: [string, 'null'], minLength: 1, maxLength: 40}
+        currency: {type: [string, 'null']}
+        payment_terms: {type: [string, 'null']}
+        valid_until: {type: [string, 'null'], format: date}
+        promised_delivery_date: {type: [string, 'null'], format: date}
+        notes: {type: [string, 'null'], maxLength: 2000}
+        lines: {type: [array, 'null'], minItems: 1, maxItems: 100, items: {$ref: '#/components/schemas/QuoteLineInput'}}
+    BillingAddress:
+      type: object
+      additionalProperties: false
+      properties:
+        street: {type: [string, 'null'], maxLength: 200}
+        exterior_number: {type: [string, 'null'], maxLength: 40}
+        interior_number: {type: [string, 'null'], maxLength: 40}
+        neighborhood: {type: [string, 'null'], maxLength: 160}
+        city: {type: [string, 'null'], maxLength: 120}
+        state: {type: [string, 'null'], maxLength: 120}
+        postal_code: {type: [string, 'null'], maxLength: 12}
+        country: {type: [string, 'null'], maxLength: 80}
+    ContactRead:
       allOf:
-        - $ref: '#/components/schemas/QuoteCreateRequest'
-    QuoteLineInput:
+        - {$ref: '#/components/schemas/ContactInput'}
+        - {type: object, required: [id, is_primary, status], properties: {id: {type: string}, is_primary: {type: boolean}, status: {type: string, enum: [active, inactive]}}}
+    CustomerRead:
       type: object
-      required: [product_service_id, quantity, unit, unit_price]
+      required: [id, code, commercial_name, customer_type, status, responsible_worker_id, responsible_worker_name, payment_terms, currency, credit_limit, contacts, created_at, updated_at]
       properties:
-        product_service_id:
-          type: string
-        quantity:
-          type: number
-        unit:
-          type: string
-        unit_price:
-          type: number
-        discount_amount:
-          type: number
-    SalesOrder:
+        id: {type: string}
+        code: {type: string}
+        commercial_name: {type: string}
+        customer_type: {type: string, enum: [company, individual, government, internal]}
+        status: {type: string, enum: [prospect, active, inactive, blocked]}
+        responsible_worker_id: {type: string}
+        responsible_worker_name: {type: string}
+        payment_terms: {type: string}
+        currency: {type: string}
+        credit_limit: {type: number}
+        legal_name: {type: [string, 'null']}
+        tax_id: {type: [string, 'null']}
+        tax_regime: {type: [string, 'null']}
+        cfdi_use: {type: [string, 'null']}
+        billing_email: {type: [string, 'null'], format: email}
+        billing_phone: {type: [string, 'null']}
+        billing_address: {oneOf: [{$ref: '#/components/schemas/BillingAddress'}, {type: 'null'}]}
+        notes: {type: [string, 'null']}
+        fulfillment_state: {type: string, enum: [idle, processing, completed, needs_reconciliation]}
+        cancellation_state: {type: string, enum: [idle, processing, completed, needs_reconciliation]}
+        contacts: {type: array, items: {$ref: '#/components/schemas/ContactRead'}}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    CustomerResponse: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/CustomerRead'}}}
+    CustomerListResponse: {type: object, required: [data], properties: {data: {type: array, items: {$ref: '#/components/schemas/CustomerRead'}}}}
+    QuoteLineRead:
       type: object
+      required: [id, line_number, product_service_id, product_service_code, product_service_name, product_service_type, unit, quantity, unit_price, discount_percentage, subtotal, discount_amount, total]
       properties:
-        id:
-          type: string
-        code:
-          type: string
-        quote_id:
-          type: string
-        customer_id:
-          type: string
-        status:
-          type: string
-        fulfillment_mode:
-          type: string
-        total:
-          type: number
-    SalesOrderResponse:
+        id: {type: string}
+        line_number: {type: integer, minimum: 1}
+        product_service_id: {type: string}
+        product_service_code: {type: string}
+        product_service_name: {type: string}
+        product_service_type: {type: string, enum: [product, service]}
+        unit: {type: string}
+        quantity: {type: number, exclusiveMinimum: 0}
+        unit_price: {type: number, minimum: 0}
+        discount_percentage: {type: number, minimum: 0, maximum: 100}
+        subtotal: {type: number, minimum: 0}
+        discount_amount: {type: number, minimum: 0}
+        total: {type: number, minimum: 0}
+        standard_unit_cost_snapshot: {type: [number, 'null'], minimum: 0}
+        estimated_cost: {type: [number, 'null'], minimum: 0}
+    QuoteRead:
       type: object
+      required: [id, code, customer_id, customer_code, customer_name, responsible_worker_id, responsible_worker_name, status, currency, payment_terms, valid_until, subtotal, discount_total, total, lines, created_at, updated_at]
+      properties:
+        id: {type: string}
+        code: {type: string}
+        customer_id: {type: string}
+        customer_code: {type: string}
+        customer_name: {type: string}
+        responsible_worker_id: {type: string}
+        responsible_worker_name: {type: string}
+        status: {type: string, enum: [draft, quoted, approved, expired, cancelled]}
+        currency: {type: string}
+        payment_terms: {type: string}
+        valid_until: {type: string, format: date}
+        promised_delivery_date: {type: [string, 'null'], format: date}
+        subtotal: {type: number, minimum: 0}
+        discount_total: {type: number, minimum: 0}
+        total: {type: number, minimum: 0}
+        estimated_cost: {type: [number, 'null'], minimum: 0}
+        estimated_margin: {type: [number, 'null']}
+        notes: {type: [string, 'null']}
+        submitted_at: {type: [string, 'null'], format: date-time}
+        approved_at: {type: [string, 'null'], format: date-time}
+        lines: {type: array, items: {$ref: '#/components/schemas/QuoteLineRead'}}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    QuoteResponse: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/QuoteRead'}}}
+    QuoteListResponse: {type: object, required: [data], properties: {data: {type: array, items: {$ref: '#/components/schemas/QuoteRead'}}}}
+    ReferenceOption: {type: object, required: [code, name_es, name_en], properties: {code: {type: string}, name_es: {type: string}, name_en: {type: string}}}
+    SalesReferenceDataResponse:
+      type: object
+      required: [data]
       properties:
         data:
-          $ref: '#/components/schemas/SalesOrder'
-    SalesOrderListResponse:
+          type: object
+          required: [currencies, payment_terms]
+          properties:
+            currencies: {type: array, items: {$ref: '#/components/schemas/ReferenceOption'}}
+            payment_terms: {type: array, items: {$ref: '#/components/schemas/ReferenceOption'}}
+    BusinessDocumentCode:
+      type: string
+      minLength: 1
+      maxLength: 60
+      pattern: '^[A-Z0-9][A-Z0-9._-]{0,59}$'
+      description: Folio de negocio tenant-safe. Puede ser provisto por el consumidor o por una autoridad de consecutivos; Sales lo normaliza a mayusculas y preserva el valor resultante.
+      x-code-source: caller-or-authoritative-generator
+    SalesOrderCreateRequest:
       type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/SalesOrder'
-        page:
-          $ref: '#/components/schemas/Page'
-    SalesOrderUpdateRequest:
+      required: [code, quote_id]
+      properties: {code: {$ref: '#/components/schemas/BusinessDocumentCode'}, quote_id: {type: string}, promised_delivery_date: {type: [string, 'null'], format: date}, notes: {type: [string, 'null'], maxLength: 2000}}
+    StockAllocationInput:
       type: object
-      properties:
-        status:
-          type: string
-        fulfillment_mode:
-          type: string
-        promised_delivery_date:
-          type: string
-          format: date
-        notes:
-          type: string
-    FulfillmentRequest:
+      required: [inventory_item_id, warehouse_id, quantity]
+      properties: {inventory_item_id: {type: string}, warehouse_id: {type: string}, quantity: {type: number, exclusiveMinimum: 0}}
+    OrderLineFulfillmentInput:
       type: object
-      required: [fulfillment_mode, lines]
+      required: [order_line_id, mode]
+      properties: {order_line_id: {type: string}, mode: {type: string, enum: [stock, production, service]}, allocations: {type: array, items: {$ref: '#/components/schemas/StockAllocationInput'}}}
+    SalesOrderFulfillmentRequest:
+      type: object
+      required: [lines]
+      properties: {lines: {type: array, minItems: 1, items: {$ref: '#/components/schemas/OrderLineFulfillmentInput'}}}
+    SalesOrderRead:
+      type: object
+      required: [id, code, quote_id, quote_code, customer_id, customer_code, customer_name, responsible_worker_id, responsible_worker_name, status, currency, payment_terms, subtotal, discount_total, total, lines, created_at, updated_at]
       properties:
-        fulfillment_mode:
-          type: string
-          enum: [inventory, production, mixed, service, pending]
-        lines:
-          type: array
-          items:
-            type: object
-            required: [sales_order_line_id, quantity]
-            properties:
-              sales_order_line_id:
-                type: string
-              quantity:
-                type: number
-              requested_due_date:
-                type: string
-                format: date
+        id: {type: string}
+        code: {type: string}
+        quote_id: {type: string}
+        quote_code: {type: string}
+        customer_id: {type: string}
+        customer_code: {type: string}
+        customer_name: {type: string}
+        responsible_worker_id: {type: string}
+        responsible_worker_name: {type: string}
+        status: {type: string, enum: [confirmed, fulfillment_pending, ready, partially_delivered, delivered, cancelled]}
+        currency: {type: string}
+        payment_terms: {type: string}
+        promised_delivery_date: {type: [string, 'null'], format: date}
+        subtotal: {type: number}
+        discount_total: {type: number}
+        total: {type: number}
+        estimated_cost: {type: [number, 'null']}
+        estimated_margin: {type: [number, 'null']}
+        actual_cost: {type: [number, 'null']}
+        actual_margin: {type: [number, 'null']}
+        notes: {type: [string, 'null']}
+        lines: {type: array, items: {type: object, additionalProperties: true}}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    SalesOrderResponse: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/SalesOrderRead'}}}
+    SalesOrderListResponse: {type: object, required: [data], properties: {data: {type: array, items: {$ref: '#/components/schemas/SalesOrderRead'}}}}
+    DeliveryLineInput: {type: object, required: [order_line_id, quantity], properties: {order_line_id: {type: string}, quantity: {type: number, exclusiveMinimum: 0}, actual_unit_cost: {type: [number, 'null'], minimum: 0, description: Required for service lines; forbidden for stock because Inventory supplies actual cost.}}}
     DeliveryCreateRequest:
       type: object
-      required: [sales_order_id]
-      properties:
-        sales_order_id:
-          type: string
-        recipient_name:
-          type: string
-        notes:
-          type: string
-    DeliveryResponse:
+      required: [code, order_id, scheduled_date, lines]
+      properties: {code: {type: string}, order_id: {type: string}, scheduled_date: {type: string, format: date}, recipient_name: {type: [string, 'null']}, evidence_reference: {type: [string, 'null']}, notes: {type: [string, 'null']}, lines: {type: array, minItems: 1, items: {$ref: '#/components/schemas/DeliveryLineInput'}}}
+    DeliveryRead:
       type: object
-      properties:
-        data:
-          type: object
-          additionalProperties: true
-    DeliveryListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        page:
-          $ref: '#/components/schemas/Page'
-    StatusChangeRequest:
-      type: object
-      required: [status]
-      properties:
-        status:
-          type: string
-        notes:
-          type: string
-    ReturnCreateRequest:
-      type: object
-      required: [sales_order_id, reason]
-      properties:
-        sales_order_id:
-          type: string
-        delivery_record_id:
-          type: string
-        reason:
-          type: string
-        lines:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-    ReturnResponse:
-      type: object
-      properties:
-        data:
-          type: object
-          additionalProperties: true
+      required: [id, code, order_id, order_code, customer_id, customer_name, status, scheduled_date, lines, created_at, updated_at]
+      properties: {id: {type: string}, code: {type: string}, order_id: {type: string}, order_code: {type: string}, customer_id: {type: string}, customer_name: {type: string}, status: {type: string, enum: [draft, confirmed, cancelled]}, confirmation_state: {type: string, enum: [idle, processing, completed, needs_reconciliation]}, scheduled_date: {type: string, format: date}, delivered_at: {type: [string, 'null'], format: date-time}, recipient_name: {type: [string, 'null']}, evidence_reference: {type: [string, 'null']}, notes: {type: [string, 'null']}, lines: {type: array, items: {type: object, additionalProperties: true, description: Delivery line includes actual_cost and actual_cost_source provenance.}}, created_at: {type: string, format: date-time}, updated_at: {type: string, format: date-time}}
+    DeliveryResponse: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/DeliveryRead'}}}
+    DeliveryListResponse: {type: object, required: [data], properties: {data: {type: array, items: {$ref: '#/components/schemas/DeliveryRead'}}}}
+    ActionReasonRequest: {type: object, required: [reason], properties: {reason: {type: string, minLength: 3, maxLength: 500}}}

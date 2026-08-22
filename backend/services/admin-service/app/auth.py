@@ -196,9 +196,9 @@ def get_authenticated_actor(
 def require_backoffice_admin(
     settings: Settings = Depends(get_settings),
     authenticated_actor: AuthenticatedActor | None = Depends(get_authenticated_actor),
-) -> None:
+) -> AuthenticatedActor | None:
     if settings.auth_mode != "firebase":
-        return
+        return None
     if authenticated_actor is None:
         raise ErclaveError("auth_required", "Authorization Bearer token is required.", status_code=401)
 
@@ -214,6 +214,7 @@ def require_backoffice_admin(
             status_code=403,
             details={"email": authenticated_actor.email},
         )
+    return authenticated_actor
 
 
 def require_permission_for_path_tenant(permission: str) -> Callable:
@@ -234,7 +235,7 @@ def require_permission_for_path_tenant(permission: str) -> Callable:
     return dependency
 
 
-def require_permission_for_header_tenant(permission: str) -> Callable:
+def require_permission_for_header_tenant(permission: str | tuple[str, ...]) -> Callable:
     def dependency(
         x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
         settings: Settings = Depends(get_settings),
@@ -257,7 +258,7 @@ def require_permission_for_header_tenant(permission: str) -> Callable:
 
 def _require_permission(
     tenant_id: str,
-    permission: str,
+    permission: str | tuple[str, ...],
     settings: Settings,
     authenticated_actor: AuthenticatedActor | None,
     repository: AdminRepository,
@@ -288,10 +289,11 @@ def _require_permission(
             status_code=403,
             details={"tenant_id": tenant_id},
         )
-    if permission not in context.permissions:
+    required = (permission,) if isinstance(permission, str) else permission
+    if not any(item in context.permissions for item in required):
         raise ErclaveError(
             "permission_denied",
             "Authenticated actor does not have the required permission.",
             status_code=403,
-            details={"tenant_id": tenant_id, "permission": permission},
+            details={"tenant_id": tenant_id, "permissions_any": list(required)},
         )

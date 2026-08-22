@@ -79,13 +79,13 @@ export function getRecipeStandardCost(recipe) {
 }
 
 export function getOrderCostSnapshot(order, recipe) {
-  const plannedCost = Number(order.plannedCost || calculateRecipe(recipe, order.quantity).totalCost);
-  const actualCost = Number(order.actualCost || plannedCost * getOrderProgressFactor(order));
+  const plannedCost = Number(order.plannedCost ?? calculateRecipe(recipe, order.quantity).totalCost);
+  const actualCost = order.actualCost == null ? null : Number(order.actualCost);
   return {
     plannedCost,
     actualCost,
-    variance: actualCost - plannedCost,
-    variancePct: plannedCost ? ((actualCost - plannedCost) / plannedCost) * 100 : 0
+    variance: actualCost == null ? null : actualCost - plannedCost,
+    variancePct: actualCost == null ? null : plannedCost ? ((actualCost - plannedCost) / plannedCost) * 100 : 0
   };
 }
 

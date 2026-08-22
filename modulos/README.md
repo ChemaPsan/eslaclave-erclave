@@ -4,6 +4,10 @@ Esta carpeta separa la documentación funcional de ERClave por módulo, para que
 
 El documento base mantiene la visión general, el enfoque modular y el roadmap. Los documentos de esta carpeta deberán usarse para bajar cada módulo a reglas, flujos, catálogos, estados, permisos, métricas y criterios de aceptación.
 
+Regla transversal de selección: maestros y documentos que crecen se consultan mediante búsqueda y resultados acotados, guardando IDs estables; listas cerradas como estatus, tipo o prioridad conservan el selector directo. La cobertura y los criterios completos están en `docs/arquitectura/seleccion_escalable_documentos.md`.
+
+Regla transversal de portada: la raíz de cada módulo operativo consulta reportes estándar propios y no genera acciones operativas. Altas, cambios y transiciones viven en submódulos. Administración es la excepción: su raíz conserva el centro de configuración. Los cruces, tableros configurables y análisis a la medida se reservan para el módulo Reportes, actualmente inactivo. La matriz completa está en `docs/arquitectura/reportes_estandar_por_modulo.md`.
+
 ## Módulos documentados
 
 | Archivo | Módulo | Propósito |
@@ -40,11 +44,11 @@ Cada módulo deberá documentarse con una estructura similar:
 
 | Modulo | Estado actual |
 |---|---|
-| Produccion | API, persistencia y UI reales en QA para productos/servicios, recetas, maquinaria, ordenes con snapshot y validacion observada; no reserva ni consume Inventario. |
-| Almacenes | Inventory y RH reales en QA junto con sus contratos y persistencia. Almacenes, articulos, movimientos, existencias y Kardex usan API; Reservas permanece fuera del alcance. |
-| Ventas | Alta, busqueda y edicion de clientes con perfil comercial y fiscal; cotizaciones multipartida ligadas a clientes y productos/servicios dados de alta; pedidos desde cotizaciones aprobadas con costo/margen estimado y bitacora de ajustes; entregas con estatus, notas y seguimiento; PDF generico imprimible. |
+| Produccion | API, persistencia y UI reales en QA para el corte desplegado. El codigo Local posterior agrega validacion autoritativa, reservas/consumo, capacidad comprometida y costo real; aun no esta promovido a QA. |
+| Almacenes | Inventory real en QA para almacenes, articulos, movimientos, existencias y Kardex. El codigo Local posterior agrega reservas/consumo para Produccion, disponibilidad neta, valuacion y concurrencia; aun no esta promovido a QA. |
+| Ventas | Backend y UI Local para Clientes, Cotizaciones, Pedidos y Entregas hasta `20260818_0020`. CHG-204 cerro los bloqueadores CHG-203 con mapeo producto-articulo, sanitizacion, costo por fuente y orquestacion concurrente/reconciliable. Devoluciones y facturacion permanecen `planned`. |
 | Administracion | UI y `admin-service` reales en QA para organizacion, usuarios, roles, permisos, entitlements, sesion y backoffice. |
-| Recursos Humanos | `hr-service`, schema, contrato, UI y entitlement estructural reales en QA; areas y puestos permanecen vacios hasta captura funcional autorizada. |
+| Recursos Humanos | `hr-service`, schema, contrato, UI y entitlement estructural reales en QA; areas y puestos permanecen vacios hasta captura funcional autorizada. Expedientes y capacidad autoritativa existen solo en codigo Local hasta su promocion. |
 | Resto de modulos | Mantienen MVP generico para especializarse progresivamente. |
 
 La navegacion efectiva depende de `session/context`, entitlements y permisos. Cada capacidad debe identificarse como QA, Local, mock o futura conforme a `docs/contexto/ESTADO_ACTUAL.md`; el estado no se duplica en fichas de agentes.

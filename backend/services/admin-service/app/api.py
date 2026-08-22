@@ -24,20 +24,35 @@ from .repositories import (
     RolePermissionValidationError,
     get_admin_repository,
 )
-from .seeds.catalog import get_module_seed
+from .seeds.catalog import MVP_MODULE_SEEDS, get_module_seed
 from .schemas import (
+    BackofficeEntitlementUpdateRequest,
     BackofficeTenantDeleteResponse,
     BackofficeTenantListResponse,
     BackofficeTenantRead,
     BackofficeTenantStatusRequest,
+    BackofficeTenantUpdateRequest,
     BackofficeUsageListResponse,
     BranchCreateRequest,
     BranchUpdateRequest,
+    CatalogItemCreateRequest,
+    CatalogItemListResponse,
+    CatalogItemResponse,
+    CatalogItemUpdateRequest,
+    CodeSequenceAllocationResponse,
+    CodeSequenceListResponse,
+    CodeSequenceNextRequest,
+    CodeSequenceResponse,
+    CodeSequenceUpdateRequest,
+    DocumentTemplateRead,
+    DocumentTemplateResponse,
     EntitlementListResponse,
     EntitlementResponse,
-    EntitlementUpsertRequest,
+    EntitlementPreferenceUpdateRequest,
     LegalEntityCreateRequest,
     LegalEntityUpdateRequest,
+    ModuleCatalogListResponse,
+    ModuleCatalogRead,
     OrganizationItemResponse,
     PolicyEvaluateRequest,
     PolicyEvaluateResponse,
@@ -61,10 +76,32 @@ from .schemas import (
     UserListResponse,
     UserResponse,
     UserUpdateRequest,
+    UnitOfMeasureCreateRequest,
+    UnitOfMeasureListResponse,
+    UnitOfMeasureResponse,
+    UnitOfMeasureUpdateRequest,
 )
 
 
 router = APIRouter(prefix="/v1")
+
+COMMERCIAL_CATALOGS = {"currencies", "payment_terms"}
+CODE_SEQUENCE_CONSUMER_PERMISSIONS = (
+    "production.product_service.create",
+    "production.recipe.create",
+    "production.order.create",
+    "production.machine.create",
+    "inventory.warehouse.create",
+    "inventory.item.create",
+    "inventory.movement.create",
+    "hr.area.create",
+    "hr.position.create",
+    "hr.worker.create",
+    "sales.customer.create",
+    "sales.quote.create",
+    "sales.order.create",
+    "sales.delivery.create",
+)
 
 
 def require_idempotency_key(idempotency_key: str | None) -> str:
@@ -79,6 +116,192 @@ def require_idempotency_key(idempotency_key: str | None) -> str:
 
 def resolve_correlation_id(correlation_id: str | None) -> str:
     return correlation_id.strip() if correlation_id else f"cor_{uuid4().hex[:26]}"
+
+
+def require_commercial_catalog(catalog_code: str) -> str:
+    if catalog_code not in COMMERCIAL_CATALOGS:
+        raise ErclaveError("catalog_not_found", "The requested tenant catalog is not implemented.", status_code=404)
+    return catalog_code
+
+
+@router.get("/catalogs/commercial/{catalog_code}", response_model=CatalogItemListResponse)
+def list_catalog_items(catalog_code: str, include_inactive: bool = Query(default=False), q: str | None = Query(default=None, max_length=120), x_tenant_id: str = Header(alias="X-Tenant-Id"), _authorization: None = Depends(require_permission_for_header_tenant(("admin.catalog.read", "sales.customer.read", "sales.customer.create", "sales.customer.update", "sales.quote.read", "sales.quote.create", "sales.quote.update", "sales.order.read", "sales.order.create"))), repository: AdminRepository = Depends(get_admin_repository)):
+    return CatalogItemListResponse(data=repository.list_catalog_items(x_tenant_id, require_commercial_catalog(catalog_code), include_inactive=include_inactive, q=q))
+
+
+@router.get("/catalogs/commercial/{catalog_code}/by-code/{code}", response_model=CatalogItemResponse)
+def get_catalog_item(catalog_code: str, code: str, x_tenant_id: str = Header(alias="X-Tenant-Id"), _authorization: None = Depends(require_permission_for_header_tenant(("admin.catalog.read", "sales.customer.create", "sales.customer.update", "sales.quote.create", "sales.quote.update", "sales.order.create"))), repository: AdminRepository = Depends(get_admin_repository)):
+    item = repository.get_catalog_item(x_tenant_id, require_commercial_catalog(catalog_code), code, active_only=True)
+    if not item:
+        raise ErclaveError("catalog_item_not_found", "The catalog value is not active for this tenant.", status_code=404)
+    return CatalogItemResponse(data=item)
+
+
+@router.post("/catalogs/commercial/{catalog_code}", response_model=CatalogItemResponse, status_code=201)
+def create_catalog_item(catalog_code: str, payload: CatalogItemCreateRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"), actor: AuthenticatedActor | None = Depends(require_permission_for_header_tenant("admin.catalog.create")), repository: AdminRepository = Depends(get_admin_repository)):
+    try:
+        value = repository.create_catalog_item(x_tenant_id, require_commercial_catalog(catalog_code), payload, require_idempotency_key(idempotency_key), resolve_correlation_id(x_correlation_id), actor.email if actor else None)
+    except IdempotencyConflictError as exc:
+        raise ErclaveError(str(exc), "Idempotency-Key was reused with a different command.", status_code=409) from exc
+    except ValueError as exc:
+        raise ErclaveError(str(exc), "Catalog code already exists in this tenant.", status_code=409) from exc
+    return CatalogItemResponse(data=value)
+
+
+@router.patch("/catalogs/commercial/{catalog_code}/{item_id}", response_model=CatalogItemResponse)
+def update_catalog_item(catalog_code: str, item_id: str, payload: CatalogItemUpdateRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"), actor: AuthenticatedActor | None = Depends(require_permission_for_header_tenant("admin.catalog.update")), repository: AdminRepository = Depends(get_admin_repository)):
+    try:
+        value = repository.update_catalog_item(x_tenant_id, require_commercial_catalog(catalog_code), item_id, payload, require_idempotency_key(idempotency_key), resolve_correlation_id(x_correlation_id), actor.email if actor else None)
+    except IdempotencyConflictError as exc:
+        raise ErclaveError(str(exc), "Idempotency-Key was reused with a different command.", status_code=409) from exc
+    if not value:
+        raise ErclaveError("catalog_item_not_found", "Catalog item does not exist in this tenant.", status_code=404)
+    return CatalogItemResponse(data=value)
+
+
+@router.get("/catalogs/code-sequences", response_model=CodeSequenceListResponse)
+def list_code_sequences(
+    x_tenant_id: str = Header(alias="X-Tenant-Id"),
+    _authorization: None = Depends(require_permission_for_header_tenant("admin.setting.read")),
+    repository: AdminRepository = Depends(get_admin_repository),
+):
+    return CodeSequenceListResponse(data=repository.list_code_sequences(x_tenant_id))
+
+
+@router.patch("/catalogs/code-sequences/{sequence_id}", response_model=CodeSequenceResponse)
+def update_code_sequence(
+    sequence_id: str,
+    payload: CodeSequenceUpdateRequest,
+    x_tenant_id: str = Header(alias="X-Tenant-Id"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+    actor: AuthenticatedActor | None = Depends(require_permission_for_header_tenant("admin.setting.update")),
+    repository: AdminRepository = Depends(get_admin_repository),
+):
+    try:
+        value = repository.update_code_sequence(x_tenant_id, sequence_id, payload, require_idempotency_key(idempotency_key), resolve_correlation_id(x_correlation_id), actor.email if actor else None)
+    except IdempotencyConflictError as exc:
+        raise ErclaveError(str(exc), "Idempotency-Key was reused with a different command.", status_code=409) from exc
+    except ValueError as exc:
+        if str(exc) == "code_sequence_cannot_rewind":
+            raise ErclaveError(str(exc), "The next number cannot be lower than the current sequence.", status_code=409) from exc
+        raise
+    if not value:
+        raise ErclaveError("code_sequence_not_found", "Code sequence does not exist in this tenant.", status_code=404)
+    return CodeSequenceResponse(data=value)
+
+
+@router.post("/catalogs/code-sequences/{document_type}/next", response_model=CodeSequenceAllocationResponse)
+def allocate_business_code(
+    document_type: str,
+    payload: CodeSequenceNextRequest,
+    x_tenant_id: str = Header(alias="X-Tenant-Id"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+    actor: AuthenticatedActor | None = Depends(require_permission_for_header_tenant(CODE_SEQUENCE_CONSUMER_PERMISSIONS)),
+    repository: AdminRepository = Depends(get_admin_repository),
+):
+    try:
+        value = repository.allocate_business_code(x_tenant_id, document_type, payload, require_idempotency_key(idempotency_key), resolve_correlation_id(x_correlation_id), actor.email if actor else None)
+    except IdempotencyConflictError as exc:
+        raise ErclaveError(str(exc), "Idempotency-Key was reused with a different command.", status_code=409) from exc
+    except ValueError as exc:
+        messages = {
+            "manual_business_code_required": ("Manual code is required for this document type.", 422),
+            "code_sequence_not_found": ("Code sequence is not active for this document type.", 404),
+        }
+        if str(exc) in messages:
+            message, status_code = messages[str(exc)]
+            raise ErclaveError(str(exc), message, status_code=status_code) from exc
+        raise
+    return CodeSequenceAllocationResponse(data=value)
+
+
+@router.get("/document-template", response_model=DocumentTemplateResponse)
+def get_document_template(x_tenant_id: str = Header(alias="X-Tenant-Id"), _authorization: None = Depends(require_permission_for_header_tenant(("admin.setting.read", "sales.quote.read", "sales.order.read", "sales.delivery.read", "production.order.read"))), repository: AdminRepository = Depends(get_admin_repository)):
+    setting = next((item for item in repository.list_settings(x_tenant_id, module_code="admin") if item.key == "document.template"), None)
+    return DocumentTemplateResponse(data=DocumentTemplateRead.model_validate(setting.value if setting else {}))
+
+
+@router.put("/document-template", response_model=DocumentTemplateResponse)
+def update_document_template(payload: DocumentTemplateRead, x_tenant_id: str = Header(alias="X-Tenant-Id"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"), _authorization: None = Depends(require_permission_for_header_tenant("admin.setting.update")), repository: AdminRepository = Depends(get_admin_repository)):
+    setting = repository.upsert_setting(tenant_id=x_tenant_id, key="document.template", module_code="admin", value=payload.model_dump(mode="json"), idempotency_key=require_idempotency_key(idempotency_key), correlation_id=resolve_correlation_id(x_correlation_id))
+    return DocumentTemplateResponse(data=DocumentTemplateRead.model_validate(setting.value))
+
+
+@router.get("/catalogs/units-of-measure", response_model=UnitOfMeasureListResponse)
+def list_units_of_measure(
+    include_inactive: bool = Query(default=False),
+    q: str | None = Query(default=None, max_length=120),
+    x_tenant_id: str = Header(alias="X-Tenant-Id"),
+    _authorization: None = Depends(require_permission_for_header_tenant(("admin.unit.read", "sales.quote.create", "sales.quote.update"))),
+    repository: AdminRepository = Depends(get_admin_repository),
+):
+    return UnitOfMeasureListResponse(data=repository.list_units_of_measure(x_tenant_id, include_inactive=include_inactive, q=q))
+
+
+@router.get("/catalogs/units-of-measure/by-code/{code}", response_model=UnitOfMeasureResponse)
+def get_unit_of_measure(
+    code: str,
+    x_tenant_id: str = Header(alias="X-Tenant-Id"),
+    _authorization: None = Depends(require_permission_for_header_tenant(("admin.unit.read", "sales.quote.create", "sales.quote.update"))),
+    repository: AdminRepository = Depends(get_admin_repository),
+):
+    item = repository.get_unit_of_measure(x_tenant_id, code, active_only=True)
+    if not item:
+        raise ErclaveError("unit_of_measure_not_found", "Unit of measure is not active in this tenant catalog.", status_code=404)
+    return UnitOfMeasureResponse(data=item)
+
+
+@router.post("/catalogs/units-of-measure", response_model=UnitOfMeasureResponse, status_code=status.HTTP_201_CREATED)
+def create_unit_of_measure(
+    payload: UnitOfMeasureCreateRequest,
+    x_tenant_id: str = Header(alias="X-Tenant-Id"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+    authorization_actor: AuthenticatedActor | None = Depends(require_permission_for_header_tenant("admin.unit.create")),
+    repository: AdminRepository = Depends(get_admin_repository),
+):
+    try:
+        return UnitOfMeasureResponse(data=repository.create_unit_of_measure(
+            x_tenant_id,
+            payload,
+            require_idempotency_key(idempotency_key),
+            resolve_correlation_id(x_correlation_id),
+            authorization_actor.email if authorization_actor else None,
+        ))
+    except IdempotencyConflictError as error:
+        raise ErclaveError(str(error), "Idempotency-Key was reused with a different command.", status_code=409) from error
+    except ValueError as error:
+        if str(error) == "unit_code_exists":
+            raise ErclaveError("unit_code_exists", "The unit code already exists in this tenant.", status_code=409) from error
+        raise
+
+
+@router.patch("/catalogs/units-of-measure/{unit_id}", response_model=UnitOfMeasureResponse)
+def update_unit_of_measure(
+    unit_id: str,
+    payload: UnitOfMeasureUpdateRequest,
+    x_tenant_id: str = Header(alias="X-Tenant-Id"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+    authorization_actor: AuthenticatedActor | None = Depends(require_permission_for_header_tenant("admin.unit.update")),
+    repository: AdminRepository = Depends(get_admin_repository),
+):
+    try:
+        item = repository.update_unit_of_measure(
+            x_tenant_id,
+            unit_id,
+            payload,
+            require_idempotency_key(idempotency_key),
+            resolve_correlation_id(x_correlation_id),
+            authorization_actor.email if authorization_actor else None,
+        )
+    except IdempotencyConflictError as error:
+        raise ErclaveError(str(error), "Idempotency-Key was reused with a different command.", status_code=409) from error
+    if not item:
+        raise ErclaveError("unit_of_measure_not_found", "Unit of measure does not exist in this tenant.", status_code=404)
+    return UnitOfMeasureResponse(data=item)
 
 
 @router.get("/session/context", response_model=SessionContextResponse)
@@ -171,6 +394,34 @@ def onboard_tenant(
     repository: AdminRepository = Depends(get_admin_repository),
 ) -> TenantOnboardingResponse:
     resolved_idempotency_key = require_idempotency_key(idempotency_key)
+    normalized_modules = []
+    requested_codes: set[str] = set()
+    for requested_module in payload.modules:
+        module = get_module_seed(requested_module.module_code)
+        if module is None:
+            raise ErclaveError("module_not_found", "Module is not part of the ERClave catalog.", status_code=404, details={"module_code": requested_module.module_code})
+        if module.code in requested_codes:
+            raise ErclaveError("duplicate_module", "Each module can only be requested once.", status_code=422, details={"module_code": module.code})
+        requested_codes.add(module.code)
+        if requested_module.status == "active" and module.implementation_status != "implemented":
+            raise ErclaveError("module_not_implemented", "A planned module cannot be enabled for a tenant.", status_code=409, details={"module_code": requested_module.module_code})
+        normalized_modules.append({**requested_module.model_dump(), "module_code": module.code})
+    admin_module = next((item for item in normalized_modules if item["module_code"] == "admin"), None)
+    if admin_module is None or admin_module["status"] != "active":
+        raise ErclaveError("core_module_required", "The Administration module is required for every tenant.", status_code=409)
+    active_codes = {item["module_code"] for item in normalized_modules if item["status"] == "active"}
+    for item in normalized_modules:
+        if item["status"] != "active":
+            continue
+        module = get_module_seed(item["module_code"])
+        missing = sorted(code for code in (module.dependencies if module else ()) if code not in active_codes)
+        if missing:
+            raise ErclaveError(
+                "module_dependencies_required",
+                "The onboarding request must include every active module dependency.",
+                status_code=409,
+                details={"module_code": item["module_code"], "dependencies": missing},
+            )
     ensure_firebase_user(payload.owner.email, payload.owner.display_name, settings)
     result = repository.onboard_tenant(
         slug=payload.slug,
@@ -182,7 +433,7 @@ def onboard_tenant(
         source=payload.source.model_dump(),
         owner=payload.owner.model_dump(),
         organization_profile=payload.organization_profile.model_dump() if payload.organization_profile else None,
-        modules=[item.model_dump() for item in payload.modules],
+        modules=normalized_modules,
         idempotency_key=resolved_idempotency_key,
         correlation_id=resolve_correlation_id(x_correlation_id),
     )
@@ -199,6 +450,93 @@ def list_backoffice_tenants(
 ) -> BackofficeTenantListResponse:
     tenants = repository.list_backoffice_tenants(search=search, limit=limit)
     return BackofficeTenantListResponse(data=[BackofficeTenantRead.model_validate(item) for item in tenants])
+
+
+@router.get("/backoffice/modules", response_model=ModuleCatalogListResponse)
+def list_backoffice_modules(
+    _authorization: AuthenticatedActor | None = Depends(require_backoffice_admin),
+) -> ModuleCatalogListResponse:
+    modules = sorted(MVP_MODULE_SEEDS, key=lambda item: item.sort_order)
+    return ModuleCatalogListResponse(
+        data=[
+            ModuleCatalogRead(
+                code=item.code,
+                name=item.name,
+                description=item.description,
+                owner_service=item.owner_service,
+                public_feature=item.public_feature,
+                implementation_status=item.implementation_status,
+                dependencies=list(item.dependencies),
+            )
+            for item in modules
+        ]
+    )
+
+
+@router.patch("/backoffice/tenants/{tenant_id}", response_model=TenantResponse)
+def update_backoffice_tenant(
+    tenant_id: str,
+    payload: BackofficeTenantUpdateRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+    authorization: AuthenticatedActor | None = Depends(require_backoffice_admin),
+    repository: AdminRepository = Depends(get_admin_repository),
+) -> TenantResponse:
+    try:
+        tenant = repository.update_backoffice_tenant(
+            tenant_id=tenant_id,
+            changes=payload.model_dump(exclude_unset=True),
+            idempotency_key=require_idempotency_key(idempotency_key),
+            correlation_id=resolve_correlation_id(x_correlation_id),
+            actor_email=authorization.email if authorization else None,
+        )
+    except IdempotencyConflictError as error:
+        raise ErclaveError(str(error), "Idempotency-Key was reused with a different command.", status_code=409) from error
+    if tenant is None:
+        raise ErclaveError("tenant_not_found", "Tenant not found.", status_code=404, details={"tenant_id": tenant_id})
+    return TenantResponse(data=tenant)
+
+
+@router.put("/backoffice/tenants/{tenant_id}/entitlements/{module_code}", response_model=EntitlementResponse)
+def set_backoffice_tenant_entitlement(
+    tenant_id: str,
+    module_code: str,
+    payload: BackofficeEntitlementUpdateRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+    authorization: AuthenticatedActor | None = Depends(require_backoffice_admin),
+    repository: AdminRepository = Depends(get_admin_repository),
+) -> EntitlementResponse:
+    module = get_module_seed(module_code)
+    if module is None:
+        raise ErclaveError("module_not_found", "Module is not part of the ERClave catalog.", status_code=404, details={"module_code": module_code})
+    if module.implementation_status != "implemented" and payload.status == "active":
+        raise ErclaveError("module_not_implemented", "A planned module cannot be enabled for a tenant.", status_code=409, details={"module_code": module_code})
+    if module.code == "admin" and payload.status != "active":
+        raise ErclaveError("core_module_required", "The Administration module is required for every tenant.", status_code=409, details={"module_code": module_code})
+    try:
+        entitlement = repository.set_backoffice_entitlement(
+            tenant_id=tenant_id,
+            module_code=module.code,
+            status=payload.status,
+            limits=payload.limits,
+            source=payload.source,
+            idempotency_key=require_idempotency_key(idempotency_key),
+            correlation_id=resolve_correlation_id(x_correlation_id),
+            actor_email=authorization.email if authorization else None,
+        )
+    except IdempotencyConflictError as error:
+        raise ErclaveError(str(error), "Idempotency-Key was reused with a different command.", status_code=409) from error
+    except ValueError as error:
+        code, _, detail = str(error).partition(":")
+        if code == "module_dependencies_required":
+            raise ErclaveError(code, "The module requires other modules to be active first.", status_code=409, details={"module_code": module.code, "dependencies": detail.split(",") if detail else []}) from error
+        if code == "module_dependency_in_use":
+            raise ErclaveError(code, "The module cannot be disabled while an active module depends on it.", status_code=409, details={"module_code": module.code, "dependents": detail.split(",") if detail else []}) from error
+        raise
+    if entitlement is None:
+        raise ErclaveError("tenant_not_found", "Tenant not found.", status_code=404, details={"tenant_id": tenant_id})
+    return EntitlementResponse(data=entitlement)
 
 
 @router.patch("/backoffice/tenants/{tenant_id}/status", response_model=TenantResponse)
@@ -284,30 +622,45 @@ def list_tenant_entitlements(
 def upsert_tenant_entitlement(
     tenant_id: str,
     module_code: str,
-    payload: EntitlementUpsertRequest,
+    payload: EntitlementPreferenceUpdateRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
     _authorization: None = Depends(require_permission_for_path_tenant("admin.entitlement.manage")),
+    authenticated_actor: AuthenticatedActor | None = Depends(get_authenticated_actor),
     repository: AdminRepository = Depends(get_admin_repository),
 ) -> EntitlementResponse:
-    if get_module_seed(module_code) is None:
+    module = get_module_seed(module_code)
+    if module is None:
         raise ErclaveError("module_not_found", "Module is not part of the ERClave catalog.", status_code=404, details={"module_code": module_code})
     if repository.get_tenant(tenant_id) is None:
         raise ErclaveError("tenant_not_found", "Tenant not found.", status_code=404, details={"tenant_id": tenant_id})
-    entitlement = repository.upsert_entitlement(
-        tenant_id=tenant_id,
-        module_code=module_code,
-        status=payload.status,
-        limits=payload.limits,
-        source=payload.source,
-        idempotency_key=require_idempotency_key(idempotency_key),
-        correlation_id=resolve_correlation_id(x_correlation_id),
-    )
+    if module.code == "admin" and not payload.enabled:
+        raise ErclaveError("core_module_required", "The Administration module cannot be disabled by the tenant.", status_code=409, details={"module_code": module_code})
+    try:
+        entitlement = repository.update_entitlement_preference(
+            tenant_id=tenant_id,
+            module_code=module.code,
+            enabled=payload.enabled,
+            idempotency_key=require_idempotency_key(idempotency_key),
+            correlation_id=resolve_correlation_id(x_correlation_id),
+            actor_email=authenticated_actor.email if authenticated_actor else None,
+        )
+    except IdempotencyConflictError as error:
+        raise ErclaveError(str(error), "Idempotency-Key was reused with a different command.", status_code=409) from error
+    except ValueError as error:
+        if str(error) == "module_not_contracted":
+            raise ErclaveError("module_not_contracted", "Only an active module granted by Backoffice can be changed by the tenant.", status_code=409, details={"module_code": module_code}) from error
+        code, _, detail = str(error).partition(":")
+        if code == "module_dependencies_required":
+            raise ErclaveError(code, "Activate the required tenant modules before enabling this module.", status_code=409, details={"module_code": module.code, "dependencies": detail.split(",") if detail else []}) from error
+        if code == "module_dependency_in_use":
+            raise ErclaveError(code, "Disable the dependent tenant modules before disabling this module.", status_code=409, details={"module_code": module.code, "dependents": detail.split(",") if detail else []}) from error
+        raise
     if entitlement is None:
         raise ErclaveError(
-            "entitlement_not_updated",
-            "Entitlement could not be updated.",
-            status_code=409,
+            "module_not_contracted",
+            "Only modules granted by Backoffice can be changed by the tenant.",
+            status_code=404,
             details={"tenant_id": tenant_id, "module_code": module_code},
         )
     return EntitlementResponse(data=entitlement)

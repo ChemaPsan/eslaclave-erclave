@@ -1,6 +1,6 @@
 # Inventory Service
 
-Microservicio propietario de Almacenes e Inventarios. El MVP implementa almacenes, articulos, movimientos manuales, transferencias atomicas, reversas, existencias calculadas y Kardex.
+Microservicio propietario de Almacenes e Inventarios. El MVP implementa almacenes, articulos, movimientos manuales, transferencias atomicas, reversas, reservas, recepcion de producto terminado, existencias calculadas y Kardex.
 
 ## Reglas
 
@@ -10,7 +10,7 @@ Microservicio propietario de Almacenes e Inventarios. El MVP implementa almacene
 - Los movimientos no se editan ni eliminan. Una correccion genera un movimiento inverso y marca el original como reversado.
 - Salidas, transferencias, ajustes negativos y reversas de entradas no pueden producir saldo negativo.
 - Existencias y Kardex se calculan desde movimientos registrados; no tienen formularios de captura.
-- Reservas permanecen fuera de este corte.
+- Las recepciones de produccion se vinculan por ID a una orden terminada; admiten parciales y nunca exceden la cantidad producida.
 
 ## Ejecucion local
 
@@ -50,6 +50,7 @@ GET/POST       /v1/inventory/items
 PATCH          /v1/inventory/items/{item_id}
 GET/POST       /v1/inventory/movements
 POST           /v1/inventory/movements/{movement_id}/reverse
+GET/POST       /v1/inventory/finished-goods-receipts
 GET            /v1/inventory/balances
 GET            /v1/inventory/kardex
 ```

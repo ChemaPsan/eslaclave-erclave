@@ -1,0 +1,16 @@
+"""add HR worker files and production assignee references."""
+from alembic import op
+import sqlalchemy as sa
+revision: str = "20260817_0014"
+down_revision: str | None = "20260805_0013"
+branch_labels=None
+depends_on=None
+def upgrade():
+    op.create_unique_constraint("uq_hr_labor_role_tenant_id","labor_roles",["tenant_id","id"],schema="hr")
+    op.create_table("workers",sa.Column("id",sa.String(40),primary_key=True),sa.Column("tenant_id",sa.String(40),nullable=False),sa.Column("employee_number",sa.String(40),nullable=False),sa.Column("first_names",sa.String(120),nullable=False),sa.Column("first_last_name",sa.String(100),nullable=False),sa.Column("second_last_name",sa.String(100)),sa.Column("curp",sa.String(18),nullable=False),sa.Column("rfc",sa.String(13),nullable=False),sa.Column("nss",sa.String(11),nullable=False),sa.Column("hire_date",sa.Date(),nullable=False),sa.Column("labor_position_id",sa.String(40),nullable=False),sa.Column("status",sa.String(20),nullable=False,server_default="active"),sa.Column("personal_email",sa.String(254)),sa.Column("phone",sa.String(30)),sa.Column("birth_date",sa.Date()),sa.Column("nationality",sa.String(80)),sa.Column("marital_status",sa.String(40)),sa.Column("address",sa.String(500)),sa.Column("emergency_contact_name",sa.String(200)),sa.Column("emergency_contact_phone",sa.String(30)),sa.Column("notes",sa.Text()),sa.Column("created_at",sa.DateTime(timezone=True),nullable=False,server_default=sa.text("now()")),sa.Column("updated_at",sa.DateTime(timezone=True),nullable=False,server_default=sa.text("now()")),sa.UniqueConstraint("tenant_id","employee_number",name="uq_hr_worker_employee_number"),sa.UniqueConstraint("tenant_id","curp",name="uq_hr_worker_curp"),sa.UniqueConstraint("tenant_id","rfc",name="uq_hr_worker_rfc"),sa.UniqueConstraint("tenant_id","nss",name="uq_hr_worker_nss"),sa.CheckConstraint("status in ('active','inactive','terminated')",name="ck_hr_worker_status"),sa.ForeignKeyConstraint(["tenant_id","labor_position_id"],["hr.labor_roles.tenant_id","hr.labor_roles.id"],name="fk_hr_worker_position_tenant"),schema="hr")
+    op.create_index("ix_hr_workers_tenant_position_status","workers",["tenant_id","labor_position_id","status"],schema="hr")
+    op.add_column("production_orders",sa.Column("responsible_worker_ref_id",sa.String(40)),schema="production");op.add_column("production_order_stages",sa.Column("responsible_worker_ref_id",sa.String(40)),schema="production")
+    op.create_index("ix_production_orders_tenant_responsible_worker","production_orders",["tenant_id","responsible_worker_ref_id"],schema="production");op.create_index("ix_production_order_stages_tenant_responsible_worker","production_order_stages",["tenant_id","responsible_worker_ref_id"],schema="production")
+def downgrade():
+    op.drop_index("ix_production_order_stages_tenant_responsible_worker",table_name="production_order_stages",schema="production");op.drop_index("ix_production_orders_tenant_responsible_worker",table_name="production_orders",schema="production")
+    op.drop_column("production_order_stages","responsible_worker_ref_id",schema="production");op.drop_column("production_orders","responsible_worker_ref_id",schema="production");op.drop_table("workers",schema="hr");op.drop_constraint("uq_hr_labor_role_tenant_id","labor_roles",schema="hr",type_="unique")

@@ -29,7 +29,7 @@ def test_demo_seed_ids_are_deterministic():
 def test_demo_modules_are_intentional_for_qa():
     module = load_seed_module()
 
-    assert module.ACTIVE_DEMO_MODULES == ("admin", "production", "inventory", "hr")
+    assert module.ACTIVE_DEMO_MODULES == ("admin", "production", "inventory", "hr", "sales")
 
 
 def test_demo_seed_default_organization_profile_matches_admin_structure():

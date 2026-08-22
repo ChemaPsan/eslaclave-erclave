@@ -10,7 +10,8 @@ export const manifest = {
   title: "Produccion",
   icon: "PR",
   version: "0.1.0",
-  permissions: ["produccion:read"],
+  implementationStatus: "implemented",
+  permissions: ["production.product_service.read"],
   routes: ["/produccion"]
 };
 ```
@@ -29,3 +30,5 @@ export function unmount() {}
 - El modulo no debe consultar elementos globales del DOM salvo los entregados por `context`.
 - El modulo no debe cambiar tema, idioma o rutas sin usar `context`.
 - El modulo no debe importar codigo interno de otro microfrontend.
+- Los permisos usan exclusivamente los codigos puntuales con puntos publicados por backend; no se admiten alias historicos con `:`.
+- `implementationStatus: "planned"` identifica manifiestos estructurales sin runtime completo y evita presentarlos como modulos reales.

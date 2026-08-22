@@ -15,3 +15,7 @@ build/
 **/.$*.drawio.bkp
 **/.$*.drawio.dtmp
 .firebase/
+.pytest_cache/
+.pytest-tmp/
+**/.pytest-tmp/
+.pytest-tmp-*/

@@ -35,7 +35,7 @@ export const modules = [
       "Seleccionar receta activa",
       "Calcular recursos por cantidad",
       "Validar inventario y herramientas",
-      "Registrar disponibilidad observada",
+      "Validar disponibilidad autoritativa",
       "Ejecutar etapas",
       "Cerrar produccion y generar producto terminado"
     ],
@@ -56,7 +56,7 @@ export const modules = [
       rows: []
     },
     validations: [
-      ["Almacenes", "Consulta existencias y faltantes observados; no reserva ni consume inventario."],
+      ["Almacenes", "Consulta existencias netas, reservas, faltantes y valuacion desde Inventory."],
       ["Compras", "Recibe requisiciones automaticas si no hay insumos."],
       ["Costos", "Calcula costo estimado y real por orden."],
       ["Contabilidad", "Prepara mapeos para consumo, merma y producto terminado."]
@@ -68,10 +68,10 @@ export const modules = [
       ["Accounting", "Prepares mappings for consumption, scrap, and finished goods."]
     ],
     form: [
-      ["Producto", "Playera basica morada"],
+      ["Producto", "Producto demostrativo"],
       ["Cantidad", "100 piezas"],
       ["Almacen origen", "Materia prima · Planta 1"],
-      ["Centro de costos", "Produccion / Costura"]
+      ["Centro de costos", "Produccion / General"]
     ],
     formEn: [
       ["Product", "Basic purple shirt"],
@@ -90,15 +90,15 @@ export const modules = [
     titleEn: "Human Resources",
     eyebrow: "Estructura operativa",
     eyebrowEn: "Operating structure",
-    summary: "Areas y puestos con capacidad, costo por hora y elegibilidad para produccion.",
-    summaryEn: "Areas and positions with capacity, hourly cost, and production eligibility.",
+    summary: "Areas, puestos y expedientes de trabajadores conectados con la operacion.",
+    summaryEn: "Areas, positions, and worker files connected to operations.",
     primary: "Nueva area",
     primaryEn: "New area",
     status: "Catalogos independientes",
     statusEn: "Independent catalogs",
     kpis: [["Areas", "0", "positive"], ["Puestos", "0", "positive"], ["Productivos", "0", "positive"]],
     kpisEn: [["Areas", "0", "positive"], ["Positions", "0", "positive"], ["Production", "0", "positive"]],
-    submodules: [["Areas y puestos", "Crea primero las areas y administra sus puestos desde formularios independientes.", "areas-puestos"]],
+    submodules: [["Areas y puestos", "Crea primero las areas y administra sus puestos desde formularios independientes.", "areas-puestos"],["Trabajadores", "Administra expedientes y asigna un puesto vigente por trabajador.", "trabajadores"]],
     workflow: ["Crear area", "Abrir area", "Crear puesto", "Definir costo por hora", "Autorizar uso en produccion"],
     workflowEn: ["Create area", "Open area", "Create position", "Set hourly cost", "Allow production use"],
     table: { columns: ["Area", "Puestos", "Estatus"], rows: [] },
@@ -158,9 +158,9 @@ export const modules = [
     table: {
       columns: ["Articulo", "Disponible", "Reservado", "Estado"],
       rows: [
-        ["Tela algodon", "220 m", "200 m", "Suficiente"],
-        ["Hilo morado", "12 cr", "18 cr", "Faltante"],
-        ["Playera basica", "86 pz", "40 pz", "Disponible"]
+        ["Componente A", "220 PZA", "200 PZA", "Suficiente"],
+        ["Componente B", "12 PZA", "18 PZA", "Faltante"],
+        ["Producto demostrativo", "86 PZA", "40 PZA", "Disponible"]
       ]
     },
     tableEn: {
@@ -185,7 +185,7 @@ export const modules = [
     ],
     form: [
       ["Tipo movimiento", "Reserva por produccion"],
-      ["Articulo", "Hilo morado"],
+      ["Articulo", "Componente B"],
       ["Cantidad", "18 carretes"],
       ["Origen", "Almacen MP / Planta 1"]
     ],
@@ -196,9 +196,9 @@ export const modules = [
       ["Origin", "RM warehouse / Plant 1"]
     ],
     records: [
-      ["MAT-004", "Tela algodon · 220 m disponibles", "Disponible"],
+      ["MAT-004", "Componente A · 220 PZA disponibles", "Disponible"],
       ["HER-011", "Tijeras industriales · 3 asignables", "Asignable"],
-      ["PT-118", "Playera basica · 40 pz reservadas", "Reservado"]
+      ["PT-118", "Producto demostrativo · 40 PZA reservadas", "Reservado"]
     ],
     recordsEn: [
       ["MAT-004", "Cotton fabric · 220 m available", "Available"],
@@ -239,7 +239,7 @@ export const modules = [
     table: {
       columns: ["Documento", "Proveedor", "Estado", "Relacion"],
       rows: [
-        ["REQ-087", "Textiles Norte", "Solicitada", "OP-1042"],
+        ["REQ-087", "Proveedor demostrativo", "Solicitada", "OP-DEMO-01"],
         ["OC-051", "Hilos MX", "Enviada", "Faltante"],
         ["REC-044", "Avios Centro", "Parcial", "Almacen MP"]
       ]
@@ -251,14 +251,14 @@ export const modules = [
       ["Contabilidad", "Mapea inventario, proveedor, impuestos y pagos."]
     ],
     form: [
-      ["Necesidad", "Hilo morado faltante"],
+      ["Necesidad", "Componente B faltante"],
       ["Proveedor sugerido", "Hilos MX"],
       ["Fecha requerida", "24 mayo"],
-      ["Centro de costos", "Produccion / Costura"]
+      ["Centro de costos", "Produccion / General"]
     ],
     records: [
-      ["REQ-087", "Hilo morado · OP-1042", "Solicitada"],
-      ["OC-051", "Tela algodon · Proveedor Norte", "Enviada"],
+      ["REQ-087", "Componente B · OP-DEMO-01", "Solicitada"],
+      ["OC-051", "Componente A · Proveedor demostrativo", "Enviada"],
       ["REC-044", "Recepcion parcial · 80%", "Parcial"]
     ]
   },
@@ -314,7 +314,7 @@ export const modules = [
       rows: [
         ["PED-220", "Uniformes Delta", "En preparacion", "34%"],
         ["COT-144", "Servicios Vega", "Cotizado", "38%"],
-        ["PED-228", "Textil Bravo", "Produccion", "29%"]
+        ["PED-228", "Cliente demostrativo", "Produccion", "29%"]
       ]
     },
     tableEn: {
@@ -322,7 +322,7 @@ export const modules = [
       rows: [
         ["ORD-220", "Delta Uniforms", "Preparing", "34%"],
         ["QTE-144", "Vega Services", "Quoted", "38%"],
-        ["ORD-228", "Textil Bravo", "Production", "29%"]
+        ["ORD-228", "Demo customer", "Production", "29%"]
       ]
     },
     validations: [
@@ -339,7 +339,7 @@ export const modules = [
     ],
     form: [
       ["Cliente", "Uniformes Delta"],
-      ["Producto", "Playera basica morada"],
+      ["Producto", "Producto demostrativo"],
       ["Cantidad", "140 piezas"],
       ["Fecha prometida", "Viernes 25"]
     ],
@@ -394,8 +394,8 @@ export const modules = [
       columns: ["Gasto", "Proveedor", "Estado", "Destino"],
       rows: [
         ["XML-330", "CFE", "Pendiente pago", "Produccion general"],
-        ["GTO-212", "Mecatronica SA", "Asignado", "Maquina recta"],
-        ["PAG-081", "Textiles Norte", "Pagado", "OC-051"]
+        ["GTO-212", "Proveedor de servicio", "Asignado", "Equipo de proceso"],
+        ["PAG-081", "Proveedor demostrativo", "Pagado", "OC-051"]
       ]
     },
     validations: [
@@ -412,7 +412,7 @@ export const modules = [
     ],
     records: [
       ["XML-330", "Energia planta · mayo", "Pendiente pago"],
-      ["GTO-212", "Mantenimiento maquina recta", "Asignado"],
+      ["GTO-212", "Mantenimiento de equipo", "Asignado"],
       ["PAG-081", "Pago proveedor · transferencia", "Registrado"]
     ]
   },
@@ -449,7 +449,7 @@ export const modules = [
     table: {
       columns: ["Objeto", "Estimado", "Real", "Variacion"],
       rows: [
-        ["OP-1042", "$18,420", "$19,194", "+4.2%"],
+        ["OP-DEMO-01", "$18,420", "$19,194", "+4.2%"],
         ["CC-CORTE", "$8,100", "$7,980", "-1.5%"],
         ["MER-020", "$620", "$870", "+40%"]
       ]
@@ -461,13 +461,13 @@ export const modules = [
       ["Contabilidad", "Variaciones, costo de venta y producto en proceso."]
     ],
     form: [
-      ["Centro", "Costura"],
-      ["Orden", "OP-1042"],
+      ["Centro", "Produccion general"],
+      ["Orden", "OP-DEMO-01"],
       ["Costo base", "Receta v3"],
       ["Metodo", "Promedio + real"]
     ],
     records: [
-      ["OP-1042", "Costo estimado $18,420", "Vs real +4.2%"],
+      ["OP-DEMO-01", "Costo estimado $18,420", "Vs real +4.2%"],
       ["CC-CORTE", "Centro de costo corte", "Dentro rango"],
       ["MER-020", "Merma tela · 2.8%", "Advertencia"]
     ]
@@ -680,7 +680,8 @@ export const erpSubmoduleCatalog = {
         es: ["Area existente", "Puesto", "Costo por hora", "Interviene en produccion"],
         en: ["Existing area", "Position", "Hourly cost", "Participates in production"]
       }
-    }
+    },
+    trabajadores: { enName: "Workers", enDetail: "Manage worker files and one current position per worker.", focus: { es: ["Identidad fiscal y NSS", "Puesto vigente", "Datos opcionales", "Estatus"], en: ["Tax identity and NSS", "Current position", "Optional data", "Status"] } }
   },
   produccion: {
     "productos-servicios": {

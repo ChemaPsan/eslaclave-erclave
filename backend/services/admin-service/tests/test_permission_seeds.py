@@ -50,6 +50,9 @@ def test_hr_contract_seeds_its_own_permission_group_without_production_legacy_co
         "hr.position.create",
         "hr.position.read",
         "hr.position.update",
+        "hr.worker.create",
+        "hr.worker.read",
+        "hr.worker.update",
     }
     assert not any(permission.code.startswith("production.labor") for permission in permissions)
 

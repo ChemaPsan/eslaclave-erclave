@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ERClave Production Service API
-  version: 0.1.0
+  version: 0.2.0
   summary: Product, recipe, production order and machine APIs; labor catalogs belong to hr-service.
 servers:
   - url: https://api.eslaclave.com
@@ -19,7 +19,7 @@ paths:
       operationId: listProductServices
       summary: Search product and service catalog.
       x-required-module: production
-      x-permissions: [production.product_service.read]
+      x-permissions: [production.product_service.read, sales.quote.create, sales.quote.update, sales.order.create, sales.order.fulfill]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -32,6 +32,12 @@ paths:
           schema:
             type: string
             enum: [product, service]
+        - name: inventory_mapping
+          in: query
+          description: Filter products by authoritative Inventory mapping state.
+          schema:
+            type: string
+            enum: [missing, linked]
       responses:
         '200':
           description: Product services.
@@ -70,7 +76,7 @@ paths:
       operationId: getProductService
       summary: Get product or service detail.
       x-required-module: production
-      x-permissions: [production.product_service.read]
+      x-permissions: [production.product_service.read, sales.quote.create, sales.quote.update, sales.order.create, sales.order.fulfill]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -130,6 +136,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductServiceResponse'
+  /v1/production/product-services/{id}/finished-good-link:
+    put:
+      tags: [ProductServices]
+      operationId: createAndLinkFinishedGood
+      summary: Create an Inventory finished good and link it to an active Production product.
+      x-required-module: production
+      x-permissions: [production.product_service.update, inventory.item.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinishedGoodLinkRequest'
+      responses:
+        '200':
+          description: Article created and linked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinishedGoodLinkResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /v1/production/product-services/{id}/cost-summary:
     get:
       tags: [ProductServices]
@@ -137,6 +170,7 @@ paths:
       summary: Get standard cost summary from approved recipe.
       x-required-module: production
       x-permissions: [production.product_service.read]
+      x-implementation-status: planned
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -192,6 +226,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecipeResponse'
+        '422':
+          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery must be active and linked to an active HR area.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/production/recipes/{id}:
     get:
       tags: [Recipes]
@@ -235,6 +275,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecipeVersionResponse'
+        '422':
+          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery must be active and linked to an active HR area.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/production/recipe-versions/{version_id}:
     patch:
       tags: [Recipes]
@@ -264,6 +310,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecipeVersionResponse'
+        '422':
+          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery must be active and linked to an active HR area.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/production/recipe-versions/{version_id}/submit:
     post:
       tags: [Recipes]
@@ -414,10 +466,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductionOrderResponse'
   /v1/production/order-requests:
+    get:
+      tags: [Orders]
+      operationId: listProductionOrderRequests
+      summary: List authoritative Sales requests awaiting Production planning.
+      x-implementation-status: implemented
+      x-required-module: production
+      x-permissions: [production.order.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: status
+          in: query
+          schema: {type: string, enum: [pending_configuration, converted, cancelled]}
+      responses:
+        '200': {description: Production requests., content: {application/json: {schema: {$ref: '#/components/schemas/ProductionSalesRequestListResponse'}}}}
     post:
       tags: [Orders]
-      operationId: createProductionOrderFromRequest
-      summary: Create order requested by sales or integration.
+      operationId: createProductionOrderRequest
+      summary: Register an authoritative Sales request without releasing a Production order.
+      x-implementation-status: implemented
       x-required-module: production
       x-permissions: [sales.order.fulfill]
       parameters:
@@ -432,11 +499,11 @@ paths:
               $ref: '#/components/schemas/ProductionOrderRequest'
       responses:
         '201':
-          description: Production order created.
+          description: Production request registered.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductionOrderResponse'
+                $ref: '#/components/schemas/ProductionSalesRequestResponse'
   /v1/production/orders/{id}:
     get:
       tags: [Orders]
@@ -460,6 +527,7 @@ paths:
       tags: [Orders]
       operationId: updateProductionOrderStatus
       summary: Change production order status.
+      description: All local transition, stage, reservation-snapshot and actual-usage preconditions are checked before any external Inventory effect. Materials are reserved when an order is released. The first transition from released or waiting_resources to in_progress consumes each reservation through Inventory, which records one immutable outbound movement in the warehouse that owned the reservation. Resuming from paused or returning from validation does not consume again. Completion requires every stage to be completed or skipped and never duplicates the material issue. Cancelling before start releases reservations; cancelling after start preserves the recorded physical issues.
       x-required-module: production
       x-permissions: [production.order.status.update]
       parameters:
@@ -480,11 +548,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductionOrderResponse'
+  /v1/production/orders/{id}/resources/{resource_id}:
+    patch:
+      tags: [Orders]
+      operationId: updateProductionOrderResourceActual
+      summary: Record actual labor or machine usage for operational costing.
+      x-required-module: production
+      x-permissions: [production.order.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+        - name: resource_id
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionOrderResourceUpdateRequest'
+      responses:
+        '200':
+          description: Actual resource usage recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrderResourceResponse'
   /v1/production/order-stages/{stage_id}:
     patch:
       tags: [Orders]
       operationId: updateProductionOrderStage
       summary: Update order stage.
+      description: Starting a stage requires its production order to already be in_progress. The client must first change the order status so Inventory can confirm all material issues; this endpoint never bypasses that rule.
       x-required-module: production
       x-permissions: [production.order_stage.update]
       parameters:
@@ -695,6 +793,9 @@ components:
           type: number
         description:
           type: string
+        inventory_item_id:
+          type: [string, 'null']
+          description: Authoritative Inventory item mapping; required for products and forbidden for services.
     ProductServiceResponse:
       type: object
       properties:
@@ -709,6 +810,36 @@ components:
             $ref: '#/components/schemas/ProductService'
         page:
           $ref: '#/components/schemas/Page'
+    FinishedGoodItemCreate:
+      type: object
+      required: [code, name, type, base_unit]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [finishedGood] }
+        category: { type: [string, 'null'] }
+        base_unit: { type: string }
+        inventory_policy: { type: string, enum: [standard, lot, serial, restricted], default: standard }
+        suggested_warehouse_id: { type: [string, 'null'] }
+        minimum_stock: { type: number, minimum: 0, default: 0 }
+        maximum_stock: { type: number, minimum: 0, default: 0 }
+        default_unit_cost: { type: number, minimum: 0, default: 0 }
+        use_in_recipe: { type: boolean, default: false }
+        description: { type: [string, 'null'] }
+    FinishedGoodLinkRequest:
+      type: object
+      required: [inventory_item]
+      properties:
+        inventory_item: { $ref: '#/components/schemas/FinishedGoodItemCreate' }
+    FinishedGoodLinkResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            product_service: { $ref: '#/components/schemas/ProductService' }
+            inventory_item: { type: object, additionalProperties: true }
+            link_status: { type: string, enum: [linked] }
     ProductServiceCreateRequest:
       type: object
       required: [code, name, type, base_unit]
@@ -734,6 +865,9 @@ components:
           type: number
         description:
           type: string
+        inventory_item_id:
+          type: [string, 'null']
+          description: Required when type is product and forbidden when type is service.
     ProductServiceUpdateRequest:
       type: object
       properties:
@@ -753,6 +887,8 @@ components:
           type: number
         description:
           type: string
+        inventory_item_id:
+          type: [string, 'null']
     StatusChangeRequest:
       type: object
       required: [status]
@@ -877,7 +1013,7 @@ components:
           type: number
     RecipeStageInput:
       type: object
-      required: [labor_area_ref_id, labor_area_name, name, sort_order]
+      required: [labor_area_ref_id, labor_area_name, name, sort_order, weight_percent]
       properties:
         labor_area_ref_id:
           type: string
@@ -891,6 +1027,13 @@ components:
           type: number
         sort_order:
           type: integer
+          minimum: 1
+          description: Consecutive phase number within the active recipe version (1..n).
+        weight_percent:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 100
+          multipleOf: 0.01
     ApprovalRequest:
       type: object
       properties:
@@ -915,18 +1058,7 @@ components:
           type: number
         unit:
           type: string
-        observed_resources:
-          type: array
-          items:
-            type: object
-            required: [resource_ref_id, resource_type, available_quantity, unit, source]
-            properties:
-              resource_ref_id: {type: string}
-              resource_type: {type: string, enum: [material, labor, machine, other]}
-              available_quantity: {type: number}
-              unit: {type: string}
-              unit_cost: {type: number}
-              source: {type: string}
+        planned_for: {type: [string, 'null'], format: date}
     ResourceValidationResponse:
       type: object
       properties:
@@ -972,13 +1104,18 @@ components:
         priority: {type: string, enum: [low, medium, high]}
         required_at: {type: string, format: date-time}
         responsible_name: {type: string}
+        responsible_worker_id: {type: string, description: External HR worker reference retained with the name snapshot.}
         planned_cost: {type: number}
         actual_cost: {type: number}
+        overall_progress_percent: {type: number, minimum: 0, maximum: 100}
         recipe_snapshot: {type: object, additionalProperties: true}
         resource_validation_snapshot: {type: object, additionalProperties: true}
         stages:
           type: array
-          items: {type: object, additionalProperties: true}
+          items: {$ref: '#/components/schemas/ProductionOrderStage'}
+        resources:
+          type: array
+          items: {$ref: '#/components/schemas/ProductionOrderResource'}
     ProductionOrderResponse:
       type: object
       properties:
@@ -995,26 +1132,30 @@ components:
           $ref: '#/components/schemas/Page'
     ProductionOrderCreateRequest:
       type: object
-      required: [recipe_version_id, quantity, unit]
+      required: [recipe_version_id, quantity, unit, responsible_worker_id, stage_assignments]
       properties:
+        code:
+          type: [string, 'null']
+          description: Optional tenant business code; production-service generates one when omitted.
         recipe_version_id:
           type: string
         quantity:
           type: number
         unit:
           type: string
+        planned_for: {type: [string, 'null'], format: date}
         planned_start_at:
           type: string
           format: date-time
         required_at: {type: string, format: date-time}
         priority: {type: string, enum: [low, medium, high]}
-        responsible_name: {type: string}
-        observed_resources:
-          type: array
-          items: {type: object, additionalProperties: true}
+        responsible_worker_id: {type: string}
         stage_assignments:
           type: array
-          items: {type: object, additionalProperties: true}
+          items:
+            type: object
+            required: [recipe_stage_id, responsible_worker_id]
+            properties: { recipe_stage_id: {type: string}, responsible_worker_id: {type: string} }
     ProductionOrderStatusRequest:
       type: object
       required: [status, reason]
@@ -1022,8 +1163,55 @@ components:
         status:
           type: string
           enum: [released, waiting_resources, in_progress, paused, in_validation, completed, cancelled]
+          description: Entering in_validation requires every stage to have 100 percent progress and be completed or skipped. Completing additionally requires the material issues recorded at production start.
         reason: {type: string}
-        actual_cost: {type: number}
+    ProductionOrderResource:
+      type: object
+      required: [id, resource_type, resource_ref_id, resource_code, resource_name, unit, planned_quantity, unit_cost, planned_cost]
+      properties:
+        id: {type: string}
+        resource_type: {type: string, enum: [material, labor, machine, other]}
+        resource_ref_id: {type: string}
+        resource_code: {type: string}
+        resource_name: {type: string}
+        unit: {type: string}
+        planned_quantity: {type: number}
+        actual_quantity: {type: [number, 'null']}
+        unit_cost: {type: number}
+        planned_cost: {type: number}
+        actual_cost: {type: [number, 'null']}
+        reservation_ref_id: {type: [string, 'null']}
+        reservation_ref_ids: {type: array, items: {type: string}}
+    ProductionOrderStage:
+      type: object
+      required: [id, name, sort_order, weight_percent, status, progress_percent]
+      properties:
+        id: {type: string}
+        recipe_stage_id: {type: [string, 'null']}
+        labor_area_ref_id: {type: [string, 'null'], description: External HR area reference captured from the approved recipe.}
+        labor_area_name: {type: [string, 'null'], description: Area name snapshot used by deliverables-by-area reads.}
+        name: {type: string}
+        sort_order: {type: integer, minimum: 1, description: Visible sequential phase number.}
+        weight_percent: {type: number, exclusiveMinimum: 0, maximum: 100}
+        status: {type: string, enum: [pending, in_progress, completed, skipped, blocked]}
+        planned_minutes: {type: [number, 'null']}
+        actual_minutes: {type: [number, 'null']}
+        responsible_name: {type: [string, 'null']}
+        responsible_worker_id: {type: [string, 'null']}
+        progress_percent: {type: number, minimum: 0, maximum: 100}
+        started_at: {type: [string, 'null'], format: date-time}
+        completed_at: {type: [string, 'null'], format: date-time}
+        notes: {type: [string, 'null']}
+    ProductionOrderResourceUpdateRequest:
+      type: object
+      required: [actual_quantity]
+      properties:
+        actual_quantity: {type: number, minimum: 0}
+    ProductionOrderResourceResponse:
+      type: object
+      required: [data]
+      properties:
+        data: {$ref: '#/components/schemas/ProductionOrderResource'}
     ProductionOrderRequest:
       type: object
       required: [sales_order_id, sales_order_line_id, product_service_id, quantity, unit]
@@ -1041,14 +1229,42 @@ components:
         requested_due_date:
           type: string
           format: date
+    ProductionSalesRequestRead:
+      type: object
+      required: [id, sales_order_id, sales_order_line_id, product_service_id, product_code, product_name, recipe_id, recipe_version_id, recipe_version, quantity, unit, status, created_at]
+      properties:
+        id: {type: string}
+        sales_order_id: {type: string}
+        sales_order_line_id: {type: string}
+        product_service_id: {type: string}
+        product_code: {type: string}
+        product_name: {type: string}
+        recipe_id: {type: string}
+        recipe_version_id: {type: string}
+        recipe_version: {type: integer}
+        quantity: {type: number}
+        unit: {type: string}
+        requested_due_date: {type: [string, 'null'], format: date}
+        status: {type: string, enum: [requested, converted, cancelled]}
+        created_at: {type: string, format: date-time}
+    ProductionSalesRequestResponse: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/ProductionSalesRequestRead'}}}
+    ProductionSalesRequestListResponse: {type: object, required: [data], properties: {data: {type: array, items: {$ref: '#/components/schemas/ProductionSalesRequestRead'}}}}
     OrderStageUpdateRequest:
       type: object
+      required: [status, progress_percent]
       properties:
         status:
           type: string
           enum: [pending, in_progress, completed, skipped, blocked]
+        progress_percent:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: 0 means pending, 1 through 99 means in progress, and 100 means completed or skipped.
         actual_minutes:
           type: number
+          minimum: 0
+          description: Optional future efficiency measurement; it is not required to advance or close the order.
         notes:
           type: string
     OrderStageResponse:
@@ -1144,13 +1360,15 @@ components:
             additionalProperties: true
     MachineCreateRequest:
       type: object
-      required: [code, name, machine_type, available_minutes_per_day, cost_per_minute]
+      required: [code, name, machine_type, area_ref_id, area_name, available_minutes_per_day, cost_per_minute]
       properties:
         code:
           type: string
         name:
           type: string
         area_name:
+          type: string
+        area_ref_id:
           type: string
         machine_type:
           type: string
@@ -1164,6 +1382,8 @@ components:
         name:
           type: string
         area_name:
+          type: string
+        area_ref_id:
           type: string
         machine_type:
           type: string

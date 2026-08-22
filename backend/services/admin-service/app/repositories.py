@@ -7,10 +7,19 @@ from sqlalchemy.engine import Engine
 
 from erclave_common.db import create_database_engine
 
+from .seeds.catalog import MVP_MODULE_SEEDS, get_module_seed
+
 from .schemas import (
     BackofficeTenantRead,
     BackofficeUsageDailyRead,
     BackofficeUsageSummaryRead,
+    CatalogItemCreateRequest,
+    CatalogItemRead,
+    CatalogItemUpdateRequest,
+    CodeSequenceAllocationRead,
+    CodeSequenceNextRequest,
+    CodeSequenceRead,
+    CodeSequenceUpdateRequest,
     EntitlementRead,
     PermissionRead,
     PolicyDecision,
@@ -20,6 +29,9 @@ from .schemas import (
     SessionScopeRead,
     SettingRead,
     TenantRead,
+    UnitOfMeasureCreateRequest,
+    UnitOfMeasureRead,
+    UnitOfMeasureUpdateRequest,
     UserRead,
 )
 
@@ -53,6 +65,34 @@ class AdminRepository:
     def __init__(self, engine: Engine):
         self.engine = engine
 
+    def _lock_module_entitlements(self, connection, tenant_id: str):
+        return connection.execute(
+            text("""select module_code,status,source,tenant_enabled,
+                (status='active' and tenant_enabled) as effective_active,limits
+                from admin.tenant_modules where tenant_id=:tenant_id order by module_code for update"""),
+            {"tenant_id": tenant_id},
+        ).mappings().all()
+
+    def _validate_module_transition(self, rows, module_code: str, effective_active: bool) -> None:
+        effective = {
+            row["module_code"]: row["status"] == "active" and bool(row["tenant_enabled"])
+            for row in rows
+        }
+        effective[module_code] = effective_active
+        module = get_module_seed(module_code)
+        if effective_active and module:
+            missing = sorted(code for code in module.dependencies if not effective.get(code, False))
+            if missing:
+                raise ValueError(f"module_dependencies_required:{','.join(missing)}")
+        if not effective_active:
+            dependents = sorted(
+                item.code
+                for item in MVP_MODULE_SEEDS
+                if module_code in item.dependencies and effective.get(item.code, False)
+            )
+            if dependents:
+                raise ValueError(f"module_dependency_in_use:{','.join(dependents)}")
+
     def default_organization_profile(self, commercial_name: str, legal_name: str | None = None) -> dict:
         return {
             "corporate": {
@@ -68,6 +108,253 @@ class AdminRepository:
             "legal_entities": [],
             "branches": [],
         }
+
+    @staticmethod
+    def _normalize_catalog_code(catalog_code: str, code: str) -> str:
+        return code.strip().upper() if catalog_code == "currencies" else code.strip().lower()
+
+    def list_catalog_items(self, tenant_id: str, catalog_code: str, *, include_inactive: bool = False, q: str | None = None) -> list[CatalogItemRead]:
+        filters = ["tenant_id=:tenant_id", "catalog_code=:catalog_code"]
+        params = {"tenant_id": tenant_id, "catalog_code": catalog_code, "q": f"%{(q or '').strip().lower()}%"}
+        if not include_inactive:
+            filters.append("status='active'")
+        if (q or "").strip():
+            filters.append("(lower(code) like :q or lower(name_es) like :q or lower(name_en) like :q)")
+        with self.engine.connect() as connection:
+            rows = connection.execute(text(f"select id,catalog_code,code,name_es,name_en,metadata,system_default,status from admin.catalog_items where {' and '.join(filters)} order by name_es,code"), params).mappings().all()
+        return [CatalogItemRead.model_validate(dict(row)) for row in rows]
+
+    def get_catalog_item(self, tenant_id: str, catalog_code: str, code: str, *, active_only: bool = False) -> CatalogItemRead | None:
+        normalized = self._normalize_catalog_code(catalog_code, code)
+        active = " and status='active'" if active_only else ""
+        with self.engine.connect() as connection:
+            row = connection.execute(text(f"select id,catalog_code,code,name_es,name_en,metadata,system_default,status from admin.catalog_items where tenant_id=:tenant_id and catalog_code=:catalog_code and code=:code{active}"), {"tenant_id": tenant_id, "catalog_code": catalog_code, "code": normalized}).mappings().first()
+        return CatalogItemRead.model_validate(dict(row)) if row else None
+
+    def create_catalog_item(self, tenant_id: str, catalog_code: str, payload: CatalogItemCreateRequest, idempotency_key: str, correlation_id: str, actor_email: str | None = None) -> CatalogItemRead:
+        operation = f"admin.catalog.create:{catalog_code}"
+        normalized = self._normalize_catalog_code(catalog_code, payload.code)
+        request_hash = self._command_request_hash({"catalog_code": catalog_code, "payload": payload.model_dump(mode="json") | {"code": normalized}})
+        item_id = f"cat_{uuid4().hex[:26]}"
+        with self.engine.begin() as connection:
+            replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
+            if replay is not None:
+                return CatalogItemRead.model_validate(replay)
+            row = connection.execute(text("""insert into admin.catalog_items(id,tenant_id,catalog_code,code,name_es,name_en,metadata,system_default,status)
+                values(:id,:tenant,:catalog,:code,:name_es,:name_en,cast(:metadata as jsonb),false,'active')
+                on conflict(tenant_id,catalog_code,code) do nothing
+                returning id,catalog_code,code,name_es,name_en,metadata,system_default,status"""), {"id": item_id, "tenant": tenant_id, "catalog": catalog_code, "code": normalized, "name_es": payload.name_es.strip(), "name_en": payload.name_en.strip(), "metadata": json.dumps(payload.metadata)}).mappings().first()
+            if not row:
+                raise ValueError("catalog_item_code_exists")
+            result = dict(row)
+            self._record_audit_event(connection, tenant_id=tenant_id, action=operation, resource_type="catalog_item", resource_id=item_id, before_state=None, after_state=result, idempotency_key=idempotency_key, correlation_id=correlation_id, metadata={"catalog_code": catalog_code}, actor_user_id=self._actor_user_id(connection, actor_email))
+            self._complete_idempotent_command(connection, tenant_id, operation, idempotency_key, result, 201)
+        return CatalogItemRead.model_validate(result)
+
+    def update_catalog_item(self, tenant_id: str, catalog_code: str, item_id: str, payload: CatalogItemUpdateRequest, idempotency_key: str, correlation_id: str, actor_email: str | None = None) -> CatalogItemRead | None:
+        values = payload.model_dump(exclude_none=True)
+        operation = f"admin.catalog.update:{catalog_code}:{item_id}"
+        request_hash = self._command_request_hash({"item_id": item_id, "payload": values})
+        with self.engine.begin() as connection:
+            before = connection.execute(text("select id,catalog_code,code,name_es,name_en,metadata,system_default,status from admin.catalog_items where tenant_id=:tenant and catalog_code=:catalog and id=:id for update"), {"tenant": tenant_id, "catalog": catalog_code, "id": item_id}).mappings().first()
+            if not before:
+                return None
+            replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
+            if replay is not None:
+                return CatalogItemRead.model_validate(replay)
+            if "metadata" in values:
+                values["metadata"] = json.dumps(values["metadata"])
+            if values:
+                assignments = ",".join(f"{name}=cast(:{name} as jsonb)" if name == "metadata" else f"{name}=:{name}" for name in values)
+                row = connection.execute(text(f"update admin.catalog_items set {assignments},updated_at=now() where tenant_id=:tenant and catalog_code=:catalog and id=:id returning id,catalog_code,code,name_es,name_en,metadata,system_default,status"), {"tenant": tenant_id, "catalog": catalog_code, "id": item_id, **values}).mappings().one()
+            else:
+                row = before
+            result = dict(row)
+            self._record_audit_event(connection, tenant_id=tenant_id, action="admin.catalog.update", resource_type="catalog_item", resource_id=item_id, before_state=dict(before), after_state=result, idempotency_key=idempotency_key, correlation_id=correlation_id, metadata={"catalog_code": catalog_code}, actor_user_id=self._actor_user_id(connection, actor_email))
+            self._complete_idempotent_command(connection, tenant_id, operation, idempotency_key, result, 200)
+        return CatalogItemRead.model_validate(result)
+
+    def list_code_sequences(self, tenant_id: str) -> list[CodeSequenceRead]:
+        with self.engine.connect() as connection:
+            rows = connection.execute(text("""select id,document_type,module_code,name_es,name_en,prefix,separator,next_number,padding,mode,system_default,status
+                from admin.code_sequences where tenant_id=:tenant_id order by module_code,document_type"""), {"tenant_id": tenant_id}).mappings().all()
+        return [CodeSequenceRead.model_validate(dict(row)) for row in rows]
+
+    def update_code_sequence(self, tenant_id: str, sequence_id: str, payload: CodeSequenceUpdateRequest, idempotency_key: str, correlation_id: str, actor_email: str | None = None) -> CodeSequenceRead | None:
+        values = payload.model_dump(exclude_none=True)
+        if "prefix" in values:
+            values["prefix"] = values["prefix"].strip().upper()
+        operation = f"admin.code_sequence.update:{sequence_id}"
+        request_hash = self._command_request_hash({"sequence_id": sequence_id, "payload": values})
+        projection = "id,document_type,module_code,name_es,name_en,prefix,separator,next_number,padding,mode,system_default,status"
+        with self.engine.begin() as connection:
+            before = connection.execute(text(f"select {projection} from admin.code_sequences where tenant_id=:tenant_id and id=:id for update"), {"tenant_id": tenant_id, "id": sequence_id}).mappings().first()
+            if not before:
+                return None
+            replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
+            if replay is not None:
+                return CodeSequenceRead.model_validate(replay)
+            if "next_number" in values and values["next_number"] < before["next_number"]:
+                raise ValueError("code_sequence_cannot_rewind")
+            if values:
+                assignments = ",".join(f"{key}=:{key}" for key in values)
+                row = connection.execute(text(f"update admin.code_sequences set {assignments},updated_at=now() where tenant_id=:tenant_id and id=:id returning {projection}"), {"tenant_id": tenant_id, "id": sequence_id, **values}).mappings().one()
+            else:
+                row = before
+            result = dict(row)
+            self._record_audit_event(connection, tenant_id=tenant_id, action="admin.code_sequence.update", resource_type="code_sequence", resource_id=sequence_id, before_state=dict(before), after_state=result, idempotency_key=idempotency_key, correlation_id=correlation_id, metadata={"document_type": result["document_type"]}, actor_user_id=self._actor_user_id(connection, actor_email))
+            self._complete_idempotent_command(connection, tenant_id, operation, idempotency_key, result, 200)
+        return CodeSequenceRead.model_validate(result)
+
+    def allocate_business_code(self, tenant_id: str, document_type: str, payload: CodeSequenceNextRequest, idempotency_key: str, correlation_id: str, actor_email: str | None = None) -> CodeSequenceAllocationRead | None:
+        normalized_document_type = document_type.strip().lower()
+        normalized_manual_code = payload.manual_code.strip().upper() if payload.manual_code else None
+        operation = f"admin.code_sequence.next:{normalized_document_type}"
+        request_hash = self._command_request_hash({"document_type": normalized_document_type, "manual_code": normalized_manual_code})
+        with self.engine.begin() as connection:
+            replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
+            if replay is not None:
+                return CodeSequenceAllocationRead.model_validate(replay)
+            sequence = connection.execute(text("""select id,document_type,prefix,separator,next_number,padding,mode,status
+                from admin.code_sequences where tenant_id=:tenant_id and document_type=:document_type for update"""), {"tenant_id": tenant_id, "document_type": normalized_document_type}).mappings().first()
+            if not sequence or sequence["status"] != "active":
+                raise ValueError("code_sequence_not_found")
+            if sequence["mode"] == "manual":
+                if not normalized_manual_code:
+                    raise ValueError("manual_business_code_required")
+                code = normalized_manual_code
+                sequence_number = None
+            else:
+                sequence_number = int(sequence["next_number"])
+                code = f"{sequence['prefix']}{sequence['separator']}{sequence_number:0{sequence['padding']}d}"
+                connection.execute(text("update admin.code_sequences set next_number=next_number+1,updated_at=now() where tenant_id=:tenant_id and id=:id"), {"tenant_id": tenant_id, "id": sequence["id"]})
+            result = {"document_type": normalized_document_type, "mode": sequence["mode"], "code": code, "sequence_number": sequence_number}
+            self._record_audit_event(connection, tenant_id=tenant_id, action="admin.code_sequence.allocate", resource_type="code_sequence", resource_id=sequence["id"], before_state=None, after_state=result, idempotency_key=idempotency_key, correlation_id=correlation_id, metadata={"document_type": normalized_document_type}, actor_user_id=self._actor_user_id(connection, actor_email))
+            self._complete_idempotent_command(connection, tenant_id, operation, idempotency_key, result, 200)
+        return CodeSequenceAllocationRead.model_validate(result)
+
+    def list_units_of_measure(self, tenant_id: str, *, include_inactive: bool = False, q: str | None = None) -> list[UnitOfMeasureRead]:
+        filters = ["tenant_id=:tenant_id"]
+        params = {"tenant_id": tenant_id, "q": f"%{(q or '').strip().lower()}%"}
+        if not include_inactive:
+            filters.append("status='active'")
+        if (q or "").strip():
+            filters.append("(lower(code) like :q or lower(name_es) like :q or lower(name_en) like :q or lower(symbol) like :q)")
+        with self.engine.connect() as connection:
+            rows = connection.execute(text(f"select id,code,name_es,name_en,symbol,category,decimal_places,system_default,status from admin.units_of_measure where {' and '.join(filters)} order by category,name_es,code"), params).mappings().all()
+        return [UnitOfMeasureRead.model_validate(dict(row)) for row in rows]
+
+    def get_unit_of_measure(self, tenant_id: str, code: str, *, active_only: bool = False) -> UnitOfMeasureRead | None:
+        active = " and status='active'" if active_only else ""
+        with self.engine.connect() as connection:
+            row = connection.execute(text(f"select id,code,name_es,name_en,symbol,category,decimal_places,system_default,status from admin.units_of_measure where tenant_id=:tenant_id and upper(code)=upper(:code){active}"), {"tenant_id": tenant_id, "code": code.strip()}).mappings().first()
+        return UnitOfMeasureRead.model_validate(dict(row)) if row else None
+
+    def create_unit_of_measure(
+        self,
+        tenant_id: str,
+        payload: UnitOfMeasureCreateRequest,
+        idempotency_key: str,
+        correlation_id: str,
+        actor_email: str | None = None,
+    ) -> UnitOfMeasureRead:
+        unit_id = f"uom_{uuid4().hex[:26]}"
+        values = payload.model_dump()
+        values.update({"id": unit_id, "tenant_id": tenant_id, "code": payload.code.strip().upper()})
+        operation = "admin.unit.create"
+        request_hash = self._command_request_hash({"payload": values | {"id": None, "tenant_id": None}})
+        with self.engine.begin() as connection:
+            replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
+            if replay is not None:
+                return UnitOfMeasureRead.model_validate(replay)
+            row = connection.execute(text("""insert into admin.units_of_measure(id,tenant_id,code,name_es,name_en,symbol,category,decimal_places,system_default,status) values(:id,:tenant_id,:code,:name_es,:name_en,:symbol,:category,:decimal_places,false,'active') on conflict(tenant_id,code) do nothing returning id,code,name_es,name_en,symbol,category,decimal_places,system_default,status"""), values).mappings().first()
+            if not row:
+                raise ValueError("unit_code_exists")
+            result = dict(row)
+            self._record_audit_event(
+                connection,
+                tenant_id=tenant_id,
+                action=operation,
+                resource_type="unit_of_measure",
+                resource_id=unit_id,
+                before_state=None,
+                after_state=result,
+                idempotency_key=idempotency_key,
+                correlation_id=correlation_id,
+                metadata={"code": result["code"], "system_default": False},
+                actor_user_id=self._actor_user_id(connection, actor_email),
+            )
+            self._complete_idempotent_command(connection, tenant_id, operation, idempotency_key, result, 201)
+        return UnitOfMeasureRead.model_validate(result)
+
+    def update_unit_of_measure(
+        self,
+        tenant_id: str,
+        unit_id: str,
+        payload: UnitOfMeasureUpdateRequest,
+        idempotency_key: str,
+        correlation_id: str,
+        actor_email: str | None = None,
+    ) -> UnitOfMeasureRead | None:
+        values = payload.model_dump(exclude_none=True)
+        operation = f"admin.unit.update:{unit_id}"
+        request_hash = self._command_request_hash({"unit_id": unit_id, "payload": values})
+        with self.engine.begin() as connection:
+            before = connection.execute(text("select id,code,name_es,name_en,symbol,category,decimal_places,system_default,status from admin.units_of_measure where tenant_id=:tenant_id and id=:id for update"), {"tenant_id": tenant_id, "id": unit_id}).mappings().first()
+            if not before:
+                return None
+            replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
+            if replay is not None:
+                return UnitOfMeasureRead.model_validate(replay)
+            if values:
+                assignments = ",".join(f"{key}=:{key}" for key in values)
+                values.update({"tenant_id": tenant_id, "id": unit_id})
+                row = connection.execute(text(f"update admin.units_of_measure set {assignments},updated_at=now() where tenant_id=:tenant_id and id=:id returning id,code,name_es,name_en,symbol,category,decimal_places,system_default,status"), values).mappings().first()
+            else:
+                row = before
+            result = dict(row)
+            if result != dict(before):
+                self._record_audit_event(
+                    connection,
+                    tenant_id=tenant_id,
+                    action="admin.unit.update",
+                    resource_type="unit_of_measure",
+                    resource_id=unit_id,
+                    before_state=dict(before),
+                    after_state=result,
+                    idempotency_key=idempotency_key,
+                    correlation_id=correlation_id,
+                    metadata={"code": result["code"]},
+                    actor_user_id=self._actor_user_id(connection, actor_email),
+                )
+            self._complete_idempotent_command(connection, tenant_id, operation, idempotency_key, result, 200)
+        return UnitOfMeasureRead.model_validate(result)
+
+    @staticmethod
+    def _command_request_hash(payload: dict) -> str:
+        return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")).hexdigest()
+
+    def _begin_idempotent_command(self, connection, tenant_id: str, operation: str, idempotency_key: str, request_hash: str) -> dict | None:
+        connection.execute(text("select pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"), {"lock_key": f"{tenant_id}:{operation}:{idempotency_key}"})
+        existing = connection.execute(text("""select request_hash,response_payload from admin.command_idempotency where tenant_id=:tenant_id and operation=:operation and idempotency_key=:idempotency_key"""), {"tenant_id": tenant_id, "operation": operation, "idempotency_key": idempotency_key}).mappings().first()
+        if existing:
+            if existing["request_hash"] != request_hash:
+                raise IdempotencyConflictError("idempotency_key_reused")
+            if existing["response_payload"] is not None:
+                return dict(existing["response_payload"])
+            raise IdempotencyConflictError("command_in_progress")
+        connection.execute(text("""insert into admin.command_idempotency(id,tenant_id,operation,idempotency_key,request_hash) values(:id,:tenant_id,:operation,:idempotency_key,:request_hash)"""), {"id": f"cmd_{uuid4().hex[:26]}", "tenant_id": tenant_id, "operation": operation, "idempotency_key": idempotency_key, "request_hash": request_hash})
+        return None
+
+    @staticmethod
+    def _complete_idempotent_command(connection, tenant_id: str, operation: str, idempotency_key: str, response_payload: dict, status_code: int) -> None:
+        connection.execute(text("""update admin.command_idempotency set response_payload=cast(:response_payload as jsonb),status_code=:status_code,completed_at=now() where tenant_id=:tenant_id and operation=:operation and idempotency_key=:idempotency_key"""), {"response_payload": json.dumps(response_payload, default=str), "status_code": status_code, "tenant_id": tenant_id, "operation": operation, "idempotency_key": idempotency_key})
+
+    @staticmethod
+    def _actor_user_id(connection, actor_email: str | None) -> str | None:
+        if not actor_email:
+            return None
+        return connection.execute(text("select id from admin.users where email=lower(:email)"), {"email": actor_email}).scalar_one_or_none()
 
     def get_tenant(self, tenant_id: str) -> TenantRead | None:
         with self.engine.connect() as connection:
@@ -122,6 +409,23 @@ class AdminRepository:
                             array_remove(array_agg(distinct tenant_modules.module_code) filter (where tenant_modules.status = 'active'), null),
                             array[]::varchar[]
                         ) as modules,
+                        coalesce(
+                            (
+                                select jsonb_agg(
+                                    jsonb_build_object(
+                                        'module_code', entitlement.module_code,
+                                        'status', entitlement.status,
+                                        'source', entitlement.source,
+                                        'tenant_enabled', entitlement.tenant_enabled,
+                                        'effective_active', entitlement.status = 'active' and entitlement.tenant_enabled,
+                                        'limits', entitlement.limits
+                                    ) order by entitlement.module_code
+                                )
+                                from admin.tenant_modules entitlement
+                                where entitlement.tenant_id = tenants.id
+                            ),
+                            '[]'::jsonb
+                        ) as entitlements,
                         coalesce(jsonb_array_length(settings.value -> 'legal_entities'), 0) as legal_entities_count,
                         coalesce(jsonb_array_length(settings.value -> 'branches'), 0) as branches_count
                     from admin.tenants tenants
@@ -232,7 +536,7 @@ class AdminRepository:
         new_status: str,
         idempotency_key: str,
         correlation_id: str,
-    ) -> BackofficeTenantRead | None:
+    ) -> TenantRead | None:
         with self.engine.begin() as connection:
             before = connection.execute(
                 text(
@@ -287,6 +591,128 @@ class AdminRepository:
 
         tenants = self.list_backoffice_tenants(search=tenant_id, limit=1)
         return tenants[0] if tenants else BackofficeTenantRead.model_validate({**dict(row), "modules": []})
+
+    def update_backoffice_tenant(
+        self,
+        tenant_id: str,
+        changes: dict,
+        idempotency_key: str,
+        correlation_id: str,
+        actor_email: str | None = None,
+    ) -> BackofficeTenantRead | None:
+        operation = "backoffice.tenant.update"
+        request_hash = self._command_request_hash({"tenant_id": tenant_id, "changes": changes})
+        with self.engine.begin() as connection:
+            before = connection.execute(
+                text("""select id,slug,legal_name,commercial_name,status,plan_id,timezone,locale from admin.tenants where id=:tenant_id for update"""),
+                {"tenant_id": tenant_id},
+            ).mappings().first()
+            if before is None:
+                return None
+            replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
+            if replay is not None:
+                return TenantRead.model_validate(replay)
+            if changes:
+                assignments = ",".join(f"{field}=:{field}" for field in changes)
+                params = {"tenant_id": tenant_id, **changes}
+                row = connection.execute(
+                    text(f"""update admin.tenants set {assignments},updated_at=now() where id=:tenant_id returning id,slug,legal_name,commercial_name,status,plan_id,timezone,locale"""),
+                    params,
+                ).mappings().one()
+            else:
+                row = before
+            result = dict(row)
+            if result != dict(before):
+                self._record_audit_event(
+                    connection,
+                    tenant_id=tenant_id,
+                    action=operation,
+                    resource_type="tenant",
+                    resource_id=tenant_id,
+                    before_state=dict(before),
+                    after_state=result,
+                    idempotency_key=idempotency_key,
+                    correlation_id=correlation_id,
+                    metadata={"fields": sorted(changes)},
+                    actor_user_id=self._actor_user_id(connection, actor_email),
+                )
+            self._complete_idempotent_command(connection, tenant_id, operation, idempotency_key, result, 200)
+        return TenantRead.model_validate(result)
+
+    def set_backoffice_entitlement(
+        self,
+        tenant_id: str,
+        module_code: str,
+        status: str,
+        limits: dict,
+        source: str,
+        idempotency_key: str,
+        correlation_id: str,
+        actor_email: str | None = None,
+    ) -> EntitlementRead | None:
+        operation = f"backoffice.tenant.entitlement.update:{module_code}"
+        request_hash = self._command_request_hash(
+            {"tenant_id": tenant_id, "module_code": module_code, "status": status, "limits": limits, "source": source}
+        )
+        with self.engine.begin() as connection:
+            if connection.execute(text("select 1 from admin.tenants where id=:tenant_id"), {"tenant_id": tenant_id}).scalar_one_or_none() is None:
+                return None
+            replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
+            if replay is not None:
+                return EntitlementRead.model_validate(replay)
+            entitlement_rows = self._lock_module_entitlements(connection, tenant_id)
+            before = next((row for row in entitlement_rows if row["module_code"] == module_code), None)
+            tenant_enabled = bool(before["tenant_enabled"]) if before is not None else True
+            self._validate_module_transition(entitlement_rows, module_code, status == "active" and tenant_enabled)
+            row = connection.execute(
+                text(
+                    """
+                    insert into admin.tenant_modules(id,tenant_id,module_code,status,source,tenant_enabled,limits)
+                    values(:id,:tenant_id,:module_code,:status,:source,true,cast(:limits as jsonb))
+                    on conflict(tenant_id,module_code) do update set
+                        status=excluded.status,
+                        source=excluded.source,
+                        limits=excluded.limits,
+                        updated_at=now()
+                    returning module_code,status,source,tenant_enabled,(status='active' and tenant_enabled) as effective_active,limits
+                    """
+                ),
+                {"id": f"tmo_{uuid4().hex[:26]}", "tenant_id": tenant_id, "module_code": module_code, "status": status, "source": source, "limits": json.dumps(limits)},
+            ).mappings().one()
+            result = dict(row)
+            if status == "active":
+                connection.execute(
+                    text(
+                        """
+                        insert into admin.role_permissions(id,tenant_id,role_id,permission_id,scope)
+                        select 'rpe_'||substr(md5(roles.tenant_id||':'||roles.id||':'||permissions.id),1,26),roles.tenant_id,roles.id,permissions.id,'{}'::jsonb
+                        from admin.roles roles
+                        join admin.permissions permissions on permissions.module_code=:module_code
+                            and permissions.status='active'
+                            and permissions.classification='tenant'
+                            and permissions.assignable_to_tenant_role=true
+                        where roles.tenant_id=:tenant_id and roles.code='owner' and roles.system_role=true and roles.status='active'
+                        on conflict(tenant_id,role_id,permission_id) do nothing
+                        """
+                    ),
+                    {"tenant_id": tenant_id, "module_code": module_code},
+                )
+            if before is None or result != dict(before):
+                self._record_audit_event(
+                    connection,
+                    tenant_id=tenant_id,
+                    action=operation,
+                    resource_type="tenant_module",
+                    resource_id=module_code,
+                    before_state=dict(before) if before else None,
+                    after_state=result,
+                    idempotency_key=idempotency_key,
+                    correlation_id=correlation_id,
+                    metadata={"source": source},
+                    actor_user_id=self._actor_user_id(connection, actor_email),
+                )
+            self._complete_idempotent_command(connection, tenant_id, operation, idempotency_key, result, 200)
+        return EntitlementRead.model_validate(result)
 
     def delete_backoffice_tenant(
         self,
@@ -637,36 +1063,6 @@ class AdminRepository:
             ).mappings().one()
             owner_role_id = role_row["id"]
 
-            connection.execute(
-                text(
-                    """
-                    insert into admin.role_permissions (id, tenant_id, role_id, permission_id, scope)
-                    select
-                        'rpe_' || substr(md5(:tenant_id || ':' || :role_id || ':' || permissions.id), 1, 26),
-                        :tenant_id,
-                        :role_id,
-                        permissions.id,
-                        '{}'::jsonb
-                    from admin.permissions permissions
-                    where permissions.status = 'active'
-                        and permissions.classification = 'tenant'
-                        and permissions.assignable_to_tenant_role = true
-                        and (
-                            permissions.module_code = 'admin'
-                            or exists (
-                                select 1
-                                from admin.tenant_modules tenant_modules
-                                where tenant_modules.tenant_id = :tenant_id
-                                    and tenant_modules.module_code = permissions.module_code
-                                    and tenant_modules.status = 'active'
-                            )
-                        )
-                    on conflict (tenant_id, role_id, permission_id) do nothing
-                    """
-                ),
-                {"tenant_id": tenant_id, "role_id": owner_role_id},
-            )
-
             membership_row = connection.execute(
                 text(
                     """
@@ -727,7 +1123,7 @@ class AdminRepository:
                             limits = excluded.limits,
                             starts_at = coalesce(admin.tenant_modules.starts_at, excluded.starts_at),
                             updated_at = now()
-                        returning module_code, status, limits
+                        returning module_code,status,source,tenant_enabled,(status='active' and tenant_enabled) as effective_active,limits
                         """
                     ),
                     {
@@ -740,6 +1136,36 @@ class AdminRepository:
                     },
                 ).mappings().one()
                 entitlement_rows.append(dict(module_row))
+
+            connection.execute(
+                text(
+                    """
+                    insert into admin.role_permissions (id, tenant_id, role_id, permission_id, scope)
+                    select
+                        'rpe_' || substr(md5(:tenant_id || ':' || :role_id || ':' || permissions.id), 1, 26),
+                        :tenant_id,
+                        :role_id,
+                        permissions.id,
+                        '{}'::jsonb
+                    from admin.permissions permissions
+                    where permissions.status = 'active'
+                        and permissions.classification = 'tenant'
+                        and permissions.assignable_to_tenant_role = true
+                        and (
+                            permissions.module_code = 'admin'
+                            or exists (
+                                select 1 from admin.tenant_modules tenant_modules
+                                where tenant_modules.tenant_id = :tenant_id
+                                    and tenant_modules.module_code = permissions.module_code
+                                    and tenant_modules.status = 'active'
+                                    and tenant_modules.tenant_enabled = true
+                            )
+                        )
+                    on conflict (tenant_id, role_id, permission_id) do nothing
+                    """
+                ),
+                {"tenant_id": tenant_id, "role_id": owner_role_id},
+            )
 
             owner_read = self._get_user_for_tenant(connection, tenant_id, owner_user_id)
             self._record_audit_event(
@@ -774,7 +1200,7 @@ class AdminRepository:
             rows = connection.execute(
                 text(
                     """
-                    select module_code, status, limits as limits
+                    select module_code,status,source,tenant_enabled,(status='active' and tenant_enabled) as effective_active,limits
                     from admin.tenant_modules
                     where tenant_id = :tenant_id
                     order by module_code
@@ -1056,7 +1482,7 @@ class AdminRepository:
             entitlements = connection.execute(
                 text(
                     """
-                    select module_code, status, limits as limits
+                    select module_code,status,source,tenant_enabled,(status='active' and tenant_enabled) as effective_active,limits
                     from admin.tenant_modules
                     where tenant_id = :tenant_id
                     order by module_code
@@ -1096,6 +1522,7 @@ class AdminRepository:
                                 where permitted_modules.tenant_id = :tenant_id
                                     and permitted_modules.module_code = permissions.module_code
                                     and permitted_modules.status = 'active'
+                                    and permitted_modules.tenant_enabled = true
                             )
                         )
                     order by permissions.code
@@ -1116,7 +1543,7 @@ class AdminRepository:
             entitlements=entitlement_reads,
             entitlement_limits={item.module_code: item.limits for item in entitlement_reads},
             permissions=list(permissions),
-            active_modules=[item.module_code for item in entitlement_reads if item.status == "active"],
+            active_modules=[item.module_code for item in entitlement_reads if item.effective_active],
             scope=scope,
         )
 
@@ -1235,65 +1662,61 @@ class AdminRepository:
             )
         return tenants
 
-    def upsert_entitlement(
+    def update_entitlement_preference(
         self,
         tenant_id: str,
         module_code: str,
-        status: str,
-        limits: dict,
-        source: str,
+        enabled: bool,
         idempotency_key: str,
         correlation_id: str,
+        actor_email: str | None = None,
     ) -> EntitlementRead | None:
+        operation = f"admin.entitlement.preference.update:{module_code}"
+        request_hash = self._command_request_hash({"tenant_id": tenant_id, "module_code": module_code, "enabled": enabled})
         with self.engine.begin() as connection:
-            before = connection.execute(
-                text(
-                    """
-                    select module_code, status, limits
-                    from admin.tenant_modules
-                    where tenant_id = :tenant_id and module_code = :module_code
-                    """
-                ),
-                {"tenant_id": tenant_id, "module_code": module_code},
-            ).mappings().first()
+            entitlement_rows = self._lock_module_entitlements(connection, tenant_id)
+            before = next((row for row in entitlement_rows if row["module_code"] == module_code), None)
+            if before is None:
+                return None
+            replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
+            if replay is not None:
+                return EntitlementRead.model_validate(replay)
+            if before["status"] != "active":
+                raise ValueError("module_not_contracted")
+            self._validate_module_transition(entitlement_rows, module_code, enabled)
             row = connection.execute(
                 text(
                     """
-                    insert into admin.tenant_modules (id, tenant_id, module_code, status, source, limits)
-                    values (:id, :tenant_id, :module_code, :status, :source, cast(:limits as jsonb))
-                    on conflict (tenant_id, module_code)
-                    do update set
-                        status = excluded.status,
-                        source = excluded.source,
-                        limits = excluded.limits,
-                        updated_at = now()
-                    returning module_code, status, limits
+                    update admin.tenant_modules
+                    set tenant_enabled=:enabled,updated_at=now()
+                    where tenant_id=:tenant_id and module_code=:module_code
+                    returning module_code,status,source,tenant_enabled,(status='active' and tenant_enabled) as effective_active,limits
                     """
                 ),
                 {
-                    "id": f"tmo_{uuid4().hex[:26]}",
                     "tenant_id": tenant_id,
                     "module_code": module_code,
-                    "status": status,
-                    "source": source,
-                    "limits": json.dumps(limits),
+                    "enabled": enabled,
                 },
-            ).mappings().first()
-            if row:
+            ).mappings().one()
+            result = dict(row)
+            if result != dict(before):
                 self._record_audit_event(
                     connection,
                     tenant_id=tenant_id,
-                    action="admin.entitlement.upsert",
+                    action=operation,
                     resource_type="tenant_module",
                     resource_id=module_code,
-                    before_state=dict(before) if before else None,
-                    after_state=dict(row),
+                    before_state=dict(before),
+                    after_state=result,
                     idempotency_key=idempotency_key,
                     correlation_id=correlation_id,
-                    metadata={"source": source},
+                    metadata={"tenant_enabled": enabled},
+                    actor_user_id=self._actor_user_id(connection, actor_email),
                 )
+            self._complete_idempotent_command(connection, tenant_id, operation, idempotency_key, result, 200)
 
-        return EntitlementRead.model_validate(dict(row)) if row else None
+        return EntitlementRead.model_validate(result)
 
     def list_users(self, tenant_id: str, limit: int = 50) -> list[UserRead]:
         with self.engine.connect() as connection:
@@ -1942,7 +2365,7 @@ class AdminRepository:
                         tenant_modules.status as entitlement_status,
                         case
                             when permissions.module_code = 'admin' then true
-                            when tenant_modules.status = 'active' then true
+                            when tenant_modules.status = 'active' and tenant_modules.tenant_enabled = true then true
                             else false
                         end as available
                     from admin.permissions permissions
@@ -2232,6 +2655,7 @@ class AdminRepository:
                             where tenant_id = :tenant_id
                                 and module_code = any(:module_codes)
                                 and status = 'active'
+                                and tenant_enabled = true
                             """
                         ),
                         {"tenant_id": tenant_id, "module_codes": list(added_modules)},
@@ -2413,14 +2837,14 @@ class AdminRepository:
             module_status = connection.execute(
                 text(
                     """
-                    select status
+                    select status,tenant_enabled
                     from admin.tenant_modules
                     where tenant_id = :tenant_id and module_code = :module
                     """
                 ),
                 {"tenant_id": tenant_id, "module": module},
-            ).scalar_one_or_none()
-            if module_status != "active":
+            ).mappings().first()
+            if module_status is None or module_status["status"] != "active" or not module_status["tenant_enabled"]:
                 return PolicyDecision(allowed=False, reason="module_not_active")
 
             rows = connection.execute(

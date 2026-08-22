@@ -38,13 +38,14 @@ RESOURCE_LABELS = {
     "business_unit": ("unidades de negocio", "business units"), "entitlement": ("modulos del tenant", "tenant modules"),
     "role": ("roles", "roles"), "role.permissions": ("permisos de roles", "role permissions"),
     "setting": ("configuracion", "settings"), "tenant": ("datos del tenant", "tenant data"), "user": ("usuarios", "users"),
-    "area": ("areas", "areas"), "position": ("puestos", "positions"), "machine": ("maquinaria", "machines"),
+    "area": ("areas", "areas"), "position": ("puestos", "positions"), "worker": ("trabajadores", "workers"), "machine": ("maquinaria", "machines"),
     "order": ("ordenes", "orders"), "order.status": ("estado de ordenes", "order status"), "order_stage": ("etapas de orden", "order stages"),
     "product_service": ("productos y servicios", "products and services"), "product_service.status": ("estado de productos y servicios", "product and service status"),
     "recipe": ("recetas", "recipes"), "availability": ("disponibilidad", "availability"), "balance": ("inventario", "inventory balances"),
     "item": ("articulos", "items"), "kardex": ("kardex", "kardex"), "location": ("ubicaciones", "locations"),
     "movement": ("movimientos", "movements"), "reservation": ("reservas", "reservations"), "warehouse": ("almacenes", "warehouses"),
     "customer": ("clientes", "customers"), "delivery": ("entregas", "deliveries"), "quote": ("cotizaciones", "quotes"),
+    "catalog": ("catalogos", "catalogs"),
     "return": ("devoluciones", "returns"), "subscription": ("suscripciones", "subscriptions"),
     "api_client": ("clientes API", "API clients"), "scope": ("alcances de integracion", "integration scopes"), "usage": ("uso de integraciones", "integration usage"),
 }
@@ -55,9 +56,10 @@ ACTION_LABELS = {
     "obsolete": ("Marcar obsoletas", "Mark obsolete"), "validate": ("Validar", "Validate"), "reverse": ("Revertir", "Reverse"),
     "release": ("Liberar", "Release"), "fulfill": ("Surtir", "Fulfill"), "expire": ("Vencer", "Expire"),
     "cancel": ("Cancelar", "Cancel"), "suspend": ("Suspender", "Suspend"), "reactivate": ("Reactivar", "Reactivate"),
+    "confirm": ("Confirmar", "Confirm"),
     "rotate_secret": ("Rotar secreto de", "Rotate secret for"), "check": ("Consultar", "Check"),
 }
-ACTION_ORDER = {"read": 10, "list": 10, "create": 20, "update": 30, "submit": 40, "approve": 50, "validate": 55, "manage": 60, "disable": 70, "delete": 90}
+ACTION_ORDER = {"read": 10, "list": 10, "create": 20, "update": 30, "submit": 40, "approve": 50, "confirm": 52, "validate": 55, "manage": 60, "disable": 70, "delete": 90}
 
 
 def parse_permission_codes(raw_permissions: str) -> tuple[str, ...]:

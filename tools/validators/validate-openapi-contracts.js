@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const { fail, fromRoot, ok } = require("./shared");
 
 const requiredContracts = [
@@ -57,5 +58,17 @@ for (const fileName of requiredContracts) {
 if (errors.length) {
   fail("OpenAPI contracts are incomplete", errors);
 } else {
-  ok("OpenAPI MVP contracts exist and include required metadata.");
+  const python = process.env.PYTHON || (process.platform === "win32" ? "python" : "python3");
+  const semantic = spawnSync(python, [fromRoot("tools", "validators", "validate_openapi_runtime.py")], {
+    cwd: fromRoot(),
+    encoding: "utf8",
+    shell: false
+  });
+  if (semantic.stdout) process.stdout.write(semantic.stdout);
+  if (semantic.stderr) process.stderr.write(semantic.stderr);
+  if (semantic.error || semantic.status !== 0) {
+    fail("OpenAPI semantic validation failed", [semantic.error?.message || `validator exited with ${semantic.status}`]);
+  } else {
+    ok("OpenAPI MVP contracts exist and include required metadata.");
+  }
 }

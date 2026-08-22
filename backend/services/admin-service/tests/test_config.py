@@ -12,6 +12,9 @@ QA_SETTINGS = {
     "auth_mode": "firebase",
     "firebase_project_id": "erclave",
     "database_url": "postgresql+psycopg://user:password@db/erclave_qa",
+    "hr_service_url": "https://hr-service-qa.example.run.app",
+    "inventory_service_url": "https://inventory-service-qa.example.run.app",
+    "production_service_url": "https://production-service-qa.example.run.app",
 }
 
 
@@ -72,6 +75,8 @@ def test_other_services_do_not_require_admin_frontend_url():
     [
         ("api_public_base_url", "http://localhost:8000", "ERCLAVE_API_PUBLIC_BASE_URL"),
         ("admin_service_url", "http://localhost:8000", "ERCLAVE_ADMIN_SERVICE_URL"),
+        ("hr_service_url", "http://localhost:8006", "ERCLAVE_HR_SERVICE_URL"),
+        ("inventory_service_url", "http://localhost:8004", "ERCLAVE_INVENTORY_SERVICE_URL"),
         ("cors_origins", "https://erclave.web.app,http://localhost:4173", "ERCLAVE_CORS_ORIGINS"),
     ],
 )
@@ -107,3 +112,22 @@ def test_inventory_uses_its_service_database_url_for_readiness():
     })
 
     assert settings.effective_database_url == settings.inventory_database_url
+
+
+@pytest.mark.parametrize(
+    ("service_name", "field", "message"),
+    [
+        ("inventory-service", "production_service_url", "ERCLAVE_PRODUCTION_SERVICE_URL"),
+        ("sales-service", "inventory_service_url", "ERCLAVE_INVENTORY_SERVICE_URL"),
+    ],
+)
+def test_authority_consumers_reject_local_dependency_urls(service_name, field, message):
+    values = {
+        **QA_SETTINGS,
+        "service_name": service_name,
+        "api_public_base_url": f"https://{service_name}-qa.example.run.app",
+        "admin_service_url": "https://admin-service-qa.example.run.app",
+        field: "http://localhost:8000",
+    }
+    with pytest.raises(ValidationError, match=message):
+        Settings(**values)

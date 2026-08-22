@@ -188,3 +188,13 @@ La reportería deberá permitir:
 - Definir si habrá dashboards embebidos.
 - Definir permisos por reporte.
 - Definir modelo analítico futuro.
+
+---
+
+## 11. Frontera con reportes estándar
+
+Estado: **inactivo y planeado**.
+
+Cada módulo operativo presenta en su propia raíz los catálogos y reportes estándar que le pertenecen, sin mutaciones. Este módulo no absorbe esas consultas cotidianas. Se reserva para cruces entre módulos, tableros configurables, indicadores avanzados, vistas guardadas, distribución y reportes a la medida.
+
+La matriz transversal y la regla para módulos futuros se mantienen en `docs/arquitectura/reportes_estandar_por_modulo.md`. Ningún dashboard, exportación o consulta especializada de este documento debe presentarse como implementada mientras el módulo permanezca inactivo.

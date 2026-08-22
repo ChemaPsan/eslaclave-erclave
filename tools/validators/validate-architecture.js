@@ -57,6 +57,20 @@ for (const relativePath of microfrontendFiles) {
   const parts = relativePath.split(path.sep);
   const owner = parts[2];
   const source = readText(relativePath);
+  const statusMatch = source.match(/implementationStatus:\s*["'](implemented|planned)["']/);
+  if (!statusMatch) {
+    errors.push(`${relativePath} must declare implementationStatus as implemented or planned.`);
+  }
+  const permissionArray = source.match(/permissions:\s*\[([^\]]*)\]/s)?.[1] || "";
+  const permissionCodes = [...permissionArray.matchAll(/["']([^"']+)["']/g)].map((match) => match[1]);
+  for (const code of permissionCodes) {
+    if (code.includes(":") || !/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/.test(code)) {
+      errors.push(`${relativePath} contains obsolete or invalid permission code ${code}.`);
+    }
+  }
+  if (statusMatch?.[1] === "implemented" && permissionCodes.length === 0) {
+    errors.push(`${relativePath} is implemented but declares no permissions.`);
+  }
   const importMatches = [...source.matchAll(/from\s+["']([^"']+)["']/g)];
 
   for (const match of importMatches) {

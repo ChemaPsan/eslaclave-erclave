@@ -44,6 +44,17 @@ const requiredPaths = [
   "backend/services/hr-service/app/schemas.py",
   "backend/services/hr-service/tests/test_hr_api.py",
   "backend/services/hr_service_adapter.py",
+  "backend/services/sales-service/app/main.py",
+  "backend/services/sales-service/app/api.py",
+  "backend/services/sales-service/app/authorization.py",
+  "backend/services/sales-service/app/authorities.py",
+  "backend/services/sales-service/app/repositories.py",
+  "backend/services/sales-service/app/schemas.py",
+  "backend/services/sales-service/tests/test_sales_api.py",
+  "backend/services/sales_service_adapter.py",
+  "backend/alembic/versions/20260818_0018_sales_customers_quotes.py",
+  "backend/alembic/versions/20260818_0019_sales_orders_deliveries_catalogs.py",
+  "backend/alembic/versions/20260818_0020_sales_chg203_hardening.py",
   "backend/alembic/versions/20260730_0010_hr_service_initial.py"
 ];
 
@@ -94,6 +105,9 @@ const requiredFragments = [
   ["backend/services/hr-service/app/authorization.py", "require_hr_access"],
   ["backend/services/hr-service/app/repositories.py", "class HrRepository"],
   ["backend/services/hr_service_adapter.py", "hr-service"]
+  ,["backend/services/sales-service/app/authorization.py", "require_sales_access"]
+  ,["backend/services/sales-service/app/repositories.py", "class SalesRepository"]
+  ,["backend/services/sales_service_adapter.py", "sales-service"]
 ];
 
 const errors = [];

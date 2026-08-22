@@ -4,6 +4,10 @@
 
 Este documento concentra los catalogos base que ERClave debera administrar desde el modulo de Administracion y Configuracion.
 
+En Local ya estan implementados `units_of_measure`, `currencies` y `payment_terms`. MXN/USD/EUR y contado/credito a 7/15/30/45/60 dias son defaults iniciales, pero cada tenant puede agregar valores o inactivarlos. Ventas valida codigos activos y no acepta texto libre. Los estados de Cotizacion, Pedido, Entrega y Orden de Produccion son maquinas de estado protegidas, no catalogos editables.
+
+`document.template` es configuracion tenant-safe y no un catalogo: centraliza logo, colores, pie y numeracion para los PDF de Ventas, Produccion y generadores futuros.
+
 El objetivo es no perder contexto de los valores que hoy pueden existir como opciones fijas del MVP, pero que mas adelante deberan poder configurarse por tenant, centro de negocio, modulo, rol o pais.
 
 ---
@@ -62,6 +66,14 @@ Estos catalogos son candidatos a implementarse primero porque impactan varios mo
 | Estados operativos compartidos | Administracion | Borrador, en revision, aprobado, cancelado, cerrado. | Media |
 | Motivos de cancelacion | Administracion | Trazabilidad de cancelaciones en varios modulos. | Media |
 | Idiomas | Administracion | Soporte Espanol/Ingles y futuros idiomas. | Media |
+
+### Unidades de medida implementadas
+
+Administracion es la fuente de verdad tenant-safe de unidades de medida. Cada tenant recibe 50 unidades iniciales basadas en codigos de tres caracteres de UN/CEFACT Recommendation 20 y puede agregar unidades propias sin alterar los codigos predeterminados.
+
+Campos operativos: `code`, `name_es`, `name_en`, `symbol`, `category`, `decimal_places`, `system_default` y `status`. Produccion e Inventarios persisten el codigo estable, no el texto visible. Las altas y actualizaciones rechazan codigos inexistentes o inactivos; un movimiento de inventario debe usar la unidad base del articulo hasta que exista un catalogo explicito de conversiones.
+
+Permisos: `admin.unit.read`, `admin.unit.create` y `admin.unit.update`. La lectura se concede a roles operativos existentes porque el catalogo es dependencia transversal; los roles nuevos deben recibirla de forma explicita si consumen Produccion o Inventarios. Crear o inactivar queda en el rol owner por defecto. Las mutaciones exigen `Idempotency-Key`, aceptan `X-Correlation-Id` y registran antes/despues en auditoria.
 
 ---
 
@@ -214,11 +226,11 @@ Una opcion fija debera moverse a catalogo administrable cuando cumpla uno o mas 
 
 ## 9. Backlog de implementacion
 
-1. Crear pantalla `Administracion > Catalogos base`.
-2. Definir servicio o repositorio comun de catalogos.
-3. Migrar opciones fijas del frontend a lectura desde catalogos.
-4. Agregar soporte de traduccion por valor de catalogo.
-5. Agregar bitacora de cambios por catalogo.
+1. Repetir para cada catalogo pendiente el patron de tarjeta-resumen y vista dedicada ya implementado en Unidades de medida.
+2. Mantener `admin-service` como propietario de catalogos transversales y definir ownership explicito para catalogos propios de modulo.
+3. Migrar opciones fijas restantes del frontend a lectura desde catalogos.
+4. Agregar soporte ES/EN a cada nuevo valor visible.
+5. Exigir idempotencia, correlacion y bitacora de cambios en cada catalogo mutable.
 6. Agregar importacion/exportacion controlada para cargas iniciales.
 7. Agregar validadores para detectar opciones fijas nuevas que deberian declararse en este documento.
 

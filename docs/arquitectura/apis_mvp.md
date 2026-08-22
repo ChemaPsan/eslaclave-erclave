@@ -239,6 +239,9 @@ Administra tenants, usuarios, roles, permisos, modulos activos, unidades de nego
 | `POST` | `/v1/business-units` | `admin.business_unit.create` | Si | Crear unidad de negocio. |
 | `GET` | `/v1/settings` | `admin.setting.read` | No | Consultar parametros. |
 | `PUT` | `/v1/settings/{key}` | `admin.setting.update` | Si | Actualizar parametro. |
+| `GET` | `/v1/catalogs/code-sequences` | `admin.setting.read` | No | Consultar configuraciones de folios del tenant. |
+| `PATCH` | `/v1/catalogs/code-sequences/{sequence_id}` | `admin.setting.update` | Si | Editar prefijo, separador, siguiente numero, longitud, modo o estatus. |
+| `POST` | `/v1/catalogs/code-sequences/{document_type}/next` | permiso de alta del documento consumidor | Si | Reservar el siguiente codigo administrado o validar la captura manual. |
 
 El reemplazo de permisos acepta asignaciones `{permission_id, scope}` y `expected_revision`. El backend bloquea la fila del rol, compara revision, valida clasificacion/asignabilidad y aplica solo agregados, retirados o scopes cambiados. Una revision obsoleta devuelve `409 permission_set_conflict`; reusar `Idempotency-Key` con otro payload devuelve `409 idempotency_key_reused`. El payload legado `permission_ids + scope` es transitorio y no debe usarse por el editor nuevo.
 
@@ -300,9 +303,10 @@ Administra productos/servicios, recetas, versiones, recursos productivos, maquin
 | `POST` | `/v1/production/resource-validations` | `production.order.validate` | Si | Validar recursos para una cantidad. |
 | `GET` | `/v1/production/orders` | `production.order.read` | No | Buscar ordenes. |
 | `POST` | `/v1/production/orders` | `production.order.create` | Si | Crear orden manual. |
-| `POST` | `/v1/production/order-requests` | interno o `sales.order.fulfill` | Si | Crear orden solicitada por ventas. |
+| `GET/POST` | `/v1/production/order-requests` | `production.order.read` / `sales.order.fulfill` | POST | Registrar/listar solicitud de produccion originada por Ventas; no libera una orden automaticamente. |
 | `GET` | `/v1/production/orders/{id}` | `production.order.read` | No | Consultar orden. |
 | `PATCH` | `/v1/production/orders/{id}/status` | `production.order.status.update` | Si | Cambiar estatus de orden. |
+| `PATCH` | `/v1/production/orders/{id}/resources/{resource_id}` | `production.order.update` | Si | Registrar cantidad real de mano de obra o maquinaria. |
 | `PATCH` | `/v1/production/order-stages/{stage_id}` | `production.order_stage.update` | Si | Actualizar etapa. |
 | `GET` | `/v1/production/machines` | `production.machine.read` | No | Listar maquinaria. |
 | `POST` | `/v1/production/machines` | `production.machine.create` | Si | Crear maquinaria. |
@@ -348,9 +352,11 @@ Administra productos/servicios, recetas, versiones, recursos productivos, maquin
 
 - Crear receta requiere producto/servicio existente y del mismo tenant.
 - Aprobar receta requiere version con recursos y etapas validas.
+- Las etapas activas deben tener orden consecutivo y pesos positivos que sumen exactamente 100.
 - Editar receta vigente debe crear nueva version o registrar motivo.
 - Crear orden requiere receta aprobada.
 - Crear orden debe guardar `recipe_snapshot`.
+- Crear orden copia peso y area de cada etapa y expone progreso general ponderado.
 - Cambiar estatus debe validar transicion.
 - Las ordenes en curso no cambian si cambia la receta vigente.
 
@@ -381,6 +387,7 @@ Es dueno de areas y puestos. Requiere tenant activo, membresia vigente, entitlem
 | `GET` | `/v1/hr/positions` | `hr.position.read` | No | Listar puestos; admite `area_id` y `production_only`. |
 | `POST` | `/v1/hr/positions` | `hr.position.create` | Si | Crear puesto dentro de un area activa existente. |
 | `PATCH` | `/v1/hr/positions/{id}` | `hr.position.update` | Si | Editar, mover o inactivar puesto. |
+| `GET` | `/v1/hr/production-capacity` | `production.order.validate` o `production.order.create` | No | Calcular capacidad diaria desde trabajadores activos. |
 
 El contrato canonico es `contracts/api/hr-service.openapi.yaml`. Todas las consultas se filtran por tenant y el FK compuesto impide referencias cruzadas.
 
@@ -404,16 +411,19 @@ Administra almacenes, articulos, ubicaciones, movimientos, existencias, kardex, 
 | `POST` | `/v1/inventory/items` | `inventory.item.create` | Si | Crear articulo. |
 | `GET` | `/v1/inventory/items/{id}` | `inventory.item.read` | No | Consultar articulo. |
 | `PATCH` | `/v1/inventory/items/{id}` | `inventory.item.update` | No | Editar articulo. |
+| `POST` | `/v1/inventory/items/{id}/unit-conversion` | `inventory.item.read` | No | Convertir cantidad y costo unitario entre UOM activas compatibles respecto de la unidad base. |
 | `GET` | `/v1/inventory/balances` | `inventory.balance.read` | No | Consultar existencias calculadas. |
 | `GET` | `/v1/inventory/kardex` | `inventory.kardex.read` | No | Consultar kardex. |
 | `GET` | `/v1/inventory/movements` | `inventory.movement.read` | No | Buscar movimientos. |
 | `POST` | `/v1/inventory/movements` | `inventory.movement.create` | Si | Registrar movimiento manual. |
 | `POST` | `/v1/inventory/movements/{id}/reverse` | `inventory.movement.reverse` | Si | Reversar movimiento. |
-| `POST` | `/v1/inventory/availability-checks` | interno o `inventory.availability.check` | Si | Consultar disponibilidad para Produccion/Ventas. |
+| `POST` | `/v1/inventory/availability-checks` | `production.order.validate` o `production.order.create` | Si | Consultar existencia menos reservas y costo promedio. |
 | `POST` | `/v1/inventory/consumption-requests` | interno `production` | Si | Registrar consumo solicitado por Produccion. |
-| `POST` | `/v1/inventory/finished-goods-receipts` | interno `production` | Si | Registrar entrada de producto terminado. |
-| `POST` | `/v1/inventory/reservation-requests` | interno o `inventory.reservation.create` | Si | Solicitar reserva futura. |
-| `POST` | `/v1/inventory/reservations/{id}/release` | `inventory.reservation.release` | Si | Liberar reserva. |
+| `GET` | `/v1/inventory/finished-goods-receipts` | `inventory.movement.read` | No | Consultar recepciones agrupadas por orden. |
+| `POST` | `/v1/inventory/finished-goods-receipts` | `inventory.movement.create` | Si | Confirmar entrada total o parcial de una orden terminada. |
+| `POST` | `/v1/inventory/reservation-requests` | `production.order.create` | Si | Reservar material por almacen para una orden. |
+| `POST` | `/v1/inventory/reservations/{id}/release` | `production.order.status.update` | Si | Liberar reserva. |
+| `POST` | `/v1/inventory/reservations/{id}/consume` | `production.order.status.update` | Si | Convertir reserva en salida inmutable al primer inicio de la orden; el almacen proviene de la reserva. |
 
 ### 7.3 Request ejemplo: movimiento manual
 
@@ -476,38 +486,39 @@ Administra almacenes, articulos, ubicaciones, movimientos, existencias, kardex, 
 
 ### 8.1 Responsabilidad
 
-Administra clientes, contactos, cotizaciones, pedidos, partidas, entregas y devoluciones comerciales.
+En el segundo corte Local administra clientes, contactos principales, cotizaciones, pedidos, configuracion de surtido y entregas parciales o totales. Devoluciones permanecen planeadas.
 
 ### 8.2 Endpoints MVP
 
 | Metodo | Ruta | Permiso | Idempotencia | Proposito |
 |---|---|---|---|---|
+| `GET` | `/v1/sales/reference-data` | `sales.customer.read` | No | Consultar monedas y condiciones versionadas. |
 | `GET` | `/v1/sales/customers` | `sales.customer.read` | No | Buscar clientes. |
 | `POST` | `/v1/sales/customers` | `sales.customer.create` | Si | Crear cliente. |
 | `GET` | `/v1/sales/customers/{id}` | `sales.customer.read` | No | Consultar cliente. |
-| `PATCH` | `/v1/sales/customers/{id}` | `sales.customer.update` | No | Editar cliente. |
-| `POST` | `/v1/sales/customers/{id}/contacts` | `sales.customer.update` | Si | Agregar contacto. |
+| `PATCH` | `/v1/sales/customers/{id}` | `sales.customer.update` | Si | Editar cliente y/o reemplazar contacto principal. |
 | `GET` | `/v1/sales/quotes` | `sales.quote.read` | No | Buscar cotizaciones. |
 | `POST` | `/v1/sales/quotes` | `sales.quote.create` | Si | Crear cotizacion. |
 | `GET` | `/v1/sales/quotes/{id}` | `sales.quote.read` | No | Consultar cotizacion. |
-| `PATCH` | `/v1/sales/quotes/{id}` | `sales.quote.update` | No | Editar cotizacion borrador. |
+| `PATCH` | `/v1/sales/quotes/{id}` | `sales.quote.update` | Si | Editar y recalcular cotizacion borrador. |
 | `POST` | `/v1/sales/quotes/{id}/submit` | `sales.quote.submit` | Si | Marcar cotizada/enviada. |
 | `POST` | `/v1/sales/quotes/{id}/approve` | `sales.quote.approve` | Si | Aprobar cotizacion. |
 | `POST` | `/v1/sales/quotes/{id}/expire` | `sales.quote.expire` | Si | Marcar vencida. |
-| `POST` | `/v1/sales/quotes/{id}/convert-to-order` | `sales.order.create` | Si | Convertir cotizacion aprobada en pedido. |
-| `GET` | `/v1/sales/orders` | `sales.order.read` | No | Buscar pedidos. |
-| `GET` | `/v1/sales/orders/{id}` | `sales.order.read` | No | Consultar pedido. |
-| `PATCH` | `/v1/sales/orders/{id}` | `sales.order.update` | No | Editar campos permitidos. |
-| `POST` | `/v1/sales/orders/{id}/request-fulfillment` | `sales.order.fulfill` | Si | Solicitar inventario o produccion. |
-| `GET` | `/v1/sales/deliveries` | `sales.delivery.read` | No | Consultar entregas. |
-| `POST` | `/v1/sales/deliveries` | `sales.delivery.create` | Si | Registrar seguimiento de entrega MVP. |
-| `PATCH` | `/v1/sales/deliveries/{id}/status` | `sales.delivery.update` | Si | Cambiar estatus de entrega. |
-| `POST` | `/v1/sales/returns` | `sales.return.create` | Si | Solicitar devolucion. |
+| `POST` | `/v1/sales/quotes/{id}/cancel` | `sales.quote.cancel` | Si | Cancelar borrador o cotizacion emitida. |
+| `GET/POST` | `/v1/sales/orders` | `sales.order.read/create` | POST | Listar o convertir una cotizacion aprobada una sola vez. |
+| `POST` | `/v1/sales/orders/{id}/fulfillment` | `sales.order.fulfill` | Si | Configurar servicio, reservas Inventory o solicitud Production por partida. |
+| `POST` | `/v1/sales/orders/{id}/cancel` | `sales.order.cancel` | Si | Cancelar y liberar reservas activas. |
+| `GET/POST` | `/v1/sales/deliveries` | `sales.delivery.read/create` | POST | Listar o registrar entrega parcial/total en borrador. |
+| `POST` | `/v1/sales/deliveries/{id}/confirm` | `sales.delivery.confirm` | Si | Consumir reservas y recalcular costo/margen real. |
+| `POST` | `/v1/sales/deliveries/{id}/cancel` | `sales.delivery.cancel` | Si | Cancelar una entrega borrador. |
+
+La conversion a pedido, el fulfillment y las entregas forman parte del runtime Local desde `20260818_0019`; `20260818_0020` agrega mapeo producto-articulo, reclamos durables, cantidad comprometida y costo real con procedencia. Devoluciones, facturacion y cobranza aun no forman parte del runtime vigente.
 
 ### 8.3 Request ejemplo: crear cotizacion
 
 ```json
 {
+  "code": "COT-001",
   "customer_id": "cus_01J...",
   "currency": "MXN",
   "valid_until": "2026-07-17",
@@ -515,23 +526,8 @@ Administra clientes, contactos, cotizaciones, pedidos, partidas, entregas y devo
     {
       "product_service_id": "ps_01J...",
       "quantity": 10,
-      "unit": "pieza",
+      "unit": "H87",
       "unit_price": 120
-    }
-  ]
-}
-```
-
-### 8.4 Request ejemplo: solicitar surtido
-
-```json
-{
-  "fulfillment_mode": "production",
-  "lines": [
-    {
-      "sales_order_line_id": "sol_01J...",
-      "quantity": 10,
-      "requested_due_date": "2026-07-20"
     }
   ]
 }
@@ -539,22 +535,18 @@ Administra clientes, contactos, cotizaciones, pedidos, partidas, entregas y devo
 
 ### 8.5 Reglas backend obligatorias
 
-- Cotizacion requiere cliente existente.
-- Cotizacion requiere productos/servicios existentes y vendibles.
-- Cotizacion aprobada no debe generar pedidos duplicados.
-- Pedido no escribe ordenes de Produccion ni movimientos de Almacenes.
-- Entrega no descuenta inventario hasta confirmacion de Almacenes.
+- Cotizacion requiere cliente activo y responsable RH activo.
+- Cotizacion requiere productos/servicios activos, unidad activa igual a su unidad base y partidas no duplicadas.
+- Importes, costos snapshot y margen estimado se calculan en backend con aritmetica decimal.
+- Solo el borrador es editable; emitir y aprobar revalidan referencias y vigencia.
+- Ningun flujo escribe schemas de Admin, RH o Produccion.
+- Un producto vendido debe tener un articulo activo de Inventory mapeado por Production y con la misma unidad; Sales no acepta sustituirlo por otro articulo compatible solo por unidad.
+- Crear una Entrega serializa Pedido/partidas y descuenta borradores; surtido, cancelacion y confirmacion reclaman estado durable antes de cualquier efecto externo.
+- El costo real identifica su fuente: consumo de Inventory o captura operativa de servicio. Production no entrega costo real hasta implementar su callback.
 
-### 8.6 Eventos emitidos
+### 8.6 Auditoria y eventos
 
-- `customer.created`
-- `customer.updated`
-- `quote.created`
-- `quote.approved`
-- `sales_order.created`
-- `sales_order.status_changed`
-- `sales_order.fulfillment_requested`
-- `return_request.created`
+Los comandos generan `sales.audit_events` e idempotencia persistente. Publicacion outbox/eventos de dominio queda para el corte de integracion posterior.
 
 ---
 

@@ -88,6 +88,16 @@ export function getHrApiBaseUrl() {
   return runtimeBaseUrl;
 }
 
+export function getSalesApiBaseUrl() {
+  const runtimeBaseUrl = getRuntimeConfigValue("salesApiBaseUrl") || "http://127.0.0.1:8008";
+  if (isLocalPreviewHost()) {
+    const override = localStorage.getItem("erclave-sales-api-base-url") || "";
+    const localBaseUrl = getRuntimeConfigValue("localSalesApiBaseUrl");
+    return getSafeLocalBaseUrl(override || localBaseUrl || runtimeBaseUrl, "http://127.0.0.1:8008");
+  }
+  return runtimeBaseUrl;
+}
+
 
 export function getDemoTenantId() {
   if (!isLocalPreviewHost()) return activeTenantId || getRuntimeConfigValue("tenantId");

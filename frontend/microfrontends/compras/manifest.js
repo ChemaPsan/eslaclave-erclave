@@ -4,6 +4,7 @@ export const manifest = {
   icon: "CO",
   version: "0.1.0",
   service: "purchasing-service",
-  permissions: ["compras:read"],
+  implementationStatus: "planned",
+  permissions: [],
   routes: ["/compras", "/compras/requisiciones", "/compras/ordenes-de-compra", "/compras/recepciones"]
 };
