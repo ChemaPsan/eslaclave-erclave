@@ -215,3 +215,7 @@ El reinicio individual de Inventory Local ahora carga y valida explicitamente la
 # Actualizacion CHG-224 (2026-08-21)
 
 El repositorio queda preparado, pero no autorizado ni desplegado, para un candidato QA de cinco servicios: Admin, Produccion, Inventory, RH y Ventas. El pipeline construye/promueve las cinco imagenes por digest, entrega a Inventory la URL autoritativa de Produccion para recepciones y publica la URL de Ventas en el frontend sanitizado. QA vigente conserva cuatro servicios, version `4e9c6881dab61239f1abd5fff688019fdd697977` y revision documentada `20260805_0013`. Antes de ejecutar se requieren PR/SHA inmutable, identidad `erclave-sales-qa`, variables Sales y aprobaciones separadas de cada gate. No hubo escritura externa.
+
+# Actualizacion CHG-225 (2026-08-21)
+
+El corte CHG-224 ya esta fusionado en `main` con SHA inmutable `adb134f7ac8b33b4a842d07db10c9b5f88525f2f` y su validacion CI concluyo correctamente. En QA se creo la identidad dedicada `erclave-sales-qa@erclave.iam.gserviceaccount.com` sin llaves administradas por usuario; conserva solo `roles/cloudsql.client`, acceso al secreto `erclave-database-url-qa` y `roles/run.invoker` sobre Admin, RH, Produccion e Inventory. GitHub Actions ya contiene las variables no secretas `QA_SALES_RUNTIME_SERVICE_ACCOUNT` y `QA_SALES_API_URL`. No se construyo candidato, no se leyo el secreto, no se ejecuto migracion/configuracion de tenant, no se desplego Cloud Run, no se movio trafico y no se publico frontend.

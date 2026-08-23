@@ -8,7 +8,7 @@ Esta carpeta declara la configuracion necesaria para preparar el candidato. No a
 
 Antes de aprovisionar se debe revisar el plan con el usuario aprobador y conceder cada rol mediante una actividad `qa-write` independiente.
 
-Estado comprobado el 2026-08-12: las seis cuentas dedicadas existentes, Artifact Registry `erclave-qa` y el provider WIF limitado a `ChemaPsan/eslaclave-erclave` estan aprovisionados. La cuenta `erclave-sales-qa` es un requisito nuevo del siguiente candidato y debe aprovisionarse mediante una actividad `qa-write` autorizada antes de promoverlo. La identidad desplegadora cuenta con `roles/firebasehosting.admin` para publicar exclusivamente mediante el gate `qa-frontend`. No existen llaves JSON del pipeline.
+Estado comprobado el 2026-08-22: las siete cuentas dedicadas declaradas, Artifact Registry `erclave-qa` y el provider WIF limitado a `ChemaPsan/eslaclave-erclave` estan aprovisionados. CHG-225 creo `erclave-sales-qa` sin llaves administradas por usuario, con `roles/cloudsql.client`, acceso solo a `erclave-database-url-qa` y `roles/run.invoker` sobre sus cuatro autoridades QA. La identidad desplegadora cuenta con `roles/firebasehosting.admin` para publicar exclusivamente mediante el gate `qa-frontend`. No existen llaves JSON del pipeline.
 
 ## GitHub Environments obligatorios
 
