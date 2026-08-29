@@ -1,6 +1,6 @@
 # Estado actual de ERClave
 
-Ultima actualizacion: 2026-08-24.
+Ultima actualizacion: 2026-08-27.
 
 ## Ambiente local
 
@@ -20,6 +20,12 @@ Ultima actualizacion: 2026-08-24.
 
 ## Cortes funcionales relevantes
 
+### Feedback operativo
+
+- CHG-251 normaliza en Local los errores de API y Firebase mediante un catálogo común ES/EN gobernado por `error.code`; `message` se conserva sólo como diagnóstico y ya no se presenta directamente.
+- Las transiciones sensibles de Producción, Ventas, Compras y Mantenimiento distinguen éxito, warning y error; si una mutación falla, el selector o proyección vuelve al estado confirmado. Los errores inesperados pueden mostrar `correlation_id` como referencia de soporte.
+- Formularios, toasts y errores de carga declaran semántica ARIA, permanecen visibles según severidad y escapan contenido antes de insertarlo en HTML. `validate:error-feedback` protege estas reglas.
+
 ### Compras
 
 - CHG-229 implementa en Local el primer corte supplier-to-receipt mediante `purchasing-service` en `http://127.0.0.1:8010` y schema aislado `purchasing`.
@@ -30,6 +36,8 @@ Ultima actualizacion: 2026-08-24.
 - La recepcion rechaza duplicados y sobre-recepcion, admite parcialidad y solicita entradas idempotentes a Inventory. Si la autoridad fisica falla, conserva `needs_reconciliation` visible sin fingir una recepcion completada.
 - CHG-232 cierra el flujo source-to-receipt: edita borradores, exige coincidencia exacta requisicion/orden, cancela con motivo, recibe varias partidas, reserva saldo concurrentemente y permite conciliar solo lineas fallidas con claves estables. Inventory expone lectura puntual tenant-safe de almacen para validar la recepcion.
 - El catalogo Admin y manifiesto marcan `purchasing` como implementado, con dependencia obligatoria de `inventory`. La UI ofrece flujo bilingue real; reabastecimiento automatico, factura, CxP, pago, devolucion y asiento permanecen planeados.
+- CHG-248 incorpora en los cinco submodulos el riel de ayuda transversal bilingue; resume cada recorrido sin alterar permisos, estados ni contratos.
+- CHG-250 reemplaza los `prompt()` nativos de cancelacion por un modal ERClave bilingue que exige motivo, conserva los comandos y permisos puntuales existentes y presenta errores dentro del flujo.
 
 ### Mantenimiento
 
@@ -38,6 +46,7 @@ Ultima actualizacion: 2026-08-24.
 - CHG-235 endurece el flujo en Local con revision `20260824_0028`: conciliacion manual durable, compensacion de reservas al cancelar, rebloqueo al reabrir, revalidacion RH al iniciar, asignacion primaria unica e indices de consulta por orden.
 - RH e Inventory son dependencias obligatorias. Production es integracion opcional y sigue siendo autoridad de maquinas y ordenes productivas.
 - La UI tolera fallos de catalogos sin perder la lectura de ordenes, respeta permisos de mutacion y distingue exito de `needs_reconciliation`. QA y Produccion no fueron modificados.
+- CHG-248 agrega el riel de ayuda transversal bilingue a Ordenes y Refacciones, conservando la regla de no reanudar Produccion automaticamente y la autoridad de Inventory sobre reservas y movimientos.
 
 ### Administracion y permisos
 
@@ -49,7 +58,7 @@ Ultima actualizacion: 2026-08-24.
 - Backoffice edita datos basicos del tenant y gobierna sus entitlements contractuales. El administrador del tenant solo cambia `tenant_enabled`; `session/context`, policy y permisos operativos exigen entitlement activo mas preferencia encendida. Los modulos planeados no pueden habilitarse y `admin` es obligatorio. La cabeza Alembic Local es `20260825_0029`; QA permanece en `20260821_0023`.
 - En Local y QA, Administracion ofrece el catalogo de folios por tipo documental. Prefijo, separador, siguiente numero, longitud y modo administrado/manual son editables por tenant; la asignacion de un consecutivo es atomica, idempotente y auditada. Los formularios actuales de Produccion, Almacenes, RH y Ventas consumen esa autoridad antes de crear el registro.
 - Los contratos OpenAPI parsean como YAML y un validador compara operaciones `implemented` con las rutas FastAPI. Capacidades futuras se marcan `x-implementation-status: planned`.
-- Los manifiestos de microfrontend distinguen `implemented`/`planned` y usan permisos puntuales con puntos; el runtime visual actual permanece centralizado en `frontend/app.js` hasta una extraccion modular posterior.
+- Los manifiestos de microfrontend distinguen `implemented`/`planned` y usan permisos puntuales con puntos; en los implementados, `permissions` es el inventario exhaustivo de operaciones OpenAPI implementadas del namespace propietario. El runtime visual actual permanece centralizado en `frontend/app.js` hasta una extraccion modular posterior.
 - El editor de permisos de roles trabaja con borrador explicito, busqueda, filtros, agrupacion por modulo/recurso, seleccion masiva visible y resumen de cambios; no incluye plantillas ni presets.
 - Los nombres tecnicos se conservan como identificadores de policy, pero la interfaz usa nombres y descripciones ES/EN mantenidos en `admin.permissions`.
 - El catalogo remoto requiere tenant y `admin.role.read`; solo expone permisos `tenant` asignables y marca disponibilidad segun el entitlement del modulo.
@@ -116,8 +125,12 @@ Ultima actualizacion: 2026-08-24.
 - El onboarding inserta entitlements antes de poblar permisos del owner. Seleccionar Ventas desde Backoffice incluye RH y Produccion, evitando un tenant activo sin autorizaciones comerciales.
 - Pedidos nacen una sola vez de una cotizacion aprobada. Cada producto exige el articulo de Inventory mapeado por Production y puede usar reserva o solicitud de Production; servicios quedan listos. Surtido, cancelacion y confirmacion reclaman estado durable bajo locks, reanudan con claves estables y marcan `needs_reconciliation` tras una interrupcion externa. El costo de `stock` proviene del consumo y el de servicio de captura operativa; Production permanece sin costo real hasta su callback. Devoluciones y facturacion permanecen `planned`.
 - QA ya tiene `sales-service` y la cadena de migraciones hasta `20260821_0023`; la habilitacion efectiva de Ventas continua dependiendo del entitlement del tenant y de RH/Produccion.
+- CHG-250 alinea la verdad visible de Ventas: Pedidos se cuenta como capacidad implementada, se elimina copy planeado obsoleto y `Margen` queda como consulta de solo lectura derivada de Pedidos/Entregas, sin alta generica ni persistencia local de documentos.
 
 ### Interfaz transversal
+
+- CHG-249 aplica una jerarquia visual mas sobria a botones y badges operativos: las acciones secundarias usan superficies neutras, las primarias conservan el acento morado y los estados activo/advertencia/error usan color semantico suave con borde y contraste para tema claro/oscuro. El bloque CSS esta aislado para rollback y conserva targets de 44 px.
+- CHG-250 corrige la identidad de los submodulos RH; localiza su guia, resumen de capacidad y estados laborales provenientes de API; completa los nombres ingleses de Mantenimiento y las etiquetas/atributos accesibles del shell. Los nombres y descripciones capturados por el tenant permanecen como datos sin traduccion automatica.
 
 - CHG-227, implementado solo en Local: toda mutacion HTTP iniciada desde el frontend principal o Backoffice muestra una capa de progreso bilingue, marca la pagina con `aria-busy` y bloquea botones, clics y activaciones por teclado mientras la operacion sigue pendiente. Un contador conserva el bloqueo cuando coinciden varias solicitudes y `finally` lo libera ante exito o error, reduciendo comandos duplicados por reintentos del usuario.
 

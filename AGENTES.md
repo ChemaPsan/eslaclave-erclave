@@ -24,6 +24,7 @@ Cada agente debe poder responder:
 
 Reglas transversales vigentes:
 
+- Todo agente funcional define bloqueos y siguiente acción; todo agente técnico conserva códigos estables y aplica `docs/arquitectura/feedback_operativo_y_errores.md`. El frontend localiza por código, no expone diagnósticos backend y restaura el estado confirmado cuando una mutación falla.
 - Un contrato OpenAPI debe parsear y reflejar el runtime; toda operacion futura se identifica con `x-implementation-status: planned`.
 - Los manifiestos usan permisos puntuales con puntos y declaran si estan `implemented` o `planned`.
 - Toda aprobacion, aceptacion o transicion operativa usa una capacidad puntual asignable a roles. El backend deriva el permiso exacto de la accion solicitada y no confia solo en controles ocultos; los nombres de puestos o roles del tenant nunca se codifican como politica. La matriz vive en `docs/arquitectura/matriz_autorizacion_operativa.md`.
@@ -650,6 +651,7 @@ Ningun agente puede usar la palabra `real`, `integrado`, `disponible` o `despleg
 - Ningun agente debe aprobar un cambio que mezcle reglas internas de varios modulos dentro de un mismo boton, componente, archivo o endpoint sin justificar un contrato transversal.
 - Si un cambio pequeno obliga a tocar muchas areas, el agente tecnico debe marcarlo como riesgo de acoplamiento y proponer segmentacion antes de implementar.
 - Ningun agente debe aprobar UI nueva con textos fijos si esos textos deben traducirse. Cada texto visible debe tener clave i18n o una justificacion clara si es dato capturado por usuario.
+- Ningun agente tecnico debe tratar `permissions` de un manifiesto implementado como una lista parcial de acceso: debe reflejar exhaustivamente las operaciones OpenAPI implementadas del namespace propietario, excluyendo permisos cruzados y capacidades `planned`.
 - Ningun agente debe aprobar una entrega sin listar `Agentes consultados` y explicar por que cada transversal o especialista aplica o no aplica.
 
 ## Regla obligatoria de segmentacion

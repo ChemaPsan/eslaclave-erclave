@@ -306,3 +306,16 @@ La requisicion aprobada conserva ademas una accion **Crear orden de compra** mie
 - Si no hay candidatas, la pantalla conserva el historial y dirige a Requisiciones; no presenta un selector vacio.
 - **Reabastecimiento** es una ruta `planned` distinta. Explica futuras sugerencias por minimos, punto de reorden, demanda, ordenes abiertas y lead time; no lista ni crea OC.
 - Los IDs de los cinco submodulos de Compras quedan explicitos en el catalogo de navegacion para evitar depender de la normalizacion del texto visible.
+
+## 19. Guias de flujo transversales CHG-248
+
+- Proveedores, Requisiciones, Ordenes de compra, Recepciones y Reabastecimiento muestran el riel vertical colapsable compartido por los modulos operativos.
+- Cada guia resume el recorrido propio del submodulo en espanol e ingles; no ejecuta comandos, no fusiona transiciones ni concede permisos.
+- Reabastecimiento conserva su etiqueta y contenido `planned`: la guia explica senales, evaluacion, sugerencia y decision futura sin simular requisiciones u ordenes reales.
+- En contenedores estrechos el riel pasa a una columna mediante el patron responsive transversal; fuera de Compras no cambia la composicion compartida.
+
+## 20. Cancelacion consistente CHG-250
+
+- Cancelar una Requisicion u Orden de compra abre un modal ERClave bilingue, no una ventana nativa del navegador.
+- El modal identifica el folio, explica que la trazabilidad se conserva, exige un motivo no vacio y presenta errores dentro del mismo formulario.
+- Los comandos y permisos no cambian: `purchasing.requisition.cancel` y `purchasing.order.cancel` siguen siendo autoridades backend independientes e idempotentes.

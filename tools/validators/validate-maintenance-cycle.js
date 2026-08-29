@@ -23,7 +23,10 @@ for (const token of [
   'name="work_performed"',
   'name="verification_notes"',
   'Technician assigned: ${result.assigned_worker_name}',
-  'Tecnico asignado: ${result.assigned_worker_name}'
+  'Técnico asignado: ${result.assigned_worker_name}',
+  "getMaintenanceFlowTitle",
+  "getMaintenanceFlowSteps",
+  'renderFlowGuide(getMaintenanceFlowTitle(id),getMaintenanceFlowSteps(id))'
 ]) {
   if (!frontend.includes(token)) errors.push(`Maintenance UI continuity missing ${token}`);
 }

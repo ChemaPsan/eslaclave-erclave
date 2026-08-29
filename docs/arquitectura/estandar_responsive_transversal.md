@@ -55,6 +55,8 @@ Nunca se comprimen columnas hasta cortar identificadores, cantidades o acciones.
 - Acciones primarias y destructivas no cambian de significado ni de orden accidentalmente al apilarse.
 - Modales y drawers caben en alto y ancho, con scroll interno predecible y cierre siempre alcanzable.
 - Targets tactiles miden al menos 44 x 44 CSS px cuando el control no tiene una superficie mayor equivalente.
+- Las acciones secundarias usan una superficie neutra y reservan el color de marca para foco, hover y acciones primarias. En tarjetas estrechas pueden envolver por espacios, pero nunca partir letras.
+- Los estados usan color semantico contenido, borde y texto legible; no dependen solo del color y conservan contraste equivalente en tema claro y oscuro.
 
 ## Flujos, filtros y alertas
 

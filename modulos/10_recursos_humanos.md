@@ -47,3 +47,10 @@ El schema base de RH nacio en `20260730_0010`; expedientes de trabajadores se ag
 ## CHG-209: seleccion escalable
 
 Áreas y puestos se consultan mediante búsqueda por código, nombre, puesto o área y se relacionan por ID estable. Estatus laboral permanece como una lista cerrada gobernada por el flujo.
+
+## CHG-250: identidad y localizacion
+
+- Las pantallas `Areas y puestos` y `Trabajadores` conservan la identidad de Recursos Humanos en su breadcrumb, aunque reutilicen componentes operativos compartidos con Produccion.
+- Los estados API `active`, `inactive` y `terminated` se presentan como `Activo`, `Inactivo` y `Baja` en espanol, con sus equivalentes ingleses.
+- La guia de configuracion, busqueda, etiquetas, resumen de capacidad y estatus de areas/puestos cambian con el idioma; nombres y descripciones capturados por el tenant permanecen como datos, sin traduccion automatica.
+- La navegacion, contexto de sesion y acciones globales del shell exponen etiquetas y atributos accesibles en ambos idiomas.

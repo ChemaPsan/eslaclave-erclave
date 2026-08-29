@@ -43,6 +43,21 @@ if (mainStyles.includes(".flow-guide-card[open] .flow-guide-steps")) {
 if (!mainStyles.includes("grid-template-columns: minmax(220px, 280px) minmax(0, 1fr)")) {
   errors.push("frontend/styles.css: missing the standard vertical flow rail layout.");
 }
+if (!mainApp.includes('renderFlowGuide(getPurchasingFlowTitle(title),getPurchasingFlowSteps(id))') || !mainApp.includes('renderFlowGuide(getMaintenanceFlowTitle(id),getMaintenanceFlowSteps(id))')) {
+  errors.push("Purchasing and Maintenance must reuse the standard responsive flow rail.");
+}
+if (!mainStyles.includes("content: attr(data-open-label)") || !mainApp.includes('data-open-label="${escapeAttribute(openCopy)}"')) {
+  errors.push("Collapsed flow guides must expose their localized open label.");
+}
+if (!mainMarkup.includes("app.js?v=20260827-chg251-error-feedback")) {
+  errors.push("frontend/index.html: the main app cachebuster must expose CHG-251 localized error feedback to open sessions.");
+}
+if (!mainMarkup.includes("styles.css?v=20260827-chg251-error-feedback")) {
+  errors.push("frontend/index.html: the main stylesheet cachebuster must expose CHG-251 semantic feedback styling to open sessions.");
+}
+if (!mainStyles.includes("CHG-249: jerarquia sobria y reversible") || !mainStyles.includes(".catalog-card-actions .small-action") || !mainStyles.includes('[data-theme="dark"] .chip.active')) {
+  errors.push("frontend/styles.css: sober action/status styling must remain isolated, readable and dark-theme aware.");
+}
 
 const insightStart = mainMarkup.indexOf('<aside class="insight-panel">');
 const insightEnd = mainMarkup.indexOf("</aside>", insightStart);

@@ -20,6 +20,7 @@
 - Los contratos OpenAPI, schemas, consumidores y pruebas cambian en el mismo corte.
 - Los OpenAPI deben parsear como YAML y coincidir con cada ruta FastAPI implementada. Una operacion futura lleva `x-implementation-status: planned`; un contrato o manifiesto no convierte por si solo un modulo en real.
 - Los manifiestos de microfrontend declaran `implementationStatus` y solo usan permisos puntuales con puntos, nunca alias historicos con `:`.
+- En manifiestos `implemented`, `permissions` enumera exhaustivamente las capacidades implementadas del namespace propietario publicadas por operaciones OpenAPI cuyo `x-required-module` corresponde al modulo. No incorpora permisos cruzados ni operaciones `planned`; los manifiestos planeados conservan la lista vacia. `validate-architecture` bloquea faltantes y sobrantes.
 
 ## Identidad y autorizacion
 
@@ -106,6 +107,13 @@
 - Modales y tarjetas operativas compuestas son contenedores responsive propios; no pueden depender exclusivamente del ancho del panel padre ni comprimir texto humano para conservar columnas.
 
 Una decision nueva o reemplazada debe registrarse tambien en `TRAZABILIDAD.md` y actualizar las fuentes funcionales correspondientes.
+
+## Feedback operativo y localización de errores
+
+- `error.code` es la fuente estable para resolver copy ES/EN; `error.message` es diagnóstico y no se presenta directamente al usuario.
+- Un error de mutación nunca confirma ni conserva visualmente un estado no aceptado. La UI restaura o recarga la proyección autoritativa y explica el siguiente paso.
+- La severidad visible distingue éxito, bloqueo funcional, conciliación y fallo técnico; sólo los casos inesperados o inciertos muestran `correlation_id` como referencia de soporte.
+- El contrato y la taxonomía completos viven en `docs/arquitectura/feedback_operativo_y_errores.md`.
 
 ## Continuidad del flujo de Compras
 

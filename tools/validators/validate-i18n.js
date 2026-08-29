@@ -43,6 +43,29 @@ if (!errors.length) {
   }
 }
 
+const shellMarkup = readText("frontend/index.html");
+for (const token of [
+  'data-i18n="skipToMain"',
+  'data-i18n-aria-label="mainNavigation"',
+  'data-i18n-aria-label="changeTheme"',
+  'data-i18n-aria-label="changeLanguage"',
+  'data-i18n-aria-label="administration"',
+  'data-i18n-aria-label="mainIndicators"',
+  'data-i18n="userLabel"',
+  'data-i18n="branchLabel"'
+]) {
+  if (!shellMarkup.includes(token)) errors.push(`Shell localization guardrail missing ${token}.`);
+}
+const appSource = readText("frontend/app.js");
+for (const token of ['authButton.textContent = t("signOut")', 't("signOutUser", { email: state.auth.user.email })', 'document.documentElement.lang = state.lang', 'active: { es: "Activo", en: "Active" }', 'terminated: { es: "Baja", en: "Terminated" }', 't("submodulesOf", { module: moduleLabel })', 't("activeOrdersInFlow", { count: activeOrders })', 'renderFlowGuide(t("laborConfigurationFlow")', 't("laborAreaSummary", { positions: areaRoles.length', '${translateStatus(area.status)}', '${translateStatus(role.status)}']) {
+  if (!appSource.includes(token)) errors.push(`Runtime localization guardrail missing ${token}.`);
+}
+const laborScreen = appSource.slice(appSource.indexOf("function renderLaborRolesScreen"), appSource.indexOf("function renderWorkersScreen"));
+if (appSource.includes("Submodulos de ${module.title}")) errors.push("Visible shell copy must not bypass i18n: submodule navigation label.");
+for (const forbidden of ['"Flujo de configuracion de mano de obra"', '>Area operativa<', '${area.status}</span>', '${role.status}</span>']) {
+  if (laborScreen.includes(forbidden)) errors.push(`Visible RH copy must not bypass i18n: ${forbidden}.`);
+}
+
 if (errors.length) {
   fail("i18n validation failed", errors);
 } else {

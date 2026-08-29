@@ -60,7 +60,7 @@ docs/arquitectura/plan_implementacion_backend_mvp.md
 | `X-Tenant-Id` | Solo permitido para clientes internos confiables; debe coincidir con permisos del token. |
 | `X-Correlation-Id` | Trazabilidad entre servicios. Si no viene, el gateway lo genera. |
 | `Idempotency-Key` | Obligatorio en comandos reintentables o con efectos economicos/operativos. |
-| `Accept-Language` | Idioma preferido para mensajes controlados, por ejemplo `es-MX` o `en-US`. |
+| `Accept-Language` | Reservado para clientes que lo implementen; el frontend vigente localiza por `error.code` y no depende de este header. |
 
 Regla:
 
@@ -121,6 +121,8 @@ Reglas:
 ```
 
 ### 3.5 Errores comunes
+
+`error.code` es el contrato estable consumido por UI y automatizaciones. `message` sirve como diagnóstico del servicio y no se inserta directamente en pantalla; el cliente lo resuelve en ES/EN conforme a `feedback_operativo_y_errores.md`. `correlation_id` debe propagarse y se presenta como referencia sólo cuando el resultado es técnico, inesperado o incierto.
 
 ```json
 {

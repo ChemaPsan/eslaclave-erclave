@@ -3921,6 +3921,82 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Rollback | Retirar el boton/modal de tiempo y la seccion integrada de Resolver, restaurando el flujo anterior de Refacciones. No existe schema ni dato que revertir. |
 | Observaciones | No hubo migracion, seed, despliegue ni acceso a QA/Produccion. |
 
+### CHG-248
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-26 |
+| Cambio | Guias de flujo transversales para Compras y Mantenimiento |
+| Autor | Codex |
+| Archivos | Frontend principal, indice/cachebuster y estilos; validadores de Compras, Mantenimiento y responsive; documentos modulares, estado y trazabilidad |
+| Secciones | Compras / Proveedores / Requisiciones / Ordenes de compra / Recepciones / Reabastecimiento / Mantenimiento / Ordenes / Refacciones / ES-EN / Responsive / Local |
+| Agentes consultados | Especialistas funcional y tecnico de Compras; especialistas funcional y tecnico de Mantenimiento; UX/UI, frontend/i18n, Arquitectura de ambientes y QA/documentacion definidos en `AGENTES.md`; no hubo delegacion. |
+| Diagnostico | Compras y Mantenimiento no mostraban el riel contextual de flujo presente en otros modulos, lo que rompia consistencia visual y hacia menos descubrible la secuencia operativa. |
+| Descripcion | Se reutiliza `renderFlowGuide` en los cinco submodulos de Compras y las dos rutas de Mantenimiento, con pasos propios ES/EN, riel vertical colapsable y reacomodo responsive. El control compartido localiza tambien sus etiquetas de abrir y ocultar/mostrar. |
+| Motivo | Mantener todos los modulos bajo la misma linea visual y explicar cada recorrido sin inventar estados ni fusionar comandos o permisos. |
+| Impacto | Solo interfaz, guardrails y documentacion Local. No cambia datos, estados backend, permisos, contratos ni ownership entre servicios. |
+| APIs afectadas | Ninguna. Contratos modificados: ninguno. Endpoints consumidos sin cambio: los ya existentes de lectura y mutacion de `purchasing-service`, `maintenance-service`, Inventory, RH y Production permanecen iguales. |
+| Validacion | Sintaxis; i18n; responsive; ciclos de Compras y Mantenimiento; documentacion viva; suite integral; inspeccion visual Local ES/EN y ancho estrecho. |
+| Rollback | Retirar las funciones de pasos y sus inserciones en los shells, restaurar las etiquetas fijas del componente y eliminar guardrails/documentacion CHG-248. No existe schema ni dato que revertir. |
+| Observaciones | Operacion `local-write` solo sobre archivos del repositorio. No hubo migracion, seed, carga de datos, escritura externa, despliegue ni acceso a QA/Produccion. El borrador automatizado se intento, pero el proceso no encontro `git` en su PATH; la entrada correlativa se completo manualmente. |
+
+### CHG-249
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-26 |
+| Cambio | Jerarquia sobria de botones y estatus operativos |
+| Autor | Codex |
+| Archivos | Estilos e indice/cachebuster del frontend; validador responsive; estandar responsive, estado y trazabilidad |
+| Secciones | Interfaz transversal / Botones / Estatus / Tarjetas / Tema claro-oscuro / Responsive / Local |
+| Agentes consultados | Agentes transversales de UX/UI, frontend/i18n, accesibilidad responsive, Arquitectura de ambientes y QA/documentacion definidos en `AGENTES.md`; los especialistas de negocio no requirieron cambiar reglas, estados ni acciones. No hubo delegacion. |
+| Diagnostico | Las acciones secundarias de tarjetas competian visualmente con las primarias por su relleno violeta y algunos textos se partian dentro de columnas estrechas. Los estatus activos usaban una capsula morada solida que no expresaba semantica operativa con sobriedad. |
+| Descripcion | Un bloque CSS aislado `CHG-249` deja botones secundarios neutros con borde tenue, reduce la sombra de primarios, conserva foco visible y targets de 44 px, impide cortes dentro de palabras y presenta badges activo/advertencia/error con color semantico suave. Incluye equivalentes de contraste para tema oscuro. |
+| Motivo | Mejorar jerarquia, lectura y consistencia sin perder la identidad morada de ERClave ni disminuir visibilidad o accesibilidad. |
+| Impacto | Presentacion transversal Local. No cambia textos, acciones, permisos, estados, contratos, datos ni comportamiento backend. |
+| APIs afectadas | Ninguna. Contratos modificados: ninguno. Endpoints consumidos sin cambio: ninguno adicional; el rediseño no altera el consumo existente. |
+| Validacion | Inspeccion visual en Areas/Puestos y Trabajadores; tema claro/oscuro; ancho de 720 px sin overflow; botones de 44 px; validador responsive, documentacion y suite integral. |
+| Rollback | Eliminar el bloque CSS iniciado por `CHG-249: jerarquia sobria y reversible`, restaurar el cachebuster CHG-248 y retirar el guardrail/documentacion CHG-249. No existe schema ni dato que revertir. |
+| Observaciones | Operacion `local-write` solo sobre archivos del repositorio. No hubo migracion, seed, carga de datos, escritura externa, despliegue ni acceso a QA/Produccion. El borrador automatizado se intento, pero el proceso no encontro `git` en su PATH; la entrada correlativa se completo manualmente. |
+
+### CHG-250
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-26 |
+| Cambio | Alineacion semantica de Ventas, Compras, RH y manifiestos activos |
+| Autor | Codex |
+| Archivos | Frontend principal, indice y catalogos ES/EN; manifiestos activos; contratos y validadores; fichas de Ventas, Compras y RH; gobierno, estado y trazabilidad |
+| Secciones | Ventas / Pedidos / Margen / Compras / Cancelaciones / RH / Identidad / ES-EN / Permisos / Arquitectura / Local |
+| Agentes consultados | Especialistas funcional y tecnico de Ventas, Compras y RH; agentes transversales de Sinergia, UX/UI, frontend/i18n, Arquitectura API, QA y documentacion definidos en `AGENTES.md`; no hubo delegacion. |
+| Diagnostico | Ventas todavia presentaba Pedidos como planeado y Margen mediante el alta generica, aunque Pedidos/Entregas ya eran autoritativos; la ficha QA no reflejaba el servicio/revision vigentes. Compras cancelaba con `prompt()`, RH heredaba identidad de Produccion y quedaban huecos bilingues. Los manifiestos implementados enumeraban permisos parciales sin declarar si la lista era exhaustiva. |
+| Descripcion | Pedidos muestra su conteo real y se elimina el renderer planeado obsoleto. Margen queda como proyeccion de solo lectura derivada de Pedidos y Entregas, con fuentes de costo explicitas y sin ningun acceso al alta generica. Compras adopta un modal ERClave con motivo obligatorio para cancelar requisiciones y ordenes. RH conserva su identidad, el shell/estados/catalogos activos cierran paridad ES/EN, y los manifiestos activos declaran exhaustivamente sus permisos implementados y rutas reales. |
+| Motivo | Hacer coincidir la interfaz y documentacion con la verdad funcional existente, mantener el patron transversal de cancelacion y convertir contradicciones semanticas en fallos automaticos. |
+| Impacto | Frontend, contratos de microfrontend, validadores y documentacion Local. No cambia schema, migraciones, seeds, datos operativos, contratos HTTP ni servicios backend; QA y Produccion no fueron modificados. |
+| APIs afectadas | Contratos HTTP modificados: ninguno. Margen reutiliza las proyecciones ya cargadas desde Pedidos y Entregas sin nuevas llamadas. Cancelacion conserva `POST /v1/purchasing/requisitions/{requisition_id}/cancel` con `purchasing.requisition.cancel` y `POST /v1/purchasing/orders/{order_id}/cancel` con `purchasing.order.cancel`, ambos con el mismo cuerpo `{ reason }`. Se aclaro el contrato interno de `manifest.permissions`. |
+| Validacion | Sintaxis; ciclos de Ventas y Compras; i18n y localizacion activa; arquitectura/manifiestos; responsive; documentacion viva; inspeccion visual Local ES/EN; suite integral del repositorio. |
+| Rollback | Revertir los bloques y documentos CHG-250, restaurar manifiestos y cachebuster anteriores. No existe schema ni dato que revertir. |
+| Observaciones | Los permisos del manifiesto son exhaustivos para operaciones OpenAPI implementadas cuyo `x-required-module` pertenece al modulo; permisos transversales ajenos no se duplican. Margen avanzado con costos fuera de Entregas permanece como evolucion de Reportes, no como captura local. |
+
+### CHG-251
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-27 |
+| Cambio | Feedback operativo localizado, semántico y seguro |
+| Autor | Codex |
+| Archivos | Cliente API y catálogo de errores ES/EN; frontend principal y Backoffice, incluidos sus cachebusters; estilos y validador; arquitectura, agentes, inicio de sesión, decisiones, estado, pendientes y trazabilidad |
+| Secciones | Transversal / Errores / Warnings / Estatus / ES-EN / Accesibilidad / Seguridad / Local |
+| Agentes consultados | Especialistas transversales de API/errores, frontend/i18n y UX/negocio solicitados por el usuario. Las auditorías fueron delegadas a Epicurus, Copernicus y Noether y contrastadas con Arquitectura SaaS, Seguridad y QA/documentación definidos en `AGENTES.md`. |
+| Diagnostico | El cliente asignaba directamente `payload.error.message` a `Error.message`; por ello el texto diagnóstico inglés del backend atravesaba la UI española. Los toasts no distinguían severidad, algunos errores se insertaban en HTML sin escape y selectores de estatus podían conservar visualmente una transición rechazada. |
+| Descripcion | Se agregó un resolvedor por `error.code` con copy accionable ES/EN, categorías seguras, Firebase, red, timeout, validación FastAPI y referencia de correlación. El cliente conserva el mensaje backend sólo como diagnóstico. Toasts y formularios incorporan severidad y ARIA; los errores HTML se escapan; Producción, Ventas, Compras y Mantenimiento usan feedback semántico en transiciones críticas y restauran controles rechazados. Un validador convierte estas reglas en guardrails. |
+| Motivo | Hacer comprensible el fallo en el idioma activo, informar qué no cambió y cuál es el siguiente paso sin filtrar detalles técnicos ni presentar falsos estados. |
+| Impacto | Frontend y documentación Local. No cambia schemas, migraciones, datos, permisos, cuerpos HTTP, respuestas HTTP ni runtime backend. QA y Producción no fueron modificados. |
+| APIs afectadas | Contratos modificados: ninguno. Endpoints consumidos sin cambio: Production `PATCH /v1/production/product-services/{id}/status` (`production.product_service.status.update`) y `PATCH /v1/production/orders/{id}/status` (permiso por transición); Sales `POST /v1/sales/quotes/{id}/submit|approve|expire|cancel` y `POST /v1/sales/deliveries/{id}/confirm|cancel` con sus permisos puntuales; Purchasing `POST /v1/purchasing/requisitions/{id}/submit|approve|reject|cancel` y `POST /v1/purchasing/orders/{id}/issue|cancel`; Maintenance `POST /v1/maintenance/orders/{id}/transitions|reconcile` y `POST /v1/maintenance/material-requests/{id}/cancel|reconcile`. APIs no tocadas: todos los servicios backend y sus contratos OpenAPI. |
+| Validacion | `validate:error-feedback`, sintaxis, i18n, responsive, documentación viva y suite integral `npm run verify`. El catálogo se prueba en ES/EN y el guardrail exige correlación, escape, ARIA y restauración de estado. |
+| Rollback | Revertir catálogo/imports, helper semántico, tonos CSS, validador, cachebuster y documentos CHG-251. El mensaje diagnóstico volvería a atravesar la UI; no existe dato ni schema que revertir. |
+| Observaciones | Operación `local-write` sólo sobre archivos del repositorio. No hubo migración, seed, carga de datos, llamadas mutantes, despliegue ni acceso a QA/Producción. La estandarización backend completa quedó registrada como pendiente separado. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

@@ -793,6 +793,14 @@ export const erpSubmoduleCatalog = {
         es: ["Disponible vs requerido", "Reservas", "Faltantes", "Compra sugerida"],
         en: ["Available vs required", "Reservations", "Shortages", "Suggested purchase"]
       }
+    },
+    maquinaria: {
+      enName: "Machinery",
+      enDetail: "Production equipment, area, availability, and machine-hour cost.",
+      focus: {
+        es: ["Equipo", "Area RH", "Capacidad diaria", "Costo por hora maquina"],
+        en: ["Equipment", "HR area", "Daily capacity", "Machine-hour cost"]
+      }
     }
   },
   almacenes: {
@@ -802,6 +810,14 @@ export const erpSubmoduleCatalog = {
       focus: {
         es: ["Tipo de almacen", "Responsable", "Centro de negocio", "Politicas de inventario"],
         en: ["Warehouse type", "Owner", "Business center", "Inventory policies"]
+      }
+    },
+    articulos: {
+      enName: "Items",
+      enDetail: "Authoritative catalog of approved inventory items.",
+      focus: {
+        es: ["Codigo y nombre", "Tipo", "Unidad base", "Politica de inventario"],
+        en: ["Code and name", "Type", "Base unit", "Inventory policy"]
       }
     },
     movimientos: {
@@ -918,6 +934,24 @@ export const erpSubmoduleCatalog = {
       focus: {
         es: ["Costo estimado", "Costo real", "Rentabilidad", "Variacion"],
         en: ["Estimated cost", "Actual cost", "Profitability", "Variance"]
+      }
+    }
+  },
+  mantenimiento: {
+    ordenes: {
+      enName: "Orders",
+      enDetail: "Report, assign, perform, and verify corrective maintenance.",
+      focus: {
+        es: ["Falla y prioridad", "Objetivo mantenible", "Tecnico elegible", "Evidencia de cierre"],
+        en: ["Fault and priority", "Maintainable target", "Eligible technician", "Closure evidence"]
+      }
+    },
+    refacciones: {
+      enName: "Spare parts",
+      enDetail: "Multi-line requests and reconciliation with the spare-parts warehouse.",
+      focus: {
+        es: ["Orden origen", "Almacen de refacciones", "Partidas reservadas", "Conciliacion"],
+        en: ["Source order", "Spare-parts warehouse", "Reserved lines", "Reconciliation"]
       }
     }
   },
@@ -1086,6 +1120,40 @@ export const erpSubmoduleCatalog = {
       focus: {
         es: ["Filtros", "Columnas", "Agrupaciones", "Exportacion"],
         en: ["Filters", "Columns", "Grouping", "Export"]
+      }
+    }
+  },
+  administracion: {
+    tenants: {
+      enName: "Organization",
+      enDetail: "Tenant, legal entities, branches, and operating profile.",
+      focus: {
+        es: ["Tenant", "Razones sociales", "Sucursales", "Perfil operativo"],
+        en: ["Tenant", "Legal entities", "Branches", "Operating profile"]
+      }
+    },
+    usuarios: {
+      enName: "Users",
+      enDetail: "Identities, memberships, and roles by tenant.",
+      focus: {
+        es: ["Identidad", "Membresia", "Roles", "Estatus"],
+        en: ["Identity", "Membership", "Roles", "Status"]
+      }
+    },
+    roles: {
+      enName: "Roles and permissions",
+      enDetail: "Tenant roles, granular permissions, and effective scope.",
+      focus: {
+        es: ["Rol", "Permisos", "Alcance", "Revision"],
+        en: ["Role", "Permissions", "Scope", "Revision"]
+      }
+    },
+    "modulos-activos": {
+      enName: "Active modules",
+      enDetail: "Contracted entitlements and tenant operating preferences.",
+      focus: {
+        es: ["Entitlement", "Preferencia", "Dependencias", "Estatus efectivo"],
+        en: ["Entitlement", "Preference", "Dependencies", "Effective status"]
       }
     }
   }

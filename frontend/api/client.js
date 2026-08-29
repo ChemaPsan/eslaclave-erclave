@@ -1,15 +1,24 @@
 import { getApiBaseUrl } from "./config.js";
 import { getAuthToken } from "../auth.js";
 import { MUTATION_FINISHED_EVENT, MUTATION_STARTED_EVENT } from "../utils/mutation-feedback.js";
+import { getLocalizedErrorMessage } from "../i18n/api-errors.js";
 
 const API_REQUEST_TIMEOUT_MS = 15000;
 
 export class ErclaveApiError extends Error {
-  constructor(message, status, payload = null) {
-    super(message);
+  constructor(serverMessage, status, payload = null, metadata = {}) {
+    const code = String(payload?.error?.code || metadata.code || "request_failed");
+    const correlationId = String(payload?.error?.correlation_id || metadata.correlationId || "");
+    const details = payload?.error?.details || metadata.details || {};
+    const diagnostic = { name: "ErclaveApiError", status, payload, code, correlationId, details };
+    super(getLocalizedErrorMessage(diagnostic, { lang: globalThis.localStorage?.getItem("erclave-lang") || "es", service: details.service }));
     this.name = "ErclaveApiError";
     this.status = status;
     this.payload = payload;
+    this.code = code;
+    this.correlationId = correlationId;
+    this.details = details;
+    this.serverMessage = String(serverMessage || "");
   }
 }
 
@@ -57,25 +66,56 @@ export async function apiRequestAt(baseUrl, path, options = {}, apiLabel = "API"
       try {
         response = await fetchApi(fallbackUrl, token, options);
       } catch (fallbackError) {
-        throw new ErclaveApiError(`No se pudo conectar con ${apiLabel} en ${baseUrl}. Tambien se intento ${fallbackUrl}. Revisa que el servicio local este activo y que el navegador no tenga cache de la URL anterior.`, 0, {
-          cause: error?.message || "fetch_failed",
-          fallback_cause: fallbackError?.message || "fallback_fetch_failed",
-          url,
-          fallback_url: fallbackUrl
+        throw new ErclaveApiError("Network request and local fallback failed.", 0, {
+          error: {
+            code: error?.name === "AbortError" || fallbackError?.name === "AbortError" ? "request_timeout" : "network_unavailable",
+            message: "The API could not be reached.",
+            correlation_id: "",
+            details: { service: apiLabel, cause: error?.message || "fetch_failed", fallback_cause: fallbackError?.message || "fallback_fetch_failed", url, fallback_url: fallbackUrl }
+          }
         });
       }
     } else {
-      throw new ErclaveApiError(`No se pudo conectar con ${apiLabel} en ${baseUrl}. Revisa que el servicio local este activo y que el navegador no tenga cache de la URL anterior.`, 0, {
-        cause: error?.message || "fetch_failed",
-        url
+      throw new ErclaveApiError("Network request failed.", 0, {
+        error: {
+          code: error?.name === "AbortError" ? "request_timeout" : "network_unavailable",
+          message: "The API could not be reached.",
+          correlation_id: "",
+          details: { service: apiLabel, cause: error?.message || "fetch_failed", url }
+        }
       });
     }
   }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const message = payload?.error?.message || `API request failed with status ${response.status}`;
-    throw new ErclaveApiError(message, response.status, payload);
+    const responseCorrelationId = response.headers.get("X-Correlation-Id") || "";
+    const fallbackCode = ({
+      401: "auth_required",
+      403: "permission_denied",
+      404: "record_not_found",
+      409: "operation_conflict",
+      422: "validation_failed",
+      429: "rate_limit_exceeded"
+    })[response.status] || (response.status >= 500 ? "service_unavailable" : "request_failed");
+    const normalizedPayload = payload?.error
+      ? {
+          ...payload,
+          error: {
+            ...payload.error,
+            correlation_id: payload.error.correlation_id || responseCorrelationId,
+            details: { ...(payload.error.details || {}), service: apiLabel }
+          }
+        }
+      : {
+          error: {
+            code: fallbackCode,
+            message: typeof payload?.detail === "string" ? payload.detail : "The request was rejected.",
+            correlation_id: responseCorrelationId,
+            details: { service: apiLabel, issues: Array.isArray(payload?.detail) ? payload.detail : [] }
+          }
+        };
+    throw new ErclaveApiError(normalizedPayload.error.message, response.status, normalizedPayload);
   }
 
   return payload;

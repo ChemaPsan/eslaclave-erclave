@@ -10,6 +10,8 @@ Regla transversal de portada: la raíz de cada módulo operativo consulta report
 
 Regla transversal de mutaciones: guardar, crear, editar, eliminar o cambiar estatus muestra inmediatamente un indicador bilingüe de operación en curso y bloquea nuevas activaciones hasta que finaliza la solicitud. El bloqueo se libera también ante error y usa un contador para no ocultarse mientras exista otra mutación pendiente.
 
+Regla transversal de feedback: los bloqueos funcionales, warnings y errores se localizan por `error.code`, explican qué no cambió y cuál es la siguiente acción. El diagnóstico de la API no se muestra directamente y un control de estatus rechazado vuelve al valor confirmado. La taxonomía vive en `docs/arquitectura/feedback_operativo_y_errores.md`.
+
 ## Módulos documentados
 
 | Archivo | Módulo | Propósito |

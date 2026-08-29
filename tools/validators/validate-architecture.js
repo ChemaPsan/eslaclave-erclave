@@ -6,6 +6,38 @@ const microfrontendsDir = fromRoot("frontend/microfrontends");
 const servicesDir = fromRoot("backend/services");
 const errors = [];
 
+function getImplementedModulePermissions(openApiSource, moduleCode) {
+  const pathsIndex = openApiSource.indexOf("\npaths:");
+  const header = pathsIndex >= 0 ? openApiSource.slice(0, pathsIndex) : openApiSource;
+  if (/^x-implementation-status:\s*planned\s*$/m.test(header)) return [];
+
+  const lines = openApiSource.split(/\r?\n/);
+  const permissions = new Set();
+  const methodPattern = /^    (get|post|put|patch|delete):/;
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!methodPattern.test(lines[index])) continue;
+    const block = [lines[index]];
+    let next = index + 1;
+    while (
+      next < lines.length
+      && !methodPattern.test(lines[next])
+      && !/^  \//.test(lines[next])
+      && !/^components:/.test(lines[next])
+    ) {
+      block.push(lines[next]);
+      next += 1;
+    }
+    index = next - 1;
+    const operation = block.join("\n");
+    if (/x-implementation-status:\s*planned/.test(operation)) continue;
+    const requiredModule = operation.match(/x-required-module:\s*([a-z][a-z0-9_]*)/)?.[1];
+    if (requiredModule !== moduleCode) continue;
+    const permissionPattern = new RegExp(`${moduleCode}\\.[a-z0-9_]+(?:\\.[a-z0-9_]+)+`, "g");
+    for (const permission of operation.match(permissionPattern) || []) permissions.add(permission);
+  }
+  return [...permissions].sort();
+}
+
 const expectedMicrofrontends = [
   "produccion",
   "almacenes",
@@ -72,6 +104,30 @@ for (const relativePath of microfrontendFiles) {
   }
   if (statusMatch?.[1] === "implemented" && permissionCodes.length === 0) {
     errors.push(`${relativePath} is implemented but declares no permissions.`);
+  }
+  const service = source.match(/service:\s*["']([^"']+)["']/)?.[1];
+  if (!service) {
+    errors.push(`${relativePath} must declare its owning service.`);
+  } else if (statusMatch?.[1] === "implemented") {
+    const moduleCode = service.replace(/-service$/, "");
+    const contractPath = `contracts/api/${service}.openapi.yaml`;
+    const contractFullPath = fromRoot(...contractPath.split("/"));
+    if (!fs.existsSync(contractFullPath)) {
+      errors.push(`${relativePath} references ${service} without ${contractPath}.`);
+    } else {
+      const expectedPermissions = getImplementedModulePermissions(readText(contractPath), moduleCode);
+      const declaredPermissions = [...new Set(permissionCodes)].sort();
+      const missingPermissions = expectedPermissions.filter((code) => !declaredPermissions.includes(code));
+      const extraPermissions = declaredPermissions.filter((code) => !expectedPermissions.includes(code));
+      if (missingPermissions.length) {
+        errors.push(`${relativePath} omits implemented ${moduleCode} permissions: ${missingPermissions.join(", ")}.`);
+      }
+      if (extraPermissions.length) {
+        errors.push(`${relativePath} declares permissions without an implemented ${moduleCode} operation: ${extraPermissions.join(", ")}.`);
+      }
+    }
+  } else if (statusMatch?.[1] === "planned" && permissionCodes.length) {
+    errors.push(`${relativePath} is planned and must not advertise runtime permissions.`);
   }
   const importMatches = [...source.matchAll(/from\s+["']([^"']+)["']/g)];
 

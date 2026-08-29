@@ -21,9 +21,22 @@ for (const token of [
   "data-open-pending-purchasing-requisitions",
   'if(id==="reabastecimiento")',
   "No lista ni crea ordenes de compra",
-  "contentFirst=false"
+  "contentFirst=false",
+  "getPurchasingFlowTitle",
+  "getPurchasingFlowSteps",
+  '"ordenes-de-compra":[["Origen"',
+  'renderFlowGuide(getPurchasingFlowTitle(title),getPurchasingFlowSteps(id))',
+  "openPurchasingCancellationModal",
+  'id="purchasingCancellationForm"',
+  'renderFormErrors([t("cancellationReasonRequired")])'
 ]) {
   if (!frontend.includes(token)) errors.push(`Purchasing UI continuity missing ${token}`);
+}
+
+const purchasingUi = frontend.slice(frontend.indexOf("function purchasingStatus"), frontend.indexOf("function inventoryQueryKey"));
+if (/\bprompt\s*\(/.test(purchasingUi)) errors.push("Purchasing cancellations must use the ERClave modal instead of a native prompt.");
+if (!purchasingUi.includes('openPurchasingCancellationModal("requisition"') || !purchasingUi.includes('openPurchasingCancellationModal("order"')) {
+  errors.push("Requisition and purchase-order cancellation must both use the shared Purchasing modal.");
 }
 
 for (const permission of [

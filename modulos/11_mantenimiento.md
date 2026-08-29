@@ -183,3 +183,10 @@ MTBF queda pendiente hasta contar con horas reales de operacion; no se inferira 
 - El formulario solo reserva contra un almacen activo `spare_parts`. Si el maestro no existe, muestra la causa y, con permiso de Inventario, abre su alta con el tipo correcto precargado.
 - Cada solicitud visible enumera codigo, nombre, cantidad, unidad y estado por partida; ya no se reduce a un contador o al nombre del almacen.
 - La tarjeta identifica de forma explicita al tecnico asignado. El selector conserva la seleccion vigente y distingue **Reasignar** de la primera asignacion.
+
+## Guias de flujo transversales CHG-248
+
+- Ordenes muestra el recorrido Reporte, Asignacion, Ejecucion y Cierre; el ultimo paso conserva la regla de liberar sin reanudar Produccion automaticamente.
+- Refacciones muestra Orden, Almacen, Reserva y Conciliacion, manteniendo Inventory como autoridad de almacenes, reservas y movimientos.
+- Ambas rutas reutilizan el riel vertical colapsable estandar, con contenido equivalente ES/EN y reacomodo por ancho real del contenedor.
+- La guia es ayuda contextual: no sustituye permisos `maintenance.*`, validaciones backend, conciliacion durable ni evidencia tecnica de cierre.

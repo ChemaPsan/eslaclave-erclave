@@ -23,5 +23,6 @@ Antes de declarar terminado un cambio:
 3. actualizar `ESTADO_ACTUAL.md` y `PENDIENTES.md` si el estado real cambio;
 4. registrar el corte en `TRAZABILIDAD.md`;
 5. indicar expresamente si hubo migraciones, seeds, despliegues o escrituras externas.
+6. si se modificaron errores, warnings, estados o copy operativo, ejecutar `npm.cmd run validate:error-feedback` y confirmar paridad ES/EN, severidad y restauracion del estado rechazado.
 
 La conversacion es contexto temporal. Estos archivos son la memoria persistente del proyecto.

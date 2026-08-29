@@ -9,6 +9,7 @@
     "validate:documentation": "node tools/validators/validate-documentation-freshness.js",
     "validate:agents": "node tools/validators/validate-agents.js",
     "validate:i18n": "node tools/validators/validate-i18n.js",
+    "validate:error-feedback": "node tools/validators/validate-error-feedback.js",
     "validate:active-localization": "node tools/validators/validate-active-module-localization.js",
     "validate:responsive": "node tools/validators/validate-responsive-ui.js",
     "validate:selectors": "node tools/validators/validate-scalable-selectors.js",

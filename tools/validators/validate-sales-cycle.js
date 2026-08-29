@@ -22,6 +22,7 @@ const checks = {
 const errors=[];
 for(const [path,fragments] of Object.entries(checks)){const source=readText(path);for(const fragment of fragments)if(!source.includes(fragment))errors.push(`${path} missing ${fragment}`);}
 const frontend = readText("frontend/app.js");
+const frontendStyles = readText("frontend/styles.css");
 for(const token of ["async function openSalesQuotePrintModal", "documentRecordUnavailable", "remove-document-logo"]){if(!frontend.includes(token))errors.push(`Document template guardrail missing ${token}`);}
 const productBuilder = frontend.slice(frontend.indexOf("function buildProductServiceFromForm"), frontend.indexOf("function validateProductService"));
 if (!productBuilder.includes('inventoryItemId: String(data.get("inventoryItemId")')) errors.push("ProductService form does not persist the authoritative Inventory mapping.");
@@ -32,4 +33,18 @@ const salesUi = frontend.slice(frontend.indexOf("function renderSalesCustomersPa
 for (const forbidden of ['data-delivery-id="${delivery.id}"', 'data-record-id="${record.id}"']) {
   if (salesUi.includes(forbidden)) errors.push(`Sales UI contains an unescaped mutable attribute: ${forbidden}`);
 }
+if (frontend.includes("function renderSalesPlannedPanel")) errors.push("Sales UI must not retain obsolete planned copy for implemented Orders and Deliveries.");
+if (frontend.includes('["Pedidos","Planeado","warning"]') || frontend.includes('["Orders","Planned","warning"]')) errors.push("Sales root must count implemented Orders instead of labeling them planned.");
+for (const token of ["isSalesMarginSubmodule", "renderSalesMarginPanel", 'hasPermission("sales.order.read")', "actualCostSource", 'activeSubmodule: button.dataset.salesMarginTarget', "const isReadOnlySalesMargin", 'module.id === "ventas" && submodule?.id === "margen"']) {
+  if (!frontend.includes(token)) errors.push(`Read-only Sales margin projection missing ${token}`);
+}
+if (!frontendStyles.includes(".topbar-actions .primary-action[hidden]")) errors.push("Hidden topbar actions need an explicit CSS guard so read-only Sales Margin cannot expose generic creation.");
+const marginPanel = frontend.slice(frontend.indexOf("function renderSalesMarginPanel"), frontend.indexOf("function findSalesQuoteByCode"));
+for (const forbidden of ["mockDb.addModuleRecord", "saveGenericRecordForm", 'data-action="module-primary"']) {
+  if (marginPanel.includes(forbidden)) errors.push(`Sales Margin must remain read-only and cannot contain ${forbidden}.`);
+}
+const salesModuleDoc = readText("modulos/04_ventas_clientes.md");
+if (!/\| QA \|[^\n]*sales-service[^\n]*20260821_0023/i.test(salesModuleDoc)) errors.push("Sales module environment table must reflect the deployed QA service and revision 20260821_0023.");
+const salesManifest = readText("frontend/microfrontends/ventas/manifest.js");
+if (!salesManifest.includes('"/ventas/margen"')) errors.push("Sales manifest must expose the implemented read-only Margin route.");
 if(errors.length)fail("sales cycle validation failed",errors);else ok("Sales baseline and CHG-203 correction guardrails are documented and wired.");
