@@ -7,7 +7,7 @@
         <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#300C57;" value="ERClave - Estado actual Local y QA" vertex="1">
           <mxGeometry height="40" width="960" x="320" y="20" as="geometry" />
         </mxCell>
-        <mxCell id="note" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontColor=#1F1233;align=center;spacing=10;" value="Corte documental: 2026-08-21. Local aislado no consume QA; las capacidades futuras se identifican como planned." vertex="1">
+        <mxCell id="note" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontColor=#1F1233;align=center;spacing=10;" value="Corte documental: 2026-08-24. Local aislado no consume QA; Compras y Mantenimiento existen solo en Local." vertex="1">
           <mxGeometry height="55" width="740" x="430" y="75" as="geometry" />
         </mxCell>
         <mxCell id="localBox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7FF;strokeColor=#9B0FC9;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="Ambiente local de prueba" vertex="1">
@@ -19,7 +19,7 @@
         <mxCell id="validationBox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2563EB;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="Validacion y trazabilidad" vertex="1">
           <mxGeometry height="130" width="1180" x="210" y="825" as="geometry" />
         </mxCell>
-        <mxCell id="frontend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B0FC9;fontColor=#1F1233;" value="Frontend local&#xa;Shell + modulos activos&#xa;API real para Admin, Produccion, Inventory, RH y Ventas hasta Entregas" vertex="1">
+        <mxCell id="frontend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B0FC9;fontColor=#1F1233;" value="Frontend local&#xa;Shell + modulos activos&#xa;API real: Admin, Produccion, Inventory, RH, Ventas, Compras y Mantenimiento" vertex="1">
           <mxGeometry height="90" width="230" x="115" y="250" as="geometry" />
         </mxCell>
         <mxCell id="adminSvc" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;" value="admin-service local&#xa;FastAPI :8000&#xa;tenants, entitlements, usuarios, roles, permisos, policy" vertex="1">
@@ -31,19 +31,19 @@
         <mxCell id="proxy" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="PostgreSQL local aislado&#xa;127.0.0.1 :5434&#xa;base erclave_local" vertex="1">
           <mxGeometry height="90" width="230" x="405" y="590" as="geometry" />
         </mxCell>
-        <mxCell id="db" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="PostgreSQL Local&#xa;schemas por servicio&#xa;Alembic head 20260821_0023" vertex="1">
+        <mxCell id="db" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="PostgreSQL Local&#xa;schemas por servicio&#xa;Alembic head 20260825_0029" vertex="1">
           <mxGeometry height="100" width="230" x="955" y="245" as="geometry" />
         </mxCell>
         <mxCell id="adminSchema" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;" value="schema admin REAL&#xa;tenants, users, memberships, roles, permissions, role_permissions, membership_roles, tenant_modules, audit_events" vertex="1">
           <mxGeometry height="150" width="220" x="1238" y="217" as="geometry" />
         </mxCell>
-        <mxCell id="prodSchema" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;" value="schemas reales Local&#xa;production + inventory + hr&#xa;referencias cruzadas por API, sin FK entre servicios" vertex="1">
+        <mxCell id="prodSchema" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;" value="schemas reales Local&#xa;production + inventory + hr + sales + purchasing + maintenance&#xa;referencias por API, sin FK cruzadas" vertex="1">
           <mxGeometry height="125" width="220" x="1210" y="430" as="geometry" />
         </mxCell>
         <mxCell id="qaData" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontColor=#1F1233;" value="Datos sinteticos solo Local&#xa;tenant ten_739ee59d765d5e14818674800d&#xa;QA conserva catalogos funcionales vacios" vertex="1">
           <mxGeometry height="125" width="230" x="955" y="520" as="geometry" />
         </mxCell>
-        <mxCell id="alembic" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Alembic&#xa;Local head 20260821_0023&#xa;QA head 20260805_0013" vertex="1">
+        <mxCell id="alembic" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Alembic&#xa;Local head 20260825_0029&#xa;QA head 20260821_0023" vertex="1">
           <mxGeometry height="100" width="230" x="98" y="585" as="geometry" />
         </mxCell>
         <mxCell id="tests" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Pruebas backend&#xa;python -m pytest&#xa;resultado vigente en ESTADO_ACTUAL.md" vertex="1">
@@ -52,7 +52,7 @@
         <mxCell id="validators" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Validadores repo&#xa;npm run validate&#xa;OpenAPI, arquitectura, trazabilidad" vertex="1">
           <mxGeometry height="60" width="260" x="540" y="875" as="geometry" />
         </mxCell>
-        <mxCell id="trace" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Trazabilidad&#xa;CHG-193 trabajadores&#xa;CHG-194 unidades / CHG-195 saneamiento" vertex="1">
+        <mxCell id="trace" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Trazabilidad&#xa;CHG-234 Mantenimiento&#xa;CHG-235 endurecimiento y conciliacion" vertex="1">
           <mxGeometry height="60" width="260" x="860" y="875" as="geometry" />
         </mxCell>
         <mxCell id="contracts" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Contratos OpenAPI&#xa;YAML parseable + rutas comparadas&#xa;operaciones futuras marcadas planned" vertex="1">

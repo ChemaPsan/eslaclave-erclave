@@ -4,58 +4,53 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ERClave | Propuesta Frontend</title>
-    <link rel="stylesheet" href="./styles.css?v=20260821-chg212-production-codes" />
+    <link rel="stylesheet" href="./styles.css?v=20260827-chg251-error-feedback" />
   </head>
   <body>
-    <a class="skip-link" href="#mainWorkspace">Saltar al contenido principal</a>
+    <a class="skip-link" href="#mainWorkspace" data-i18n="skipToMain">Saltar al contenido principal</a>
     <div class="app-shell" data-theme="light">
-      <aside class="sidebar" aria-label="Navegacion principal">
+      <aside class="sidebar" aria-label="Navegacion principal" data-i18n-aria-label="mainNavigation">
         <div class="brand-block">
           <div class="brand-mark">ER</div>
           <div>
             <strong>ERClave</strong>
-            <span>Operacion modular</span>
+            <span data-i18n="modularOperation">Operacion modular</span>
           </div>
         </div>
 
-        <nav class="module-nav" id="moduleNav" aria-label="Modulos y submodulos"></nav>
+        <nav class="module-nav" id="moduleNav" aria-label="Modulos y submodulos" data-i18n-aria-label="modulesNavigation"></nav>
 
         <div class="sidebar-footer">
-          <button class="icon-button" id="themeToggle" type="button" aria-label="Cambiar tema" title="Cambiar tema">
+          <button class="icon-button" id="themeToggle" type="button" aria-label="Cambiar tema" title="Cambiar tema" data-i18n-aria-label="changeTheme" data-i18n-title="changeTheme">
             <span class="icon">◐</span>
           </button>
-          <button class="icon-button" id="langToggle" type="button" aria-label="Cambiar idioma" title="Cambiar idioma">
+          <button class="icon-button" id="langToggle" type="button" aria-label="Cambiar idioma" title="Cambiar idioma" data-i18n-aria-label="changeLanguage" data-i18n-title="changeLanguage">
             <span class="icon">ES</span>
           </button>
-          <button class="icon-button" id="adminShortcut" type="button" aria-label="Administracion" title="Administracion">
+          <button class="icon-button" id="adminShortcut" type="button" aria-label="Administracion" title="Administracion" data-i18n-aria-label="administration" data-i18n-title="administration">
             <span class="icon">⚙</span>
           </button>
         </div>
       </aside>
 
       <main class="workspace" id="mainWorkspace" tabindex="-1">
-        <section class="context-bar" aria-label="Contexto de sesion">
-          <div class="context-pill">
-            <span class="context-label">Usuario</span>
-            <strong id="contextUser">Sin sesion</strong>
-          </div>
-          <div class="context-pill branch-context" id="branchContext">
-            <span class="context-label">Sucursal</span>
-            <strong id="contextBranch">Matriz</strong>
-          </div>
-          <button class="context-logout" id="authButton" type="button" hidden>Cerrar sesion</button>
-        </section>
-
         <header class="topbar">
           <div class="topbar-title">
-            <button class="back-button" id="backButton" type="button" aria-label="Volver a la pantalla anterior" title="Volver" disabled>
+            <button class="back-button" id="backButton" type="button" aria-label="Volver a la pantalla anterior" title="Volver" data-i18n-aria-label="backToPreviousScreen" data-i18n-title="back" disabled>
               <span>&lt;</span>
             </button>
-            <div>
-              <p class="eyebrow" data-i18n="tenant">Cliente piloto</p>
-              <h1 data-i18n="title">Centro operativo</h1>
-            </div>
           </div>
+          <section class="context-bar" aria-label="Contexto de sesion" data-i18n-aria-label="sessionContext">
+            <div class="context-pill">
+              <span class="context-label" data-i18n="userLabel">Usuario</span>
+              <strong id="contextUser">Sin sesion</strong>
+            </div>
+            <div class="context-pill branch-context" id="branchContext">
+              <span class="context-label" data-i18n="branchLabel">Sucursal</span>
+              <strong id="contextBranch">Matriz</strong>
+            </div>
+            <button class="context-logout" id="authButton" type="button" hidden>Cerrar sesion</button>
+          </section>
           <div class="topbar-actions">
             <label class="search-field">
               <span>⌕</span>
@@ -68,39 +63,15 @@
           </div>
         </header>
 
-        <section class="status-strip" aria-label="Indicadores principales">
-          <article class="metric-card">
-            <span class="metric-label" data-i18n="metricProduction">Produccion activa</span>
-            <strong>18</strong>
-            <small class="trend positive">+12%</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label" data-i18n="metricInventory">Inventario critico</span>
-            <strong>7</strong>
-            <small class="trend warning">3 faltantes</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label" data-i18n="metricMargin">Margen estimado</span>
-            <strong>32.4%</strong>
-            <small class="trend positive">estable</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label" data-i18n="metricAccounting">Pendiente contable</span>
-            <strong>11</strong>
-            <small class="trend danger">requiere mapeo</small>
-          </article>
-        </section>
-
         <section class="content-grid">
           <section class="main-panel" id="modulePanel"></section>
 
           <aside class="insight-panel">
+            <section class="status-strip" aria-label="Indicadores principales" data-i18n-aria-label="mainIndicators"></section>
             <div class="panel-head">
               <div>
-                <p class="eyebrow" data-i18n="notifications">Notificaciones</p>
                 <h2 data-i18n="alertsTitle">Alertas operativas</h2>
               </div>
-              <span class="chip active" data-i18n="alertNow">Ahora</span>
             </div>
 
             <div class="flow-list" id="flowList"></div>
@@ -121,6 +92,6 @@
     <div class="auth-gate" id="authGate" hidden></div>
 
     <script src="./env.js"></script>
-    <script type="module" src="./app.js?v=20260821-chg212-production-codes"></script>
+    <script type="module" src="./app.js?v=20260828-chg252-maintenance-load"></script>
   </body>
 </html>

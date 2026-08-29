@@ -11,7 +11,8 @@ paths:
     get:
       operationId: getSalesReferenceData
       x-required-module: sales
-      x-permissions: [sales.customer.read, sales.customer.create, sales.customer.update, sales.quote.read, sales.quote.create, sales.quote.update]
+      x-permissions: [sales.customer.read, sales.customer.create, sales.customer.update, sales.quote.read, sales.quote.create, sales.quote.update, sales.order.read, sales.order.create]
+      x-permission-mode: any
       parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
       responses: { '200': { description: Monedas y condiciones de pago versionadas., content: { application/json: { schema: { $ref: '#/components/schemas/SalesReferenceDataResponse' } } } } }
   /v1/sales/customers:

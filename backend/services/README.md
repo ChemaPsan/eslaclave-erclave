@@ -14,6 +14,7 @@ Cada microservicio debe ser dueno de su dominio, datos, reglas y API.
 - `admin-service`
 - `accounting-service`
 - `hr-service`
+- `maintenance-service` (implementado en Local; ordenes correctivas, tiempos y refacciones)
 
 ## Regla de oro
 

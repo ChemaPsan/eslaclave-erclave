@@ -101,6 +101,16 @@ Los manuales funcionales de Produccion y Almacenes CHG-222 continúan vigentes; 
 - Base: preferir `forward-fix`; restaurar backup solo mediante decision explicita. No ejecutar downgrade despues de admitir escrituras sin evaluar perdida de datos.
 - Bootstrap de Ventas: al ser servicio nuevo, registrar su primera revision y definir si se deshabilita el entitlement o se retira trafico ante fallo.
 
-## Escrituras externas realizadas
+## Escrituras externas durante la preparacion
 
 Ninguna. Esta preparacion solo modifico archivos del repositorio y consulto endpoints publicos de salud/version. No ejecuto workflow, migracion, seed, configuracion de tenant, despliegue, trafico ni Hosting.
+
+## Resultado de la promocion (2026-08-23)
+
+- Workflow gobernado: `32621200718`.
+- SHA inmutable promovido: `7aa5c674b605d8268b6bfe00e0812b6a300277cb`.
+- Cloud SQL QA: Alembic `20260821_0023`.
+- Trafico 100% vigente: Admin `admin-service-qa-00021-669` despues del ajuste de invitaciones CHG-226; Inventory `inventory-service-qa-00006-ceb`, RH `hr-service-qa-00006-xey`, Produccion `production-service-qa-00011-naj` y Ventas `sales-service-qa-00001-gez`. Todos conservan el SHA certificado.
+- Frontend QA: `https://erclave.web.app`, sin URLs localhost y con las cinco APIs QA.
+- Incidente UAT CHG-226: se agrego `roles/firebaseauth.admin` exclusivamente a la cuenta runtime Admin para su ciclo de identidades. El endurecimiento de respuestas `pending` permanece pendiente de un nuevo candidato.
+- No se ejecutaron seeds ni se copiaron datos Local. La captura UAT sigue siendo explicita y tenant-safe.

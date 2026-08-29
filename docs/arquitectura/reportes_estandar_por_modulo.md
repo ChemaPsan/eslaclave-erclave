@@ -18,6 +18,7 @@ Los reportes estandar consultan catalogos, estados y documentos propios de un so
 | Ventas | clientes; cotizaciones; pedidos; entregas; margen comercial |
 | Administracion | Excepcion: conserva su centro de configuracion; sus consultas acompañan las pantallas administrativas |
 | Compras | proveedores; requisiciones; ordenes de compra; recepciones |
+| Mantenimiento | ordenes/backlog; indisponibilidad; espera de refacciones; tiempos/MTTR; consumo y costo; recurrencia |
 | Gastos | documentos; gastos; cuentas por pagar; pagos |
 | Costos | centros de costos; costo estimado; costo real; variaciones; rentabilidad |
 | Contabilidad | cuentas; periodos; asientos/polizas; mapeos; anexos |

@@ -8,6 +8,10 @@ Regla transversal de selección: maestros y documentos que crecen se consultan m
 
 Regla transversal de portada: la raíz de cada módulo operativo consulta reportes estándar propios y no genera acciones operativas. Altas, cambios y transiciones viven en submódulos. Administración es la excepción: su raíz conserva el centro de configuración. Los cruces, tableros configurables y análisis a la medida se reservan para el módulo Reportes, actualmente inactivo. La matriz completa está en `docs/arquitectura/reportes_estandar_por_modulo.md`.
 
+Regla transversal de mutaciones: guardar, crear, editar, eliminar o cambiar estatus muestra inmediatamente un indicador bilingüe de operación en curso y bloquea nuevas activaciones hasta que finaliza la solicitud. El bloqueo se libera también ante error y usa un contador para no ocultarse mientras exista otra mutación pendiente.
+
+Regla transversal de feedback: los bloqueos funcionales, warnings y errores se localizan por `error.code`, explican qué no cambió y cuál es la siguiente acción. El diagnóstico de la API no se muestra directamente y un control de estatus rechazado vuelve al valor confirmado. La taxonomía vive en `docs/arquitectura/feedback_operativo_y_errores.md`.
+
 ## Módulos documentados
 
 | Archivo | Módulo | Propósito |
@@ -23,6 +27,7 @@ Regla transversal de portada: la raíz de cada módulo operativo consulta report
 | [08_administracion_configuracion.md](08_administracion_configuracion.md) | Administración y configuración | Roles, permisos, módulos, submódulos, catálogos base y configuración por tenant. |
 | [09_contabilidad.md](09_contabilidad.md) | Contabilidad | Cuentas contables, periodos, asientos, anexos, mapeos contables y reportes contables. |
 | [10_recursos_humanos.md](10_recursos_humanos.md) | Recursos Humanos | Áreas, puestos, costo por hora, capacidad y elegibilidad para Producción. |
+| [11_mantenimiento.md](11_mantenimiento.md) | Mantenimiento | Ordenes correctivas, responsables, tiempos, continuidad productiva y refacciones. |
 
 ## Criterio de documentación
 
@@ -44,11 +49,12 @@ Cada módulo deberá documentarse con una estructura similar:
 
 | Modulo | Estado actual |
 |---|---|
-| Produccion | API, persistencia y UI reales en QA para el corte desplegado. El codigo Local posterior agrega validacion autoritativa, reservas/consumo, capacidad comprometida y costo real; aun no esta promovido a QA. |
-| Almacenes | Inventory real en QA para almacenes, articulos, movimientos, existencias y Kardex. El codigo Local posterior agrega reservas/consumo para Produccion, disponibilidad neta, valuacion y concurrencia; aun no esta promovido a QA. |
-| Ventas | Backend y UI Local para Clientes, Cotizaciones, Pedidos y Entregas hasta `20260818_0020`. CHG-204 cerro los bloqueadores CHG-203 con mapeo producto-articulo, sanitizacion, costo por fuente y orquestacion concurrente/reconciliable. Devoluciones y facturacion permanecen `planned`. |
+| Produccion | API, persistencia y UI reales en Local y QA: recetas ponderadas, validacion autoritativa, reservas/consumo, capacidad comprometida, avance porcentual y recepcion posterior de producto terminado. |
+| Almacenes | Inventory real en Local y QA para almacenes, articulos, movimientos, existencias, Kardex, reservas/consumo, disponibilidad neta, valuacion, concurrencia y recepcion de producto terminado. |
+| Ventas | Backend y UI reales en Local y QA para Clientes, Cotizaciones, Pedidos y Entregas hasta `20260818_0020`, con mapeo producto-articulo, sanitizacion, costo por fuente y orquestacion concurrente/reconciliable. Devoluciones y facturacion permanecen `planned`. |
 | Administracion | UI y `admin-service` reales en QA para organizacion, usuarios, roles, permisos, entitlements, sesion y backoffice. |
-| Recursos Humanos | `hr-service`, schema, contrato, UI y entitlement estructural reales en QA; areas y puestos permanecen vacios hasta captura funcional autorizada. Expedientes y capacidad autoritativa existen solo en codigo Local hasta su promocion. |
+| Recursos Humanos | `hr-service`, schema, contrato, UI, expedientes, elegibilidad productiva y capacidad autoritativa reales en Local y QA. Los datos QA dependen de captura funcional autorizada; no se asumen catalogos vacios. |
+| Mantenimiento | Backend, schema, contrato, permisos y UI reales en Local: correctivos manuales o desde Produccion, asignacion RH, tiempos, refacciones, bloqueo seguro y conciliacion durable. |
 | Resto de modulos | Mantienen MVP generico para especializarse progresivamente. |
 
 La navegacion efectiva depende de `session/context`, entitlements y permisos. Cada capacidad debe identificarse como QA, Local, mock o futura conforme a `docs/contexto/ESTADO_ACTUAL.md`; el estado no se duplica en fichas de agentes.

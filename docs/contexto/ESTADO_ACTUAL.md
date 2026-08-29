@@ -1,6 +1,6 @@
 # Estado actual de ERClave
 
-Ultima actualizacion: 2026-08-21.
+Ultima actualizacion: 2026-08-27.
 
 ## Ambiente local
 
@@ -12,20 +12,54 @@ Ultima actualizacion: 2026-08-21.
 - Production API local esperada en `http://127.0.0.1:8002`.
 - Inventory API local esperada en `http://127.0.0.1:8004`.
 - HR API local esperada en `http://127.0.0.1:8006`.
-- Sales API local esperada en `http://127.0.0.1:8008`; cubre Clientes, Cotizaciones, Pedidos, surtido y Entregas. No esta desplegada en QA.
+- Sales API local esperada en `http://127.0.0.1:8008`; cubre Clientes, Cotizaciones, Pedidos, surtido y Entregas. El mismo servicio ya esta desplegado en QA como parte del candidato de cinco servicios.
+- Purchasing API Local esperada en `http://127.0.0.1:8010`; cubre Proveedores, Requisiciones, Ordenes y Recepciones. No esta desplegada en QA ni Produccion.
 - PostgreSQL portatil aislado para Inventory escucha en `127.0.0.1:5434`, base `erclave_local`.
 - Firebase Auth Emulator escucha en `127.0.0.1:9099` y su UI en `127.0.0.1:4000`; el usuario local `admin.qa@erclave.local` resuelve el tenant demo sin consumir Firebase QA.
 - Firebase autentica; `admin-service /v1/session/context` resuelve tenant, membresia, modulos, permisos y alcance.
 
 ## Cortes funcionales relevantes
 
+### Feedback operativo
+
+- CHG-251 normaliza en Local los errores de API y Firebase mediante un catálogo común ES/EN gobernado por `error.code`; `message` se conserva sólo como diagnóstico y ya no se presenta directamente.
+- Las transiciones sensibles de Producción, Ventas, Compras y Mantenimiento distinguen éxito, warning y error; si una mutación falla, el selector o proyección vuelve al estado confirmado. Los errores inesperados pueden mostrar `correlation_id` como referencia de soporte.
+- Formularios, toasts y errores de carga declaran semántica ARIA, permanecen visibles según severidad y escapan contenido antes de insertarlo en HTML. `validate:error-feedback` protege estas reglas.
+
+### Compras
+
+- CHG-229 implementa en Local el primer corte supplier-to-receipt mediante `purchasing-service` en `http://127.0.0.1:8010` y schema aislado `purchasing`.
+- CHG-230 agrega perfil fiscal editable al maestro de proveedores. Las altas nuevas exigen razon social, RFC, regimen, correo de facturacion y codigo postal fiscal; RFC es unico por tenant y los registros heredados pueden completarse gradualmente.
+- CHG-231 habilita en la UI Local requisiciones con multiples partidas buscables. Backend rechaza articulos repetidos en el mismo documento y la conversion a Orden solicita un precio independiente por partida.
+- Compras es dueno de proveedores, requisiciones, ordenes, recepciones comerciales, idempotencia y auditoria. Inventory conserva la autoridad exclusiva de articulos, almacenes, movimientos, saldos y Kardex.
+- La requisicion transita de borrador a enviada y aprobada/rechazada; una orden solo consume requisicion aprobada o exige motivo de compra directa. Emitir congela la orden para recibir.
+- La recepcion rechaza duplicados y sobre-recepcion, admite parcialidad y solicita entradas idempotentes a Inventory. Si la autoridad fisica falla, conserva `needs_reconciliation` visible sin fingir una recepcion completada.
+- CHG-232 cierra el flujo source-to-receipt: edita borradores, exige coincidencia exacta requisicion/orden, cancela con motivo, recibe varias partidas, reserva saldo concurrentemente y permite conciliar solo lineas fallidas con claves estables. Inventory expone lectura puntual tenant-safe de almacen para validar la recepcion.
+- El catalogo Admin y manifiesto marcan `purchasing` como implementado, con dependencia obligatoria de `inventory`. La UI ofrece flujo bilingue real; reabastecimiento automatico, factura, CxP, pago, devolucion y asiento permanecen planeados.
+- CHG-248 incorpora en los cinco submodulos el riel de ayuda transversal bilingue; resume cada recorrido sin alterar permisos, estados ni contratos.
+- CHG-250 reemplaza los `prompt()` nativos de cancelacion por un modal ERClave bilingue que exige motivo, conserva los comandos y permisos puntuales existentes y presenta errores dentro del flujo.
+
+### Mantenimiento
+
+- CHG-252 corrige en Local la continuidad de carga del frontend: al terminar las consultas autoritativas, Mantenimiento vuelve a renderizar y deja el estado `Cargando Mantenimiento`; un guardrail evita reintroducir el bloqueo.
+- CHG-234 implementa Mantenimiento correctivo en Local: API `8012`, schema `maintenance`, ordenes manuales o ligadas a maquina/Produccion, responsable RH elegible, tiempos y solicitudes multi-linea al almacen de refacciones.
+- Solicitar una orden bloquea la maquina y pausa una orden productiva `in_progress`; resolver consume reservas y libera la maquina sin reanudar Produccion. Backoffice ya permite activar el modulo y el tenant demo Local lo tiene activo.
+- CHG-235 endurece el flujo en Local con revision `20260824_0028`: conciliacion manual durable, compensacion de reservas al cancelar, rebloqueo al reabrir, revalidacion RH al iniciar, asignacion primaria unica e indices de consulta por orden.
+- RH e Inventory son dependencias obligatorias. Production es integracion opcional y sigue siendo autoridad de maquinas y ordenes productivas.
+- La UI tolera fallos de catalogos sin perder la lectura de ordenes, respeta permisos de mutacion y distingue exito de `needs_reconciliation`. QA y Produccion no fueron modificados.
+- CHG-248 agrega el riel de ayuda transversal bilingue a Ordenes y Refacciones, conservando la regla de no reanudar Produccion automaticamente y la autoridad de Inventory sobre reservas y movimientos.
+
 ### Administracion y permisos
 
-- Solo en Local, Administracion incluye catalogos tenant-safe de unidades, monedas y condiciones de pago. Cada tarjeta abre una vista dedicada; altas/ediciones son idempotentes, correlacionadas y auditadas. CHG-205 endurecio `document.template` con logo reemplazable/eliminable, colores, pie y numeracion compartidos por los PDF de Ventas y Produccion. La UI es bilingue y permission-aware; el backend verifica formato, Base64, firma binaria y limite decodificado de 1 MB del logo. Ambos generadores recuperan el registro API si falta en cache, informan fallos visibles y escapan el contenido operativo antes de insertarlo en el documento.
-- Solo en Local, Backoffice edita datos basicos del tenant y gobierna sus entitlements contractuales. El administrador del tenant solo cambia `tenant_enabled`; `session/context`, policy y permisos operativos exigen entitlement activo mas preferencia encendida. Los modulos planeados no pueden habilitarse y `admin` es obligatorio. La cabeza Alembic aplicada en PostgreSQL Local es `20260821_0023`; QA permanece en `20260805_0013`.
-- Solo en Local, Administracion ofrece el catalogo de folios por tipo documental. Prefijo, separador, siguiente numero, longitud y modo administrado/manual son editables por tenant; la asignacion de un consecutivo es atomica, idempotente y auditada. Los formularios actuales de Produccion, Almacenes, RH y Ventas consumen esa autoridad antes de crear el registro.
+- CHG-236 implementa solo en Local autorizacion operativa granular: Produccion separa liberar, esperar recursos, iniciar, pausar, reanudar, enviar a validacion, finalizar y cancelar; cada resultado de etapa tiene permiso propio. Mantenimiento separa sus nueve transiciones y Almacenes separa leer de recibir producto terminado. Compras, Ventas y Recetas ya cumplian el patron y fueron auditados sin cambios de flujo.
+- CHG-237 endurece ese corte solo en Local: la autorizacion exacta de Produccion ocurre antes de precondiciones sensibles; Almacenes consume una proyeccion minima de orden terminada en vez de lecturas generales; OpenAPI y runtime comparan tambien sus permisos; y el mapa maestro/manuales quedan sincronizados.
+- El backend exige el permiso derivado de la accion solicitada aunque el usuario posea otra capacidad del mismo endpoint. El editor de Roles recibe los permisos desde OpenAPI y no depende de nombres fijos de puestos.
+
+- En Local y QA, Administracion incluye catalogos tenant-safe de unidades, monedas y condiciones de pago. Cada tarjeta abre una vista dedicada; altas/ediciones son idempotentes, correlacionadas y auditadas. CHG-205 endurecio `document.template` con logo reemplazable/eliminable, colores, pie y numeracion compartidos por los PDF de Ventas y Produccion. La UI es bilingue y permission-aware; el backend verifica formato, Base64, firma binaria y limite decodificado de 1 MB del logo. Ambos generadores recuperan el registro API si falta en cache, informan fallos visibles y escapan el contenido operativo antes de insertarlo en el documento.
+- Backoffice edita datos basicos del tenant y gobierna sus entitlements contractuales. El administrador del tenant solo cambia `tenant_enabled`; `session/context`, policy y permisos operativos exigen entitlement activo mas preferencia encendida. Los modulos planeados no pueden habilitarse y `admin` es obligatorio. La cabeza Alembic Local es `20260825_0029`; QA permanece en `20260821_0023`.
+- En Local y QA, Administracion ofrece el catalogo de folios por tipo documental. Prefijo, separador, siguiente numero, longitud y modo administrado/manual son editables por tenant; la asignacion de un consecutivo es atomica, idempotente y auditada. Los formularios actuales de Produccion, Almacenes, RH y Ventas consumen esa autoridad antes de crear el registro.
 - Los contratos OpenAPI parsean como YAML y un validador compara operaciones `implemented` con las rutas FastAPI. Capacidades futuras se marcan `x-implementation-status: planned`.
-- Los manifiestos de microfrontend distinguen `implemented`/`planned` y usan permisos puntuales con puntos; el runtime visual actual permanece centralizado en `frontend/app.js` hasta una extraccion modular posterior.
+- Los manifiestos de microfrontend distinguen `implemented`/`planned` y usan permisos puntuales con puntos; en los implementados, `permissions` es el inventario exhaustivo de operaciones OpenAPI implementadas del namespace propietario. El runtime visual actual permanece centralizado en `frontend/app.js` hasta una extraccion modular posterior.
 - El editor de permisos de roles trabaja con borrador explicito, busqueda, filtros, agrupacion por modulo/recurso, seleccion masiva visible y resumen de cambios; no incluye plantillas ni presets.
 - Los nombres tecnicos se conservan como identificadores de policy, pero la interfaz usa nombres y descripciones ES/EN mantenidos en `admin.permissions`.
 - El catalogo remoto requiere tenant y `admin.role.read`; solo expone permisos `tenant` asignables y marca disponibilidad segun el entitlement del modulo.
@@ -33,31 +67,31 @@ Ultima actualizacion: 2026-08-21.
 - Los grants historicos internos pueden conservarse como relacion para no perder trazabilidad, pero ya no ingresan a `session/context` ni producen autorizacion efectiva. El owner conserva un piso administrativo y no puede inactivarse.
 - El payload anterior `permission_ids + scope` permanece compatible y esta deprecado; la interfaz nueva usa `assignments + expected_revision`.
 - Mientras un ambiente no tenga `admin.role.permissions.manage`, Roles permite abrir `Ver permisos` en modo de solo lectura y explica por que la edicion permanece bloqueada; no aplica fallback de escritura inseguro.
-- La revision vigente de Cloud SQL QA es `20260805_0013`; incluye metadata de permisos, revision por rol, comandos idempotentes, Inventory, RH y referencias externas de areas en Produccion. La promocion gobernada del 2026-08-12 repitio Alembic y la configuracion estructural de forma idempotente sin cargar datos funcionales.
+- La revision vigente de Cloud SQL QA es `20260821_0023`. La promocion gobernada ejecuto la cadena `0013 -> 0023` sin copiar datos funcionales Local y publico el SHA inmutable `7aa5c674b605d8268b6bfe00e0812b6a300277cb` en los cinco servicios.
 
 ### Produccion
 
-- Solo en Local, las ordenes nuevas ya no aceptan responsables libres: exigen trabajadores activos validados por `hr-service`, tanto para responsable general como por etapa, y conservan ID externo mas nombre snapshot. Este corte aun no esta desplegado en QA.
+- En Local y QA, las ordenes nuevas ya no aceptan responsables libres: exigen trabajadores activos validados por `hr-service`, tanto para responsable general como por etapa, y conservan ID externo mas nombre snapshot.
 
 - Productos y servicios se presentan como catalogo maestro antes de consultar ordenes relacionadas.
-- En Local y QA, Productos/Servicios, Recetas/versiones, Maquinaria, Ordenes y etapas persisten mediante `production-service`; la UI recarga PostgreSQL y no degrada silenciosamente a `localStorage` cuando `apiMode=api`. El corte autoritativo descrito a continuacion existe solo en codigo Local y aun no esta desplegado en QA.
+- En Local y QA, Productos/Servicios, Recetas/versiones, Maquinaria, Ordenes y etapas persisten mediante `production-service`; la UI recarga PostgreSQL y no degrada silenciosamente a `localStorage` cuando `apiMode=api`. La validacion autoritativa descrita a continuacion esta desplegada en ambos ambientes.
 - La version vigente aprobada y el borrador/pendiente mas reciente se distinguen. Las ordenes siempre usan `current_version_id`, guardan snapshots de receta, recursos y costos autoritativos y conservan sus etapas aunque la receta cambie.
 - El editor API de Recetas consume materiales activos con `use_in_recipe=true` desde Inventory y puestos productivos/areas activas desde HR. No carga seeds; las etapas nuevas conservan ID externo y nombre snapshot del area mediante la revision Local `20260805_0013`.
 - El editor de Recetas separa materiales, mano de obra y maquinaria. Los materiales usan la unidad base de Almacenes; mano de obra y maquinaria se capturan como horas-persona y horas-maquina, con conversion transparente a minutos para el contrato vigente.
 - Las horas-persona y horas-maquina aceptan cualquier fraccion decimal, sin saltos obligatorios de 15 minutos; la UI aclara que `0.5 h = 30 min`.
 - El buscador de producto/servicio en Recetas presenta nombre y codigo comercial; los IDs tecnicos `prs_*` permanecen ocultos y se usan solo para la relacion interna.
 - Las listas, selectores, mensajes y documentos de Recetas ocultan IDs `rec_*`; muestran nombre, codigo del producto y version mientras conservan el ID en relaciones y atributos internos.
-- Solo en Local, la receta tiene folio de negocio propio, enumera sus fases y exige que sus pesos activos sumen 100%. La orden conserva ese snapshot y expone avance general ponderado. La seleccion de una version aprobada ya reconoce correctamente la version aprobada retornada por API aunque la proyeccion de cabecera no incluya `current_version_id`.
+- En Local y QA, la receta tiene folio de negocio propio, enumera sus fases y exige que sus pesos activos sumen 100%. La orden conserva ese snapshot y expone avance general ponderado. La seleccion de una version aprobada ya reconoce correctamente la version aprobada retornada por API aunque la proyeccion de cabecera no incluya `current_version_id`.
 - El alta y edicion de Maquinaria consulta areas activas de `hr-service`; no permite capturar areas libres y dirige a Areas y puestos cuando el catalogo esta vacio.
 - Las transiciones de orden y etapa se validan en backend, son idempotentes y auditadas. Una etapa terminal no vuelve a pendiente; completar todas las etapas lleva la orden a validacion y el cierre es explicito.
-- Solo en codigo Local, la validacion ya no acepta disponibilidad ni costos enviados por el navegador. Produccion consulta Inventarios y RH, descuenta reservas/capacidad comprometida por fecha, bloquea capacidad concurrentemente y crea reservas atomicas por almacen antes de liberar la orden.
-- La primera entrada de una orden a `in_progress` consume sus reservas como salidas inmutables en los almacenes que las otorgaron y fija el costo real de materiales; reanudar o cerrar no duplica movimientos. El cierre exige uso real de mano de obra/maquinaria y recalcula `actual_cost` desde cantidades reales por costo unitario snapshot. Cancelar antes del inicio libera reservas; despues del inicio conserva las salidas fisicas y libera los compromisos de capacidad aplicables.
-- Aprobar una receta revalida producto, materiales, unidades, puestos, areas y maquinaria activos. Maquinaria conserva `area_ref_id`; nombres y costos externos son snapshots, no texto maestro libre.
+- En Local y QA, la validacion ya no acepta disponibilidad ni costos enviados por el navegador. Produccion consulta Inventarios y RH, descuenta reservas/capacidad comprometida por fecha, bloquea capacidad concurrentemente y crea reservas atomicas por almacen antes de liberar la orden.
+- La primera entrada de una orden a `in_progress` consume sus reservas como salidas inmutables en los almacenes que las otorgaron y fija el costo real de materiales; reanudar o cerrar no duplica movimientos. En el corte vigente, cerrar exige todas las fases al 100%, pero no obliga a capturar minutos reales de mano de obra/maquinaria; esa medicion queda diferida hasta definir el modelo de eficiencia. `actual_cost` conserva el costo material consumido. Cancelar antes del inicio libera reservas; despues del inicio conserva las salidas fisicas y libera los compromisos de capacidad aplicables.
+- Aprobar una receta revalida producto, materiales, unidades, puestos, areas y maquinaria existente no inactiva. Una maquina en mantenimiento puede definir el proceso, pero aporta cero capacidad y bloquea la orden hasta reactivarse. `area_ref_id` sigue recomendado para asignacion/reportes; nombres y costos son snapshots y no se infieren relaciones por texto.
 - Areas y puestos pertenecen al modulo independiente Recursos Humanos, con microfrontend y `hr-service` propios.
-- Solo en Local, RH administra expedientes minimos de trabajadores con un puesto vigente, identificadores CURP/RFC/NSS validados y datos complementarios opcionales. La revision de RH es `20260817_0014` y la cabeza de codigo Local acumulada es `20260818_0017`; QA permanece en `20260805_0013`.
+- En Local y QA, RH administra expedientes minimos de trabajadores con un puesto vigente, identificadores CURP/RFC/NSS validados y datos complementarios opcionales. La cabeza Alembic comun es `20260821_0023`.
 - El entitlement `hr` controla la disponibilidad por tenant; alta y edicion usan permisos separados `hr.area.*` y `hr.position.*`.
 - El esquema `hr` incorpora aislamiento por tenant, FK compuesto area-puesto, idempotencia y auditoria. El 2026-07-31 se creo vacio en QA; posteriormente CHG-182 desplego `hr-service` y activo el entitlement estructural sin cargar areas ni puestos.
-- PostgreSQL QA conserva seis permisos `hr.*` activos y los permisos `production.labor.*` heredados inactivos. Los catalogos `hr.labor_areas` y `hr.labor_roles` quedaron en cero registros.
+- El corte estructural CHG-182 dejo seis permisos `hr.*` activos y los permisos `production.labor.*` heredados inactivos. Los catalogos partieron vacios; su contenido actual depende exclusivamente de las capturas UAT autorizadas y no se documenta como constante.
 - Produccion consume areas y puestos desde `hr-service`; no los persiste ni escribe su schema.
 - Las recetas en modo API ya no usan el catalogo fijo de materiales: consumen articulos activos marcados `use_in_recipe` y balances reales de Almacenes.
 
@@ -69,21 +103,21 @@ Ultima actualizacion: 2026-08-21.
 - Inventario consume balances enriquecidos con busqueda, filtros, orden y paginacion server-side.
 - La vista usa container queries: colapsa el flujo por defecto, transforma la tabla en tarjetas cuando el panel central se estrecha y mueve Alertas debajo del contenido en viewports intermedios.
 - Los movimientos registrados y no reversados son la fuente de verdad.
-- Solo en Local, cada articulo expone `default_unit_cost_per_base_unit` con semantica explicita de costo por unidad base y un calculador HTTP para conversiones compatibles (por ejemplo kg/g o L/ml). No inventa equivalencias para empaques o unidades personalizadas.
-- Solo en codigo Local, `available_quantity = max(on_hand_quantity - reserved_quantity, 0)`. Las reservas activas y no vencidas se muestran por ubicacion y se protegen con bloqueos transaccionales por tenant/articulo/almacen.
+- En Local y QA, cada articulo expone `default_unit_cost_per_base_unit` con semantica explicita de costo por unidad base y un calculador HTTP para conversiones compatibles (por ejemplo kg/g o L/ml). No inventa equivalencias para empaques o unidades personalizadas.
+- En Local y QA, `available_quantity = max(on_hand_quantity - reserved_quantity, 0)`. Las reservas activas y no vencidas se muestran por ubicacion y se protegen con bloqueos transaccionales por tenant/articulo/almacen.
+- En Local y QA, cada articulo incorpora costo unitario predeterminado; los saldos calculan costo promedio e importe de inventario desde movimientos inmutables. Salidas, transferencias, reversiones y consumos preservan la valuacion y rechazan stock disponible insuficiente.
+- La unidad base queda bloqueada despues del primer movimiento; articulos/almacenes inactivos no aceptan movimientos ni reservas y `maximum_stock` no puede ser menor que `minimum_stock`.
+- La bandera `inventory.items.use_in_recipe` pertenece a la migracion `20260730_0009`. Los catalogos partieron vacios en QA; desde la promocion `0023`, su contenido depende de las capturas UAT autorizadas y no se documenta como constante.
+- Inventario muestra con saldo cero los articulos sin movimientos que tengan almacen sugerido.
 
 ### Recursos Humanos
 
 - Areas y puestos son catalogos generales de RH. La bandera `intervenes_in_production=true`, junto con estatus activo, es la unica que hace elegible un puesto y sus trabajadores para recetas y ordenes; crear un puesto nuevo no activa esa bandera por defecto.
-- Solo en codigo Local, cada articulo incorpora costo unitario predeterminado; los saldos calculan costo promedio e importe de inventario desde movimientos inmutables. Salidas, transferencias, reversiones y consumos preservan la valuacion y rechazan stock disponible insuficiente.
-- La unidad base queda bloqueada despues del primer movimiento; articulos/almacenes inactivos no aceptan movimientos ni reservas y `maximum_stock` no puede ser menor que `minimum_stock`.
-- La bandera `inventory.items.use_in_recipe` pertenece a la migracion `20260730_0009`; la cabeza acumulada `20260730_0011` fue aplicada en QA el 2026-07-31 con autorizacion explicita. Los catalogos `inventory.warehouses`, `inventory.items` e `inventory.movements` permanecieron en cero registros.
-- Inventario muestra con saldo cero los articulos sin movimientos que tengan almacen sugerido.
 - La validacion local cubrio 10,000 articulos y 10,000 movimientos; consultar `docs/operaciones/validacion_volumen_inventario_local.md`.
 
 ### Ventas
 
-- Solo en Local, `sales-service` persiste Clientes, Cotizaciones, Pedidos y Entregas mediante las revisiones `20260818_0018`/`0019`/`0020`. CHG-204 cerro el plan correctivo de CHG-203: alta de Entregas, mapeo producto-articulo, sanitizacion, costo real por fuente y orquestacion durable/concurrente.
+- En Local y QA, `sales-service` persiste Clientes, Cotizaciones, Pedidos y Entregas mediante las revisiones `20260818_0018`/`0019`/`0020`. CHG-204 cerro el plan correctivo de CHG-203: alta de Entregas, mapeo producto-articulo, sanitizacion, costo real por fuente y orquestacion durable/concurrente.
 - Clientes exige codigo estable, contacto principal, moneda/condiciones controladas y responsable seleccionado de trabajadores activos de RH. El perfil fiscal es opcional, pero al iniciarse exige razon social, RFC/ID fiscal y correo de facturacion.
 - Cotizaciones exige cliente activo, producto/servicio activo de Produccion y unidad activa de Administracion igual a la unidad base. Backend calcula subtotal, descuentos, total, costo snapshot y margen estimado.
 - Los estados reales son borrador, cotizada, aprobada, vencida y cancelada; solo el borrador es editable y emitir/aprobar revalida referencias autoritativas.
@@ -91,9 +125,15 @@ Ultima actualizacion: 2026-08-21.
 - Los endpoints de lectura no requieren resolver maestros y la UI usa `Promise.allSettled`: una falla de catalogos o autoridades conserva documentos comerciales disponibles y bloquea solamente las mutaciones dependientes.
 - El onboarding inserta entitlements antes de poblar permisos del owner. Seleccionar Ventas desde Backoffice incluye RH y Produccion, evitando un tenant activo sin autorizaciones comerciales.
 - Pedidos nacen una sola vez de una cotizacion aprobada. Cada producto exige el articulo de Inventory mapeado por Production y puede usar reserva o solicitud de Production; servicios quedan listos. Surtido, cancelacion y confirmacion reclaman estado durable bajo locks, reanudan con claves estables y marcan `needs_reconciliation` tras una interrupcion externa. El costo de `stock` proviene del consumo y el de servicio de captura operativa; Production permanece sin costo real hasta su callback. Devoluciones y facturacion permanecen `planned`.
-- QA no tiene `sales-service`, migracion 0018 ni entitlement Sales activo; permanece en `20260805_0013`.
+- QA ya tiene `sales-service` y la cadena de migraciones hasta `20260821_0023`; la habilitacion efectiva de Ventas continua dependiendo del entitlement del tenant y de RH/Produccion.
+- CHG-250 alinea la verdad visible de Ventas: Pedidos se cuenta como capacidad implementada, se elimina copy planeado obsoleto y `Margen` queda como consulta de solo lectura derivada de Pedidos/Entregas, sin alta generica ni persistencia local de documentos.
 
 ### Interfaz transversal
+
+- CHG-249 aplica una jerarquia visual mas sobria a botones y badges operativos: las acciones secundarias usan superficies neutras, las primarias conservan el acento morado y los estados activo/advertencia/error usan color semantico suave con borde y contraste para tema claro/oscuro. El bloque CSS esta aislado para rollback y conserva targets de 44 px.
+- CHG-250 corrige la identidad de los submodulos RH; localiza su guia, resumen de capacidad y estados laborales provenientes de API; completa los nombres ingleses de Mantenimiento y las etiquetas/atributos accesibles del shell. Los nombres y descripciones capturados por el tenant permanecen como datos sin traduccion automatica.
+
+- CHG-227, implementado solo en Local: toda mutacion HTTP iniciada desde el frontend principal o Backoffice muestra una capa de progreso bilingue, marca la pagina con `aria-busy` y bloquea botones, clics y activaciones por teclado mientras la operacion sigue pendiente. Un contador conserva el bloqueo cuando coinciden varias solicitudes y `finally` lo libera ante exito o error, reduciendo comandos duplicados por reintentos del usuario.
 
 - El shell, los modulos activos, los catalogos, formularios y modales comparten reglas responsive basadas en el ancho real de su contenedor.
 - La guia descriptiva conserva el patron compartido de riel vertical izquierdo y compresion; solo pasa a una columna en anchos estrechos o mediante una excepcion explicita de pantalla.
@@ -164,6 +204,34 @@ En Local, la raíz de cada módulo es un centro de reportes estándar de solo le
 
 En Local, Administracion gobierna folios y consecutivos por tenant; Produccion identifica recetas y ordenes con codigos de negocio, exige fases ponderadas al 100% y calcula avance general ponderado; Entregables por area conserva numero, peso y area de la fase. Almacenes expone costo por unidad base y conversiones estandar compatibles. RH mantiene areas y puestos generales y solo comparte con Produccion los marcados explicitamente. Las revisiones `20260821_0021` y `20260821_0022` estan aplicadas solo en PostgreSQL Local; QA permanece en `20260805_0013`.
 
+# Actualizacion CHG-241 (2026-08-25)
+
+En Local, Produccion ya no exige concentrar todos los minutos de mano de obra y maquinaria en una sola fecha. Recetas guardan una duracion sugerida y las ordenes capturan inicio, dias productivos y fecha requerida. Production distribuye capacidad de lunes a viernes, descuenta compromisos activos por dia, devuelve el desglose autoritativo y persiste compromisos diarios bajo bloqueo transaccional. Los materiales se validan y reservan una sola vez. La revision `20260825_0029` esta aplicada solo en `127.0.0.1:5434/erclave_local`; QA y Produccion permanecen sin cambios. Calendarios tenant, turnos, festivos, ausencias y afectacion automatica por mantenimiento siguen pendientes.
+
+# Actualizacion CHG-242 (2026-08-25)
+
+En Local, el editor de Recetas ofrece maquinaria activa y en mantenimiento, incluso si su area RH sigue pendiente. La receta define que equipo requiere el proceso; el estatus operativo se evalua al validar/liberar la orden. Por ello una maquina en mantenimiento puede guardarse en la receta, pero sigue aportando cero minutos y bloquea la orden hasta volver a activa. Maquinaria inactiva o inexistente permanece rechazada. No hubo migracion ni cambios de maestros; QA y Produccion permanecen sin cambios.
+
+# Actualizacion CHG-243 (2026-08-25)
+
+En Local, **Validar definicion** dentro de Recetas comprueba exclusivamente que cada recurso exista y sea elegible y proyecta cantidades/costo; no compara inventario ni horas disponibles. La duracion sugerida solo precarga la futura orden. **Validar orden** conserva la comprobacion autoritativa de materiales, minutos de puestos y maquinas, compromisos existentes y horizonte multi-dia. No hubo migracion ni cambios de datos; QA y Produccion permanecen sin cambios.
+
+# Actualizacion CHG-244 (2026-08-25)
+
+El frontend Local compacta el shell y elimina la identidad generica **Centro operativo** y los badges tecnicos de persistencia. Los indicadores transversales viven ahora encima de **Alertas operativas** y responden al ancho del panel lateral. Los modales adaptan validaciones de recursos y partidas de Compras por su propio contenedor; Mantenimiento y Compras usan tarjetas operativas que apilan identidad, responsable, estados, partidas y acciones sin comprimir palabras. Los controles operativos pequenos conservan un target minimo de 44 px. La cobertura ES/EN activa incluye tambien Compras, Mantenimiento y Recursos Humanos. No hubo cambio de API, base de datos, datos ni ambientes remotos.
+
+# Actualizacion CHG-245 (2026-08-25)
+
+El frontend Local aprovecha mejor la zona superior en todos los modulos y submodulos. Contexto de sesion, sucursal, busqueda y accion contextual comparten una topbar adaptable en escritorio; en ancho intermedio se compactan antes de apilarse. La cabecera blanca previa al hero funciona solo como breadcrumb y retorno, sin repetir el titulo principal; heroes, workspace y paneles reducen su altura y espaciado compartidos. No hubo cambio de API, base de datos, datos ni ambientes remotos.
+
+# Actualizacion CHG-246 (2026-08-25)
+
+En Local, Resolver y Cancelar ordenes de Mantenimiento ya no usan cuadros `prompt()` del navegador. Ambas acciones abren formularios dentro del modal ERClave; Resolver captura diagnostico, causa raiz opcional, trabajo realizado y verificacion, mientras Cancelar solicita el motivo auditable. Validaciones y errores permanecen dentro del formulario. No hubo cambio de API, base de datos, datos ni ambientes remotos.
+
+# Actualizacion CHG-247 (2026-08-25)
+
+En Local, la captura requerida de tiempo de Mantenimiento ya es visible desde cada tarjeta de orden activa mediante **Registrar tiempo**. Resolver muestra el total acumulado y, cuando la orden tiene cero minutos, integra Inicio, Fin y Notas antes de ejecutar la transicion; si el rol carece de `maintenance.time.create`, explica la autoridad faltante. No hubo cambio de contrato, base de datos, datos ni ambientes remotos.
+
 # Actualizacion CHG-211 (2026-08-20)
 
 En Local se revirtió únicamente la portada de Administración: vuelve a mostrar su centro de configuración de organización, usuarios, roles, permisos, módulos activos y catálogos base. Los módulos operativos conservan las portadas de reportes estándar de CHG-210 y Reportes continúa inactivo. La excepción de Administración quedó documentada y protegida por el validador transversal; no cambia APIs ni persistencia.
@@ -219,3 +287,25 @@ El repositorio queda preparado, pero no autorizado ni desplegado, para un candid
 # Actualizacion CHG-225 (2026-08-21)
 
 El corte CHG-224 ya esta fusionado en `main` con SHA inmutable `adb134f7ac8b33b4a842d07db10c9b5f88525f2f` y su validacion CI concluyo correctamente. En QA se creo la identidad dedicada `erclave-sales-qa@erclave.iam.gserviceaccount.com` sin llaves administradas por usuario; conserva solo `roles/cloudsql.client`, acceso al secreto `erclave-database-url-qa` y `roles/run.invoker` sobre Admin, RH, Produccion e Inventory. GitHub Actions ya contiene las variables no secretas `QA_SALES_RUNTIME_SERVICE_ACCOUNT` y `QA_SALES_API_URL`. No se construyo candidato, no se leyo el secreto, no se ejecuto migracion/configuracion de tenant, no se desplego Cloud Run, no se movio trafico y no se publico frontend.
+
+# Actualizacion CHG-226 (2026-08-23)
+
+El workflow gobernado `32621200718` promovio a QA el SHA inmutable `7aa5c674b605d8268b6bfe00e0812b6a300277cb`, ejecuto Alembic hasta `20260821_0023`, llevo a 100% las revisiones certificadas de cinco servicios y publico el frontend sanitizado en `https://erclave.web.app`. Despues del ajuste de configuracion CHG-226, el trafico actual de Admin apunta a `admin-service-qa-00021-669`; Inventory permanece en `inventory-service-qa-00006-ceb`, RH en `hr-service-qa-00006-xey`, Produccion en `production-service-qa-00011-naj` y Ventas en `sales-service-qa-00001-gez`. Todos conservan el mismo SHA certificado.
+
+Durante UAT, crear y eliminar tenants devolvio `500`. Cloud Logging demostro `INSUFFICIENT_PERMISSION` del Admin SDK de Firebase en la identidad runtime `erclave-admin-qa@erclave.iam.gserviceaccount.com`; no fue un error operativo. Con autorizacion explicita se concedio solamente `roles/firebaseauth.admin` a esa cuenta. El tenant que se intento eliminar ya habia sido borrado en PostgreSQL antes del fallo de limpieza; la identidad Firebase asociada tampoco existia, comprobado con un job efimero sobre la misma imagen, eliminado al terminar. No se cargaron datos ni se modificaron otros tenants.
+
+El primer onboarding posterior respondio `201`, pero no envio correo porque la clave web publica solo llegaba al frontend. Con autorizacion explicita se agrego `ERCLAVE_FIREBASE_WEB_API_KEY` al runtime Admin, se valido la revision `admin-service-qa-00021-669` por URL etiquetada y se promovio al 100% conservando imagen y SHA. El workflow ahora deriva siempre esa variable desde `QA_FIREBASE_API_KEY`; los siguientes onboardings solicitan el correo de restablecimiento a Firebase en vez de devolver solo un enlace manual.
+
+En la rama CHG-226, aun pendiente de una nueva promocion gobernada, Admin traduce fallos Firebase a errores seguros y separa el resultado principal del seguimiento de invitacion/limpieza. El onboarding puede responder `invitation.delivery=pending` si el tenant ya persistio pero la invitacion fallo; el borrado responde `firebase_identity_cleanup.status=completed|pending` sin exponer correos internos ni presentar una limpieza secundaria como fracaso total.
+
+# Actualizacion CHG-238 (2026-08-24)
+
+En Local, Compras expone de forma continua el ciclo ya implementado por API: aprobar una requisicion abre la creacion de orden con la requisicion precargada; crear conserva la orden en borrador; emitir abre la recepcion con la orden seleccionada. Las tarjetas conservan accesos explicitos para retomar el siguiente paso. Formularios y comandos de proveedor, requisicion, orden y recepcion se muestran solo con su permiso puntual. No hubo migracion, cambio de contrato, escritura operativa ni modificacion en QA/Produccion.
+
+# Actualizacion CHG-239 (2026-08-24)
+
+En Local, Mantenimiento hace visible el tecnico asignado y conserva su seleccion al reasignar. Las ordenes elegibles enlazan directamente a **Solicitar refacciones** con el folio precargado; las solicitudes muestran sus partidas y estados. El diagnostico Local confirma que la base vigente no contiene un almacen `spare_parts`, por lo que la UI ahora ofrece abrir su alta en Inventario, preseleccionada correctamente y sujeta a `inventory.warehouse.create`, en vez de ocultar el recorrido. No se crearon maestros automaticamente, no hubo migracion ni cambios en QA/Produccion.
+
+# Actualizacion CHG-240 (2026-08-24)
+
+En Local, **Compras > Ordenes de compra** muestra primero el historial completo sin filtrar estatus y solo presenta el alta cuando hay requisiciones aprobadas pendientes de conversion. El diagnostico autenticado encontro dos OC emitidas (`OC_0001`, `OC_0002`) y ninguna requisicion elegible: `REQ_001`/`REQ_003` ya estan convertidas y `REQ_002` cancelada. **Reabastecimiento** queda visual y semánticamente separado como capacidad planeada; no contiene OC. No hubo escritura operativa, migracion ni cambios en QA/Produccion.

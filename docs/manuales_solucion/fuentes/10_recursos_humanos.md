@@ -1,8 +1,8 @@
 # Manual funcional de Recursos Humanos
 
 - Audiencia: responsables de RH y administradores de estructura
-- Alcance por ambiente: Local para folios y elegibilidad productiva
-- Ultima revision: 2026-08-21
+- Alcance por ambiente: Local y QA
+- Ultima revision: 2026-08-23
 - Capacidades cubiertas: areas, puestos, empleados y relacion con Produccion
 
 ## Proposito

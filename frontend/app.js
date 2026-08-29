@@ -2,6 +2,7 @@ import { modules, erpSubmoduleCatalog } from "./data/modules.js";
 import { defaultRecipes } from "./data/resources.js";
 import { mockDb } from "./data/mockDb.js";
 import { translations } from "./i18n/translations.js";
+import { getApiErrorTone, getLocalizedErrorMessage } from "./i18n/api-errors.js";
 import {
   createTenantBranch,
   createTenantLegalEntity,
@@ -33,15 +34,18 @@ import {
   updateProductionRecipeVersion
   ,createProductionProductService, updateProductionProductService, updateProductionProductServiceStatus,
   createProductionMachine, updateProductionMachine, validateProductionResources,
-  createProductionOrder, updateProductionOrderStatus, updateProductionOrderResource, updateProductionOrderStage, getProductionProducts, getCompletedProductionOrders, getUnlinkedProductionProducts, createAndLinkFinishedGood
+  createProductionOrder, updateProductionOrderStatus, updateProductionOrderResource, updateProductionOrderStage, getProductionProducts, getFinishedGoodsCandidates, getUnlinkedProductionProducts, createAndLinkFinishedGood
 } from "./api/production.js";
 import { createFinishedGoodsReceipt, createInventoryItem, createInventoryMovement, createInventoryWarehouse, getFinishedGoodsReceipts, getInventoryBalances, getInventoryCatalog, getInventoryItems, getInventoryMovements, updateInventoryItem, updateInventoryWarehouse } from "./api/inventory.js";
-import { createHrArea, createHrPosition, getHrAreas, getHrCatalog, updateHrArea, updateHrPosition, getHrWorkers, getProductionEligibleWorkers, getSalesEligibleWorkers, createHrWorker, updateHrWorker } from "./api/hr.js";
+import { createHrArea, createHrPosition, getHrAreas, getHrCatalog, updateHrArea, updateHrPosition, getHrWorkers, getProductionEligibleWorkers, getSalesEligibleWorkers, getMaintenanceEligibleWorkers, createHrWorker, updateHrWorker } from "./api/hr.js";
 import { approveSalesQuote, cancelSalesQuote, createSalesCustomer, createSalesQuote, expireSalesQuote, getSalesWorkspace, submitSalesQuote, updateSalesCustomer, updateSalesQuote, createSalesOrder, configureSalesOrderFulfillment, cancelSalesOrder, createSalesDelivery, confirmSalesDelivery, cancelSalesDelivery } from "./api/sales.js";
+import { cancelPurchasingOrder, cancelPurchasingRequisition, createPurchasingOrder, createPurchasingReceipt, createPurchasingRequisition, createPurchasingSupplier, getPurchasingWorkspace, issuePurchasingOrder, reconcilePurchasingReceipt, transitionPurchasingRequisition, updatePurchasingOrder, updatePurchasingRequisition, updatePurchasingSupplier } from "./api/purchasing.js";
+import { cancelMaintenanceMaterialRequest, createMaintenanceMaterialRequest, createMaintenanceOrder, createMaintenanceTime, getMaintenanceOrders, reconcileMaintenanceMaterialRequest, reconcileMaintenanceOrder, transitionMaintenanceOrder, updateMaintenanceOrder } from "./api/maintenance.js";
 import { getApiBaseUrl, getApiMode, setApiMode, getDemoActorId, getDemoTenantId, setActiveTenantId, isInventoryApiEnabled } from "./api/config.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "./auth.js";
 import {
   calculateRecipe,
+  validateRecipeDefinition,
   getOrderCostSnapshot,
   getOrderProgress,
   getProductionModuleData,
@@ -56,6 +60,7 @@ import {
   isRecipeApproved
 } from "./utils/production.js";
 import { diffDays, formatCurrency, formatNumber, startOfDay } from "./utils/format.js";
+import { installMutationFeedback } from "./utils/mutation-feedback.js";
 
 const state = {
   active: modules[0].id,
@@ -82,6 +87,15 @@ const state = {
   inventoryBalances: { status: "idle", data: [], page: {}, error: "", queryKey: "", cursor: "", previousCursors: [] },
   hrApi: { status: "idle", error: "", workers: [] },
   salesApi: { status: "idle", error: "", referenceWarnings: [], workers: [], references: { currencies: [], payment_terms: [] } },
+  purchasingApi: { status: "idle", error: "", suppliers: [], requisitions: [], orders: [], receipts: [], items: [], warehouses: [] },
+  purchasingSupplierEditId: "",
+  purchasingRequisitionEditId: "",
+  purchasingOrderEditId: "",
+  purchasingOrderSourceRequisitionId: "",
+  purchasingReceiptSourceOrderId: "",
+  maintenanceApi: { status: "idle", error: "", orders: [], workers: [], machines: [], productionOrders: [], items: [], warehouses: [] },
+  maintenanceSourceOrderId: "",
+  maintenanceMaterialSourceOrderId: "",
   unitCatalog: { status: "idle", data: [], error: "" },
   tenantResolution: {
     status: "idle",
@@ -111,22 +125,26 @@ function codeSequenceConfig(documentType){return (state.adminApi.data?.codeSeque
 function codeRequestKey(documentType){const value=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;return `web-code-${documentType}-${value}`;}
 async function resolveBusinessCode(documentType,manualCode,requestKey){if(getApiMode()!=="api")return String(manualCode||"").trim().toUpperCase();const allocation=await allocateBusinessCode(documentType,String(manualCode||"").trim()||null,requestKey);return allocation.code;}
 function unitSelect(name,selected="",attributes="required"){return `<select name="${name}" ${attributes}>${unitOptions(selected||"H87")}</select>`;}
-const mvpModuleIds = ["produccion", "almacenes", "recursos-humanos", "ventas"];
+const mvpModuleIds = ["produccion", "almacenes", "recursos-humanos", "ventas", "compras", "mantenimiento"];
 const backendModuleByUiModule = {
   administracion: "admin",
   produccion: "production",
   almacenes: "inventory",
   "recursos-humanos": "hr",
-  ventas: "sales"
+  ventas: "sales",
+  compras: "purchasing",
+  mantenimiento: "maintenance"
 };
 const uiModuleByBackendModule = Object.fromEntries(Object.entries(backendModuleByUiModule).map(([ui, backend]) => [backend, ui]));
-const tenantModuleDependencies = Object.freeze({ sales: ["hr", "production"] });
+const tenantModuleDependencies = Object.freeze({ sales: ["hr", "production"], purchasing: ["inventory"], maintenance: ["hr", "inventory"] });
 const adminPermissionModuleCatalog = Object.freeze({
   admin: { es: "Administracion", en: "Administration", order: 10 },
   production: { es: "Produccion", en: "Production", order: 20 },
   hr: { es: "Recursos Humanos", en: "Human Resources", order: 25 },
   inventory: { es: "Almacenes", en: "Inventory", order: 30 },
   sales: { es: "Ventas", en: "Sales", order: 40 },
+  purchasing: { es: "Compras", en: "Purchasing", order: 45 },
+  maintenance: { es: "Mantenimiento", en: "Maintenance", order: 47 },
   billing: { es: "Billing", en: "Billing", order: 50 },
   provisioning: { es: "Provisioning", en: "Provisioning", order: 60 },
   integrations: { es: "Integraciones", en: "Integrations", order: 70 }
@@ -230,6 +248,8 @@ function getNavigationModules() {
     return aOrder - bOrder;
   });
 }
+
+installMutationFeedback({ getMessage: () => t("operationInProgress") });
 
 function enhanceEntitySelect(select) {
   if(select.dataset.entityEnhanced==="true")return;
@@ -379,8 +399,9 @@ function renderNav() {
 
 function renderSubnav(module) {
   if (!getModuleAccessState(module).enabled) return "";
+  const moduleLabel = state.lang === "en" ? module.titleEn : module.title;
   return `
-    <div class="submodule-nav" aria-label="Submodulos de ${module.title}">
+    <div class="submodule-nav" aria-label="${escapeAttribute(t("submodulesOf", { module: moduleLabel }))}">
       ${normalizeSubmodules(module)
         .map((submodule) => `
             <button class="subnav-button ${state.active === module.id && state.activeSubmodule === submodule.id ? "active" : ""}" type="button" data-module="${module.id}" data-submodule-nav="${submodule.id}">
@@ -442,6 +463,12 @@ const standardReportCatalog = {
     ["Reporte de órdenes de compra", "Purchase order report", "Folio, proveedor, importe, comprador, entrega y estatus", "Number, supplier, amount, buyer, delivery, and status"],
     ["Reporte de recepciones", "Receipt report", "Orden, proveedor, artículo, cantidad, almacén y diferencia", "Order, supplier, item, quantity, warehouse, and variance"],
   ],
+  mantenimiento: [
+    ["Reporte de ordenes", "Maintenance order report", "Folio, objetivo, prioridad, responsable, estado y antiguedad", "Number, target, priority, assignee, status, and age"],
+    ["Reporte de indisponibilidad", "Downtime report", "Maquina o ubicacion, inicio, resolucion y minutos", "Machine or location, start, resolution, and minutes"],
+    ["Reporte de refacciones", "Spare-parts report", "Orden, almacen, articulo, solicitado, reservado, consumido y costo", "Order, warehouse, item, requested, reserved, consumed, and cost"],
+    ["Reporte de tiempos", "Maintenance labor report", "Tecnico, orden, intervalo, minutos y MTTR", "Technician, order, interval, minutes, and MTTR"],
+  ],
   gastos: [
     ["Reporte documental", "Document report", "Folio, XML/PDF, proveedor, fecha, moneda y validación", "Number, XML/PDF, supplier, date, currency, and validation"],
     ["Reporte de gastos", "Expense report", "Tipo, proveedor, centro, periodo, importe y estatus", "Type, supplier, center, period, amount, and status"],
@@ -478,6 +505,21 @@ function getStandardReports(module) {
   ]);
 }
 
+function userFacingError(error, fallback = "") {
+  return getLocalizedErrorMessage(error, { lang: state.lang, fallback });
+}
+
+function showApiError(error, fallback = "") {
+  showToast(userFacingError(error, fallback), getApiErrorTone(error));
+}
+
+function renderModuleLoadError(module, error, retryAction) {
+  const title = state.lang === "en" ? `${module.titleEn || module.title} could not be loaded` : `No se pudo cargar ${module.title}`;
+  const retryLabel = state.lang === "en" ? "Retry" : "Reintentar";
+  modulePanel.innerHTML = `<section class="section-card module-load-error" role="alert" aria-live="assertive"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(String(error || ""))}</p><button class="secondary-action" data-action="retry-module-api">${retryLabel}</button></section>`;
+  modulePanel.querySelector("[data-action='retry-module-api']")?.addEventListener("click", retryAction);
+}
+
 function renderPanel() {
   const module = { ...(modules.find((item) => item.id === state.active) || modules[0]) };
   if (!isModuleAccessible(module.id)) {
@@ -492,8 +534,7 @@ function renderPanel() {
         return;
       }
       if (state.productionApi.status === "error") {
-        modulePanel.innerHTML = `<section class="section-card"><strong>No se pudo cargar Produccion</strong><p>${state.productionApi.error}</p><button class="secondary-action" data-action="retry-production-api">Reintentar</button></section>`;
-        modulePanel.querySelector("[data-action='retry-production-api']")?.addEventListener("click", () => { state.productionApi.status = "idle"; render(); });
+        renderModuleLoadError(module, state.productionApi.error, () => { state.productionApi.status = "idle"; render(); });
         return;
       }
     }
@@ -522,7 +563,7 @@ function renderPanel() {
   } else if (module.id === "recursos-humanos") {
     if (getApiMode() === "api" && state.sessionApi.status === "ready" && state.hrApi.status === "idle") loadHrApiData();
     if (state.hrApi.status === "loading" && !mockDb.loadLaborAreas().length) { renderAdminLoadingPanel(module, "Cargando Recursos Humanos"); return; }
-    if (state.hrApi.status === "error") { modulePanel.innerHTML=`<section class="section-card"><strong>No se pudo cargar Recursos Humanos</strong><p>${state.hrApi.error}</p><button class="secondary-action" data-action="retry-hr-api">Reintentar</button></section>`;modulePanel.querySelector("[data-action='retry-hr-api']")?.addEventListener("click",()=>{state.hrApi.status="idle";render();});return; }
+    if (state.hrApi.status === "error") { renderModuleLoadError(module,state.hrApi.error,()=>{state.hrApi.status="idle";render();});return; }
     const areas = mockDb.loadLaborAreas();
     const roles = mockDb.loadLaborRoles();
     module.kpis = [["Areas", String(areas.length), "positive"], ["Puestos", String(roles.length), "positive"], ["Productivos", String(roles.filter((role) => role.intervenesInProduction === true).length), "positive"]];
@@ -538,9 +579,22 @@ function renderPanel() {
   } else if (module.id === "ventas" && getApiMode() === "api" && state.sessionApi.status === "ready") {
     if (state.salesApi.status === "idle") loadSalesApiData();
     if (state.salesApi.status === "loading" && !mockDb.loadModuleRecords("ventas").length) { renderAdminLoadingPanel(module, "Cargando Ventas"); return; }
-    if (state.salesApi.status === "error") { modulePanel.innerHTML=`<section class="section-card"><strong>No se pudo cargar Ventas</strong><p>${state.salesApi.error}</p><button class="secondary-action" data-action="retry-sales-api">Reintentar</button></section>`;modulePanel.querySelector("[data-action='retry-sales-api']")?.addEventListener("click",()=>{state.salesApi.status="idle";render();});return; }
+    if (state.salesApi.status === "error") { renderModuleLoadError(module,state.salesApi.error,()=>{state.salesApi.status="idle";render();});return; }
     if (state.activeSubmodule) { renderGenericSubmodulePanel(module); return; }
-    const salesRecords=mockDb.loadModuleRecords("ventas");module.status="Clientes y cotizaciones persistidos";module.statusEn="API-persisted customers and quotes";module.kpis=[["Clientes",String(salesRecords.filter(item=>item.recordType==="customer").length),"positive"],["Cotizaciones",String(salesRecords.filter(item=>item.recordType==="quote").length),"positive"],["Pedidos","Planeado","warning"]];module.kpisEn=[["Customers",module.kpis[0][1],"positive"],["Quotes",module.kpis[1][1],"positive"],["Orders","Planned","warning"]];
+    const salesRecords=mockDb.loadModuleRecords("ventas");module.kpis=[["Clientes",String(salesRecords.filter(item=>item.recordType==="customer").length),"positive"],["Cotizaciones",String(salesRecords.filter(item=>item.recordType==="quote").length),"positive"],["Pedidos",String(salesRecords.filter(item=>item.recordType==="salesOrder").length),"positive"]];module.kpisEn=[["Customers",module.kpis[0][1],"positive"],["Quotes",module.kpis[1][1],"positive"],["Orders",module.kpis[2][1],"positive"]];
+  } else if (module.id === "compras" && getApiMode() === "api" && state.sessionApi.status === "ready") {
+    if (state.purchasingApi.status === "idle") loadPurchasingApiData();
+    if (state.purchasingApi.status === "loading" && !state.purchasingApi.suppliers.length) { renderAdminLoadingPanel(module, state.lang === "en" ? "Loading Purchasing" : "Cargando Compras"); return; }
+    if (state.purchasingApi.status === "error") { renderModuleLoadError(module,state.purchasingApi.error,()=>{state.purchasingApi.status="idle";render();});return; }
+    if (state.activeSubmodule) { renderPurchasingSubmodulePanel(module); return; }
+    module.kpis=[["Proveedores",String(state.purchasingApi.suppliers.length),"positive"],["Requisiciones",String(state.purchasingApi.requisitions.length),"positive"],["Ordenes abiertas",String(state.purchasingApi.orders.filter(item=>["issued","partially_received"].includes(item.status)).length),"warning"]];
+    module.kpisEn=[["Suppliers",module.kpis[0][1],"positive"],["Requisitions",module.kpis[1][1],"positive"],["Open orders",module.kpis[2][1],"warning"]];
+  } else if (module.id === "mantenimiento" && getApiMode() === "api" && state.sessionApi.status === "ready") {
+    if (state.maintenanceApi.status === "idle") loadMaintenanceApiData();
+    if (state.maintenanceApi.status === "loading" && !state.maintenanceApi.orders.length) { renderAdminLoadingPanel(module, state.lang === "en" ? "Loading Maintenance" : "Cargando Mantenimiento"); return; }
+    if (state.maintenanceApi.status === "error") { renderModuleLoadError(module,state.maintenanceApi.error,()=>{state.maintenanceApi.status="idle";render();});return; }
+    if (state.activeSubmodule) { renderMaintenanceSubmodulePanel(module); return; }
+    const open=state.maintenanceApi.orders.filter(item=>!["closed","cancelled"].includes(item.status));module.kpis=[["Ordenes abiertas",String(open.length),"positive"],["Esperando refacciones",String(open.filter(item=>item.status==="waiting_parts").length),"warning"],["Minutos registrados",String(state.maintenanceApi.orders.reduce((sum,item)=>sum+Number(item.total_minutes||0),0)),"positive"]];module.kpisEn=[["Open orders",module.kpis[0][1],"positive"],["Waiting for parts",module.kpis[1][1],"warning"],["Logged minutes",module.kpis[2][1],"positive"]];
   } else if (module.id === "almacenes" && getApiMode() === "api" && isInventoryApiEnabled() && state.sessionApi.status === "ready") {
     if (state.inventoryApi.status === "idle") loadInventoryApiData();
     if (state.inventoryApi.status === "loading" && !mockDb.loadModuleRecords("almacenes").length) {
@@ -548,18 +602,17 @@ function renderPanel() {
       return;
     }
     if (state.inventoryApi.status === "error") {
-      modulePanel.innerHTML = `<section class="section-card"><strong>No se pudo cargar Almacenes</strong><p>${state.inventoryApi.error}</p><button class="secondary-action" data-action="retry-inventory-api">Reintentar</button></section>`;
-      modulePanel.querySelector("[data-action='retry-inventory-api']")?.addEventListener("click", () => { state.inventoryApi.status = "idle"; render(); });
+      renderModuleLoadError(module, state.inventoryApi.error, () => { state.inventoryApi.status = "idle"; render(); });
       return;
     }
     if (state.activeSubmodule) { renderGenericSubmodulePanel(module); return; }
-    const warehouseCount = mockDb.loadModuleRecords("almacenes").filter((record) => record.recordType === "warehouse").length;
+    const warehouseRecords = mockDb.loadModuleRecords("almacenes").filter((record) => record.recordType === "warehouse");
+    const warehouseCount = warehouseRecords.length;
+    const activeWarehouseCount = warehouseRecords.filter((record) => record.status === "Activo").length;
     module.primary = "Nuevo almacen";
     module.primaryEn = "New warehouse";
-    module.status = "Datos persistidos en API";
-    module.statusEn = "API-persisted data";
-    module.kpis = [["Almacenes", String(warehouseCount), "positive"], ["Reservas", "No disponibles", "warning"], ["Fuente", "PostgreSQL", "positive"]];
-    module.kpisEn = [["Warehouses", String(warehouseCount), "positive"], ["Reservations", "Unavailable", "warning"], ["Source", "PostgreSQL", "positive"]];
+    module.kpis = [["Almacenes", String(warehouseCount), "positive"], ["Reservas", "No disponibles", "warning"], ["Almacenes activos", String(activeWarehouseCount), "positive"]];
+    module.kpisEn = [["Warehouses", String(warehouseCount), "positive"], ["Reservations", "Unavailable", "warning"], ["Active warehouses", String(activeWarehouseCount), "positive"]];
   } else if (state.activeSubmodule) {
     renderGenericSubmodulePanel(module);
     return;
@@ -578,7 +631,6 @@ function renderPanel() {
   }
   const label = state.lang === "en" ? module.titleEn : module.title;
   const moduleEyebrow = getModuleField(module, "eyebrow");
-  const moduleStatus = getModuleField(module, "status");
   const moduleSummary = getModuleField(module, "summary");
   const moduleKpis = getModuleField(module, "kpis") || [];
   const moduleRecords = getModuleField(module, "records") || [];
@@ -586,20 +638,11 @@ function renderPanel() {
   const standardReports = getStandardReports(module);
 
   modulePanel.innerHTML = `
-    <div class="panel-head">
-      <div>
-        <p class="eyebrow">${moduleEyebrow}</p>
-        <h2>${label}</h2>
-      </div>
-      <span class="chip active">${moduleStatus}</span>
-    </div>
-
     <div class="module-summary expanded standard-report-summary">
       <div class="module-hero standard-report-hero">
-        <span class="report-hero-label">${t("standardReportsTitle")}</span>
+        <p class="eyebrow module-eyebrow">${moduleEyebrow}</p>
         <h1>${label}</h1>
-        <p>${t("standardReportsIntro", { module: label })}</p>
-        <small>${moduleSummary}</small>
+        <p>${moduleSummary}</p>
       </div>
 
       <div class="module-kpis">
@@ -736,22 +779,22 @@ function renderStatusStrip() {
     <article class="metric-card">
       <span class="metric-label" data-i18n="metricProduction">Produccion activa</span>
       <strong>${activeOrders}</strong>
-      <small class="trend neutral">sin ordenes</small>
+      <small class="trend ${activeOrders ? "positive" : "neutral"}">${activeOrders ? t("activeOrdersInFlow", { count: activeOrders }) : t("noOrders")}</small>
     </article>
     <article class="metric-card">
       <span class="metric-label" data-i18n="metricInventory">Inventario critico</span>
       <strong>${missingResources}</strong>
-      <small class="trend neutral">sin faltantes</small>
+      <small class="trend ${missingResources ? "warning" : "neutral"}">${missingResources ? t("requiresAttention") : t("noShortages")}</small>
     </article>
     <article class="metric-card">
       <span class="metric-label" data-i18n="metricMargin">Margen estimado</span>
       <strong>0%</strong>
-      <small class="trend neutral">sin datos</small>
+      <small class="trend neutral">${t("noData")}</small>
     </article>
     <article class="metric-card">
       <span class="metric-label" data-i18n="metricAccounting">Pendiente contable</span>
       <strong>0</strong>
-      <small class="trend neutral">sin datos</small>
+      <small class="trend neutral">${t("noData")}</small>
     </article>
   `;
 }
@@ -761,7 +804,7 @@ function renderUnavailableModulePanel(module) {
   modulePanel.innerHTML = `
     <div class="panel-head">
       <div>
-        <p class="eyebrow">Session Context MVP</p>
+        <p class="eyebrow">${state.lang === "en" ? "Module" : "Modulo"}</p>
         <h2>${label}</h2>
       </div>
       <span class="chip warning">Bloqueado</span>
@@ -769,7 +812,7 @@ function renderUnavailableModulePanel(module) {
     <div class="validation-card danger">
       <strong>Modulo no disponible</strong>
       <p>Este modulo no esta activo para el tenant actual o el contexto de sesion aun no esta disponible.</p>
-      <small>${state.sessionApi.error || "Admin-service define los modulos activos por tenant."}</small>
+      <small>${escapeHtml(state.sessionApi.error || "Admin-service define los módulos activos por empresa.")}</small>
     </div>
     <button class="secondary-action" type="button" data-action="go-admin">Ir a Administracion</button>
   `;
@@ -1471,7 +1514,7 @@ function getContextUserLabel() {
   if (state.auth.user?.email) return state.auth.user.displayName || state.auth.user.email;
   if (sessionUser?.display_name) return sessionUser.display_name;
   if (sessionUser?.email) return sessionUser.email;
-  return "Sesion local";
+  return t("localSession");
 }
 
 function renderContextBar() {
@@ -1482,7 +1525,7 @@ function renderContextBar() {
   if (branches.length > 1) {
     branchContext.classList.add("is-selectable");
     contextBranch.innerHTML = `
-      <select id="branchSelector" data-entity-selector aria-label="Seleccionar sucursal activa">
+      <select id="branchSelector" data-entity-selector aria-label="${t("selectActiveBranch")}">
         ${branches
           .map((branch) => `<option value="${escapeAttribute(branch.id)}" ${selectedOption(branch.id, selectedBranch.id)}>${escapeAttribute(branch.name)}${branch.code ? ` · ${escapeAttribute(branch.code)}` : ""}</option>`)
           .join("")}
@@ -2136,7 +2179,7 @@ function renderAdminApiPanel(module) {
       <div class="validation-card danger">
         <strong>${isResolvingTenant ? "Resolviendo tenant" : "Acceso no autorizado"}</strong>
         <p>${isResolvingTenant ? "Estamos buscando el tenant activo para tu usuario." : isSignedIn ? "Tu correo autentico correctamente, pero no tiene una sesion ERClave activa para este tenant." : "Inicia sesion con una cuenta autorizada para cargar Administracion."}</p>
-        <small>${state.tenantResolution.error || state.sessionApi.error || state.auth.error || getApiBaseUrl()}</small>
+        <small>${escapeHtml(state.tenantResolution.error || state.sessionApi.error || state.auth.error || getApiBaseUrl())}</small>
       </div>
       <div class="admin-overview-actions">
         <button class="secondary-action" type="button" data-action="admin-refresh-api">Reintentar</button>
@@ -2174,8 +2217,8 @@ function renderAdminApiPanel(module) {
       </div>
     </div>
 
-    ${state.adminApi.error ? `<div class="validation-card danger"><strong>${getApiBaseUrl().includes("127.0.0.1") || getApiBaseUrl().includes("localhost") ? "API Local" : "API QA"}</strong><p>${state.adminApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
-    ${state.sessionApi.error ? `<div class="validation-card danger"><strong>Session Context</strong><p>${state.sessionApi.error}</p><small>${getApiBaseUrl()}</small></div>` : ""}
+    ${state.adminApi.error ? `<div class="validation-card danger" role="alert"><strong>${getApiBaseUrl().includes("127.0.0.1") || getApiBaseUrl().includes("localhost") ? "API Local" : "API QA"}</strong><p>${escapeHtml(state.adminApi.error)}</p><small>${escapeHtml(getApiBaseUrl())}</small></div>` : ""}
+    ${state.sessionApi.error ? `<div class="validation-card danger" role="alert"><strong>Session Context</strong><p>${escapeHtml(state.sessionApi.error)}</p><small>${escapeHtml(getApiBaseUrl())}</small></div>` : ""}
 
     ${renderAdminHubCards(safeData)}
 
@@ -2433,6 +2476,7 @@ function mapApiRecipe(item, products) {
     currentVersionData: currentVersion,
     draftVersionId: draftVersion?.id || "",
     quantityBase: Number(version?.base_quantity || 1),
+    suggestedDurationDays: Number(version?.suggested_duration_days || 1),
     unit: version?.base_unit || product?.unit || "pieza",
     status: item.status === "active" ? "Activa" : "Borrador",
     approvalStatus: approval[version?.status] || "Borrador",
@@ -2470,6 +2514,17 @@ function getOrderCloseState(order){
   const stagesComplete=(order.areas||[]).every((stage)=>["Terminada","Omitida"].includes(stage.status));
   return {stagesComplete,ready:stagesComplete};
 }
+function productionOrderTransitionPermission(currentStatus,targetStatus){
+  if(targetStatus==="Liberada")return "production.order.release";
+  if(targetStatus==="En espera de recursos")return "production.order.wait_resources";
+  if(targetStatus==="En produccion")return ["Liberada","En espera de recursos"].includes(currentStatus)?"production.order.start":"production.order.resume";
+  if(targetStatus==="Pausada")return "production.order.pause";
+  if(targetStatus==="En validacion")return "production.order.send_to_validation";
+  if(targetStatus==="Terminada")return "production.order.complete";
+  if(targetStatus==="Cancelada")return "production.order.cancel";
+  return "";
+}
+function productionStagePermission(status){return ({pending:"production.order_stage.reset",in_progress:"production.order_stage.update",completed:"production.order_stage.complete",blocked:"production.order_stage.block",skipped:"production.order_stage.skip"})[status]||"";}
 function getOrderStatusOptions(order){
   const transitions={
     Liberada:["En espera de recursos","En produccion","Cancelada"],
@@ -2481,7 +2536,7 @@ function getOrderStatusOptions(order){
   };
   const options=[order.status,...(transitions[order.status]||[])];
   if(order.status==="En validacion"&&getOrderCloseState(order).ready)options.push("Terminada");
-  return [...new Set(options)];
+  return [...new Set(options)].filter(status=>status===order.status||hasPermission(productionOrderTransitionPermission(order.status,status)));
 }
 function getOrderCloseHelp(order){
   if(order.status!=="En validacion")return "";
@@ -2501,6 +2556,7 @@ function mapApiOrderRecipeSnapshot(item, fallbackRecipe) {
     version: Number(version.version_number || 1),
     versionId: version.id,
     quantityBase: Number(version.base_quantity || 1),
+    suggestedDurationDays: Number(version.suggested_duration_days || 1),
     unit: version.base_unit || item.unit,
     resources: (version.resources || []).map((resource) => ({
       resourceId: resource.resource_ref_id || resource.resource_code,
@@ -2514,7 +2570,7 @@ function mapApiOrderRecipeSnapshot(item, fallbackRecipe) {
     steps: (version.stages || []).filter((stage) => stage.status === "active").map((stage) => stage.name)
   };
 }
-function mapApiOrder(item, recipes){const recipe=recipes.find((entry)=>entry.id===item.recipe_id);const recipeSnapshot=mapApiOrderRecipeSnapshot(item,recipe);return {id:item.id,code:item.code,productServiceId:item.product_service_id,recipeId:item.recipe_id,recipeVersion:recipeSnapshot.version||1,recipeSnapshot,recipeName:recipeSnapshot.product||item.product_service_id,quantity:Number(item.quantity),unit:item.unit,status:mapApiOrderStatus(item.status),priority:({high:"Alta",medium:"Media",low:"Baja"})[item.priority]||item.priority,dueDate:item.required_at?.slice(0,10)||"",center:recipeSnapshot.center||"Produccion",responsibleWorkerId:item.responsible_worker_id,responsible:item.responsible_name,plannedCost:Number(item.planned_cost||0),actualCost:item.actual_cost==null?null:Number(item.actual_cost),overallProgress:Number(item.overall_progress_percent||0),resources:(item.resources||[]).map((resource)=>({id:resource.id,type:resource.resource_type,refId:resource.resource_ref_id,code:resource.resource_code,name:resource.resource_name,unit:resource.unit,plannedQuantity:Number(resource.planned_quantity),actualQuantity:resource.actual_quantity==null?null:Number(resource.actual_quantity),unitCost:Number(resource.unit_cost),plannedCost:Number(resource.planned_cost),actualCost:resource.actual_cost==null?null:Number(resource.actual_cost),reservationIds:resource.reservation_ref_ids||[]})),releaseStatus:"Liberada",areas:(item.stages||[]).map((stage)=>({id:stage.id,recipeStageId:stage.recipe_stage_id,area:stage.name,phaseNumber:Number(stage.sort_order||0),weightPercent:Number(stage.weight_percent||0),responsibleWorkerId:stage.responsible_worker_id,responsible:stage.responsible_name||"",status:mapApiStageStatus(stage.status),progress:Number(stage.progress_percent||0),plannedMinutes:stage.planned_minutes,actualMinutes:stage.actual_minutes,actualCostFactor:1})),createdAt:item.created_at?.slice(0,10)||""};}
+function mapApiOrder(item, recipes){const recipe=recipes.find((entry)=>entry.id===item.recipe_id);const recipeSnapshot=mapApiOrderRecipeSnapshot(item,recipe);return {id:item.id,code:item.code,productServiceId:item.product_service_id,recipeId:item.recipe_id,recipeVersion:recipeSnapshot.version||1,recipeSnapshot,recipeName:recipeSnapshot.product||item.product_service_id,quantity:Number(item.quantity),unit:item.unit,status:mapApiOrderStatus(item.status),priority:({high:"Alta",medium:"Media",low:"Baja"})[item.priority]||item.priority,plannedStartDate:item.planned_start_at?.slice(0,10)||"",plannedEndDate:item.planned_end_date||"",plannedDurationDays:Number(item.planned_duration_days||1),dueDate:item.required_at?.slice(0,10)||"",center:recipeSnapshot.center||"Produccion",responsibleWorkerId:item.responsible_worker_id,responsible:item.responsible_name,plannedCost:Number(item.planned_cost||0),actualCost:item.actual_cost==null?null:Number(item.actual_cost),overallProgress:Number(item.overall_progress_percent||0),resources:(item.resources||[]).map((resource)=>({id:resource.id,type:resource.resource_type,refId:resource.resource_ref_id,code:resource.resource_code,name:resource.resource_name,unit:resource.unit,plannedQuantity:Number(resource.planned_quantity),actualQuantity:resource.actual_quantity==null?null:Number(resource.actual_quantity),unitCost:Number(resource.unit_cost),plannedCost:Number(resource.planned_cost),actualCost:resource.actual_cost==null?null:Number(resource.actual_cost),reservationIds:resource.reservation_ref_ids||[]})),releaseStatus:"Liberada",areas:(item.stages||[]).map((stage)=>({id:stage.id,recipeStageId:stage.recipe_stage_id,area:stage.name,phaseNumber:Number(stage.sort_order||0),weightPercent:Number(stage.weight_percent||0),responsibleWorkerId:stage.responsible_worker_id,responsible:stage.responsible_name||"",status:mapApiStageStatus(stage.status),progress:Number(stage.progress_percent||0),plannedMinutes:stage.planned_minutes,actualMinutes:stage.actual_minutes,actualCostFactor:1})),createdAt:item.created_at?.slice(0,10)||""};}
 
 function loadProductionApiData() {
   if (getApiMode() !== "api" || state.productionApi.status === "loading") return Promise.resolve();
@@ -2577,10 +2633,10 @@ function loadInventoryMovementData() {
 }
 
 function loadFinishedGoodsReceiptData() {
-  if (getApiMode() !== "api" || !isInventoryApiEnabled() || state.finishedGoodsReceipts.status === "loading") return Promise.resolve();
+  if (getApiMode() !== "api" || !isInventoryApiEnabled() || !["inventory.finished_goods_receipt.read","inventory.finished_goods_receipt.receive"].some(hasPermission) || state.finishedGoodsReceipts.status === "loading") return Promise.resolve();
   state.finishedGoodsReceipts = { ...state.finishedGoodsReceipts, status: "loading", error: "" };
-  return Promise.all([getCompletedProductionOrders(),getProductionProducts(),getFinishedGoodsReceipts()]).then(([orders,products,response])=>{
-    state.finishedGoodsReceipts={status:"ready",orders:orders||[],products:products||[],summaries:response.data||[],error:""};render();
+  return Promise.all([getFinishedGoodsCandidates(),getFinishedGoodsReceipts()]).then(([candidates,response])=>{
+    state.finishedGoodsReceipts={status:"ready",orders:candidates.orders||[],products:candidates.products||[],summaries:response.data||[],error:""};render();
   }).catch((error)=>{state.finishedGoodsReceipts={status:"error",orders:[],products:[],summaries:[],error:error.message||t("finishedGoodsReceiptLoadError")};render();});
 }
 
@@ -2589,7 +2645,7 @@ function loadHrApiData() {
   state.hrApi={status:"loading",error:""};
   return Promise.all([getHrCatalog(),getHrWorkers()]).then(([{areas,positions},workers])=>{
     mockDb.saveLaborAreas((areas||[]).map((area)=>({id:area.id,code:area.code,name:area.name,description:area.description||"",status:area.status==="active"?"Activo":"Inactivo"})));
-    mockDb.saveLaborRoles((positions||[]).map((position)=>({id:position.id,areaId:position.labor_area_id,area:(areas||[]).find((area)=>area.id===position.labor_area_id)?.name||"",position:position.position,name:position.recipe_name,quantity:position.resource_quantity,minutesPerResource:position.minutes_per_resource,available:position.resource_quantity*position.minutes_per_resource,hourlyCost:Number(position.hourly_cost),cost:Number(position.hourly_cost)/60,unit:"min",type:"Mano de obra",source:"Recursos Humanos",intervenesInProduction:Boolean(position.intervenes_in_production),status:position.status==="active"?"Activo":"Inactivo"})));
+    mockDb.saveLaborRoles((positions||[]).map((position)=>({id:position.id,areaId:position.labor_area_id,area:(areas||[]).find((area)=>area.id===position.labor_area_id)?.name||"",position:position.position,name:position.recipe_name,quantity:position.resource_quantity,minutesPerResource:position.minutes_per_resource,available:position.resource_quantity*position.minutes_per_resource,hourlyCost:Number(position.hourly_cost),cost:Number(position.hourly_cost)/60,unit:"min",type:"Mano de obra",source:"Recursos Humanos",intervenesInProduction:Boolean(position.intervenes_in_production),intervenesInMaintenance:Boolean(position.intervenes_in_maintenance),status:position.status==="active"?"Activo":"Inactivo"})));
     state.hrApi={status:"ready",error:"",workers:workers||[]};render();
   }).catch((error)=>{state.hrApi={status:"error",error:error.message||"HR API unavailable"};render();});
 }
@@ -2712,6 +2768,301 @@ function ensureSessionContext() {
   }
 }
 
+async function loadPurchasingApiData() {
+  if (getApiMode() !== "api" || state.purchasingApi.status === "loading") return;
+  state.purchasingApi={...state.purchasingApi,status:"loading",error:""};
+  try {
+    const [workspace,itemResult,catalogResult]=await Promise.all([getPurchasingWorkspace(),getInventoryItems({status:"active"}),getInventoryCatalog()]);
+    const critical=Object.entries(workspace.errors||{});
+    if(critical.length) throw new Error(critical.map(([name,message])=>`${name}: ${message}`).join(" · "));
+    state.purchasingApi={status:"ready",error:"",...workspace,items:itemResult.data||[],warehouses:catalogResult.warehouses||[]};
+  } catch(error) { state.purchasingApi={...state.purchasingApi,status:"error",error:error.message||"Purchasing API unavailable"}; }
+  render();
+}
+
+async function loadMaintenanceApiData(){
+  if(getApiMode()!=="api"||state.maintenanceApi.status==="loading")return;
+  state.maintenanceApi={...state.maintenanceApi,status:"loading",error:""};
+  try{
+    const canMutateOrders=hasPermission("maintenance.order.create")||["request","assign","start","wait_for_parts","resume","resolve","close","reopen","cancel"].some(action=>hasPermission(`maintenance.order.${action}`)),canUseTime=hasPermission("maintenance.time.create"),canUseMaterials=hasPermission("maintenance.material_request.create")||hasPermission("maintenance.material_request.cancel")||hasPermission("maintenance.material_request.reconcile");
+    const [ordersResult,workersResult,productionResult,itemsResult,catalogResult]=await Promise.allSettled([getMaintenanceOrders(),canMutateOrders||canUseTime?getMaintenanceEligibleWorkers():Promise.resolve([]),canMutateOrders?getProductionCatalog():Promise.resolve({machines:[],orders:[]}),canUseMaterials?getInventoryItems({status:"active"}):Promise.resolve({data:[]}),canUseMaterials?getInventoryCatalog():Promise.resolve({warehouses:[]})]);
+    if(ordersResult.status==="rejected")throw ordersResult.reason;
+    const workers=workersResult.status==="fulfilled"?workersResult.value:[],production=productionResult.status==="fulfilled"?productionResult.value:{machines:[],orders:[]},items=itemsResult.status==="fulfilled"?itemsResult.value:{data:[]},catalog=catalogResult.status==="fulfilled"?catalogResult.value:{warehouses:[]};
+    const warnings=[workersResult,productionResult,itemsResult,catalogResult].filter(result=>result.status==="rejected").map(result=>result.reason?.message||"Catalog unavailable");
+    state.maintenanceApi={status:"ready",error:"",warnings,orders:ordersResult.value,workers,machines:production.machines||[],productionOrders:(production.orders||[]).filter(item=>["waiting_resources","in_progress"].includes(item.status)),items:items.data||[],warehouses:(catalog.warehouses||[]).filter(item=>item.status==="active"&&["spare_parts","spareParts"].includes(item.type))};
+  }catch(error){state.maintenanceApi={...state.maintenanceApi,status:"error",error:error.message||"Maintenance API unavailable"};}
+  render();
+}
+function maintenanceStatus(value){const map={draft:["Borrador","Draft"],requested:["Solicitada","Requested"],assigned:["Asignada","Assigned"],in_progress:["En proceso","In progress"],waiting_resources:["Esperando recursos","Waiting for resources"],waiting_parts:["Esperando refacciones","Waiting for parts"],resolved:["Resuelta","Resolved"],closed:["Cerrada","Closed"],cancelled:["Cancelada","Cancelled"],processing:["Procesando","Processing"],completed:["Conciliada","Reconciled"],reserved:["Reservada","Reserved"],issued:["Entregada","Issued"],released:["Liberada","Released"],failed:["Fallida","Failed"],cancelling:["Cancelando","Cancelling"],needs_reconciliation:["Requiere conciliacion","Needs reconciliation"]};return (map[value]||[value,value])[state.lang==="en"?1:0];}
+function maintenanceTransitionButtons(order,en){if(order.integration_status==="needs_reconciliation")return hasPermission("maintenance.order.reconcile")?`<button class="primary-action small-action" type="button" data-maintenance-transition="reconcile" data-order-id="${escapeAttribute(order.id)}">${en?"Reconcile":"Conciliar"}</button>`:"";const buttons=[];if(order.status==="draft")buttons.push(["request",en?"Request":"Solicitar"]);if(["requested","assigned"].includes(order.status))buttons.push(["assign",order.status==="assigned"?(en?"Reassign":"Reasignar"):(en?"Assign":"Asignar")]);if(order.status==="assigned")buttons.push(["start",en?"Start":"Iniciar"]);if(order.status==="in_progress")buttons.push(["wait_for_parts",en?"Wait for parts":"Esperar refacciones"],["resolve",en?"Resolve":"Resolver"]);if(order.status==="waiting_parts")buttons.push(["resume",en?"Resume":"Reanudar"],["resolve",en?"Resolve":"Resolver"]);if(order.status==="resolved")buttons.push(["close",en?"Close":"Cerrar"],["reopen",en?"Reopen":"Reabrir"]);if(["draft","requested","assigned"].includes(order.status))buttons.push(["cancel",en?"Cancel":"Cancelar"]);return buttons.filter(([action])=>hasPermission(`maintenance.order.${action}`)).map(([action,label])=>`<button class="${action==="resolve"?"primary-action":"secondary-action"} small-action" type="button" data-maintenance-transition="${action}" data-order-id="${escapeAttribute(order.id)}">${label}</button>`).join("");}
+
+function maintenanceDateTimeValue(value=new Date()){
+  const date=value instanceof Date?value:new Date(value);
+  if(Number.isNaN(date.getTime()))return "";
+  return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);
+}
+
+function maintenanceTimeFields(order,en){
+  const end=new Date(),candidate=order.started_at?new Date(order.started_at):new Date(end.getTime()-60*60000);
+  const start=Number.isNaN(candidate.getTime())||candidate>=end?new Date(end.getTime()-60*60000):candidate;
+  return `<section class="maintenance-resolution-time"><div class="section-title"><span class="section-icon">&#9201;</span><strong>${en?"Time spent":"Tiempo empleado"}</strong></div><p class="helper-copy">${en?"At least one time entry is required. It will be assigned to the current technician.":"Se requiere al menos un registro de tiempo. Se asignara al tecnico responsable actual."}</p><div class="form-grid"><label class="preview-field"><span>${en?"Technician":"Tecnico"}</span><input value="${escapeAttribute(order.assigned_worker_name||"")}" readonly></label><label class="preview-field"><span>${en?"Current total":"Total actual"}</span><input value="${formatNumber(Number(order.total_minutes||0))} min" readonly></label><label class="preview-field"><span>${en?"Start":"Inicio"}</span><input name="time_started_at" type="datetime-local" value="${maintenanceDateTimeValue(start)}" required></label><label class="preview-field"><span>${en?"End":"Fin"}</span><input name="time_ended_at" type="datetime-local" value="${maintenanceDateTimeValue(end)}" required></label><label class="preview-field wide-field"><span>${en?"Time notes":"Notas del tiempo"}</span><textarea name="time_notes" rows="2" maxlength="1000"></textarea></label></div></section>`;
+}
+
+function openMaintenanceTimeModal(order,en){
+  modalContent.innerHTML=`<form class="recipe-form" id="maintenanceTimeModalForm"><div class="modal-head"><div><p class="eyebrow">${en?"Maintenance order":"Orden de mantenimiento"}</p><h2 id="modalTitle">${en?"Log time":"Registrar tiempo"}</h2><p class="helper-copy">${escapeHtml(order.code)} &middot; ${escapeHtml(order.title)}</p></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div>${maintenanceTimeFields(order,en)}<div class="form-errors" id="formErrors" hidden></div><div class="modal-actions"><button class="secondary-action" type="button" data-action="close-maintenance-time">${t("cancel")}</button><button class="primary-action" type="submit">${en?"Save time":"Guardar tiempo"}</button></div></form>`;
+  modalBackdrop.hidden=false;modalContent.querySelector(".modal-close").addEventListener("click",closeModal);modalContent.querySelector("[data-action='close-maintenance-time']").addEventListener("click",closeModal);modalContent.querySelector("#maintenanceTimeModalForm").addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget)),start=new Date(data.time_started_at),end=new Date(data.time_ended_at),errors=[];if(!order.assigned_worker_id)errors.push(en?"Assign a technician before logging time.":"Asigna un tecnico antes de registrar tiempo.");if(!data.time_started_at||!data.time_ended_at||end<=start)errors.push(en?"End must be after start.":"El fin debe ser posterior al inicio.");if(end>new Date())errors.push(en?"End cannot be in the future.":"El fin no puede estar en el futuro.");renderFormErrors(errors);if(errors.length)return;try{await createMaintenanceTime(order.id,{worker_id:order.assigned_worker_id,started_at:start.toISOString(),ended_at:end.toISOString(),notes:data.time_notes.trim()||null});closeModal();await loadMaintenanceApiData();render();showToast(en?"Maintenance time saved.":"Tiempo de mantenimiento guardado.");}catch(error){renderFormErrors([error.message||"Error"]);}});
+}
+
+function openMaintenanceActionModal(order,action,en){
+  const resolving=action==="resolve",needsTime=resolving&&Number(order.total_minutes||0)<=0,canCreateTime=hasPermission("maintenance.time.create");
+  let timeCreated=false;
+  modalContent.innerHTML=`<form class="recipe-form" id="maintenanceActionForm">
+    <div class="modal-head"><div><p class="eyebrow">${en?"Maintenance order":"Orden de mantenimiento"}</p><h2 id="modalTitle">${resolving?(en?"Resolve order":"Resolver orden"):(en?"Cancel order":"Cancelar orden")}</h2><p class="helper-copy">${escapeHtml(order.code)} &middot; ${escapeHtml(order.title)}</p></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div>
+    ${resolving?`<p class="helper-copy">${en?"Document the technical result before releasing the equipment and sending the order to validation.":"Documenta el resultado tecnico antes de liberar el equipo y enviar la orden a validacion."}</p><div class="form-grid">
+      <label class="preview-field wide-field"><span>${en?"Diagnosis":"Diagnostico"}</span><textarea name="diagnosis" rows="3" maxlength="4000" required>${escapeHtml(order.diagnosis||"")}</textarea><small>${en?"Condition found and scope of the failure.":"Condicion encontrada y alcance de la falla."}</small></label>
+      <label class="preview-field wide-field"><span>${en?"Root cause (optional)":"Causa raiz (opcional)"}</span><textarea name="root_cause" rows="2" maxlength="2000">${escapeHtml(order.root_cause||"")}</textarea></label>
+      <label class="preview-field wide-field"><span>${en?"Work performed":"Trabajo realizado"}</span><textarea name="work_performed" rows="3" maxlength="4000" required>${escapeHtml(order.work_performed||"")}</textarea><small>${en?"Repair, adjustment or intervention performed.":"Reparacion, ajuste o intervencion realizada."}</small></label>
+      <label class="preview-field wide-field"><span>${en?"Verification":"Verificacion"}</span><textarea name="verification_notes" rows="3" maxlength="2000" required>${escapeHtml(order.verification_notes||"")}</textarea><small>${en?"Functional test and result after the intervention.":"Prueba funcional y resultado posterior a la intervencion."}</small></label>
+    </div>${needsTime?(canCreateTime?maintenanceTimeFields(order,en):`<div class="form-errors maintenance-time-permission"><p>${en?"This order has no logged time. Ask a user with the maintenance.time.create permission to register it from the order.":"Esta orden no tiene tiempo registrado. Solicita a un usuario con el permiso maintenance.time.create que lo capture desde la orden."}</p></div>`):`<div class="form-notice"><p>${en?`Logged time: ${formatNumber(Number(order.total_minutes))} minutes.`:`Tiempo registrado: ${formatNumber(Number(order.total_minutes))} minutos.`}</p></div>`}`:`<p class="helper-copy">${en?"The reason will remain in the order audit trail.":"El motivo quedara registrado en la trazabilidad de la orden."}</p><div class="form-grid"><label class="preview-field wide-field"><span>${en?"Cancellation reason":"Motivo de cancelacion"}</span><textarea name="reason" rows="3" maxlength="1000" required></textarea></label></div>`}
+    <div class="form-errors" id="formErrors" hidden></div><div class="modal-actions"><button class="secondary-action" type="button" data-action="close-maintenance-action">${t("cancel")}</button><button class="primary-action" type="submit">${resolving?(en?"Save and resolve":"Guardar y resolver"):(en?"Confirm cancellation":"Confirmar cancelacion")}</button></div>
+  </form>`;
+  modalBackdrop.hidden=false;
+  modalContent.querySelector(".modal-close").addEventListener("click",closeModal);
+  modalContent.querySelector("[data-action='close-maintenance-action']").addEventListener("click",closeModal);
+  modalContent.querySelector("#maintenanceActionForm").addEventListener("submit",async event=>{
+    event.preventDefault();
+    const data=Object.fromEntries(new FormData(event.currentTarget));
+    const errors=[];
+    if(resolving){if(!data.diagnosis.trim())errors.push(en?"Diagnosis is required.":"El diagnostico es obligatorio.");if(!data.work_performed.trim())errors.push(en?"Work performed is required.":"El trabajo realizado es obligatorio.");if(!data.verification_notes.trim())errors.push(en?"Verification is required.":"La verificacion es obligatoria.");if(needsTime&&!canCreateTime)errors.push(en?"Logged time is required and your role cannot create it.":"Se requiere tiempo registrado y tu rol no puede crearlo.");if(needsTime&&canCreateTime&&!timeCreated){const start=new Date(data.time_started_at),end=new Date(data.time_ended_at);if(!order.assigned_worker_id)errors.push(en?"Assign a technician before logging time.":"Asigna un tecnico antes de registrar tiempo.");if(!data.time_started_at||!data.time_ended_at||end<=start)errors.push(en?"Time end must be after start.":"El fin del tiempo debe ser posterior al inicio.");if(end>new Date())errors.push(en?"Time end cannot be in the future.":"El fin del tiempo no puede estar en el futuro.");}}
+    else if(data.reason.trim().length<3)errors.push(en?"Enter a cancellation reason of at least 3 characters.":"Captura un motivo de cancelacion de al menos 3 caracteres.");
+    renderFormErrors(errors);if(errors.length)return;
+    try{
+      let result;
+      if(resolving){await updateMaintenanceOrder(order.id,{diagnosis:data.diagnosis.trim(),root_cause:data.root_cause.trim()||null,work_performed:data.work_performed.trim(),verification_notes:data.verification_notes.trim()});if(needsTime&&canCreateTime&&!timeCreated){await createMaintenanceTime(order.id,{worker_id:order.assigned_worker_id,started_at:new Date(data.time_started_at).toISOString(),ended_at:new Date(data.time_ended_at).toISOString(),notes:data.time_notes.trim()||null});timeCreated=true;}result=await transitionMaintenanceOrder(order.id,"resolve",{});}
+      else result=await transitionMaintenanceOrder(order.id,"cancel",{reason:data.reason.trim()});
+      closeModal();await loadMaintenanceApiData();render();showToast(result.integration_status==="needs_reconciliation"?(en?"The operation still requires reconciliation.":"La operacion aun requiere conciliacion."):(resolving?(en?"Maintenance order resolved.":"Orden de mantenimiento resuelta."):(en?"Maintenance order cancelled.":"Orden de mantenimiento cancelada.")));
+    }catch(error){renderFormErrors([...(timeCreated?[en?"Time was saved. Complete the remaining correction and try resolving again.":"El tiempo ya fue guardado. Corrige lo pendiente e intenta resolver nuevamente."]:[]),error.message||"Error"]);}
+  });
+}
+function maintenanceLineMarkup(items,en){return `<div class="purchasing-requisition-line" data-maintenance-material-line><label class="preview-field purchasing-line-item"><span>${en?"Spare part":"Refaccion"}</span><select name="item_id" data-entity-selector required><option value="">${en?"Choose an item":"Selecciona un articulo"}</option>${items.map(item=>`<option value="${escapeAttribute(item.id)}" data-unit="${escapeAttribute(item.base_unit)}">${escapeHtml(item.code)} · ${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="preview-field"><span>${en?"Quantity":"Cantidad"}</span><input name="quantity" type="number" min="0.000001" step="any" required></label><label class="preview-field"><span>${en?"Unit":"Unidad"}</span><input name="unit_code" readonly required></label><button class="secondary-action small-action" type="button" data-remove-maintenance-line>${en?"Remove":"Quitar"}</button></div>`;}
+function maintenanceMaterialActions(order,en){return (order.material_requests||[]).map(request=>`<section class="maintenance-material-request"><div class="row-actions"><span class="chip ${request.status==="needs_reconciliation"?"danger":"warning"}">${escapeHtml(request.warehouse_name)} · ${maintenanceStatus(request.status)}</span>${request.status==="needs_reconciliation"&&request.pending_operation!=="issue"&&hasPermission("maintenance.material_request.reconcile")?`<button class="primary-action small-action" type="button" data-reconcile-maintenance-material="${escapeAttribute(request.id)}">${en?"Reconcile parts":"Conciliar refacciones"}</button>`:""}${["reserved","needs_reconciliation","cancelling"].includes(request.status)&&request.pending_operation!=="issue"&&hasPermission("maintenance.material_request.cancel")?`<button class="secondary-action small-action" type="button" data-cancel-maintenance-material="${escapeAttribute(request.id)}">${en?"Cancel parts":"Cancelar refacciones"}</button>`:""}</div><ul class="purchasing-line-summary">${(request.lines||[]).map(line=>`<li><span>${escapeHtml(line.item_code||"")} · ${escapeHtml(line.item_name||"")}</span><strong>${formatNumber(Number(line.quantity))} ${escapeHtml(line.unit_code)} · ${maintenanceStatus(line.line_status)}</strong></li>`).join("")}</ul></section>`).join("");}
+function getMaintenanceFlowTitle(id){return state.lang==="en"?(id==="refacciones"?"Spare parts flow":"Corrective orders flow"):(id==="refacciones"?"Flujo de Refacciones":"Flujo de Ordenes correctivas");}
+function getMaintenanceFlowSteps(id){const steps={es:{ordenes:[["Reporte","Describir la falla, el objetivo, la prioridad y la seguridad."],["Asignacion","Solicitar la orden y asignar un tecnico elegible de RH."],["Ejecucion","Registrar diagnostico, trabajo, tiempo y refacciones."],["Cierre","Verificar, conciliar y liberar sin reanudar Produccion automaticamente."]],refacciones:[["Orden","Partir de una orden asignada, en proceso o esperando refacciones."],["Almacen","Elegir un almacen activo de tipo Refacciones."],["Reserva","Solicitar partidas y cantidades; Inventario confirma la reserva."],["Conciliacion","Consumir, cancelar o reintentar sin duplicar movimientos."]]},en:{ordenes:[["Report","Describe the fault, target, priority, and safety considerations."],["Assign","Request the order and assign an eligible HR technician."],["Perform","Log diagnosis, work, time, and spare parts."],["Close","Verify, reconcile, and release without automatically resuming Production."]],refacciones:[["Order","Start from an assigned, in-progress, or waiting-for-parts order."],["Warehouse","Choose an active Spare parts warehouse."],["Reserve","Request lines and quantities; Inventory confirms the reservation."],["Reconcile","Consume, cancel, or retry without duplicating movements."]]}};return (steps[state.lang]?.[id]||steps.es[id]||steps.es.ordenes).map(([title,detail])=>({title,detail}));}
+function renderMaintenanceSubmodulePanel(module){
+  const api=state.maintenanceApi,en=state.lang==="en",id=state.activeSubmodule;
+  const workerOptions=api.workers.map(item=>`<option value="${escapeAttribute(item.id)}">${escapeHtml(item.full_name)} · ${escapeHtml(item.position_name)}</option>`).join("");
+  const cards=api.orders.map(order=>{const assignedWorkerOptions=api.workers.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===order.assigned_worker_id?"selected":""}>${escapeHtml(item.full_name)} · ${escapeHtml(item.position_name)}</option>`).join("");return `<article class="catalog-card maintenance-order-card"><div class="maintenance-order-main"><span class="muted-label">${escapeHtml(order.code)} · ${escapeHtml(order.priority)}</span><strong>${escapeHtml(order.title)}</strong><p>${escapeHtml(order.machine_name_snapshot||order.location)}</p><div class="record-main"><span>${en?"Assigned technician":"Tecnico asignado"}</span><strong>${escapeHtml(order.assigned_worker_name||(en?"Unassigned":"Sin asignar"))}</strong></div></div><div class="maintenance-order-meta"><span class="chip ${order.status==="closed"?"active":"warning"}">${maintenanceStatus(order.status)}</span>${order.integration_status==="needs_reconciliation"?`<span class="chip danger">${maintenanceStatus(order.integration_status)}</span>`:""}<small>${order.total_minutes||0} min · ${(order.material_requests||[]).reduce((sum,request)=>sum+(request.lines?.length||0),0)} ${en?"parts":"refacciones"}</small></div>${hasPermission("maintenance.order.assign")&&["requested","assigned"].includes(order.status)?`<label class="preview-field maintenance-technician-field"><span>${order.status==="assigned"?(en?"Reassign technician":"Reasignar tecnico"):(en?"Technician":"Tecnico")}</span><select data-maintenance-worker-for="${escapeAttribute(order.id)}"><option value="">${en?"Choose a technician":"Selecciona un tecnico"}</option>${assignedWorkerOptions}</select></label>`:""}${maintenanceMaterialActions(order,en)}<div class="row-actions maintenance-order-actions">${["assigned","in_progress","waiting_parts"].includes(order.status)&&hasPermission("maintenance.time.create")?`<button class="secondary-action small-action" type="button" data-log-maintenance-time="${escapeAttribute(order.id)}">${en?"Log time":"Registrar tiempo"}</button>`:""}${["assigned","in_progress","waiting_parts"].includes(order.status)&&hasPermission("maintenance.material_request.create")?`<button class="primary-action small-action" type="button" data-request-maintenance-material="${escapeAttribute(order.id)}">${en?"Request spare parts":"Solicitar refacciones"}</button>`:""}${maintenanceTransitionButtons(order,en)}</div></article>`;}).join("");
+  if(id==="ordenes"){
+    const sourceOrder=api.productionOrders.find(item=>item.id===state.maintenanceSourceOrderId),sourceMachineId=sourceOrder?.resources?.find(item=>item.resource_type==="machine")?.resource_ref_id||"";const machines=api.machines.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===sourceMachineId?"selected":""}>${escapeHtml(item.code)} · ${escapeHtml(item.name)}</option>`).join(""),productionOrders=api.productionOrders.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===state.maintenanceSourceOrderId?"selected":""}>${escapeHtml(item.code)} · ${maintenanceStatus(item.status)}</option>`).join("");
+    modulePanel.innerHTML=`<div class="panel-head"><div><p class="eyebrow">${en?"Maintenance / Operations":"Mantenimiento / Operacion"}</p><h2>${en?"Corrective orders":"Ordenes correctivas"}</h2></div><button class="secondary-action" data-action="back-module">${t("overview")}</button></div><div class="flow-guided-layout">${renderFlowGuide(getMaintenanceFlowTitle(id),getMaintenanceFlowSteps(id))}<section class="section-card"><form class="form-grid" id="maintenanceOrderForm"><label class="preview-field"><span>${en?"Code":"Folio"}</span><input name="code" required></label><label class="preview-field"><span>${en?"Target":"Objetivo"}</span><select name="target_type"><option value="facility">${en?"Facility":"Instalacion"}</option><option value="other">${en?"Other":"Otro"}</option><option value="production_machine">${en?"Production machine":"Maquina de Produccion"}</option></select></label><label class="preview-field"><span>${en?"Machine":"Maquina"}</span><select name="production_machine_id"><option value="">${en?"Not applicable":"No aplica"}</option>${machines}</select></label><label class="preview-field"><span>${en?"Production order (optional)":"Orden de Produccion (opcional)"}</span><select name="source_production_order_id"><option value="">${en?"Manual report":"Reporte manual"}</option>${productionOrders}</select></label><label class="preview-field"><span>${en?"Priority":"Prioridad"}</span><select name="priority"><option value="low">${en?"Low":"Baja"}</option><option value="medium" selected>${en?"Medium":"Media"}</option><option value="high">${en?"High":"Alta"}</option><option value="critical">${en?"Critical":"Critica"}</option></select></label><label class="preview-field"><span>${en?"Title":"Titulo"}</span><input name="title" maxlength="180" required></label><label class="preview-field wide-field"><span>${en?"Fault description":"Descripcion de la falla"}</span><textarea name="description" maxlength="4000" required></textarea></label><label class="preview-field"><span>${en?"Location":"Ubicacion"}</span><input name="location" maxlength="300" required></label><label class="preview-field"><span>${en?"Safety notes":"Notas de seguridad"}</span><input name="safety_notes" maxlength="2000"></label><div class="wide-field"><button class="primary-action" type="submit">${en?"Create order":"Crear orden"}</button></div></form></section><section class="section-card"><div class="catalog-grid">${cards||`<p>${en?"No maintenance orders yet.":"Aun no hay ordenes de mantenimiento."}</p>`}</div></section></div>`;
+    if(!hasPermission("maintenance.order.create"))modulePanel.querySelector("#maintenanceOrderForm")?.closest(".section-card")?.remove();
+    modulePanel.querySelector("#maintenanceOrderForm")?.addEventListener("submit",async event=>{event.preventDefault();const d=Object.fromEntries(new FormData(event.currentTarget));const machineId=d.production_machine_id||null,sourceId=d.source_production_order_id||null;try{await createMaintenanceOrder({...d,target_type:machineId?"production_machine":d.target_type,production_machine_id:machineId,source_type:sourceId?"production_order":"manual",source_production_order_id:sourceId,safety_notes:d.safety_notes||null});state.maintenanceSourceOrderId="";await loadMaintenanceApiData();render();showToast(en?"Maintenance order created.":"Orden de mantenimiento creada.");}catch(error){showToast(error.message||"Error");}});
+  }else{
+    const materialOrders=api.orders.filter(item=>["assigned","in_progress","waiting_parts"].includes(item.status)),orders=materialOrders.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===state.maintenanceMaterialSourceOrderId?"selected":""}>${escapeHtml(item.code)} · ${escapeHtml(item.title)}</option>`).join(""),warehouses=api.warehouses.map(item=>`<option value="${escapeAttribute(item.id)}">${escapeHtml(item.code)} · ${escapeHtml(item.name)}</option>`).join("");
+    const materialSetup=!materialOrders.length?`<p class="helper-copy">${en?"Assign a technician to an order before requesting parts.":"Asigna un tecnico a una orden antes de solicitar refacciones."}</p>`:!api.warehouses.length?`<div><p class="helper-copy">${en?"An active spare-parts warehouse is required. None exists in Inventory yet.":"Se necesita un almacen activo de tipo Refacciones. Aun no existe ninguno en Inventario."}</p><div class="row-actions">${hasPermission("inventory.warehouse.create")?`<button class="primary-action small-action" type="button" data-open-spare-parts-warehouse>${en?"Create spare-parts warehouse":"Crear almacen de refacciones"}</button>`:`<span class="chip warning">${en?"Ask the Inventory manager to create it.":"Solicita su alta al encargado de Inventario."}</span>`}</div></div>`:!api.items.length?`<div><p class="helper-copy">${en?"Create an active inventory item before requesting it.":"Crea primero un articulo activo en Inventario para poder solicitarlo."}</p>${hasPermission("inventory.item.create")?`<button class="primary-action small-action" type="button" data-open-spare-parts-items>${en?"Create inventory item":"Crear articulo"}</button>`:`<span class="chip warning">${en?"Ask the Inventory manager to create it.":"Solicita su alta al encargado de Inventario."}</span>`}</div>`:`<form class="form-grid" id="maintenanceMaterialForm"><label class="preview-field"><span>${en?"Order":"Orden"}</span><select name="order_id" required><option value="" ${state.maintenanceMaterialSourceOrderId?"":"selected"}>${en?"Choose":"Selecciona"}</option>${orders}</select></label><label class="preview-field"><span>${en?"Spare-parts warehouse":"Almacen de refacciones"}</span><select name="warehouse_id" required><option value="">${en?"Choose":"Selecciona"}</option>${warehouses}</select></label><div class="wide-field"><button class="secondary-action small-action" type="button" data-add-maintenance-line>${en?"Add part":"Agregar refaccion"}</button></div><div class="wide-field purchasing-requisition-lines" id="maintenanceMaterialLines">${maintenanceLineMarkup(api.items,en)}</div><div class="wide-field"><button class="primary-action" type="submit">${en?"Reserve parts":"Solicitar y reservar refacciones"}</button></div></form>`;
+    modulePanel.innerHTML=`<div class="panel-head"><div><p class="eyebrow">${en?"Maintenance / Spare parts":"Mantenimiento / Refacciones"}</p><h2>${en?"Labor and spare parts":"Tiempos y refacciones"}</h2></div><button class="secondary-action" data-action="back-module">${t("overview")}</button></div><div class="flow-guided-layout">${renderFlowGuide(getMaintenanceFlowTitle(id),getMaintenanceFlowSteps(id))}<section class="section-card"><h3>${en?"Log labor time":"Registrar tiempo"}</h3><form class="form-grid" id="maintenanceTimeForm"><label class="preview-field"><span>${en?"Order":"Orden"}</span><select name="order_id" required><option value="">${en?"Choose":"Selecciona"}</option>${orders}</select></label><label class="preview-field"><span>${en?"Technician":"Tecnico"}</span><select name="worker_id" required><option value="">${en?"Choose":"Selecciona"}</option>${workerOptions}</select></label><label class="preview-field"><span>${en?"Start":"Inicio"}</span><input name="started_at" type="datetime-local" required></label><label class="preview-field"><span>${en?"End":"Fin"}</span><input name="ended_at" type="datetime-local" required></label><label class="preview-field wide-field"><span>${en?"Notes":"Notas"}</span><input name="notes" maxlength="1000"></label><div class="wide-field"><button class="primary-action" type="submit">${en?"Save time":"Guardar tiempo"}</button></div></form></section><section class="section-card"><h3>${en?"Request spare parts":"Solicitar refacciones"}</h3>${materialSetup}</section><section class="section-card"><div class="catalog-grid">${cards}</div></section></div>`;
+    if(!hasPermission("maintenance.time.create"))modulePanel.querySelector("#maintenanceTimeForm")?.closest(".section-card")?.remove();
+    if(!hasPermission("maintenance.material_request.create"))modulePanel.querySelector("#maintenanceMaterialForm")?.closest(".section-card")?.remove();
+    modulePanel.querySelector("#maintenanceTimeForm")?.addEventListener("submit",async event=>{event.preventDefault();const d=Object.fromEntries(new FormData(event.currentTarget));try{await createMaintenanceTime(d.order_id,{worker_id:d.worker_id,started_at:new Date(d.started_at).toISOString(),ended_at:new Date(d.ended_at).toISOString(),notes:d.notes||null});await loadMaintenanceApiData();render();showToast(en?"Time saved.":"Tiempo guardado.");}catch(error){showToast(error.message||"Error");}});
+    const lineContainer=modulePanel.querySelector("#maintenanceMaterialLines");modulePanel.querySelector("[data-add-maintenance-line]")?.addEventListener("click",()=>lineContainer?.insertAdjacentHTML("beforeend",maintenanceLineMarkup(api.items,en)));modulePanel.addEventListener("change",event=>{if(event.target.name==="item_id"){const row=event.target.closest("[data-maintenance-material-line]");row.querySelector('[name="unit_code"]').value=event.target.selectedOptions[0]?.dataset.unit||"";}});modulePanel.addEventListener("click",event=>{const button=event.target.closest("[data-remove-maintenance-line]");if(button&&lineContainer?.querySelectorAll("[data-maintenance-material-line]").length>1)button.closest("[data-maintenance-material-line]").remove();});modulePanel.querySelector("[data-open-spare-parts-warehouse]")?.addEventListener("click",()=>{const inventoryModule=modules.find(item=>item.id==="almacenes"),submodule=getGenericSubmodule(inventoryModule,"almacenes");navigateTo({active:"almacenes",activeSubmodule:"almacenes",laborArea:""});openWarehouseModal(inventoryModule,submodule,null,{type:"spare_parts"});});modulePanel.querySelector("[data-open-spare-parts-items]")?.addEventListener("click",()=>{const inventoryModule=modules.find(item=>item.id==="almacenes"),submodule=getGenericSubmodule(inventoryModule,"articulos");navigateTo({active:"almacenes",activeSubmodule:"articulos",laborArea:""});openInventoryItemModal(inventoryModule,submodule,null,{type:"sparePart"});});modulePanel.querySelector("#maintenanceMaterialForm")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget,d=Object.fromEntries(new FormData(form)),lines=[...form.querySelectorAll("[data-maintenance-material-line]")].map(row=>({item_id:row.querySelector('[name="item_id"]').value,quantity:Number(row.querySelector('[name="quantity"]').value),unit_code:row.querySelector('[name="unit_code"]').value}));try{const request=await createMaintenanceMaterialRequest(d.order_id,{warehouse_id:d.warehouse_id,lines});state.maintenanceMaterialSourceOrderId="";await loadMaintenanceApiData();render();showToast(request.status==="needs_reconciliation"?(en?"Some parts require reconciliation.":"Algunas refacciones requieren conciliacion."):(en?"Spare parts requested and reserved.":"Refacciones solicitadas y reservadas."));}catch(error){showToast(error.message||"Error");}});
+  }
+  modulePanel.querySelector("[data-action='back-module']")?.addEventListener("click",()=>navigateTo({active:"mantenimiento",activeSubmodule:null,laborArea:""}));
+  modulePanel.querySelectorAll("[data-request-maintenance-material]").forEach(button=>button.addEventListener("click",()=>{state.maintenanceMaterialSourceOrderId=button.dataset.requestMaintenanceMaterial;navigateTo({active:"mantenimiento",activeSubmodule:"refacciones",laborArea:""});}));
+  modulePanel.querySelectorAll("[data-log-maintenance-time]").forEach(button=>button.addEventListener("click",()=>{const order=api.orders.find(item=>item.id===button.dataset.logMaintenanceTime);if(order)openMaintenanceTimeModal(order,en);}));
+  modulePanel.querySelectorAll("[data-maintenance-transition]").forEach(button=>button.addEventListener("click",async()=>{const order=api.orders.find(item=>item.id===button.dataset.orderId),action=button.dataset.maintenanceTransition;if(["resolve","cancel"].includes(action)){openMaintenanceActionModal(order,action,en);return;}let extra={};if(action==="assign"){const workerId=modulePanel.querySelector(`[data-maintenance-worker-for="${CSS.escape(order.id)}"]`)?.value;if(!workerId){showToast(en?"Choose a maintenance technician.":"Selecciona un técnico de mantenimiento.","warning");return;}extra.assigned_worker_id=workerId;}try{const result=action==="reconcile"?await reconcileMaintenanceOrder(order.id):await transitionMaintenanceOrder(order.id,action,extra);await loadMaintenanceApiData();render();if(action==="assign"){showToast(en?`Technician assigned: ${result.assigned_worker_name}`:`Técnico asignado: ${result.assigned_worker_name}`,"success");return;}showToast(result.integration_status==="needs_reconciliation"?(en?"The operation still requires reconciliation.":"La operación aún requiere conciliación."):(en?"Maintenance status updated.":"Estado de mantenimiento actualizado."),result.integration_status==="needs_reconciliation"?"warning":"success");}catch(error){showApiError(error,en?"The maintenance status could not be updated.":"No se pudo actualizar el estado de mantenimiento.");}}));
+  modulePanel.querySelectorAll("[data-reconcile-maintenance-material]").forEach(button=>button.addEventListener("click",async()=>{try{const result=await reconcileMaintenanceMaterialRequest(button.dataset.reconcileMaintenanceMaterial);await loadMaintenanceApiData();render();showToast(result.status==="needs_reconciliation"?(en?"Parts still require reconciliation.":"Las refacciones aún requieren conciliación."):(en?"Parts reconciled.":"Refacciones conciliadas."),result.status==="needs_reconciliation"?"warning":"success");}catch(error){showApiError(error,en?"The spare-parts request could not be reconciled.":"No se pudo conciliar la solicitud de refacciones.");}}));
+  modulePanel.querySelectorAll("[data-cancel-maintenance-material]").forEach(button=>button.addEventListener("click",async()=>{try{const result=await cancelMaintenanceMaterialRequest(button.dataset.cancelMaintenanceMaterial);await loadMaintenanceApiData();render();showToast(result.status==="needs_reconciliation"?(en?"Cancellation requires reconciliation.":"La cancelación requiere conciliación."):(en?"Parts request cancelled.":"Solicitud de refacciones cancelada."),result.status==="needs_reconciliation"?"warning":"success");}catch(error){showApiError(error,en?"The spare-parts request could not be cancelled.":"No se pudo cancelar la solicitud de refacciones.");}}));
+}
+
+function purchasingStatus(value){const map={draft:["Borrador","Draft"],submitted:["Enviada","Submitted"],approved:["Aprobada","Approved"],rejected:["Rechazada","Rejected"],converted:["Convertida","Converted"],issued:["Emitida","Issued"],partially_received:["Recepcion parcial","Partially received"],received:["Recibida","Received"],closed:["Cerrada","Closed"],cancelled:["Cancelada","Cancelled"],processing:["Procesando","Processing"],completed:["Completada","Completed"],needs_reconciliation:["Requiere conciliacion","Needs reconciliation"],active:["Activo","Active"],inactive:["Inactivo","Inactive"]};return (map[value]||[value,value])[state.lang==="en"?1:0];}
+function openPurchasingCancellationModal(documentType, documentId) {
+  const isRequisition = documentType === "requisition";
+  const document = (isRequisition ? state.purchasingApi.requisitions : state.purchasingApi.orders).find((item) => item.id === documentId);
+  if (!document) {
+    showToast(t("purchasingCancellationDocumentMissing"));
+    return;
+  }
+  modalContent.innerHTML = `
+    <form class="recipe-form" id="purchasingCancellationForm">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">${t("purchasingCancellationEyebrow")}</p>
+          <h2 id="modalTitle">${t(isRequisition ? "cancelRequisitionTitle" : "cancelPurchaseOrderTitle")}</h2>
+          <p class="helper-copy">${escapeHtml(document.code)}</p>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
+      </div>
+      <p class="helper-copy">${t("purchasingCancellationHelp")}</p>
+      <label class="preview-field">
+        <span>${t("cancellationReason")}</span>
+        <textarea name="reason" rows="4" maxlength="1000" required></textarea>
+        <small>${t("purchasingCancellationReasonHelp")}</small>
+      </label>
+      <div class="form-errors" id="formErrors" hidden></div>
+      <div class="modal-actions">
+        <button class="secondary-action" type="button" data-action="close-purchasing-cancellation">${t("cancel")}</button>
+        <button class="primary-action" type="submit">${t("confirmCancellation")}</button>
+      </div>
+    </form>
+  `;
+  modalBackdrop.hidden = false;
+  modalContent.querySelector(".modal-close")?.addEventListener("click", closeModal);
+  modalContent.querySelector("[data-action='close-purchasing-cancellation']")?.addEventListener("click", closeModal);
+  modalContent.querySelector("#purchasingCancellationForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const reason = new FormData(event.currentTarget).get("reason")?.trim() || "";
+    if (!reason) {
+      renderFormErrors([t("cancellationReasonRequired")]);
+      return;
+    }
+    try {
+      if (isRequisition) {
+        await cancelPurchasingRequisition(documentId, reason);
+        state.purchasingRequisitionEditId = "";
+      } else {
+        await cancelPurchasingOrder(documentId, reason);
+        state.purchasingOrderEditId = "";
+      }
+      closeModal();
+      await loadPurchasingApiData();
+      showToast(t(isRequisition ? "requisitionCancelled" : "purchaseOrderCancelled"));
+    } catch (error) {
+      renderFormErrors([userFacingError(error, t("purchasingCancellationFailed"))]);
+    }
+  });
+}
+function getPurchasingFlowTitle(title){return state.lang==="en"?`${title} flow`:`Flujo de ${title}`;}
+function getPurchasingFlowSteps(id){const steps={es:{proveedores:[["Alta","Registrar perfil comercial, contacto y condiciones."],["Fiscal","Completar razon social, RFC, regimen, correo y codigo postal fiscal."],["Validacion","Revisar moneda, condiciones, plazo y estatus."],["Operacion","Usarlo en ordenes y seguimiento de compras."]],requisiciones:[["Necesidad","Consolidar partidas y fecha requerida."],["Envio","Enviar el borrador para revision."],["Autorizacion","Aprobar, rechazar o cancelar con permiso puntual."],["Conversion","Convertir la requisicion aprobada en orden de compra."]],"ordenes-de-compra":[["Origen","Seleccionar una requisicion aprobada pendiente."],["Proveedor y precio","Elegir proveedor y precio para cada partida."],["Emision","Congelar condiciones y emitir la orden."],["Recepcion","Continuar con la recepcion parcial o total."]],recepciones:[["Orden","Seleccionar una orden emitida con saldo pendiente."],["Partidas","Capturar cantidades y almacenes destino."],["Validacion","Evitar sobre-recepcion y validar referencias de Inventario."],["Conciliacion","Crear entradas o reintentar pendientes sin duplicarlas."]],reabastecimiento:[["Senales","Considerar minimos, reorden, demanda y ordenes abiertas."],["Evaluacion","Cruzar faltantes y tiempo de entrega del proveedor."],["Sugerencia","Preparar una recomendacion futura de compra."],["Decision","Crear una requisicion explicita cuando el flujo sea implementado."]]},en:{proveedores:[["Create","Register commercial profile, contact, and terms."],["Tax profile","Complete legal name, tax ID, regime, billing email, and postal code."],["Validate","Review currency, terms, lead time, and status."],["Operate","Use the supplier in orders and purchasing follow-up."]],requisiciones:[["Need","Consolidate lines and required date."],["Submit","Send the draft for review."],["Authorize","Approve, reject, or cancel with a specific permission."],["Convert","Convert the approved requisition into a purchase order."]],"ordenes-de-compra":[["Source","Select a pending approved requisition."],["Supplier and price","Choose the supplier and price for each line."],["Issue","Freeze terms and issue the order."],["Receive","Continue with a partial or full receipt."]],recepciones:[["Order","Select an issued order with an open balance."],["Lines","Capture quantities and destination warehouses."],["Validate","Prevent over-receipt and validate Inventory references."],["Reconcile","Create entries or retry pending work without duplicates."]],reabastecimiento:[["Signals","Consider minimums, reorder points, demand, and open orders."],["Evaluate","Cross-check shortages and supplier lead time."],["Suggest","Prepare a future purchasing recommendation."],["Decide","Create an explicit requisition once the flow is implemented."]]}};return (steps[state.lang]?.[id]||steps.es[id]||steps.es.proveedores).map(([title,detail])=>({title,detail}));}
+function purchasingShell(module,title,help,content,form="",contentFirst=false) { const id=state.activeSubmodule,label=state.lang==="en"?module.titleEn:module.title,list=`<section class="section-card purchasing-records"><div class="catalog-grid">${content||`<p class="helper-copy">${state.lang==="en"?"No records yet.":"Aun no hay registros."}</p>`}</div></section>`;modulePanel.innerHTML=`<div class="panel-head"><div><p class="eyebrow">${escapeHtml(label)} / ${state.lang==="en"?"Operations":"Operacion"}</p><h2>${escapeHtml(title)}</h2></div><button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button></div><section class="submodule-screen"><div class="submodule-screen-head"><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(help)}</p></div></div><div class="flow-guided-layout">${renderFlowGuide(getPurchasingFlowTitle(title),getPurchasingFlowSteps(id))}${contentFirst?`${list}${form}`:`${form}${list}`}</div></section>`;modulePanel.querySelector("[data-action='back-module']")?.addEventListener("click",()=>navigateTo({active:"compras",activeSubmodule:null,laborArea:""})); }
+function purchasingForm(id,fields,button){return `<section class="section-card"><form class="form-grid" id="${id}">${fields}<div class="wide-field inline-actions"><button class="primary-action" type="submit">${escapeHtml(button)}</button></div></form></section>`;}
+
+function renderPurchasingSuppliersPanel(module){
+  const api=state.purchasingApi,en=state.lang==="en";
+  const editing=api.suppliers.find(item=>item.id===state.purchasingSupplierEditId)||null;
+  const value=name=>escapeAttribute(editing?.[name]??"");
+  const cards=api.suppliers.map(item=>`<article class="catalog-card">
+    <span class="muted-label">${escapeHtml(item.code)} &middot; ${escapeHtml(item.tax_id||(en?"Fiscal profile pending":"Perfil fiscal pendiente"))}</span>
+    <strong>${escapeHtml(item.commercial_name)}</strong>
+    <p>${escapeHtml(item.legal_name||"")}${item.tax_regime?` &middot; ${en?"Tax regime":"Regimen"} ${escapeHtml(item.tax_regime)}`:""}</p>
+    <p>${escapeHtml(item.billing_email||item.email||"")} &middot; ${escapeHtml(item.currency)} &middot; ${escapeHtml(item.payment_terms)} &middot; ${item.lead_time_days} ${en?"days":"dias"}</p>
+    <span class="chip ${item.status==="active"?"active":"warning"}">${purchasingStatus(item.status)}</span>
+    ${hasPermission("purchasing.supplier.update")?`<button class="secondary-action small-action" type="button" data-edit-supplier="${escapeAttribute(item.id)}">${en?"Edit supplier":"Editar proveedor"}</button>`:""}
+  </article>`).join("");
+  const fields=`
+    <div class="section-title form-section-title wide-field"><span class="section-icon">F</span><strong>${editing?(en?"Edit supplier":"Editar proveedor"):(en?"New supplier":"Nuevo proveedor")}</strong></div>
+    <label class="preview-field"><span>${en?"Code":"Codigo"}</span><input name="code" required maxlength="40" value="${value("code")}" ${editing?"readonly":""}></label>
+    <label class="preview-field"><span>${en?"Commercial name":"Nombre comercial"}</span><input name="commercial_name" required maxlength="240" value="${value("commercial_name")}"></label>
+    <label class="preview-field"><span>${en?"Legal name":"Razon social"}</span><input name="legal_name" required maxlength="240" value="${value("legal_name")}"></label>
+    <label class="preview-field"><span>RFC</span><input name="tax_id" required maxlength="13" pattern="[A-Za-z&#209;&#241;&amp;]{3,4}[0-9]{6}[A-Za-z0-9]{3}" value="${value("tax_id")}" placeholder="AAA010101AAA"></label>
+    <label class="preview-field"><span>${en?"Tax regime":"Regimen fiscal"}</span><select name="tax_regime" required>
+      <option value="601" ${selectedOption(editing?.tax_regime,"601")}>601 &middot; ${en?"General legal entities":"General de Ley Personas Morales"}</option>
+      <option value="603" ${selectedOption(editing?.tax_regime,"603")}>603 &middot; ${en?"Nonprofit legal entities":"Personas Morales con Fines no Lucrativos"}</option>
+      <option value="605" ${selectedOption(editing?.tax_regime,"605")}>605 &middot; ${en?"Wages and salaries":"Sueldos y Salarios"}</option>
+      <option value="606" ${selectedOption(editing?.tax_regime,"606")}>606 &middot; ${en?"Leasing":"Arrendamiento"}</option>
+      <option value="612" ${selectedOption(editing?.tax_regime,"612")}>612 &middot; ${en?"Business and professional activities":"Actividades Empresariales y Profesionales"}</option>
+      <option value="616" ${selectedOption(editing?.tax_regime,"616")}>616 &middot; ${en?"No tax obligations":"Sin obligaciones fiscales"}</option>
+      <option value="626" ${selectedOption(editing?.tax_regime,"626")}>626 &middot; RESICO</option>
+    </select></label>
+    <label class="preview-field"><span>${en?"Billing email":"Correo de facturacion"}</span><input name="billing_email" type="email" required maxlength="254" value="${value("billing_email")}"></label>
+    <label class="preview-field"><span>${en?"Fiscal postal code":"Codigo postal fiscal"}</span><input name="fiscal_postal_code" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" value="${value("fiscal_postal_code")}"></label>
+    <label class="preview-field"><span>${en?"Fiscal country":"Pais fiscal"}</span><select name="fiscal_country"><option value="MX">Mexico</option></select></label>
+    <label class="preview-field wide-field"><span>${en?"Fiscal street":"Calle fiscal"}</span><input name="fiscal_street" maxlength="200" value="${value("fiscal_street")}"></label>
+    <label class="preview-field"><span>${en?"Exterior number":"Numero exterior"}</span><input name="fiscal_exterior_number" maxlength="40" value="${value("fiscal_exterior_number")}"></label>
+    <label class="preview-field"><span>${en?"Interior number":"Numero interior"}</span><input name="fiscal_interior_number" maxlength="40" value="${value("fiscal_interior_number")}"></label>
+    <label class="preview-field"><span>${en?"Neighborhood":"Colonia"}</span><input name="fiscal_neighborhood" maxlength="160" value="${value("fiscal_neighborhood")}"></label>
+    <label class="preview-field"><span>${en?"Municipality":"Municipio o alcaldia"}</span><input name="fiscal_municipality" maxlength="160" value="${value("fiscal_municipality")}"></label>
+    <label class="preview-field"><span>${en?"State":"Estado"}</span><input name="fiscal_state" maxlength="120" value="${value("fiscal_state")}"></label>
+    <div class="section-title form-section-title wide-field"><span class="section-icon">C</span><strong>${en?"Commercial contact":"Contacto comercial"}</strong></div>
+    <label class="preview-field"><span>${en?"Contact name":"Nombre de contacto"}</span><input name="contact_name" maxlength="200" value="${value("contact_name")}"></label>
+    <label class="preview-field"><span>${en?"Contact email":"Correo de contacto"}</span><input name="email" type="email" maxlength="254" value="${value("email")}"></label>
+    <label class="preview-field"><span>${en?"Phone":"Telefono"}</span><input name="phone" maxlength="30" value="${value("phone")}"></label>
+    <label class="preview-field"><span>${en?"Website":"Sitio web"}</span><input name="website" type="url" maxlength="300" value="${value("website")}"></label>
+    <label class="preview-field"><span>${en?"Currency":"Moneda"}</span><select name="currency"><option ${selectedOption(editing?.currency||"MXN","MXN")}>MXN</option><option ${selectedOption(editing?.currency,"USD")}>USD</option><option ${selectedOption(editing?.currency,"EUR")}>EUR</option></select></label>
+    <label class="preview-field"><span>${en?"Payment terms":"Condiciones de pago"}</span><select name="payment_terms"><option value="cash" ${selectedOption(editing?.payment_terms||"cash","cash")}>${en?"Cash":"Contado"}</option><option value="credit_30" ${selectedOption(editing?.payment_terms,"credit_30")}>${en?"Net 30":"Credito 30 dias"}</option></select></label>
+    <label class="preview-field"><span>${en?"Lead time (days)":"Entrega (dias)"}</span><input name="lead_time_days" type="number" min="0" value="${editing?.lead_time_days??0}"></label>
+    <label class="preview-field"><span>${en?"Status":"Estatus"}</span><select name="status"><option value="active" ${selectedOption(editing?.status||"active","active")}>${en?"Active":"Activo"}</option><option value="inactive" ${selectedOption(editing?.status,"inactive")}>${en?"Inactive":"Inactivo"}</option></select></label>
+    ${editing?`<button class="secondary-action wide-field" type="button" data-cancel-supplier-edit>${en?"Cancel editing":"Cancelar edicion"}</button>`:""}`;
+  const form=purchasingForm("purchasingSupplierForm",fields,editing?(en?"Update supplier":"Actualizar proveedor"):(en?"Save supplier":"Guardar proveedor"));
+  purchasingShell(module,en?"Suppliers":"Proveedores",en?"Fiscal identity, commercial contacts and delivery terms.":"Identidad fiscal, contactos comerciales y condiciones de entrega.",cards,form);
+  if(!hasPermission(editing?"purchasing.supplier.update":"purchasing.supplier.create"))modulePanel.querySelector("#purchasingSupplierForm")?.closest(".section-card")?.remove();
+  modulePanel.querySelectorAll("[data-edit-supplier]").forEach(button=>button.addEventListener("click",()=>{state.purchasingSupplierEditId=button.dataset.editSupplier;render();modulePanel.querySelector("#purchasingSupplierForm")?.scrollIntoView({behavior:"smooth",block:"start"});}));
+  modulePanel.querySelector("[data-cancel-supplier-edit]")?.addEventListener("click",()=>{state.purchasingSupplierEditId="";render();});
+  modulePanel.querySelector("#purchasingSupplierForm")?.addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget));const payload={...data,tax_id:data.tax_id.toUpperCase().replaceAll("-","").replaceAll(" ",""),lead_time_days:Number(data.lead_time_days)};try{if(editing){delete payload.code;await updatePurchasingSupplier(editing.id,payload);}else await createPurchasingSupplier(payload);state.purchasingSupplierEditId="";await loadPurchasingApiData();showToast(editing?(en?"Supplier updated.":"Proveedor actualizado."):(en?"Supplier saved.":"Proveedor guardado."));}catch(error){showToast(error.message||"Error");}});
+}
+
+function purchasingRequisitionLineMarkup(items,en,line={}){
+  const options=items.map(item=>`<option value="${escapeAttribute(item.id)}" data-unit="${escapeAttribute(item.base_unit)}" ${selectedOption(line.inventory_item_id,item.id)}>${escapeHtml(item.code)} &middot; ${escapeHtml(item.name)} (${escapeHtml(item.base_unit)})</option>`).join("");
+  return `<div class="purchasing-requisition-line" data-requisition-line>
+    <label class="preview-field purchasing-line-item"><span>${en?"Inventory item":"Articulo"}</span><select data-entity-selector data-search-placeholder="${en?"Search item by code or name":"Buscar articulo por codigo o nombre"}" name="inventory_item_id" required><option value="" disabled ${line.inventory_item_id?"":"selected"}>${en?"Choose an item":"Selecciona un articulo"}</option>${options}</select></label>
+    <label class="preview-field"><span>${en?"Quantity":"Cantidad"}</span><input name="quantity" type="number" min="0.000001" step="any" value="${escapeAttribute(line.quantity??"")}" required></label>
+    <label class="preview-field purchasing-line-description"><span>${en?"Description":"Descripcion"}</span><input name="description" maxlength="300" value="${escapeAttribute(line.description??"")}" required></label>
+    <label class="preview-field purchasing-line-unit"><span>${en?"Unit":"Unidad"}</span><input name="unit_code" value="${escapeAttribute(line.unit_code??"")}" readonly required></label>
+    <button class="secondary-action small-action remove-resource" type="button" data-remove-requisition-line aria-label="${en?"Remove line":"Quitar partida"}">${en?"Remove":"Quitar"}</button>
+  </div>`;
+}
+
+function renderPurchasingSubmodulePanel(module){
+  const api=state.purchasingApi; const id=state.activeSubmodule; const en=state.lang==="en";
+  if(id==="proveedores"){
+    renderPurchasingSuppliersPanel(module);return;
+  }
+  if(id==="requisiciones"){
+    const editing=api.requisitions.find(x=>x.id===state.purchasingRequisitionEditId)||null;
+    const cards=api.requisitions.map(x=>`<article class="catalog-card"><span class="muted-label">${escapeHtml(x.code)} &middot; ${escapeHtml(x.required_date)}</span><strong>${x.lines?.length||0} ${en?"lines":"partidas"}</strong><ul class="purchasing-line-summary">${(x.lines||[]).map(line=>`<li><span>${escapeHtml(line.description)}</span><strong>${formatNumber(Number(line.quantity))} ${escapeHtml(line.unit_code)}</strong></li>`).join("")}</ul><p>${escapeHtml(x.priority)}</p><span class="chip ${x.status==="approved"?"active":"warning"}">${purchasingStatus(x.status)}</span><div class="row-actions">${x.status==="draft"&&hasPermission("purchasing.requisition.update")?`<button class="secondary-action small-action" data-edit-requisition="${escapeAttribute(x.id)}">${en?"Edit":"Editar"}</button>`:""}${x.status==="draft"&&hasPermission("purchasing.requisition.submit")?`<button class="secondary-action small-action" data-purchasing-transition="submit" data-id="${escapeAttribute(x.id)}">${en?"Submit":"Enviar"}</button>`:""}${x.status==="submitted"&&hasPermission("purchasing.requisition.approve")?`<button class="primary-action small-action" data-purchasing-transition="approve" data-id="${escapeAttribute(x.id)}">${en?"Approve":"Aprobar"}</button>`:""}${x.status==="submitted"&&hasPermission("purchasing.requisition.reject")?`<button class="secondary-action small-action" data-purchasing-transition="reject" data-id="${escapeAttribute(x.id)}">${en?"Reject":"Rechazar"}</button>`:""}${x.status==="approved"&&hasPermission("purchasing.order.create")?`<button class="primary-action small-action" data-create-order-from-requisition="${escapeAttribute(x.id)}">${en?"Create purchase order":"Crear orden de compra"}</button>`:""}${["draft","submitted","approved"].includes(x.status)&&hasPermission("purchasing.requisition.cancel")?`<button class="secondary-action small-action" data-cancel-requisition="${escapeAttribute(x.id)}">${en?"Cancel":"Cancelar"}</button>`:""}</div></article>`).join("");
+    const today=new Date().toISOString().slice(0,10),editLines=(editing?.lines||[]).map(line=>({...line,inventory_item_id:line.inventory_item_ref_id}));const form=purchasingForm("purchasingRequisitionForm",`<label class="preview-field"><span>${en?"Code":"Codigo"}</span><input name="code" value="${escapeAttribute(editing?.code||"")}" required></label><label class="preview-field"><span>${en?"Required date":"Fecha requerida"}</span><input name="required_date" type="date" min="${today}" value="${escapeAttribute(editing?.required_date||today)}" required></label><label class="preview-field"><span>${en?"Priority":"Prioridad"}</span><select name="priority"><option value="normal" ${editing?.priority==="normal"?"selected":""}>Normal</option><option value="urgent" ${editing?.priority==="urgent"?"selected":""}>${en?"Urgent":"Urgente"}</option></select></label><div class="wide-field purchasing-lines-head"><div><strong>${en?"Requested items":"Articulos solicitados"}</strong><p>${en?"Add every item needed under the same requisition.":"Agrega todos los articulos necesarios en la misma requisicion."}</p></div><button class="secondary-action small-action" type="button" data-add-requisition-line>${en?"Add item":"Agregar articulo"}</button></div><div class="wide-field purchasing-requisition-lines" id="purchasingRequisitionLines">${(editLines.length?editLines:[{}]).map(line=>purchasingRequisitionLineMarkup(api.items,en,line)).join("")}</div>${editing?`<div class="wide-field"><button class="secondary-action" type="button" data-cancel-requisition-edit>${en?"Discard edit":"Descartar edicion"}</button></div>`:""}`,editing?(en?"Update requisition":"Actualizar requisicion"):(en?"Create requisition":"Crear requisicion"));
+    purchasingShell(module,en?"Requisitions":"Requisiciones",en?"Request, submit and approve purchasing needs.":"Solicita, envia y aprueba necesidades de compra.",cards,form);
+    if(!hasPermission(editing?"purchasing.requisition.update":"purchasing.requisition.create"))modulePanel.querySelector("#purchasingRequisitionForm")?.closest(".section-card")?.remove();
+    const requisitionForm=modulePanel.querySelector("#purchasingRequisitionForm"),lineContainer=modulePanel.querySelector("#purchasingRequisitionLines");
+    modulePanel.querySelector("[data-add-requisition-line]")?.addEventListener("click",()=>lineContainer.insertAdjacentHTML("beforeend",purchasingRequisitionLineMarkup(api.items,en)));
+    lineContainer?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-requisition-line]");if(!button)return;const rows=lineContainer.querySelectorAll("[data-requisition-line]");if(rows.length===1){showToast(en?"A requisition needs at least one line.":"La requisicion necesita al menos una partida.");return;}button.closest("[data-requisition-line]")?.remove();});
+    lineContainer?.addEventListener("change",event=>{const select=event.target.closest('select[name="inventory_item_id"]');if(!select)return;const row=select.closest("[data-requisition-line]"),item=api.items.find(value=>value.id===select.value);if(!row||!item)return;row.querySelector('[name="unit_code"]').value=item.base_unit;const description=row.querySelector('[name="description"]');if(!description.value.trim())description.value=item.name;});
+    requisitionForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f));const lines=[...f.querySelectorAll("[data-requisition-line]")].map(row=>({line_type:"inventory_item",inventory_item_id:row.querySelector('[name="inventory_item_id"]').value,description:row.querySelector('[name="description"]').value.trim(),quantity:Number(row.querySelector('[name="quantity"]').value),unit_code:row.querySelector('[name="unit_code"]').value}));if(new Set(lines.map(line=>line.inventory_item_id)).size!==lines.length){showToast(en?"The same item cannot be repeated; adjust its quantity in one line.":"No se puede repetir el mismo articulo; ajusta su cantidad en una sola partida.");return;}try{const payload={code:d.code,required_date:d.required_date,priority:d.priority,source_type:"manual",lines};if(editing)await updatePurchasingRequisition(editing.id,payload);else await createPurchasingRequisition(payload);state.purchasingRequisitionEditId="";await loadPurchasingApiData();showToast(editing?(en?"Requisition updated.":"Requisicion actualizada."):(en?`${lines.length} requisition lines created.`:`Requisicion creada con ${lines.length} partidas.`));}catch(error){showToast(error.message||"Error");}});
+    modulePanel.querySelectorAll("[data-edit-requisition]").forEach(button=>button.addEventListener("click",()=>{state.purchasingRequisitionEditId=button.dataset.editRequisition;render();}));
+    modulePanel.querySelector("[data-cancel-requisition-edit]")?.addEventListener("click",()=>{state.purchasingRequisitionEditId="";render();});
+    modulePanel.querySelectorAll("[data-cancel-requisition]").forEach(button=>button.addEventListener("click",()=>openPurchasingCancellationModal("requisition",button.dataset.cancelRequisition)));
+    modulePanel.querySelectorAll("[data-create-order-from-requisition]").forEach(button=>button.addEventListener("click",()=>{state.purchasingOrderSourceRequisitionId=button.dataset.createOrderFromRequisition;state.purchasingOrderEditId="";navigateTo({active:"compras",activeSubmodule:"ordenes-de-compra",laborArea:""});}));
+    modulePanel.querySelectorAll("[data-purchasing-transition]").forEach(button=>button.addEventListener("click",async()=>{try{const action=button.dataset.purchasingTransition;await transitionPurchasingRequisition(button.dataset.id,action,action==="reject"?(en?"Rejected by buyer":"Rechazada por comprador"):null);await loadPurchasingApiData();if(action==="approve"&&hasPermission("purchasing.order.create")){state.purchasingOrderSourceRequisitionId=button.dataset.id;navigateTo({active:"compras",activeSubmodule:"ordenes-de-compra",laborArea:""});showToast(en?"Requisition approved. Complete supplier and prices to create the order.":"Requisición aprobada. Completa proveedor y precios para crear la orden.","success");return;}showToast(en?"Status updated.":"Estado actualizado.","success");}catch(error){showApiError(error,en?"The requisition status could not be updated.":"No se pudo actualizar el estado de la requisición.");}}));return;
+  }
+  if(id==="ordenes-de-compra"){
+    const editing=api.orders.find(x=>x.id===state.purchasingOrderEditId)||null;
+    const pendingRequisitions=api.requisitions.filter(x=>x.status==="approved"),sourceRequisitionId=editing?.requisition_id||state.purchasingOrderSourceRequisitionId||"";
+    const cards=`<div class="purchasing-lines-head"><div><strong>${en?`All purchase orders (${api.orders.length})`:`Todas las ordenes de compra (${api.orders.length})`}</strong><p>${en?"Every status is included: draft, issued, partial, received, closed, or cancelled.":"Se incluyen todos los estatus: borrador, emitida, parcial, recibida, cerrada o cancelada."}</p></div></div>`+(api.orders.map(x=>{const requisition=api.requisitions.find(item=>item.id===x.requisition_id);return `<article class="catalog-card"><span class="muted-label">${escapeHtml(x.code)} · ${x.created_at?new Date(x.created_at).toLocaleDateString():""}</span><strong>${escapeHtml(x.supplier_name_snapshot)}</strong><p>${formatCurrency(x.subtotal)} · ${x.lines?.length||0} ${en?"lines":"partidas"}</p><p>${en?"Origin":"Origen"}: ${escapeHtml(requisition?.code||(x.direct_purchase_reason?(en?"Direct purchase":"Compra directa"):(en?"No requisition":"Sin requisicion")))}</p><span class="chip ${["received","closed"].includes(x.status)?"active":"warning"}">${purchasingStatus(x.status)}</span><div class="row-actions">${x.status==="draft"&&hasPermission("purchasing.order.update")?`<button class="secondary-action small-action" data-edit-order="${escapeAttribute(x.id)}">${en?"Edit":"Editar"}</button>`:""}${x.status==="draft"&&hasPermission("purchasing.order.issue")?`<button class="primary-action small-action" data-issue-order="${escapeAttribute(x.id)}">${en?"Issue order":"Emitir orden"}</button>`:""}${["issued","partially_received"].includes(x.status)&&hasPermission("purchasing.receipt.create")?`<button class="primary-action small-action" data-receive-order="${escapeAttribute(x.id)}">${en?"Register receipt":"Registrar recepcion"}</button>`:""}${["draft","issued","partially_received"].includes(x.status)&&hasPermission("purchasing.order.cancel")?`<button class="secondary-action small-action" data-cancel-order="${escapeAttribute(x.id)}">${en?"Cancel":"Cancelar"}</button>`:""}</div></article>`;}).join("")||`<p class="helper-copy">${en?"No purchase orders have been created yet.":"Aun no se han creado ordenes de compra."}</p>`);
+    const suppliers=api.suppliers.filter(x=>x.status==="active").map(x=>`<option value="${escapeAttribute(x.id)}" ${editing?.supplier_id===x.id?"selected":""}>${escapeHtml(x.code)} &middot; ${escapeHtml(x.commercial_name)}</option>`).join("");const reqs=api.requisitions.filter(x=>x.status==="approved"||x.id===editing?.requisition_id).map(x=>`<option value="${escapeAttribute(x.id)}" ${sourceRequisitionId===x.id?"selected":""}>${escapeHtml(x.code)} &middot; ${x.lines?.length||0} ${en?"lines":"partidas"}</option>`).join("");
+    const orderFields=`<label class="preview-field"><span>${en?"Code":"Codigo"}</span><input name="code" value="${escapeAttribute(editing?.code||"")}" required></label><label class="preview-field"><span>${en?"Approved requisition":"Requisicion aprobada"}</span><select name="requisition_id" data-entity-selector data-search-placeholder="${en?"Search approved requisition":"Buscar requisicion aprobada"}" required ${editing?"disabled":""}><option value="" disabled ${sourceRequisitionId?"":"selected"}>${en?"Choose a requisition":"Selecciona una requisicion"}</option>${reqs}</select></label><label class="preview-field"><span>${en?"Supplier":"Proveedor"}</span><select name="supplier_id" data-entity-selector data-search-placeholder="${en?"Search supplier":"Buscar proveedor"}" required><option value="" disabled ${editing?"":"selected"}>${en?"Choose a supplier":"Selecciona un proveedor"}</option>${suppliers}</select></label><div class="wide-field purchasing-order-prices" id="purchasingOrderPrices"><p class="helper-copy">${en?"Choose a requisition to capture a price for every line.":"Selecciona una requisicion para capturar el precio de cada partida."}</p></div>${editing?`<div class="wide-field"><button class="secondary-action" type="button" data-cancel-order-edit>${en?"Discard edit":"Descartar edicion"}</button></div>`:""}`;
+    const creation=editing||pendingRequisitions.length?purchasingForm("purchasingOrderForm",orderFields,editing?(en?"Update purchase order":"Actualizar orden de compra"):(en?"Create purchase order":"Crear orden de compra")):`<section class="section-card"><span class="chip warning">${en?"No pending requisitions":"Sin requisiciones pendientes"}</span><h3>${en?"New purchase order":"Nueva orden de compra"}</h3><p>${en?"There are no approved requisitions pending conversion. Approve a requisition before creating another purchase order.":"No hay requisiciones aprobadas pendientes de convertir. Aprueba una requisicion antes de crear otra orden de compra."}</p>${hasPermission("purchasing.requisition.read")?`<button class="secondary-action" type="button" data-open-pending-purchasing-requisitions>${en?"Review requisitions":"Revisar requisiciones"}</button>`:""}</section>`;
+    const form=`<section class="section-card"><div class="purchasing-lines-head"><div><strong>${en?"Purchase orders are operational documents":"Las ordenes de compra son documentos operativos"}</strong><p>${en?"Replenishment is a separate planned feature for automatic reorder suggestions.":"Reabastecimiento es una funcion planeada distinta para sugerencias automaticas por punto de reorden."}</p></div></div></section>`+creation;
+    purchasingShell(module,en?"Purchase orders":"Ordenes de compra",en?"Complete history first; create only from approved requisitions pending conversion.":"Primero el historial completo; crea solo desde requisiciones aprobadas pendientes de convertir.",cards,form,true);
+    if(!hasPermission(editing?"purchasing.order.update":"purchasing.order.create"))modulePanel.querySelector("#purchasingOrderForm")?.closest(".section-card")?.remove();
+    modulePanel.querySelector("[data-open-pending-purchasing-requisitions]")?.addEventListener("click",()=>navigateTo({active:"compras",activeSubmodule:"requisiciones",laborArea:""}));
+    const orderForm=modulePanel.querySelector("#purchasingOrderForm"),priceContainer=modulePanel.querySelector("#purchasingOrderPrices"),requisitionSelect=orderForm?.elements.requisition_id;
+    const renderOrderPrices=()=>{const req=api.requisitions.find(value=>value.id===(requisitionSelect?.value||editing?.requisition_id));priceContainer.innerHTML=req?`<div class="purchasing-lines-head"><div><strong>${en?"Price by line":"Precio por partida"}</strong><p>${en?"Each requested item keeps its own negotiated price.":"Cada articulo solicitado conserva su precio negociado."}</p></div></div>${req.lines.map((line,index)=>`<label class="resource-input"><span><strong>${escapeHtml(line.description)}</strong><small>${formatNumber(Number(line.quantity))} ${escapeHtml(line.unit_code)}</small></span><input name="unit_price_${index}" data-order-unit-price="${index}" type="number" min="0" step=".01" value="${escapeAttribute(editing?.lines?.[index]?.unit_price??"")}" required aria-label="${en?"Unit price":"Precio unitario"}: ${escapeAttribute(line.description)}"></label>`).join("")}`:`<p class="helper-copy">${en?"Choose a requisition to capture a price for every line.":"Selecciona una requisicion para capturar el precio de cada partida."}</p>`;};
+    requisitionSelect?.addEventListener("change",renderOrderPrices);
+    if(sourceRequisitionId)renderOrderPrices();
+    orderForm?.addEventListener("submit",async event=>{event.preventDefault();const d=Object.fromEntries(new FormData(event.currentTarget)),req=api.requisitions.find(x=>x.id===(d.requisition_id||editing?.requisition_id)),supplier=api.suppliers.find(x=>x.id===d.supplier_id);if(!req||!supplier)return;const payload={code:d.code,requisition_id:req.id,supplier_id:supplier.id,currency:supplier.currency,payment_terms:supplier.payment_terms,lines:req.lines.map((x,index)=>({line_type:x.line_type,inventory_item_id:x.inventory_item_ref_id,description:x.description,quantity:Number(x.quantity),unit_code:x.unit_code,unit_price:Number(event.currentTarget.querySelector(`[data-order-unit-price="${index}"]`).value)}))};try{if(editing)await updatePurchasingOrder(editing.id,payload);else await createPurchasingOrder(payload);state.purchasingOrderEditId="";state.purchasingOrderSourceRequisitionId="";await loadPurchasingApiData();showToast(editing?(en?"Purchase order updated.":"Orden de compra actualizada."):(en?"Purchase order created. Issue it when it is ready to send to the supplier.":"Orden de compra creada. Emitela cuando este lista para enviarse al proveedor."));}catch(error){showToast(error.message||"Error");}});
+    modulePanel.querySelectorAll("[data-edit-order]").forEach(button=>button.addEventListener("click",()=>{state.purchasingOrderEditId=button.dataset.editOrder;render();}));modulePanel.querySelector("[data-cancel-order-edit]")?.addEventListener("click",()=>{state.purchasingOrderEditId="";render();});
+    modulePanel.querySelectorAll("[data-receive-order]").forEach(button=>button.addEventListener("click",()=>{state.purchasingReceiptSourceOrderId=button.dataset.receiveOrder;navigateTo({active:"compras",activeSubmodule:"recepciones",laborArea:""});}));
+    modulePanel.querySelectorAll("[data-cancel-order]").forEach(button=>button.addEventListener("click",()=>openPurchasingCancellationModal("order",button.dataset.cancelOrder)));modulePanel.querySelectorAll("[data-issue-order]").forEach(button=>button.addEventListener("click",async()=>{try{await issuePurchasingOrder(button.dataset.issueOrder);await loadPurchasingApiData();if(hasPermission("purchasing.receipt.create")){state.purchasingReceiptSourceOrderId=button.dataset.issueOrder;navigateTo({active:"compras",activeSubmodule:"recepciones",laborArea:""});showToast(en?"Order issued. Register the supplier receipt when goods arrive.":"Orden emitida. Registra la recepción cuando llegue la mercancía.","success");return;}showToast(en?"Order issued.":"Orden emitida.","success");}catch(error){showApiError(error,en?"The purchase order could not be issued.":"No se pudo emitir la orden de compra.");}}));return;
+  }
+  if(id==="recepciones"){
+    const cards=api.receipts.map(x=>`<article class="catalog-card"><span class="muted-label">${escapeHtml(x.code)}</span><strong>${purchasingStatus(x.status)}</strong><p>${escapeHtml(x.supplier_document_reference||"")} · ${new Date(x.received_at).toLocaleString()}</p><span class="chip ${x.status==="completed"?"active":"warning"}">${purchasingStatus(x.status)}</span>${x.status==="needs_reconciliation"&&hasPermission("purchasing.receipt.reconcile")?`<button class="primary-action small-action" data-reconcile-receipt="${escapeAttribute(x.id)}">${en?"Reconcile":"Conciliar"}</button>`:""}</article>`).join("");
+    const sourceOrderId=state.purchasingReceiptSourceOrderId||"",openOrders=api.orders.filter(x=>["issued","partially_received"].includes(x.status)&&x.lines.some(line=>Number(line.received_quantity)<Number(line.quantity))),orderOptions=openOrders.map(order=>`<option value="${escapeAttribute(order.id)}" ${sourceOrderId===order.id?"selected":""}>${escapeHtml(order.code)} · ${order.lines.length} ${en?"lines":"partidas"}</option>`).join("");const warehouses=api.warehouses.filter(x=>x.status==="active").map(x=>`<option value="${escapeAttribute(x.id)}">${escapeHtml(x.code)} · ${escapeHtml(x.name)}</option>`).join("");
+    const form=purchasingForm("purchasingReceiptForm",`<label class="preview-field"><span>${en?"Receipt code":"Codigo de recepcion"}</span><input name="code" required></label><label class="preview-field"><span>${en?"Purchase order":"Orden de compra"}</span><select name="purchase_order_id" required><option value="" disabled ${sourceOrderId?"":"selected"}>${en?"Choose an order":"Selecciona una orden"}</option>${orderOptions}</select></label><label class="preview-field"><span>${en?"Supplier document":"Documento proveedor"}</span><input name="supplier_document_reference"></label><div class="wide-field purchasing-requisition-lines" id="purchasingReceiptLines"><p class="helper-copy">${en?"Choose an order and capture one or more received lines.":"Selecciona una orden y captura una o mas partidas recibidas."}</p></div>`,en?"Register receipt":"Registrar recepcion");
+    purchasingShell(module,en?"Receipts":"Recepciones",en?"Partial receipts create authoritative Inventory entries.":"Las recepciones parciales crean entradas autoritativas en Inventarios.",cards,form);
+    if(!hasPermission("purchasing.receipt.create"))modulePanel.querySelector("#purchasingReceiptForm")?.closest(".section-card")?.remove();
+    const receiptForm=modulePanel.querySelector("#purchasingReceiptForm"),receiptLines=modulePanel.querySelector("#purchasingReceiptLines");
+    const renderReceiptLines=orderId=>{const order=openOrders.find(value=>value.id===orderId);receiptLines.innerHTML=(order?.lines||[]).filter(line=>Number(line.received_quantity)<Number(line.quantity)).map(line=>{const remaining=Number(line.quantity)-Number(line.received_quantity),inventory=line.line_type==="inventory_item";return `<div class="purchasing-requisition-line" data-receipt-line data-line-id="${escapeAttribute(line.id)}" data-remaining="${remaining}"><div class="purchasing-line-item"><strong>${escapeHtml(line.description)}</strong><small>${en?"Remaining":"Pendiente"}: ${formatNumber(remaining)} ${escapeHtml(line.unit_code)}</small></div><label class="preview-field"><span>${en?"Received quantity":"Cantidad recibida"}</span><input name="quantity" type="number" min="0" max="${remaining}" step="any" value="0"></label>${inventory?`<label class="preview-field"><span>${en?"Warehouse":"Almacen"}</span><select name="warehouse_id"><option value="">${en?"Choose a warehouse":"Selecciona un almacen"}</option>${warehouses}</select></label>`:`<input name="warehouse_id" type="hidden" value="">`}</div>`;}).join("")||`<p class="helper-copy">${en?"This order has no pending lines.":"Esta orden no tiene partidas pendientes."}</p>`;};
+    receiptForm?.elements.purchase_order_id.addEventListener("change",event=>renderReceiptLines(event.target.value));
+    if(sourceOrderId&&receiptForm)renderReceiptLines(sourceOrderId);
+    receiptForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f)),lines=[...f.querySelectorAll("[data-receipt-line]")].map(row=>({order_line_id:row.dataset.lineId,quantity:Number(row.querySelector('[name="quantity"]').value),warehouse_id:row.querySelector('[name="warehouse_id"]').value||null,remaining:Number(row.dataset.remaining)})).filter(line=>line.quantity>0);if(!lines.length){showToast(en?"Capture at least one received quantity.":"Captura al menos una cantidad recibida.");return;}if(lines.some(line=>line.quantity>line.remaining)){showToast(en?"A quantity exceeds its remaining balance.":"Una cantidad excede su saldo pendiente.");return;}const order=openOrders.find(value=>value.id===d.purchase_order_id);if(lines.some(line=>order?.lines.find(value=>value.id===line.order_line_id)?.line_type==="inventory_item"&&!line.warehouse_id)){showToast(en?"Select a warehouse for every inventory line.":"Selecciona un almacen para cada partida inventariable.");return;}try{await createPurchasingReceipt({code:d.code,purchase_order_id:d.purchase_order_id,received_at:new Date().toISOString(),supplier_document_reference:d.supplier_document_reference||null,lines:lines.map(({remaining,...line})=>line)});state.purchasingReceiptSourceOrderId="";await loadPurchasingApiData();showToast(en?`${lines.length} receipt lines registered.`:`Recepcion registrada con ${lines.length} partidas.`);}catch(error){showToast(error.message||"Error");}});
+    modulePanel.querySelectorAll("[data-reconcile-receipt]").forEach(button=>button.addEventListener("click",async()=>{try{await reconcilePurchasingReceipt(button.dataset.reconcileReceipt);await loadPurchasingApiData();showToast(en?"Receipt reconciled.":"Recepcion conciliada.");}catch(error){showToast(error.message||"Error");}}));return;
+  }
+  if(id==="reabastecimiento"){
+    const planned=`<article class="catalog-card"><span class="chip warning">${en?"Planned":"Planeado"}</span><strong>${en?"Automatic purchasing suggestions":"Sugerencias automaticas de compra"}</strong><p>${en?"This future flow will analyze minimum stock, reorder points, demand, open purchase orders, and supplier lead time. It does not list or create purchase orders.":"Este flujo futuro analizara minimos, puntos de reorden, demanda, ordenes abiertas y tiempo de entrega del proveedor. No lista ni crea ordenes de compra."}</p></article>`;
+    purchasingShell(module,en?"Replenishment":"Reabastecimiento",en?"Planning by stock policy; separate from operational purchase orders.":"Planeacion por politicas de inventario; separado de las ordenes de compra operativas.",planned);return;
+  }
+  purchasingShell(module,en?"Purchasing":"Compras",en?"This purchasing route is not available.":"Esta ruta de Compras no esta disponible.","");
+}
+
 function renderGenericSubmodulePanel(module) {
   const submodule = getGenericSubmodule(module, state.activeSubmodule);
   if (isWarehouseMasterSubmodule(module, submodule)) {
@@ -2752,6 +3103,10 @@ function renderGenericSubmodulePanel(module) {
   }
   if (isSalesDeliveriesSubmodule(module, submodule)) {
     renderSalesDeliveriesPanel(module, submodule);
+    return;
+  }
+  if (isSalesMarginSubmodule(module, submodule)) {
+    renderSalesMarginPanel(module, submodule);
     return;
   }
   const sampleRows = buildGenericSubmoduleRows(module, submodule);
@@ -3207,8 +3562,6 @@ function getInventoryViewFilters() {
     cursor: state.inventoryBalances.cursor || ""
   };
 }
-
-function renderSalesPlannedPanel(module,submodule){const label=state.lang==="en"?module.titleEn:module.title;modulePanel.innerHTML=`<div class="panel-head"><div><p class="eyebrow">${label} / ${t("submodule")}</p><h2>${submodule.name}</h2></div><button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button></div><section class="section-card"><span class="chip warning">Planeado</span><h3>${submodule.name}</h3><p>Este flujo no forma parte del primer corte real de Ventas. Clientes y Cotizaciones ya operan contra API; pedidos, entregas, devoluciones y sus reservas se implementarán en el siguiente corte sin reutilizar datos mock.</p></section>`;modulePanel.querySelector("[data-action='back-module']").addEventListener("click",()=>navigateTo({active:state.active,activeSubmodule:null,laborArea:""}));}
 
 function inventoryQueryKey(filters) {
   return JSON.stringify(filters);
@@ -4199,8 +4552,8 @@ function renderSalesDeliveriesPanel(module, submodule) {
       openSalesQuotePrintModal(quoteId);
     });
   });
-  modulePanel.querySelectorAll("[data-action='confirm-api-delivery']").forEach(button=>button.addEventListener("click",async event=>{event.stopPropagation();try{await confirmSalesDelivery(button.dataset.deliveryId,"Entrega confirmada con evidencia comercial.");await loadSalesApiData();showToast("Entrega confirmada y reservas consumidas.");}catch(error){showToast(error.message||"No se pudo confirmar la entrega.");}}));
-  modulePanel.querySelectorAll("[data-action='cancel-api-delivery']").forEach(button=>button.addEventListener("click",async event=>{event.stopPropagation();try{await cancelSalesDelivery(button.dataset.deliveryId,"Entrega cancelada por el usuario.");await loadSalesApiData();showToast("Entrega cancelada.");}catch(error){showToast(error.message||"No se pudo cancelar la entrega.");}}));
+  modulePanel.querySelectorAll("[data-action='confirm-api-delivery']").forEach(button=>button.addEventListener("click",async event=>{event.stopPropagation();try{await confirmSalesDelivery(button.dataset.deliveryId,"Entrega confirmada con evidencia comercial.");await loadSalesApiData();showToast(state.lang==="en"?"Delivery confirmed and reservations consumed.":"Entrega confirmada y reservas consumidas.","success");}catch(error){showApiError(error,state.lang==="en"?"The delivery could not be confirmed.":"No se pudo confirmar la entrega.");}}));
+  modulePanel.querySelectorAll("[data-action='cancel-api-delivery']").forEach(button=>button.addEventListener("click",async event=>{event.stopPropagation();try{await cancelSalesDelivery(button.dataset.deliveryId,"Entrega cancelada por el usuario.");await loadSalesApiData();showToast(state.lang==="en"?"Delivery cancelled.":"Entrega cancelada.","success");}catch(error){showApiError(error,state.lang==="en"?"The delivery could not be cancelled.":"No se pudo cancelar la entrega.");}}));
   bindProductionPanelActions();
 }
 
@@ -4212,7 +4565,7 @@ function getPendingFinishedGoodsReceipts(){
 }
 function renderPendingFinishedGoodsReceipt(row){
   const blocked=!row.product?.inventory_item_id||!row.item||row.item.status!=="Activo"||row.item.fields?.type!=="finishedGood";
-  return `<article class="record-row"><div class="record-main"><strong>${escapeHtml(row.order.code)} · ${escapeHtml(row.product?.name||row.order.product_service_id)}</strong><span>${t("finishedGoodsPendingDetail",{received:formatNumber(row.received),remaining:formatNumber(row.remaining),quantity:formatNumber(row.order.quantity),unit:row.order.unit})}</span><span>${blocked?t("finishedGoodsMappingBlocked"):`${escapeHtml(row.item.code)} · ${escapeHtml(row.item.title)}`}</span></div>${blocked?`<span class="chip warning">${t("blockedStatus")}</span>`:`<button class="primary-action small-action" type="button" data-action="receive-finished-good" data-order-id="${escapeAttribute(row.order.id)}">${t("receiveFinishedGood")}</button>`}</article>`;
+  return `<article class="record-row"><div class="record-main"><strong>${escapeHtml(row.order.code)} · ${escapeHtml(row.product?.name||row.order.product_service_id)}</strong><span>${t("finishedGoodsPendingDetail",{received:formatNumber(row.received),remaining:formatNumber(row.remaining),quantity:formatNumber(row.order.quantity),unit:row.order.unit})}</span><span>${blocked?t("finishedGoodsMappingBlocked"):`${escapeHtml(row.item.code)} · ${escapeHtml(row.item.title)}`}</span></div>${blocked?`<span class="chip warning">${t("blockedStatus")}</span>`:hasPermission("inventory.finished_goods_receipt.receive")?`<button class="primary-action small-action" type="button" data-action="receive-finished-good" data-order-id="${escapeAttribute(row.order.id)}">${t("receiveFinishedGood")}</button>`:""}</article>`;
 }
 
 function renderSalesDeliveryCard(delivery, order = null) {
@@ -4255,6 +4608,93 @@ function getDeliveriesForOrder(orderId, deliveries = mockDb.loadModuleRecords("v
   return deliveries
     .filter((delivery) => delivery.fields?.orderId === orderId)
     .sort((a, b) => new Date(b.fields?.deliveryDate || b.createdAt || 0) - new Date(a.fields?.deliveryDate || a.createdAt || 0));
+}
+
+function getSalesActualCostSourceLabel(source) {
+  const labels = {
+    inventory_consumption: t("inventoryConsumptionCostSource"),
+    service_capture: t("serviceCaptureCostSource"),
+    production_report: t("productionReportCostSource")
+  };
+  return labels[source] || source;
+}
+
+function renderSalesMarginPanel(module, submodule) {
+  const label = state.lang === "en" ? module.titleEn : module.title;
+  const canReadOrders = hasPermission("sales.order.read");
+  const canReadDeliveries = hasPermission("sales.delivery.read");
+  const orders = canReadOrders
+    ? mockDb.loadModuleRecords(module.id, "pedidos").filter((record) => record.recordType === "salesOrder")
+    : [];
+  const deliveries = canReadDeliveries
+    ? mockDb.loadModuleRecords(module.id, "entregas").filter((record) => record.recordType === "salesDelivery")
+    : [];
+  const ordersWithActualMargin = orders.filter((record) => record.fields?.actualMargin != null);
+  const pendingActualMargin = orders.length - ordersWithActualMargin.length;
+
+  const cards = orders.map((record) => {
+    const currency = record.fields?.currency || "MXN";
+    const relatedDeliveries = getDeliveriesForOrder(record.id, deliveries);
+    const actualCostSources = [...new Set(relatedDeliveries
+      .flatMap((delivery) => delivery.fields?.lines || [])
+      .map((line) => line.actualCostSource)
+      .filter(Boolean))]
+      .map(getSalesActualCostSourceLabel);
+    const hasActualMargin = record.fields?.actualMargin != null;
+    const statusTone = record.status === "Entregado" ? "active" : record.status === "Cancelado" ? "danger" : "warning";
+    return `
+      <article class="catalog-card sales-margin-card">
+        <div class="catalog-card-main">
+          <span class="muted-label">${escapeHtml(record.code)} &middot; ${escapeHtml(record.fields?.quoteCode || t("notDefined"))}</span>
+          <strong>${escapeHtml(record.fields?.customerName || record.title)}</strong>
+          <p>${t("salesMarginRevenue")}: ${formatSalesMoney(record.fields?.total, currency)}</p>
+          <span class="muted-label">${t("estimatedCost")}: ${record.fields?.estimatedCost == null ? t("notDefined") : formatSalesMoney(record.fields.estimatedCost, currency)} &middot; ${t("estimatedMargin")}: ${record.fields?.estimatedMargin == null ? t("notDefined") : `${formatNumber(record.fields.estimatedMargin)}%`}</span>
+          <span class="muted-label">${t("actualCost")}: ${record.fields?.actualCost == null ? t("actualCostPending") : formatSalesMoney(record.fields.actualCost, currency)} &middot; ${t("actualMargin")}: ${hasActualMargin ? `${formatNumber(record.fields.actualMargin)}%` : t("actualMarginPending")}</span>
+          <span class="muted-label">${t("actualCostSource")}: ${actualCostSources.length ? escapeHtml(actualCostSources.join(" / ")) : t("actualCostSourcePending")}</span>
+        </div>
+        <div class="catalog-card-actions">
+          <span class="chip ${statusTone}">${escapeHtml(translateStatus(record.status))}</span>
+          <span class="chip ${hasActualMargin ? "active" : "warning"}">${hasActualMargin ? t("actualMarginAvailable") : t("actualMarginPending")}</span>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  modulePanel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">${label} / ${t("submodule")}</p>
+        <h2>${submodule.name}</h2>
+      </div>
+      <button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button>
+    </div>
+    <section class="submodule-screen sales-margin-screen">
+      <div class="submodule-screen-head">
+        <div>
+          <h1>${submodule.name}</h1>
+          <p>${t("salesMarginReadOnlyHelp")}</p>
+        </div>
+      </div>
+      <section class="section-card catalog-workspace">
+        ${renderFlowGuide(getSalesFlowTitle(submodule), getSalesFlowSteps(submodule))}
+        <div class="cost-summary-grid sales-margin-summary">
+          <article><span>${t("salesMarginOrdersReviewed")}</span><strong>${orders.length}</strong></article>
+          <article><span>${t("salesMarginActualAvailable")}</span><strong>${ordersWithActualMargin.length}</strong></article>
+          <article><span>${t("salesMarginActualPending")}</span><strong>${pendingActualMargin}</strong></article>
+        </div>
+        <div class="inline-actions">
+          ${canReadOrders ? `<button class="secondary-action" type="button" data-sales-margin-target="pedidos">${t("reviewSalesOrders")}</button>` : ""}
+          ${canReadDeliveries ? `<button class="secondary-action" type="button" data-sales-margin-target="entregas">${t("reviewSalesDeliveries")}</button>` : ""}
+        </div>
+        ${canReadOrders
+          ? `<div class="catalog-grid">${cards || `<p class="helper-copy">${t("salesMarginEmpty")}</p>`}</div>`
+          : `<p class="helper-copy">${t("salesMarginPermissionDenied")}</p>`}
+      </section>
+    </section>
+  `;
+
+  modulePanel.querySelector("[data-action='back-module']")?.addEventListener("click", () => navigateTo({ active: "ventas", activeSubmodule: null, laborArea: "" }));
+  modulePanel.querySelectorAll("[data-sales-margin-target]").forEach((button) => button.addEventListener("click", () => navigateTo({ active: "ventas", activeSubmodule: button.dataset.salesMarginTarget, laborArea: "" })));
 }
 
 function findSalesQuoteByCode(code) {
@@ -4313,6 +4753,7 @@ function createRecipeSnapshot(recipe) {
     product: recipe.product,
     version: recipe.version,
     quantityBase: recipe.quantityBase,
+    suggestedDurationDays: recipe.suggestedDurationDays || 1,
     unit: recipe.unit,
     status: recipe.status,
     approvalStatus: getRecipeApprovalStatus(recipe),
@@ -4464,6 +4905,10 @@ function isSalesOrdersSubmodule(module, submodule) {
 
 function isSalesDeliveriesSubmodule(module, submodule) {
   return module?.id === "ventas" && submodule?.id === "entregas";
+}
+
+function isSalesMarginSubmodule(module, submodule) {
+  return module?.id === "ventas" && submodule?.id === "margen";
 }
 
 function translateWarehouseType(type) {
@@ -4718,11 +5163,13 @@ function translateModuleName(name) {
 function renderProductionSubmodulePanel(module) {
   const submodule = getProductionSubmodule(state.activeSubmodule, module);
   const body = renderProductionSubmoduleBody(submodule.id);
+  const moduleLabel = state.lang === "en" ? module.titleEn : module.title;
+  const submoduleContext = module.id === "produccion" ? t("productionSubmodule") : `${moduleLabel} / ${t("submodule")}`;
 
   modulePanel.innerHTML = `
     <div class="panel-head">
       <div>
-        <p class="eyebrow">${t("productionSubmodule")}</p>
+        <p class="eyebrow">${submoduleContext}</p>
         <h2>${submodule.name}</h2>
       </div>
       <button class="secondary-action" type="button" data-action="back-production">${t("overview")}</button>
@@ -4752,6 +5199,7 @@ function getProductionSubmodule(id, module = modules[0]) {
 }
 
 function renderProductionSubmoduleAction(id) {
+  if (["ordenes","entregables","validacion-recursos"].includes(id) && !hasPermission("production.order.release")) return "";
   const actions = {
     "productos-servicios": `<button class="primary-action" type="button" data-action="open-recipe"><span>＋</span><span>${t("newProduct")}</span></button>`,
     recetas: `<button class="primary-action" type="button" data-action="open-recipe"><span>＋</span><span>${t("newRecipe")}</span></button>`,
@@ -4790,19 +5238,21 @@ function renderProductionSubmoduleBody(id) {
 }
 
 function renderFlowGuide(title, steps, currentIndex = null, open = true) {
+  const toggleCopy = state.lang === "en" ? "Hide / show" : "Ocultar / mostrar";
+  const openCopy = state.lang === "en" ? "Open flow" : "Abrir flujo";
   return `
     <details class="flow-guide-card" ${open ? "open" : ""}>
-      <summary class="flow-guide-summary">
+      <summary class="flow-guide-summary" data-open-label="${escapeAttribute(openCopy)}">
         <span class="section-icon">↳</span>
-        <strong>${title}</strong>
-        <span class="flow-guide-toggle-copy">Ocultar / mostrar</span>
+        <strong>${escapeHtml(title)}</strong>
+        <span class="flow-guide-toggle-copy">${toggleCopy}</span>
       </summary>
       <div class="flow-guide-steps">
         ${steps.map((step, index) => `
           <article class="flow-guide-step ${currentIndex === index ? "current" : ""}">
             <span>${index + 1}</span>
-            <strong>${step.title}</strong>
-            <p>${step.detail}</p>
+            <strong>${escapeHtml(step.title)}</strong>
+            <p>${escapeHtml(step.detail)}</p>
           </article>
         `).join("")}
       </div>
@@ -5029,16 +5479,16 @@ function renderLaborRolesScreen() {
 
   return `
     <section class="section-card catalog-workspace">
-      ${renderFlowGuide("Flujo de configuracion de mano de obra", [
-        { title: "Area", detail: "Registrar o ubicar el area operativa." },
-        { title: "Rol", detail: "Definir puesto o rol requerido." },
-        { title: "Capacidad", detail: "Capturar recursos, minutos y costo." },
-        { title: "Receta", detail: "Usar el rol como recurso productivo." }
+      ${renderFlowGuide(t("laborConfigurationFlow"), [
+        { title: t("laborAreaStep"), detail: t("laborAreaStepHelp") },
+        { title: t("laborRoleStep"), detail: t("laborRoleStepHelp") },
+        { title: t("laborCapacityStep"), detail: t("laborCapacityStepHelp") },
+        { title: t("laborRecipeStep"), detail: t("laborRecipeStepHelp") }
       ])}
       <div class="catalog-toolbar">
         <label class="search-field catalog-search">
           <span>S</span>
-          <input id="laborAreaSearch" type="search" value="${search}" placeholder="Buscar area, puesto o rol" />
+          <input id="laborAreaSearch" type="search" value="${search}" placeholder="${escapeAttribute(t("searchLaborAreaRole"))}" />
         </label>
       </div>
       <p class="helper-copy">${t("laborAreaScreenHelp")}</p>
@@ -5050,11 +5500,11 @@ function renderLaborRolesScreen() {
           return `
             <article class="area-card">
               <div>
-                <span class="muted-label">Area operativa</span>
+                <span class="muted-label">${t("operationalArea")}</span>
                 <strong>${area.name}</strong>
-                <span class="muted-label">${area.code} - ${area.status}</span>
-                <p>${area.description || "Sin descripcion."}</p>
-                <p>${areaRoles.length} puestos/roles - ${totalPeople} recursos - ${formatNumber(totalMinutes)} min/dia</p>
+                <span class="muted-label">${area.code} - ${translateStatus(area.status)}</span>
+                <p>${area.description || t("noDescription")}</p>
+                <p>${t("laborAreaSummary", { positions: areaRoles.length, resources: totalPeople, minutes: formatNumber(totalMinutes) })}</p>
               </div>
               <div class="catalog-card-actions">
                 ${hasPermission("hr.area.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-labor-area" data-area-id="${area.id}">${t("editLaborArea")}</button>` : ""}
@@ -5083,9 +5533,9 @@ function renderLaborAreaDetailScreen(areaId, roles = mockDb.loadLaborRoles(), ar
     <section class="section-card catalog-workspace">
       <div class="panel-head compact">
         <div>
-          <p class="eyebrow">Area operativa</p>
+          <p class="eyebrow">${t("operationalArea")}</p>
           <h3>${area.name}</h3>
-          <p>${area.code} - ${area.description || "Sin descripcion."}</p>
+          <p>${area.code} - ${area.description || t("noDescription")}</p>
         </div>
         <div class="row-actions">
           ${hasPermission("hr.position.create") ? `<button class="primary-action" type="button" data-action="open-labor-role-area" data-area-id="${area.id}"><span>+</span><span>${t("newLaborRole")}</span></button>` : ""}
@@ -5094,9 +5544,9 @@ function renderLaborAreaDetailScreen(areaId, roles = mockDb.loadLaborRoles(), ar
         </div>
       </div>
       <div class="area-summary-grid">
-        <article class="mini-kpi positive"><span>Puestos/roles</span><strong>${areaRoles.length}</strong></article>
-        <article class="mini-kpi positive"><span>Recursos</span><strong>${totalPeople}</strong></article>
-        <article class="mini-kpi positive"><span>Capacidad</span><strong>${formatNumber(totalMinutes)} min</strong></article>
+        <article class="mini-kpi positive"><span>${t("positionsAndRoles")}</span><strong>${areaRoles.length}</strong></article>
+        <article class="mini-kpi positive"><span>${t("resources")}</span><strong>${totalPeople}</strong></article>
+        <article class="mini-kpi positive"><span>${t("capacity")}</span><strong>${formatNumber(totalMinutes)} ${t("minutesShort")}</strong></article>
       </div>
       <div class="catalog-grid">
         ${areaRoles.map((role) => `
@@ -5104,13 +5554,13 @@ function renderLaborAreaDetailScreen(areaId, roles = mockDb.loadLaborRoles(), ar
             <div class="catalog-card-main">
               <span class="muted-label">${role.id} - ${area.name}</span>
               <strong>${role.name}</strong>
-              <p>${role.position} - ${formatNumber(role.quantity || 1)} personas/recurso.</p>
-              <span class="muted-label">${formatNumber(role.minutesPerResource || role.available)} ${role.unit} por recurso - ${formatNumber(role.available)} ${role.unit} totales por dia</span>
+              <p>${role.position} - ${t("peoplePerResource", { count: formatNumber(role.quantity || 1) })}</p>
+              <span class="muted-label">${t("laborRoleDailyCapacity", { perResource: formatNumber(role.minutesPerResource || role.available), total: formatNumber(role.available) })}</span>
               <span class="muted-label">${t("laborRoleHourlyCost")}: ${formatCurrency(role.hourlyCost ?? Number(role.cost || 0) * 60)}</span>
               <span class="muted-label">${role.intervenesInProduction === true ? t("intervenesInProduction") : t("doesNotInterveneInProduction")}</span>
             </div>
             <div class="catalog-card-actions">
-              <span class="chip ${role.status === "Activo" ? "active" : ""}">${role.status}</span>
+              <span class="chip ${role.status === "Activo" ? "active" : ""}">${translateStatus(role.status)}</span>
               ${hasPermission("hr.position.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-labor-role" data-role-id="${role.id}">${t("editLaborRole")}</button>` : ""}
             </div>
           </article>
@@ -5260,7 +5710,7 @@ function renderValidationScreen(recipes) {
     <section class="section-card flow-guided-layout">
       ${renderFlowGuide("Flujo de liberacion", [
         { title: "Receta aprobada", detail: "Debe existir version vigente y autorizada." },
-        { title: "Recursos suficientes", detail: "Validar materiales, mano de obra y maquinaria." },
+        { title: "Recursos definidos", detail: "Confirmar que materiales, puestos y maquinaria existan y sean elegibles." },
         { title: "Costo planeado", detail: "Confirmar costo estandar del lote." },
         { title: "Orden liberada", detail: "Crear orden solo cuando no existan bloqueos." }
       ])}
@@ -5418,7 +5868,7 @@ function bindProductionPanelActions() {
     });
   });
   modulePanel.querySelectorAll("[data-action='receive-finished-good']").forEach((button)=>button.addEventListener("click",()=>openFinishedGoodsReceiptModal(button.dataset.orderId)));
-  modulePanel.querySelectorAll("[data-action='transition-sales-quote']").forEach(button=>{button.addEventListener("click",async()=>{try{const action={submit:submitSalesQuote,approve:approveSalesQuote,expire:expireSalesQuote,cancel:cancelSalesQuote}[button.dataset.transition];await action(button.dataset.recordId);await loadSalesApiData();showToast("Estado de cotización actualizado.");}catch(error){showToast(error.message||"No se pudo actualizar la cotización.");}});});
+  modulePanel.querySelectorAll("[data-action='transition-sales-quote']").forEach(button=>{button.addEventListener("click",async()=>{try{const action={submit:submitSalesQuote,approve:approveSalesQuote,expire:expireSalesQuote,cancel:cancelSalesQuote}[button.dataset.transition];await action(button.dataset.recordId);await loadSalesApiData();showToast(state.lang==="en"?"Quote status updated.":"Estado de cotización actualizado.","success");}catch(error){showApiError(error,state.lang==="en"?"The quote status could not be updated.":"No se pudo actualizar la cotización.");}});});
   modulePanel.querySelectorAll("[data-action='view-product-orders']").forEach((button) => {
     button.addEventListener("click", () => {
       localStorage.setItem("erclave-production-orders-product", button.dataset.productId);
@@ -5447,7 +5897,10 @@ function bindProductionPanelActions() {
           await updateProductionProductServiceStatus(item.id,{status:statuses[select.value]||select.value,reason:"Actualizacion desde catalogo"});
           await loadProductionApiData();
           showToast(`${item.id} actualizado a ${select.value}.`);
-        } catch(error) { showToast(error.message||"No se pudo actualizar el estatus."); }
+        } catch(error) {
+          showApiError(error, state.lang === "en" ? "The status could not be updated." : "No se pudo actualizar el estatus.");
+          render();
+        }
         return;
       }
       mockDb.updateProductService({ ...item, status: select.value });
@@ -5466,6 +5919,9 @@ function bindProductionPanelActions() {
   });
   modulePanel.querySelectorAll("[data-action='print-order']").forEach((button) => {
     button.addEventListener("click", () => openOrderPrintModal(button.dataset.orderId));
+  });
+  modulePanel.querySelectorAll("[data-action='create-maintenance-from-order']").forEach((button)=>{
+    button.addEventListener("click",()=>{state.maintenanceSourceOrderId=button.dataset.orderId;state.maintenanceApi.status="idle";navigateTo({active:"mantenimiento",activeSubmodule:"ordenes",laborArea:""});});
   });
   modulePanel.querySelectorAll("[data-action='change-order-status']").forEach((select) => {
     select.addEventListener("change", () => changeOrderStatus(select.dataset.orderId, select.value));
@@ -5508,13 +5964,14 @@ function renderRecipeValidationOnly(recipes = mockDb.loadRecipes()) {
     `;
   }
   const validationQuantity = Number(localStorage.getItem("erclave-validation-qty") || 100);
-  const release = getReleaseReview(recipe, validationQuantity);
-  const validation = release.validation;
+  const validation = validateRecipeDefinition(recipe, validationQuantity);
+  const definitionIssues=[...(!isRecipeApproved(recipe)?["Receta pendiente de aprobacion"]:[]),...validation.missing.map((row)=>`Recurso no elegible: ${row.name}`)];
+  const definitionReady=!definitionIssues.length;
 
   return `
       <div class="section-title">
         <span class="section-icon">✓</span>
-        <strong>Validacion de receta contra almacen</strong>
+        <strong>Validacion de definicion de receta</strong>
       </div>
       <div class="validator-head">
         <div>
@@ -5536,22 +5993,22 @@ function renderRecipeValidationOnly(recipes = mockDb.loadRecipes()) {
           </select>
         </label>
         <label class="quantity-control">
-          <span>Cantidad a producir</span>
+          <span>Cantidad para proyectar costo</span>
           <input id="validationQuantity" type="number" min="1" value="${validationQuantity}" />
         </label>
-        <span class="chip ${release.canRelease ? "active" : "warning"}">
-          ${release.canRelease ? "Lista para liberar" : "Pendiente de liberacion"}
+        <span class="chip ${definitionReady ? "active" : "warning"}">
+          ${definitionReady ? "Definicion valida" : "Definicion incompleta"}
         </span>
       </div>
-      <p class="helper-copy">La validacion multiplica los recursos de la receta por la cantidad indicada, revisa aprobacion de receta y calcula costo estandar. Materias primas y consumibles vienen de Almacenes; mano de obra viene de Areas y puestos; maquinaria viene del catalogo de Maquinaria.</p>
+      <p class="helper-copy">Esta validacion confirma que los recursos existan y sean elegibles y proyecta su costo. No compara inventario ni horas disponibles. La orden de produccion valida materiales, capacidad diaria y dias planeados para su fecha real.</p>
       <div class="cost-summary-grid">
         <span><strong>${getRecipeApprovalStatus(recipe)}</strong>Aprobacion</span>
         <span><strong>${formatCurrency(getRecipeStandardCost(recipe))}</strong>Costo estandar unitario</span>
         <span><strong>${formatCurrency(validation.totalCost)}</strong>Costo planeado lote</span>
       </div>
-      ${release.issues.length ? `<p class="helper-copy">Pendientes para liberar: ${release.issues.join(", ")}.</p>` : ""}
+      ${definitionIssues.length ? `<p class="helper-copy">Pendientes de definicion: ${definitionIssues.join(", ")}.</p>` : ""}
       <div class="inline-actions">
-        <button class="primary-action" type="button" data-action="open-order">Generar orden de produccion</button>
+        ${hasPermission("production.order.release")?`<button class="primary-action" type="button" data-action="open-order">Generar orden de produccion</button>`:""}
         <button class="secondary-action" type="button" data-action="open-recipe">Nueva receta</button>
       </div>
       <div class="resource-check-grid">
@@ -5563,7 +6020,7 @@ function renderRecipeValidationOnly(recipes = mockDb.loadRecipes()) {
                   <strong>${row.name}</strong>
                   <span>${row.type} · ${row.source}</span>
                 </div>
-                <p>${formatNumber(row.required)} / ${formatNumber(row.available)} ${row.unit}</p>
+                <p>${row.ok ? `Existe en catalogo · referencia para ${formatNumber(row.required)} ${row.unit}` : "No existe en el catalogo elegible"}</p>
               </article>
             `
           )
@@ -5595,7 +6052,7 @@ function renderOrderList(orders, emptyMessage = "") {
                 <span>Avance ${formatNumber(progress)}% · planeado ${formatCurrency(cost.plannedCost)} · real ${cost.actualCost == null ? "Pendiente" : formatCurrency(cost.actualCost)}${cost.variance == null ? "" : ` · variacion ${formatCurrency(cost.variance)} (${formatNumber(cost.variancePct)}%)`}</span>
                 <div class="stage-progress-list">
                   ${(order.areas || []).map((stage, index) => `
-                    <button class="stage-pill ${stage.status === "Terminada" ? "done" : stage.status === "En proceso" ? "active" : ""}" type="button" data-action="advance-order-stage" data-order-id="${order.id}" data-stage-index="${index}" title="Pulsa para avanzar esta fase">
+                    <button class="stage-pill ${stage.status === "Terminada" ? "done" : stage.status === "En proceso" ? "active" : ""}" type="button" data-action="advance-order-stage" data-order-id="${order.id}" data-stage-index="${index}" title="Pulsa para avanzar esta fase" ${["production.order_stage.reset","production.order_stage.update","production.order_stage.complete","production.order_stage.block","production.order_stage.skip"].some(hasPermission)?"":"disabled"}>
                       <strong>${stage.area}</strong>
                       <span>${stage.status} · ${formatNumber(stage.progress || (stage.status === "Terminada" ? 100 : 0))}%</span>
                     </button>
@@ -5613,6 +6070,7 @@ function renderOrderList(orders, emptyMessage = "") {
                   </select>
                 </label>
                 <button class="secondary-action small-action" type="button" data-action="print-order" data-order-id="${order.id}">PDF/Imprimir</button>
+                ${["En espera de recursos","En produccion"].includes(order.status)?`<button class="secondary-action small-action" type="button" data-action="create-maintenance-from-order" data-order-id="${escapeAttribute(order.id)}">${state.lang==="en"?"Maintenance":"Mantenimiento"}</button>`:""}
                 ${closeHelp?`<small class="helper-copy">${escapeHtml(closeHelp)}</small>`:""}
               </div>
             </article>
@@ -5635,7 +6093,7 @@ function renderRecipeList(recipes) {
       <div class="recipe-list">
         ${recipes
           .map((recipe) => {
-            const validation = calculateRecipe(recipe, Number(localStorage.getItem("erclave-validation-qty") || 100));
+            const validation = validateRecipeDefinition(recipe, Number(localStorage.getItem("erclave-validation-qty") || 100));
             const approvalStatus = getRecipeApprovalStatus(recipe);
             const standardCost = getRecipeStandardCost(recipe);
             return `
@@ -5839,6 +6297,9 @@ function renderNotificationSummary({ overdue, dueSoon, missingResources }) {
 
 function translateStatus(status) {
   const statusMap = {
+    active: { es: "Activo", en: "Active" },
+    inactive: { es: "Inactivo", en: "Inactive" },
+    terminated: { es: "Baja", en: "Terminated" },
     Activo: { es: "Activo", en: "Active" },
     Inactivo: { es: "Inactivo", en: "Inactive" },
     Bloqueado: { es: "Bloqueado", en: "Blocked" },
@@ -5881,13 +6342,16 @@ function translateStatus(status) {
 
 
 
-function showToast(message) {
+function showToast(message, tone = "info") {
   toast.textContent = message;
+  toast.dataset.tone = tone;
+  toast.setAttribute("role", tone === "danger" ? "alert" : "status");
+  toast.setAttribute("aria-live", tone === "danger" ? "assertive" : "polite");
   toast.hidden = false;
   window.clearTimeout(showToast.timeout);
   showToast.timeout = window.setTimeout(() => {
     toast.hidden = true;
-  }, 2600);
+  }, tone === "danger" ? 8000 : tone === "warning" ? 6000 : 3200);
 }
 
 function closeModal() {
@@ -5909,6 +6373,7 @@ function openGenericRecordModal(moduleId = state.active, submoduleId = state.act
   if (!module || module.id === "produccion") return;
 
   const submodule = submoduleId ? getGenericSubmodule(module, submoduleId) : null;
+  if (module.id === "ventas" && submodule?.id === "margen") return;
   if (isWarehouseMasterSubmodule(module, submodule)) {
     openWarehouseModal(module, submodule);
     return;
@@ -6039,10 +6504,10 @@ function selectedOption(value, expected) {
   return value === expected ? "selected" : "";
 }
 
-function openWarehouseModal(module, submodule, recordId = null) {
+function openWarehouseModal(module, submodule, recordId = null, initialFields = {}) {
   const label = state.lang === "en" ? module.titleEn : module.title;
   const existingRecord = recordId ? mockDb.findModuleRecord(module.id, recordId) : null;
-  const fields = existingRecord?.fields || {};
+  const fields = existingRecord?.fields || initialFields;
   const isEditing = Boolean(existingRecord);
 
   modalContent.innerHTML = `
@@ -6074,7 +6539,7 @@ function openWarehouseModal(module, submodule, recordId = null) {
             <option value="workInProcess" ${selectedOption(fields.type, "workInProcess")}>${t("workInProcess")}</option>
             <option value="finishedGoods" ${selectedOption(fields.type, "finishedGoods")}>${t("finishedGoods")}</option>
             <option value="scrap" ${selectedOption(fields.type, "scrap")}>${t("scrapWarehouse")}</option>
-            <option value="spareParts" ${selectedOption(fields.type, "spareParts")}>${t("spareParts")}</option>
+            <option value="spare_parts" ${selectedOption(fields.type, "spare_parts")||selectedOption(fields.type, "spareParts")}>${t("spareParts")}</option>
           </select>
         </label>
         <label class="preview-field">
@@ -6231,10 +6696,10 @@ async function saveWarehouseForm(event, module, submodule) {
   showToast(t(existingRecord ? "warehouseUpdated" : "warehouseSaved", { code }));
 }
 
-async function openInventoryItemModal(module, submodule, recordId = null) {
+async function openInventoryItemModal(module, submodule, recordId = null, initialFields = {}) {
   const label = state.lang === "en" ? module.titleEn : module.title;
   const existingRecord = recordId ? mockDb.findModuleRecord(module.id, recordId) : null;
-  const fields = existingRecord?.fields || {};
+  const fields = existingRecord?.fields || initialFields;
   const warehouses = mockDb.loadModuleRecords(module.id, "almacenes").filter((record) => record.recordType === "warehouse");
   const isEditing = Boolean(existingRecord);
   let productionCandidates=[];
@@ -8356,6 +8821,7 @@ function openLaborRoleModal(roleId = null, defaultAreaId = "") {
         <label class="preview-field"><span>${t("laborRoleMinutes")}</span><input name="minutesPerResource" type="number" min="1" value="${existingRole?.minutesPerResource || existingRole?.available || 480}" required /></label>
         <label class="preview-field"><span>${t("laborRoleHourlyCost")}</span><input name="hourlyCost" type="number" min="0" step="0.01" value="${existingRole?.hourlyCost ?? Number(existingRole?.cost || 0) * 60}" required /></label>
         <label class="preview-field checkbox-field"><input name="intervenesInProduction" type="checkbox" value="true" ${existingRole?.intervenesInProduction ? "checked" : ""} /><span>${t("intervenesInProductionQuestion")}</span></label>
+        <label class="preview-field checkbox-field"><input name="intervenesInMaintenance" type="checkbox" value="true" ${existingRole?.intervenesInMaintenance ? "checked" : ""} /><span>${t("intervenesInMaintenanceQuestion")}</span></label>
         <label class="preview-field"><span>Estatus</span><select name="status"><option ${existingRole?.status === "Activo" ? "selected" : ""}>Activo</option><option ${existingRole?.status === "Inactivo" ? "selected" : ""}>Inactivo</option></select></label>
       </div>
       <div class="form-errors" id="formErrors" hidden></div>
@@ -8415,11 +8881,12 @@ async function saveLaborRoleForm(event) {
     type: "Mano de obra",
     source: "Recursos Humanos",
     intervenesInProduction: data.get("intervenesInProduction") === "true",
+    intervenesInMaintenance: data.get("intervenesInMaintenance") === "true",
     status: String(data.get("status") || "Activo")
   };
   if (getApiMode() === "api") {
     try {
-      const payload={labor_area_id:item.areaId,position:item.position,recipe_name:item.name,resource_quantity:item.quantity,minutes_per_resource:item.minutesPerResource,hourly_cost:item.hourlyCost,intervenes_in_production:item.intervenesInProduction,status:item.status==="Activo"?"active":"inactive"};
+      const payload={labor_area_id:item.areaId,position:item.position,recipe_name:item.name,resource_quantity:item.quantity,minutes_per_resource:item.minutesPerResource,hourly_cost:item.hourlyCost,intervenes_in_production:item.intervenesInProduction,intervenes_in_maintenance:item.intervenesInMaintenance,status:item.status==="Activo"?"active":"inactive"};
       if (roleId) await updateHrPosition(roleId,payload);
       else { const {status,...createPayload}=payload;await createHrPosition(createPayload); }
       closeModal();await loadHrApiData();navigateTo({active:"recursos-humanos",activeSubmodule:"areas-puestos",laborArea:item.areaId});showToast(`Puesto ${item.name} ${roleId?"actualizado":"guardado"}.`);
@@ -8568,16 +9035,16 @@ async function saveMachineForm(event) {
 
 async function prepareRecipeResourceCatalog() {
   if (getApiMode() !== "api") return { areas: [] };
-  const activeMachines = mockDb.loadMachines().filter((machine) => machine.status === "Activo");
-  const invalidMachineResources = activeMachines.filter((machine) => !machine.areaId);
-  setMachineRecipeResources(activeMachines
-    .filter((machine) => machine.areaId)
+  const eligibleMachines = mockDb.loadMachines().filter((machine) => machine.status !== "Inactivo");
+  const invalidMachineResources = eligibleMachines.filter((machine) => !machine.areaId);
+  setMachineRecipeResources(eligibleMachines
     .map((machine) => ({
       ...machine,
       unit: "min",
       resourceType: "machine",
       type: "Maquinaria",
-      source: machine.area ? `Maquinaria: ${machine.area}` : "Maquinaria"
+      source: `${machine.area ? `Maquinaria: ${machine.area}` : "Maquinaria: area pendiente"}${machine.status === "Mantenimiento" ? " - En mantenimiento" : ""}`,
+      availabilityWarning: machine.status === "Mantenimiento" ? "En mantenimiento; bloqueara la liberacion mientras no vuelva a estar activa." : ""
     })));
   const hrCatalog = isModuleAccessible("recursos-humanos") && hasPermission("hr.position.read")
     ? await getHrCatalog({ production_only: true })
@@ -8701,6 +9168,11 @@ async function openRecipeModal(recipeId = null) {
           <input name="quantityBase" type="number" min="1" value="${existingRecipe?.quantityBase || 1}" required />
         </label>
         <label class="preview-field">
+          <span>Duracion sugerida (dias productivos)</span>
+          <input name="suggestedDurationDays" type="number" min="1" max="365" value="${existingRecipe?.suggestedDurationDays || 1}" required />
+          <small>Se propone al crear la orden y puede ajustarse.</small>
+        </label>
+        <label class="preview-field">
           <span>Unidad</span>
           ${unitSelect("unit", existingRecipe?.unit || activeProductService?.unit || "H87")}
         </label>
@@ -8709,7 +9181,7 @@ async function openRecipeModal(recipeId = null) {
           <input name="center" type="text" value="${existingRecipe?.center || activeProductService?.center || "Produccion / General"}" required />
         </label>
         <label class="preview-field wide-field">
-          <span>Cantidad para vista previa</span>
+          <span>Cantidad para proyectar costo</span>
           <input name="simulationQuantity" type="number" min="1" value="${localStorage.getItem("erclave-validation-qty") || 100}" required />
         </label>
         <label class="preview-field">
@@ -8761,7 +9233,7 @@ async function openRecipeModal(recipeId = null) {
       <div class="form-errors" id="formErrors" hidden></div>
 
       <div class="modal-actions">
-        <button class="secondary-action" type="button" data-action="preview-recipe">Validar recursos</button>
+        <button class="secondary-action" type="button" data-action="preview-recipe">Validar definicion</button>
         <button class="primary-action" type="submit">${isEditing ? "Actualizar receta" : "Guardar receta"}</button>
       </div>
 
@@ -8981,6 +9453,7 @@ function buildRecipeFromForm(form) {
     product: productService?.name || "",
     version: Number(data.get("version") || 1),
     quantityBase: Number(data.get("quantityBase") || 1),
+    suggestedDurationDays: Math.max(1,Number(data.get("suggestedDurationDays") || 1)),
     unit: String(data.get("unit") || "").trim(),
     status: String(data.get("approvalStatus") || "Borrador") === "Aprobada" ? "Activa" : "Borrador",
     approvalStatus: String(data.get("approvalStatus") || "Borrador"),
@@ -8999,6 +9472,7 @@ function toApiRecipeVersionPayload(recipe) {
   return {
     base_quantity: recipe.quantityBase,
     base_unit: normalizeUnitCode(recipe.unit),
+    suggested_duration_days: recipe.suggestedDurationDays || 1,
     change_reason: recipe.changeReason || null,
     resources: recipe.resources.map((item, index) => {
       const catalogItem = getResource(item.resourceId);
@@ -9041,6 +9515,10 @@ function validateRecipe(recipe) {
 
 function renderFormErrors(errors) {
   const box = modalContent.querySelector("#formErrors");
+  if (!box) return;
+  box.setAttribute("role", "alert");
+  box.setAttribute("aria-live", "assertive");
+  box.setAttribute("tabindex", "-1");
   if (!errors.length) {
     box.hidden = true;
     box.innerHTML = "";
@@ -9048,6 +9526,7 @@ function renderFormErrors(errors) {
   }
   box.hidden = false;
   box.innerHTML = errors.map((error) => `<p>${escapeHtml(String(error))}</p>`).join("");
+  box.focus({ preventScroll: false });
 }
 
 function previewRecipeForm() {
@@ -9059,15 +9538,15 @@ function previewRecipeForm() {
   if (errors.length) return;
 
   localStorage.setItem("erclave-validation-qty", simulationQuantity);
-  const validation = calculateRecipe(recipe, simulationQuantity);
+  const validation = validateRecipeDefinition(recipe, simulationQuantity);
   modalContent.querySelector("#recipePreview").innerHTML = `
     <div class="validator-head">
       <div>
-        <span class="muted-label">Vista previa del lote</span>
+        <span class="muted-label">Vista previa de definicion y costo</span>
         <strong>${formatNumber(simulationQuantity)} ${recipe.unit} · ${formatCurrency(validation.totalCost)}</strong>
       </div>
       <span class="chip ${validation.missing.length ? "warning" : "active"}">
-        ${validation.missing.length ? `${validation.missing.length} faltantes` : "Recursos suficientes"}
+        ${validation.missing.length ? `${validation.missing.length} referencias no elegibles` : "Recursos definidos"}
       </span>
     </div>
     <div class="resource-check-grid compact">
@@ -9079,7 +9558,7 @@ function previewRecipeForm() {
                 <strong>${row.name}</strong>
                 <span>${row.type}</span>
               </div>
-              <p>${formatRecipeValidationQuantity(row.required, row.type)} / ${formatRecipeValidationQuantity(row.available, row.type)} ${row.type === "Mano de obra" ? t("recipeLaborUnit") : row.type === "Maquinaria" ? t("recipeMachineUnit") : row.unit}</p>
+              <p>${row.ok ? `Existe en catalogo · ${formatRecipeValidationQuantity(row.required, row.type)} ${row.type === "Mano de obra" ? t("recipeLaborUnit") : row.type === "Maquinaria" ? t("recipeMachineUnit") : row.unit} en la proyeccion` : "No existe en el catalogo elegible"}</p>
             </article>
           `
         )
@@ -9209,6 +9688,21 @@ function deleteRecipe(recipeId) {
   showToast(`${formatRecipeDisplayLabel(recipe)}: receta eliminada.`);
 }
 
+function localDateValue(value=new Date()) {
+  const adjusted=new Date(value.getTime()-value.getTimezoneOffset()*60000);
+  return adjusted.toISOString().slice(0,10);
+}
+
+function productionEndDate(startValue,durationDays) {
+  let current=new Date(`${startValue}T12:00:00`);
+  let remaining=Math.max(1,Number(durationDays)||1);
+  while(remaining>0){
+    if(current.getDay()!==0&&current.getDay()!==6)remaining-=1;
+    if(remaining>0)current.setDate(current.getDate()+1);
+  }
+  return localDateValue(current);
+}
+
 async function openOrderModal() {
   const recipes = mockDb.loadRecipes();
   const selectedRecipeId = localStorage.getItem("erclave-selected-recipe") || recipes[0]?.id;
@@ -9223,6 +9717,10 @@ async function openOrderModal() {
   if(!eligibleWorkers.length){showToast("Da de alta trabajadores activos en puestos habilitados para produccion antes de generar una orden.");return;}
   state.hrApi.workers=eligibleWorkers;
   const workerOptions=eligibleWorkers.map(worker=>`<option value="${worker.id}">${escapeHtml(worker.full_name)} · ${escapeHtml(worker.position_name)}</option>`).join("");
+
+  const defaultStartDate=localDateValue();
+  const defaultDurationDays=recipe.suggestedDurationDays||1;
+  const defaultDueDate=productionEndDate(defaultStartDate,defaultDurationDays);
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="orderForm">
@@ -9260,8 +9758,17 @@ async function openOrderModal() {
           <input name="quantity" type="number" min="1" value="${defaultQuantity}" required />
         </label>
         <label class="preview-field">
+          <span>Inicio planeado</span>
+          <input name="plannedStartDate" type="date" value="${defaultStartDate}" required />
+        </label>
+        <label class="preview-field">
+          <span>Dias productivos</span>
+          <input name="plannedDurationDays" type="number" min="1" max="365" value="${defaultDurationDays}" required />
+          <small>Capacidad distribuida de lunes a viernes.</small>
+        </label>
+        <label class="preview-field">
           <span>Fecha requerida</span>
-          <input name="dueDate" type="date" value="2026-05-25" required />
+          <input name="dueDate" type="date" value="${defaultDueDate}" required />
         </label>
         <label class="preview-field">
           <span>Prioridad</span>
@@ -9301,7 +9808,13 @@ async function openOrderModal() {
   modalContent.querySelector("#orderRecipeSelect").addEventListener("change", (event) => {
     const nextRecipe = mockDb.findRecipe(event.target.value) || recipe;
     modalContent.querySelector("#areaAssignmentList").innerHTML = renderAreaAssignments(nextRecipe,eligibleWorkers);
+    modalContent.querySelector("[name='plannedDurationDays']").value=nextRecipe.suggestedDurationDays||1;
+    const start=modalContent.querySelector("[name='plannedStartDate']").value;
+    modalContent.querySelector("[name='dueDate']").value=productionEndDate(start,nextRecipe.suggestedDurationDays||1);
   });
+  const syncOrderEnd=()=>{const start=modalContent.querySelector("[name='plannedStartDate']").value;const duration=modalContent.querySelector("[name='plannedDurationDays']").value;if(start)modalContent.querySelector("[name='dueDate']").value=productionEndDate(start,duration);};
+  modalContent.querySelector("[name='plannedStartDate']").addEventListener("change",syncOrderEnd);
+  modalContent.querySelector("[name='plannedDurationDays']").addEventListener("input",syncOrderEnd);
   modalContent.querySelector("[data-action='preview-order']").addEventListener("click", previewOrderForm);
   modalContent.querySelector("#orderForm").addEventListener("submit", saveOrderForm);
 }
@@ -9356,6 +9869,9 @@ function buildOrderFromForm(form) {
     unit: recipe.unit,
     status: "Liberada",
     priority: String(data.get("priority") || "Media"),
+    plannedStartDate: String(data.get("plannedStartDate") || ""),
+    plannedDurationDays: Math.max(1,Number(data.get("plannedDurationDays")||1)),
+    plannedEndDate: productionEndDate(String(data.get("plannedStartDate")||localDateValue()),Number(data.get("plannedDurationDays")||1)),
     dueDate: String(data.get("dueDate") || ""),
     center: recipe.center,
     responsibleWorkerId:String(data.get("responsibleWorkerId")||"").trim(),responsible:workerName(String(data.get("responsibleWorkerId")||"")),
@@ -9373,7 +9889,10 @@ function validateOrder(order) {
   const recipe = getOrderRecipe(order);
   if (!order.recipeId) errors.push("Selecciona una receta.");
   if (!order.quantity) errors.push("Captura la cantidad.");
+  if (!order.plannedStartDate) errors.push("Captura la fecha de inicio planeada.");
+  if (!order.plannedDurationDays) errors.push("Captura los dias productivos.");
   if (!order.dueDate) errors.push("Captura fecha requerida.");
+  if(order.dueDate&&order.plannedEndDate&&order.dueDate<order.plannedEndDate)errors.push("La fecha requerida no puede ser anterior al fin planeado.");
   if (!order.responsibleWorkerId) errors.push("Selecciona responsable general.");
   if (order.areas.some((area) => !area.responsibleWorkerId)) errors.push("Asigna una persona a cada etapa.");
   if (getApiMode() !== "api") {
@@ -9395,7 +9914,7 @@ function productionValidationErrors(validation) {
 }
 
 function renderRemoteOrderValidation(order, validation) {
-  modalContent.querySelector("#orderPreview").innerHTML=`<div class="validator-head"><div><span class="muted-label">${t("orderAuthoritativeValidation")}</span><strong>${formatNumber(order.quantity)} ${escapeHtml(order.unit)} · ${formatCurrency(validation.planned_cost)}</strong></div><span class="chip ${validation.can_release?"active":"warning"}">${validation.can_release?t("orderReadyToRelease"):t("orderBlocked")}</span></div><div class="resource-check-grid compact">${(validation.rows||[]).map((row)=>`<article class="resource-check ${row.ok?"ok":"risk"}"><div><strong>${escapeHtml(row.resource_name)}</strong><span>${escapeHtml(row.resource_type)} · ${escapeHtml(row.source)}</span></div><p>${formatNumber(row.required_quantity)} / ${formatNumber(row.available_quantity)} ${escapeHtml(row.unit)}</p></article>`).join("")}</div>`;
+  modalContent.querySelector("#orderPreview").innerHTML=`<div class="validator-head"><div><span class="muted-label">${t("orderAuthoritativeValidation")}</span><strong>${formatNumber(order.quantity)} ${escapeHtml(order.unit)} · ${formatCurrency(validation.planned_cost)}</strong><small>${escapeHtml(validation.planned_start_date)} a ${escapeHtml(validation.planned_end_date)} · ${validation.planned_duration_days} dias productivos · minimo calculado ${validation.minimum_duration_days}</small></div><span class="chip ${validation.can_release?"active":"warning"}">${validation.can_release?t("orderReadyToRelease"):t("orderBlocked")}</span></div><div class="resource-check-grid compact">${(validation.rows||[]).map((row)=>`<article class="resource-check ${row.ok?"ok":"risk"}"><div><strong>${escapeHtml(row.resource_name)}</strong><span>${escapeHtml(row.resource_type)} · ${escapeHtml(row.source)}</span></div><p>${formatNumber(row.required_quantity)} / ${formatNumber(row.available_quantity)} ${escapeHtml(row.unit)}</p>${row.daily_allocations?.length?`<details><summary>Desglose diario</summary>${row.daily_allocations.map((day)=>`<p>${escapeHtml(day.planned_date)}: ${formatNumber(day.allocated_quantity)} asignados / ${formatNumber(day.available_quantity)} disponibles ${escapeHtml(row.unit)}</p>`).join("")}</details>`:""}</article>`).join("")}</div>`;
 }
 
 async function previewOrderForm() {
@@ -9408,7 +9927,7 @@ async function previewOrderForm() {
   if (getApiMode() === "api") {
     if (!recipe?.currentVersionId) { renderFormErrors(["La validacion requiere una receta aprobada vigente."]);return; }
     try {
-      const remote=await validateProductionResources({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_for:order.dueDate||null});
+      const remote=await validateProductionResources({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_start_date:order.plannedStartDate,planned_duration_days:order.plannedDurationDays});
       renderRemoteOrderValidation(order,remote);
       renderFormErrors(productionValidationErrors(remote));
     } catch(error) { renderFormErrors([error.message||"No se pudo validar recursos."]); }
@@ -9458,13 +9977,13 @@ async function saveOrderForm(event) {
     if (!recipe?.currentVersionId) { renderFormErrors(["La orden requiere una version de receta aprobada vigente."]);return; }
     const currentStages=recipe.currentVersionData?.stages?.filter((stage)=>stage.status==="active")||[];
     try {
-      const remote=await validateProductionResources({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_for:order.dueDate||null});
+      const remote=await validateProductionResources({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_start_date:order.plannedStartDate,planned_duration_days:order.plannedDurationDays});
       renderRemoteOrderValidation(order,remote);
       const availabilityErrors=productionValidationErrors(remote);
       renderFormErrors(availabilityErrors);
       if (availabilityErrors.length) return;
       const businessCode=await resolveBusinessCode("production.order",order.code,order.codeRequestKey);
-      const saved=await createProductionOrder({code:businessCode,recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_for:order.dueDate||null,required_at:order.dueDate?`${order.dueDate}T23:59:59Z`:null,priority:({Alta:"high",Media:"medium",Baja:"low"})[order.priority]||"medium",responsible_worker_id:order.responsibleWorkerId,stage_assignments:currentStages.map((stage,index)=>({recipe_stage_id:stage.id,responsible_worker_id:order.areas[index]?.responsibleWorkerId})),source_type:"manual"});
+      const saved=await createProductionOrder({code:businessCode,recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_start_date:order.plannedStartDate,planned_duration_days:order.plannedDurationDays,planned_start_at:new Date(`${order.plannedStartDate}T08:00:00`).toISOString(),required_at:order.dueDate?new Date(`${order.dueDate}T23:59:59`).toISOString():null,priority:({Alta:"high",Media:"medium",Baja:"low"})[order.priority]||"medium",responsible_worker_id:order.responsibleWorkerId,stage_assignments:currentStages.map((stage,index)=>({recipe_stage_id:stage.id,responsible_worker_id:order.areas[index]?.responsibleWorkerId})),source_type:"manual"});
       localStorage.setItem("erclave-selected-recipe",order.recipeId);localStorage.setItem("erclave-validation-qty",order.quantity);closeModal();await loadProductionApiData();showToast(`Orden ${saved.code} generada en Production API.`);openOrderPrintModal(saved.id);
     } catch(error) { renderFormErrors([error?.payload?.error?.code==="resources_unavailable"?t("orderResourcesChanged"):(error.message||"No se pudo generar la orden.")]); }
     return;
@@ -9482,11 +10001,13 @@ async function changeOrderStatus(orderId, status) {
   const order = mockDb.findOrder(orderId);
   if (!order || !orderStatusCatalog.includes(status)) return;
   if (getApiMode() === "api") {
+    if(!hasPermission(productionOrderTransitionPermission(order.status,status)))return;
     try { await updateProductionOrderStatus(orderId,{status:toApiOrderStatus(status),reason:"Cambio operativo desde la orden"});await loadProductionApiData();showToast(status==="En produccion"?t("orderMaterialIssueRegistered",{code:order.code||order.id}):`Orden ${order.id} ahora esta en ${status}.`); }
     catch(error){
       const code=error?.payload?.error?.code;
       const messages={material_consumption_required:t("orderMaterialIssueFailed"),production_stages_incomplete:t("orderStagesIncomplete"),invalid_order_transition:t("orderInvalidTransition")};
-      showToast(messages[code]||(error.message||t("orderInvalidTransition")));
+      showApiError(error,messages[code]||t("orderInvalidTransition"));
+      render();
     }
     return;
   }
@@ -9522,8 +10043,12 @@ async function saveOrderStageProgressForm(event){
   if(!Number.isFinite(progress)||progress<0||progress>100){showToast(t("orderStageProgressInvalid"));return;}
   const status=progress===100?"completed":progress===0?"pending":"in_progress";
   if(getApiMode()==="api"){
+    if(!hasPermission(productionStagePermission(status)))return;
     try{
-      if(progress>0&&order.status!=="En produccion")await updateProductionOrderStatus(order.id,{status:"in_progress",reason:"Actualizacion de avance por etapa"});
+      if(progress>0&&order.status!=="En produccion"){
+        if(!hasPermission(productionOrderTransitionPermission(order.status,"En produccion")))return;
+        await updateProductionOrderStatus(order.id,{status:"in_progress",reason:"Actualizacion de avance por etapa"});
+      }
       await updateProductionOrderStage(stage.id,{status,progress_percent:progress,notes:"Porcentaje de avance registrado desde Produccion"});
       closeModal();await loadProductionApiData();showToast(t("orderStageProgressUpdated",{stage:stage.area,progress:formatNumber(progress)}));
     }catch(error){showToast(error?.payload?.error?.code==="material_consumption_required"?t("orderMaterialIssueFailed"):(error.message||t("orderStageProgressSaveError")));}
@@ -9688,11 +10213,18 @@ async function openSalesQuotePrintModal(quoteId) {
 
 function applyI18n() {
   const dict = translations[state.lang];
+  document.documentElement.lang = state.lang;
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = dict[node.dataset.i18n] || node.textContent;
   });
   document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
     node.placeholder = dict[node.dataset.i18nPlaceholder] || node.placeholder;
+  });
+  document.querySelectorAll("[data-i18n-aria-label]").forEach((node) => {
+    node.setAttribute("aria-label", dict[node.dataset.i18nAriaLabel] || node.getAttribute("aria-label") || "");
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach((node) => {
+    node.title = dict[node.dataset.i18nTitle] || node.title;
   });
   langToggle.querySelector(".icon").textContent = state.lang.toUpperCase();
 }
@@ -9704,8 +10236,8 @@ function renderAuthControls() {
   if (!enabled) return;
   authButton.hidden = !state.auth.user;
   authButton.disabled = state.auth.status === "loading";
-  authButton.textContent = "Cerrar sesion";
-  authButton.title = state.auth.user ? `Cerrar sesion de ${state.auth.user.email}` : "Cerrar sesion";
+  authButton.textContent = t("signOut");
+  authButton.title = state.auth.user ? t("signOutUser", { email: state.auth.user.email }) : t("signOut");
 }
 
 function escapeHtml(value) {
@@ -9722,22 +10254,13 @@ function escapeAttribute(value) {
 }
 
 function getAuthErrorMessage(error, fallback) {
-  const code = error?.code || "";
-  if (["auth/invalid-credential", "auth/user-not-found", "auth/wrong-password"].includes(code)) {
-    return "Correo o contrasena incorrectos.";
-  }
-  if (code === "auth/invalid-email") return "Revisa que el correo tenga un formato valido.";
-  if (code === "auth/too-many-requests") {
-    return "Hay demasiados intentos. Espera unos minutos y vuelve a intentar.";
-  }
-  if (code === "auth/network-request-failed") {
-    return "No pudimos conectar con Firebase. Revisa tu conexion e intenta de nuevo.";
-  }
-  return error?.message || fallback;
+  return userFacingError(error, fallback);
 }
 
 function getPasswordResetNotice(email) {
-  return `Si existe una cuenta para ${email}, te enviaremos instrucciones para restablecer tu contrasena.`;
+  return state.lang === "en"
+    ? `If an account exists for ${email}, we will send password reset instructions.`
+    : `Si existe una cuenta para ${email}, enviaremos instrucciones para restablecer tu contraseña.`;
 }
 
 function shouldTreatPasswordResetAsSent(error) {
@@ -9779,8 +10302,8 @@ function renderAuthGate() {
         <p class="eyebrow">ERClave QA</p>
         <h2 id="authGateTitle">Iniciar sesion</h2>
         <p>Usa el correo autorizado por tu organizacion.</p>
-        ${state.auth.error ? `<div class="form-errors"><p>${state.auth.error}</p></div>` : ""}
-        ${state.auth.notice ? `<div class="form-notice"><p>${state.auth.notice}</p></div>` : ""}
+        ${state.auth.error ? `<div class="form-errors" role="alert"><p>${escapeHtml(state.auth.error)}</p></div>` : ""}
+        ${state.auth.notice ? `<div class="form-notice" role="status"><p>${escapeHtml(state.auth.notice)}</p></div>` : ""}
         <form class="auth-form" data-form="auth-email">
           <label>
             <span>Correo electronico</span>
@@ -9812,7 +10335,7 @@ function handleEmailAuthSubmit(event) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "");
   if (!email || !password) {
-    state.auth = { ...state.auth, status: "error", email, error: "Correo y contrasena son requeridos.", notice: "" };
+    state.auth = { ...state.auth, status: "error", email, error: state.lang === "en" ? "Email and password are required." : "Correo y contraseña son requeridos.", notice: "" };
     render();
     return;
   }
@@ -9823,7 +10346,7 @@ function handleEmailAuthSubmit(event) {
       status: "error",
       user: null,
       email,
-      error: getAuthErrorMessage(error, "No se pudo iniciar sesion con correo."),
+      error: getAuthErrorMessage(error, state.lang === "en" ? "Sign-in failed." : "No se pudo iniciar sesión con correo."),
       notice: ""
     };
     render();
@@ -9835,7 +10358,7 @@ function handlePasswordReset() {
   const emailInput = authGate.querySelector("[name='email']");
   const email = String(emailInput?.value || "").trim().toLowerCase();
   if (!email) {
-    state.auth = { ...state.auth, status: "error", email, error: "Escribe tu correo para recuperar la contrasena.", notice: "" };
+    state.auth = { ...state.auth, status: "error", email, error: state.lang === "en" ? "Enter your email to reset your password." : "Escribe tu correo para recuperar la contraseña.", notice: "" };
     render();
     return;
   }
@@ -9860,7 +10383,7 @@ function handlePasswordReset() {
           status: "error",
           user: null,
           email,
-          error: getAuthErrorMessage(error, "No se pudo enviar la recuperacion."),
+          error: getAuthErrorMessage(error, state.lang === "en" ? "The password reset email could not be sent." : "No se pudo enviar la recuperación."),
           notice: ""
         };
       }
@@ -9872,7 +10395,7 @@ function handleAuthButton() {
   if (!isFirebaseAuthConfigured() || state.auth.status === "loading") return;
   if (state.auth.user) {
     signOutUser().catch((error) => {
-      state.auth = { ...state.auth, error: error.message || "No se pudo cerrar sesion." };
+      state.auth = { ...state.auth, error: userFacingError(error, state.lang === "en" ? "Sign-out failed." : "No se pudo cerrar sesión.") };
       render();
     });
   }
@@ -9913,7 +10436,8 @@ function render() {
   document.body.dataset.theme = state.theme;
   backButton.disabled = !state.history.length;
   adminShortcut.classList.toggle("active", state.active === "administracion");
-  topbarPrimary.hidden = !state.activeSubmodule;
+  const isReadOnlySalesMargin = state.active === "ventas" && state.activeSubmodule === "margen";
+  topbarPrimary.hidden = !state.activeSubmodule || isReadOnlySalesMargin;
   topbarPrimary.querySelector("[data-i18n]").dataset.i18n = state.active === "produccion" ? "newOrder" : "newModuleRecord";
   renderNav();
   renderStatusStrip();
@@ -9955,6 +10479,7 @@ document.addEventListener("keydown", (event) => {
 
 topbarPrimary.addEventListener("click", () => {
   if (!state.activeSubmodule) return;
+  if (state.active === "ventas" && state.activeSubmodule === "margen") return;
   if (state.active === "produccion") {
     openOrderModal();
     return;

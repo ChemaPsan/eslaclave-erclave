@@ -35,6 +35,8 @@ class InventoryRepository:
         return [WarehouseRead.model_validate(dict(x)) for x in rows]
     def _warehouse(self,c,t,i):
         row=c.execute(text("select id,code,name,type,status,business_center,location,owner,capacity,inventory_policy,zone,aisle,rack,level,position,description from inventory.warehouses where tenant_id=:t and id=:i"),{"t":t,"i":i}).mappings().first(); return WarehouseRead.model_validate(dict(row)) if row else None
+    def get_warehouse(self,t,i):
+        with self.engine.connect() as c:return self._warehouse(c,t,i)
     def create_warehouse(self,t,p,k,h,a):
         with self.engine.begin() as c:
             replay=self._claim(c,t,"warehouse.create",k,h)
@@ -155,8 +157,7 @@ class InventoryRepository:
                 where tenant_id=:t and source_type='production_order_receipt' and source_id=:order_id and direction='in' and status='recorded'"""),{"t":t,"order_id":order["id"]}).scalar_one())
             ordered=float(order["quantity"]);quantity=float(p.quantity)
             if received+quantity>ordered+0.000001:self._release(c,t,operation,k);raise ValueError("finished_goods_receipt_quantity_exceeded")
-            total_cost=order.get("actual_cost") if order.get("actual_cost") is not None else order.get("planned_cost")
-            unit_cost=float(total_cost or 0)/ordered if ordered else float(item.default_unit_cost)
+            unit_cost=float(order.get("unit_cost")) if order.get("unit_cost") is not None else float(item.default_unit_cost)
             movement_payload=MovementCreate(movement_type="entry",inventory_item_id=item.id,warehouse_id=p.warehouse_id,quantity=quantity,unit=item.base_unit,unit_cost=unit_cost,reason=p.notes or f"Recepción de orden {order['code']}",source=SourceRef(type="production_order_receipt",id=order["id"]),occurred_at=p.received_at)
             movement_id=f"mov_{uuid4().hex[:26]}"; movement_code=f"MOV-{uuid4().hex[:10].upper()}"
             self._resource_lock(c,t,item.id,p.warehouse_id)

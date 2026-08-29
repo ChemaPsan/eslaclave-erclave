@@ -138,7 +138,7 @@ Estos endpoints leen y actualizan PostgreSQL por medio de `AdminRepository`. `GE
 
 `POST /v1/tenants` es el primer corte para provisioning: crea o actualiza idempotentemente el tenant por slug e inicializa `organization.profile`. Antes de Produccion debe conectarse a autenticacion service-to-service para `internal.provisioning.tenant.create`.
 
-`POST /v1/provisioning/tenant-onboarding` crea el tenant, inicializa `organization.profile`, crea o enlaza el owner inicial, asigna rol `owner`, habilita modulos y deja alcance de sucursales en `membership.metadata.scope.branch_ids`. En modo Firebase requiere `Authorization: Bearer <token>` de un correo incluido en `ERCLAVE_BACKOFFICE_ADMIN_EMAILS`. Tambien asegura la identidad en Firebase y prepara la invitacion de contrasena: si `ERCLAVE_FIREBASE_WEB_API_KEY` esta configurado, Firebase envia el correo de reset; si no, el endpoint devuelve `invitation.reset_link` para envio manual o para un futuro `notification-service`. Requiere `Idempotency-Key`. Estructura minima:
+`POST /v1/provisioning/tenant-onboarding` crea el tenant, inicializa `organization.profile`, crea o enlaza el owner inicial, asigna rol `owner`, habilita modulos y deja alcance de sucursales en `membership.metadata.scope.branch_ids`. En modo Firebase requiere `Authorization: Bearer <token>` de un correo incluido en `ERCLAVE_BACKOFFICE_ADMIN_EMAILS`. Tambien asegura la identidad en Firebase y prepara la invitacion de contrasena: si `ERCLAVE_FIREBASE_WEB_API_KEY` esta configurado, Firebase envia el correo de reset; si no, el endpoint devuelve `invitation.reset_link` para envio manual o para un futuro `notification-service`. Si el tenant ya persistio y solo falla la entrega de la invitacion, conserva el alta y devuelve `invitation.delivery=pending` con un codigo seguro. Requiere `Idempotency-Key`. Estructura minima:
 
 ```json
 {
@@ -180,6 +180,10 @@ Estos endpoints leen y actualizan PostgreSQL por medio de `AdminRepository`. `GE
   ]
 }
 ```
+
+`DELETE /v1/backoffice/tenants/{tenant_id}` confirma primero la eliminacion administrativa y reporta por separado la limpieza de identidades mediante `firebase_identity_cleanup.status=completed|pending`. Una falla secundaria de Firebase no convierte una eliminacion ya confirmada en PostgreSQL en un falso fracaso total. Los codigos del proveedor se traducen a errores operativos seguros y nunca incluyen correos ni payloads sensibles.
+
+En QA, la cuenta de servicio runtime de Admin requiere `roles/firebaseauth.admin` para buscar, crear, actualizar y eliminar identidades Firebase. Firebase solo autentica: membresias, entitlements y permisos siguen perteneciendo a ERClave. Este rol no debe concederse a los demas servicios ni a identidades humanas para operar Backoffice.
 
 Los endpoints mutables requieren:
 

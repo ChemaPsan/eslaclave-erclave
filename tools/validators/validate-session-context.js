@@ -33,6 +33,8 @@ if (!errors.length) {
   if (!packageJson.scripts?.["validate:documentation"]) errors.push("package.json is missing script validate:documentation.");
   const contextScript = readText("tools/session-context.js");
   if (!contextScript.includes('probe("Sales API", 8008)')) errors.push("session:context must report the Local Sales API.");
+  if (!contextScript.includes('probe("Purchasing API", 8010)')) errors.push("session:context must report the Local Purchasing API.");
+  if (!contextScript.includes('probe("Maintenance API", 8012)')) errors.push("session:context must report the Local Maintenance API.");
 }
 
 if (errors.length) fail("Session context validation failed", errors);

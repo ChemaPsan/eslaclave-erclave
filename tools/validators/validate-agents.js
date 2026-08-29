@@ -108,9 +108,9 @@ for (const fragment of staleAgentFragments) {
 const moduleIndex = readText("modulos/README.md");
 for (const fragment of [
   "UI y `admin-service` reales en QA",
-  "El codigo Local posterior agrega reservas/consumo para Produccion",
-  "Ventas | Backend y UI Local para Clientes, Cotizaciones, Pedidos y Entregas",
-  "Expedientes y capacidad autoritativa existen solo en codigo Local"
+  "Produccion | API, persistencia y UI reales en Local y QA",
+  "Ventas | Backend y UI reales en Local y QA",
+  "expedientes, elegibilidad productiva y capacidad autoritativa reales en Local y QA"
 ]) {
   if (!moduleIndex.includes(fragment)) {
     errors.push(`Module index is missing current state: ${fragment}`);
@@ -155,13 +155,13 @@ const documentationChecks = [
   },
   {
     path: "modulos/10_recursos_humanos.md",
-    required: ["corte acumulado Local `20260818_0017`"],
+    required: ["corte acumulado `20260818_0017`, hoy desplegado en Local y QA"],
     forbidden: ["La migracion `20260730_0010` y el seed de permisos deben ejecutarse primero"]
   },
   {
     path: "docs/arquitectura/ownership_datos_mvp.md",
     required: [
-      "Reservas para ordenes de Produccion y Pedidos de Ventas estan implementadas en codigo Local",
+      "Reservas para ordenes de Produccion y Pedidos de Ventas estan implementadas en Local y QA",
       "POST /v1/inventory/reservations/{id}/consume"
     ],
     forbidden: ["Reservas quedan como contrato futuro si el MVP inicial no las ejecuta todavia"]
@@ -170,20 +170,20 @@ const documentationChecks = [
     path: "docs/arquitectura/modelo_datos_mvp.md",
     required: [
       "Es un contrato tecnico vivo",
-      "se materializo para ordenes de Produccion en la revision Local `20260818_0017`"
+      "se materializo para ordenes de Produccion en `20260818_0017` y hoy esta desplegado en Local y QA"
     ],
     forbidden: ["Reserva de inventario. Puede quedar fase futura"]
   },
   {
     path: "docs/arquitectura/diagramas/estado_actual_backend_mvp.drawio",
-    required: ["Local head 20260821_0023", "QA head 20260805_0013"],
+    required: ["Local head 20260825_0029", "QA head 20260821_0023"],
     forbidden: ["Local head 20260817_0015", "Alembic head 20260817_0015", "Ventas planned/mock"]
   },
   {
     path: "docs/arquitectura/diagramas/apis_mvp_relaciones.drawio",
     required: [
-      "SOLO LOCAL: reservas/consumos de Produccion, valuacion y concurrencia",
-      "LOCAL: availability / reserve / release / consume; planned: finished goods"
+      "REAL LOCAL/QA: almacenes, articulos, movimientos, balances y Kardex",
+      "LOCAL/QA: availability / reserve / release / consume / finished goods receipt"
     ],
     forbidden: ["reservas/consumos planned", "OBJETIVO: availability / consumption / receipts"]
   }

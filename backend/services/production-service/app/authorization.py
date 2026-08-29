@@ -13,6 +13,16 @@ class AuthorizedContext:
     tenant_id: str
     actor_id: str
     permission: str
+    permissions: frozenset[str]
+
+    def require(self, permission: str) -> None:
+        if permission not in self.permissions:
+            raise ErclaveError(
+                "permission_denied",
+                "Authenticated actor does not have the required permission.",
+                status_code=403,
+                details={"permission": permission},
+            )
 
 
 class AdminSessionClient:
@@ -55,7 +65,7 @@ def require_production_access(permission: str | tuple[str, ...]):
             raise ErclaveError("tenant_required", "X-Tenant-Id header is required.", status_code=400)
         required = (permission,) if isinstance(permission, str) else permission
         if settings.auth_mode != "firebase":
-            return AuthorizedContext(tenant_id=x_tenant_id, actor_id=x_actor_id or "usr_demo", permission=required[0])
+            return AuthorizedContext(tenant_id=x_tenant_id, actor_id=x_actor_id or "usr_demo", permission=required[0], permissions=frozenset(required))
         if not authorization or not authorization.lower().startswith("bearer ") or not authorization.split(" ", 1)[1].strip():
             raise ErclaveError("auth_required", "Authorization Bearer token is required.", status_code=401)
 
@@ -72,6 +82,6 @@ def require_production_access(permission: str | tuple[str, ...]):
         actor_id = str(user.get("id") or "")
         if not actor_id:
             raise ErclaveError("authorization_service_unavailable", "Authorization context is incomplete.", status_code=503)
-        return AuthorizedContext(tenant_id=x_tenant_id, actor_id=actor_id, permission=required[0])
+        return AuthorizedContext(tenant_id=x_tenant_id, actor_id=actor_id, permission=required[0], permissions=frozenset(context.get("permissions", [])))
 
     return dependency

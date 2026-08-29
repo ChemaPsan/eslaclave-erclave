@@ -4,7 +4,7 @@ Backend real de ERClave para mover los modulos MVP fuera de la maqueta.
 
 ## Estado actual
 
-Scaffolding inicial con FastAPI para iniciar por `admin-service`.
+Backend FastAPI modular con servicios reales de Administracion, Produccion, Inventario, RH, Ventas y, en Local, Compras y Mantenimiento.
 
 Incluye:
 
@@ -12,8 +12,8 @@ Incluye:
 - health checks;
 - manejo comun de errores;
 - `correlation_id`;
-- placeholder de tenant;
-- Alembic inicial conectado al modelo fisico de `admin-service`;
+- aislamiento tenant y autorizacion centralizada por `admin-service`;
+- cadena Alembic unica con schemas propietarios por servicio;
 - estructura para servicios FastAPI;
 - dominio/API base configurable por variable de ambiente.
 
@@ -92,7 +92,7 @@ python -m pip install -e ".[dev]"
 
 El camino canonico es `scripts/start_local.ps1`, que fuerza PostgreSQL `erclave_local`, loopback y Firebase Emulator. Los comandos `uvicorn` aislados de esta seccion son diagnosticos avanzados: requieren variables locales explicitas y nunca deben reutilizar `backend/.env`, Cloud SQL Auth Proxy o recursos QA.
 
-En Windows, el comando canonico levanta PostgreSQL local, Firebase Auth Emulator, frontend y las APIs de Administracion, Produccion, Inventario y RH:
+En Windows, el comando canonico levanta PostgreSQL local, Firebase Auth Emulator, frontend y las APIs de Administracion, Produccion, Inventario, RH, Ventas, Compras y Mantenimiento:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_local.ps1
@@ -141,6 +141,16 @@ uvicorn services.inventory_service_adapter:app --reload --port 8004
 ```
 
 No aplicar la migracion de Inventarios a QA o Produccion sin autorizacion explicita. En Windows, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_inventory_local.ps1` inicia el PostgreSQL portatil aislado en `5434` y `inventory-service` en `8004` sin cambiar la politica global.
+
+## Ejecutar maintenance-service
+
+Desde `backend`, con la revision Local vigente:
+
+```bash
+uvicorn services.maintenance_service_adapter:app --reload --port 8012
+```
+
+Mantenimiento consume exclusivamente los contratos HTTP de RH, Inventory y Production. Las conciliaciones se reintentan desde sus endpoints propietarios; no se corrigen escribiendo schemas ajenos.
 
 En QA/Produccion, `production-service` debe configurar `ERCLAVE_AUTH_MODE=firebase`, `ERCLAVE_FIREBASE_PROJECT_ID` y `ERCLAVE_ADMIN_SERVICE_URL`. Cada ruta reenvia el Bearer token a `admin-service /v1/session/context` y valida tenant activo, modulo Produccion y permiso exacto. `X-Tenant-Id` funciona solamente como selector. En modo local `demo` se admite `X-Actor-Id` para pruebas controladas.
 

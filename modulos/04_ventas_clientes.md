@@ -2,14 +2,14 @@
 
 ## Objetivo
 
-Ventas conecta la relacion comercial con los maestros autoritativos de ERClave. El segundo corte real existe solo en Local y cubre Clientes, Cotizaciones, Pedidos, surtido y Entregas mediante `sales-service`; no convierte texto libre ni datos del navegador en maestros operativos.
+Ventas conecta la relacion comercial con los maestros autoritativos de ERClave. El segundo corte real esta desplegado en Local y QA y cubre Clientes, Cotizaciones, Pedidos, surtido y Entregas mediante `sales-service`; no convierte texto libre ni datos del navegador en maestros operativos.
 
 ## Alcance por ambiente
 
 | Ambiente | Alcance comprobado |
 |---|---|
 | Local | API, schema `sales`, migraciones hasta `20260818_0020`, permisos, UI, idempotencia, auditoria y pruebas negativas/concurrentes para Clientes, Cotizaciones, Pedidos y Entregas. |
-| QA | Ventas inactivo; conserva cabeza `20260805_0013` y no tiene `sales-service` desplegado. |
+| QA | `sales-service` desplegado dentro del candidato de cinco servicios; cadena comun aplicada hasta `20260821_0023`. La disponibilidad efectiva depende del entitlement del tenant y de RH/Produccion. |
 | Produccion | No aprovisionado. |
 
 Devoluciones permanecen `planned`. Pedidos y Entregas ya no escriben mock cuando la interfaz opera en modo API.
@@ -35,7 +35,14 @@ El detalle, evidencia y criterios de cierre viven en [`docs/auditorias/ventas_se
 
 ### Seleccion escalable de documentos
 
-Los catalogos pequenos y estables, como estatus, moneda o unidad, pueden usar selectores. Las entidades operativas crecientes no deben renderizar cientos de opciones: clientes, productos, cotizaciones, pedidos, ordenes de compra, recepciones y documentos equivalentes requieren busqueda por texto, filtros de negocio y resultados acotados. Ventas implementa el patron Local para Cotizacion -> Pedido y Pedido -> Entrega; los modulos aun no especializados deben adoptarlo al construir esos flujos. Para volumen superior al limite preventivo de 200, la busqueda y paginacion deben resolverse en el backend.
+Los catalogos pequenos y estables, como estatus, moneda o unidad, pueden usar selectores. Las entidades operativas crecientes no deben renderizar cientos de opciones: clientes, productos, cotizaciones, pedidos, ordenes de compra, recepciones y documentos equivalentes requieren busqueda por texto, filtros de negocio y resultados acotados. Ventas implementa el patron en Local y QA para Cotizacion -> Pedido y Pedido -> Entrega; los modulos aun no especializados deben adoptarlo al construir esos flujos. Para volumen superior al limite preventivo de 200, la busqueda y paginacion deben resolverse en el backend.
+
+### Consulta de Margen CHG-250
+
+- `Margen` es una consulta operativa de solo lectura sobre Pedidos y Entregas propiedad de Sales.
+- Presenta venta, costo/margen estimados y costo/margen reales solo cuando la Entrega confirmada aporta una fuente trazable (`inventory_consumption`, `service_capture` o `production_report`).
+- No crea registros, no usa el formulario generico y no persiste documentos en `localStorage` cuando `apiMode=api`.
+- Los cruces configurables por periodo, producto, cliente u otros modulos permanecen bajo el modulo especializado Reportes.
 
 ## Criterios de aceptacion del primer corte
 
@@ -110,7 +117,6 @@ Los endpoints de lectura reducida aceptan permisos de Ventas sin conceder acceso
 - almacenamiento del logo en object storage para QA/Produccion; Local conserva un data URL validado de hasta 1 MB;
 - paginacion comercial con cursor para volumen mayor al limite preventivo de 200;
 - PDF de Pedido y remision/Entrega con snapshot documental;
-- despliegue o activacion en QA.
 
 Estas capacidades requieren nuevos criterios de aceptacion, contratos propietarios y migraciones. No se implementan como escritura cruzada ni como fallback mock.
 # CHG-206: elegibilidad comercial

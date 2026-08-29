@@ -25,6 +25,7 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 - Mantener reglas críticas, autorización e idempotencia en backend, no sólo en frontend.
 - El consumo HTTP del frontend vive en `frontend/api/`; las pantallas no llaman `fetch` directamente.
 - Todo texto visible nuevo o modificado debe existir en español e inglés con las mismas variables.
+- Los errores visibles se resuelven por `error.code` estable mediante `docs/arquitectura/feedback_operativo_y_errores.md`; nunca se presenta directamente `error.message` del backend. Un fallo de transición restaura el estado confirmado y usa severidad, accesibilidad y correlación según la taxonomía transversal.
 - Toda interfaz nueva o modificada debe cumplir `docs/arquitectura/estandar_responsive_transversal.md`; ejecutar `npm run validate:responsive` y validar el ancho real del contenedor, no solo el viewport.
 - No cambiar globalmente la composicion de componentes compartidos para corregir una sola pantalla. Las excepciones responsive deben usar una clase explicita del modulo o seccion, conservar el patron estandar fuera de ese alcance y quedar documentadas.
 - Cambios de API deben actualizar OpenAPI, schemas, consumidores y pruebas en el mismo corte.
@@ -61,6 +62,7 @@ Un cambio termina solo cuando cumple los criterios documentados, conserva owners
 ```powershell
 npm.cmd run validate
 npm.cmd run validate:documentation
+npm.cmd run validate:error-feedback
 npm.cmd run validate:responsive
 npm.cmd run verify
 npm.cmd run traceability:draft -- --title "Descripción del cambio"

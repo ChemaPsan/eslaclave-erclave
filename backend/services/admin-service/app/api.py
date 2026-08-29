@@ -89,7 +89,7 @@ COMMERCIAL_CATALOGS = {"currencies", "payment_terms"}
 CODE_SEQUENCE_CONSUMER_PERMISSIONS = (
     "production.product_service.create",
     "production.recipe.create",
-    "production.order.create",
+    "production.order.release",
     "production.machine.create",
     "inventory.warehouse.create",
     "inventory.item.create",
@@ -437,7 +437,17 @@ def onboard_tenant(
         idempotency_key=resolved_idempotency_key,
         correlation_id=resolve_correlation_id(x_correlation_id),
     )
-    result["invitation"] = create_firebase_password_invitation(payload.owner.email, settings)
+    try:
+        result["invitation"] = create_firebase_password_invitation(payload.owner.email, settings)
+    except ErclaveError as error:
+        result["invitation"] = {
+            "provider": "firebase" if settings.auth_mode == "firebase" else "demo",
+            "email": payload.owner.email.lower(),
+            "email_sent": False,
+            "reset_link": None,
+            "delivery": "pending",
+            "error_code": error.code,
+        }
     return TenantOnboardingResponse(data=result)
 
 
@@ -575,8 +585,19 @@ def delete_backoffice_tenant(
     )
     if result is None:
         raise ErclaveError("tenant_not_found", "Tenant not found.", status_code=404, details={"tenant_id": tenant_id})
-    for email in result.get("firebase_emails", []):
-        delete_firebase_user_by_email(email, settings)
+    firebase_emails = result.pop("firebase_emails", [])
+    cleanup_errors = []
+    for email in firebase_emails:
+        try:
+            delete_firebase_user_by_email(email, settings)
+        except ErclaveError as error:
+            cleanup_errors.append(error.code)
+    result["firebase_identity_cleanup"] = {
+        "status": "pending" if cleanup_errors else "completed",
+        "requested": len(firebase_emails),
+        "failed": len(cleanup_errors),
+        "error_codes": sorted(set(cleanup_errors)),
+    }
     return BackofficeTenantDeleteResponse(data=result)
 
 

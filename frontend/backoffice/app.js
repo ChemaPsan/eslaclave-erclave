@@ -1,6 +1,8 @@
 import { getApiBaseUrl } from "../api/config.js";
 import { deleteBackofficeTenant, listBackofficeModules, listBackofficeTenants, listBackofficeUsage, onboardTenant, setBackofficeTenantEntitlement, setBackofficeTenantStatus, updateBackofficeTenant } from "../api/backoffice.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "../auth.js";
+import { installMutationFeedback } from "../utils/mutation-feedback.js";
+import { getLocalizedErrorMessage } from "../i18n/api-errors.js";
 
 
 const app = document.getElementById("backofficeApp");
@@ -33,9 +35,12 @@ const backofficeCopy = {
     module_hr: "Recursos Humanos",
     module_inventory: "Almacenes e inventarios",
     module_sales: "Ventas",
+    module_purchasing: "Compras",
+    module_maintenance: "Mantenimiento",
     module_billing: "Facturacion SaaS",
     module_provisioning: "Aprovisionamiento",
-    module_integrations: "Integraciones"
+    module_integrations: "Integraciones",
+    operationInProgress: "Procesando la operacion..."
   },
   en: {
     manage: "Manage",
@@ -63,18 +68,31 @@ const backofficeCopy = {
     module_hr: "Human Resources",
     module_inventory: "Warehouses and inventory",
     module_sales: "Sales",
+    module_purchasing: "Purchasing",
+    module_maintenance: "Maintenance",
     module_billing: "SaaS billing",
     module_provisioning: "Provisioning",
-    module_integrations: "Integrations"
+    module_integrations: "Integrations",
+    operationInProgress: "Processing the operation..."
   }
 };
+
+function backofficeError(error, esFallback, enFallback) {
+  return getLocalizedErrorMessage(error, {
+    lang: backofficeLanguage,
+    fallback: backofficeLanguage === "en" ? enFallback : esFallback
+  });
+}
 const bt = (key) => backofficeCopy[backofficeLanguage][key] || key;
+installMutationFeedback({ getMessage: () => bt("operationInProgress") });
 const moduleOptions = [
   { code: "admin", label: "Administracion", required: true },
   { code: "production", label: "Produccion" },
   { code: "hr", label: "Recursos Humanos" },
   { code: "inventory", label: "Almacenes" },
-  { code: "sales", label: "Ventas", dependencies: ["hr", "production"] }
+  { code: "sales", label: "Ventas", dependencies: ["hr", "production"] },
+  { code: "purchasing", label: "Compras", dependencies: ["inventory"] },
+  { code: "maintenance", label: "Mantenimiento", dependencies: ["hr", "inventory"] }
 ];
 const defaultUsageToDate = new Date().toISOString().slice(0, 10);
 const defaultUsageFromDate = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -769,7 +787,7 @@ function handleLogin(event) {
   state.auth = { ...state.auth, status: "loading", email, error: "", notice: "" };
   render();
   signInWithEmail(email, password).catch((error) => {
-    state.auth = { ...state.auth, status: "signed_out", user: null, email, error: error.message || "No se pudo iniciar sesion.", notice: "" };
+    state.auth = { ...state.auth, status: "signed_out", user: null, email, error: backofficeError(error, "No se pudo iniciar sesión.", "Sign-in failed."), notice: "" };
     render();
   });
 }
@@ -791,7 +809,7 @@ function handleReset() {
       render();
     })
     .catch((error) => {
-      state.auth = { ...state.auth, status: "signed_out", error: error.message || "No se pudo enviar recuperacion.", notice: "" };
+      state.auth = { ...state.auth, status: "signed_out", error: backofficeError(error, "No se pudo enviar la recuperación.", "The password reset email could not be sent."), notice: "" };
       render();
     });
 }
@@ -816,7 +834,7 @@ function verifyBackofficeAccess() {
     .catch((error) => {
       state.access = {
         status: "denied",
-        error: error.message || "Tu usuario no esta autorizado para usar ERClave Backoffice."
+        error: backofficeError(error, "Tu usuario no está autorizado para usar ERClave Backoffice.", "Your account is not authorized to use ERClave Backoffice.")
       };
       state.tenantAdmin = { ...state.tenantAdmin, status: "idle", tenants: [], error: "", actionTenantId: "" };
       render();
@@ -843,7 +861,7 @@ function loadTenantAdmin(search = state.tenantAdmin.search) {
       render();
     })
     .catch((error) => {
-      state.tenantAdmin = { ...state.tenantAdmin, status: "error", error: error.message || "No se pudieron cargar tenants.", actionTenantId: "" };
+      state.tenantAdmin = { ...state.tenantAdmin, status: "error", error: backofficeError(error, "No se pudieron cargar las empresas.", "Organizations could not be loaded."), actionTenantId: "" };
       render();
     });
 }
@@ -898,7 +916,7 @@ function handleTenantEditorSubmit(event) {
       return loadTenantAdmin();
     })
     .catch((error) => {
-      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: error.message || "No se pudo actualizar el tenant." };
+      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: backofficeError(error, "No se pudo actualizar la empresa.", "The organization could not be updated.") };
       render();
     });
 }
@@ -915,7 +933,7 @@ function updateTenantEntitlementFromBackoffice(tenantId, moduleCode, status) {
       return loadTenantAdmin();
     })
     .catch((error) => {
-      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: error.message || "No se pudo actualizar el modulo." };
+      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: backofficeError(error, "No se pudo actualizar el módulo.", "The module could not be updated.") };
       render();
     });
 }
@@ -955,7 +973,7 @@ function loadUsage(filters = {}) {
       render();
     })
     .catch((error) => {
-      state.usage = { ...state.usage, status: "error", error: error.message || "No se pudieron cargar metricas de uso." };
+      state.usage = { ...state.usage, status: "error", error: backofficeError(error, "No se pudieron cargar las métricas de uso.", "Usage metrics could not be loaded.") };
       render();
     });
 }
@@ -967,7 +985,7 @@ function updateTenantStatus(tenantId, status) {
   setBackofficeTenantStatus(tenantId, status)
     .then(() => loadTenantAdmin())
     .catch((error) => {
-      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: error.message || "No se pudo actualizar el tenant." };
+      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: backofficeError(error, "No se pudo actualizar la empresa.", "The organization could not be updated.") };
       render();
     });
 }
@@ -981,7 +999,7 @@ function removeTenant(tenantId, name) {
   deleteBackofficeTenant(tenantId)
     .then(() => loadTenantAdmin())
     .catch((error) => {
-      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: error.message || "No se pudo eliminar el tenant." };
+      state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: backofficeError(error, "No se pudo eliminar la empresa.", "The organization could not be deleted.") };
       render();
     });
 }
@@ -1004,7 +1022,7 @@ function handleOnboardingSubmit(event) {
       render();
     })
     .catch((error) => {
-      state.onboarding = { status: "error", error: error.message || "No se pudo crear el tenant.", result: state.onboarding.result };
+      state.onboarding = { status: "error", error: backofficeError(error, "No se pudo crear la empresa.", "The organization could not be created."), result: state.onboarding.result };
       render();
     });
 }
@@ -1029,7 +1047,7 @@ if (isFirebaseAuthConfigured()) {
     render();
     if (user) verifyBackofficeAccess();
   }).catch((error) => {
-    state.auth = { ...state.auth, status: "error", error: error.message || "Firebase Auth no disponible." };
+    state.auth = { ...state.auth, status: "error", error: backofficeError(error, "El servicio de acceso no está disponible.", "The sign-in service is unavailable.") };
     render();
   });
 }

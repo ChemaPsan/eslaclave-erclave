@@ -864,7 +864,7 @@ Reglas:
 
 ### 7.6 `inventory.inventory_reservations`
 
-Reserva de inventario. El modelo conceptual se materializo para ordenes de Produccion en la revision Local `20260818_0017`; consultar la seccion 20 para constraints, valuacion, concurrencia y relaciones definitivas del corte. Reservas para Ventas y otros origenes permanecen futuras.
+Reserva de inventario. El modelo conceptual se materializo para ordenes de Produccion en `20260818_0017` y hoy esta desplegado en Local y QA dentro de la cabeza `20260821_0023`; consultar la seccion 20 para constraints, valuacion, concurrencia y relaciones definitivas del corte. Las reservas para Pedidos de Ventas tambien estan implementadas; lotes y otros origenes permanecen futuros.
 
 | Columna | Tipo | Reglas |
 |---|---|---|
@@ -1698,3 +1698,38 @@ Estado: definido en `docs/arquitectura/apis_mvp.md`.
 - Se normalizan las columnas de unidad de Inventory, Production y Sales para conservar consistencia entre maestros, movimientos y snapshots documentales.
 - Cada fila corregida produce un evento `migration.unit_alias.normalize` en `admin.audit_events` con estado anterior, posterior, tabla y columna. El downgrade usa esa evidencia y solo restaura filas cuyo valor actual aun coincide con el valor aplicado por la migracion.
 - La normalizacion no altera identificadores, cantidades, importes, costos, almacenes, estatus ni relaciones. El bloqueo runtime de cambio de unidad base cuando existen movimientos o reservas permanece intacto para cambios semanticos reales.
+
+## 25. Perfil fiscal editable de proveedores (revision 20260824_0025)
+
+- `purchasing.suppliers` conserva razon social, RFC, regimen fiscal, correo de facturacion, contacto, sitio web y domicilio fiscal mediante columnas tenant-safe.
+- El indice parcial unico `uq_purchasing_supplier_tax_id` protege `(tenant_id, tax_id)` cuando existe RFC. El backend normaliza RFC a mayusculas sin espacios ni guiones antes de persistir.
+- Las altas nuevas exigen juntos `legal_name`, `tax_id`, `tax_regime`, `billing_email` y `fiscal_postal_code`; para Mexico, el codigo postal contiene cinco digitos.
+- La migracion no inventa datos ni bloquea proveedores heredados incompletos. Siguen legibles y pueden completar su perfil mediante una edicion auditada e idempotente.
+- El maestro es editable y no representa por si mismo un snapshot fiscal historico. Las facturas o documentos fiscales futuros deberan copiar los datos aplicables al momento de emision.
+
+## 26. Endurecimiento source-to-receipt de Compras (revision 20260824_0026)
+
+- `purchasing.requisitions` y `purchasing.purchase_orders` conservan motivo, actor y fecha de cancelacion; cancelar nunca borra documentos ni recepciones.
+- `purchasing.purchase_receipt_lines.line_number` identifica establemente cada partida e `inventory_idempotency_key` conserva la clave durable usada por Inventory. Ambas son unicas por tenant en su alcance.
+- `purchasing.purchase_receipts` conserva numero de intentos, ultimo intento y actor conciliador. `needs_reconciliation` es estado operativo reanudable, no una recepcion completada ficticia.
+- Crear una recepcion bloquea orden y partidas, y resta reclamos `processing|needs_reconciliation` al saldo disponible. Esto evita sobre-recepcion aun con solicitudes concurrentes.
+- Una linea completada incrementa `received_quantity` una sola vez. La conciliacion selecciona exclusivamente lineas no completadas y reutiliza la clave Inventory original.
+
+## 27. Mantenimiento correctivo (revisiones 20260824_0027-0028)
+
+El schema Local `maintenance` contiene `orders`, `assignments`, `time_entries`, `material_requests`, `material_request_lines`, `audit_events` e `idempotency_records`. Todas las tablas son tenant-safe y no tienen FK a schemas propietarios. La revision agrega `hr.labor_roles.intervenes_in_maintenance` y el hold logico `production.machines.maintenance_order_ref_id`.
+
+La revision `0028` agrega la operacion externa pendiente, intentos y fecha de conciliacion en ordenes y solicitudes de material; garantiza un unico responsable primario e incorpora indices `(tenant_id, order_id)` para asignaciones, tiempos y solicitudes. Los valores `block|release` y `reserve|issue|cancel` permiten reanudar efectos parciales sin inferir intenciones desde mensajes de error.
+
+`orders` guarda folio, `target_type=production_machine|facility|other`, referencia externa opcional, snapshots, origen manual/Production, prioridad, estado, ubicacion, diagnostico, causa, trabajo, seguridad y verificacion. Estados: `draft`, `requested`, `assigned`, `in_progress`, `waiting_parts`, `resolved`, `closed`, `cancelled`.
+
+Una restriccion parcial impide mas de una orden bloqueante activa por maquina y tenant. Las asignaciones conservan responsable principal/historial; los tiempos validan intervalos; las partidas conservan cantidad, reserva, movimiento de salida, estado y costo snapshot. La orden y la solicitud material exponen `processing|completed|needs_reconciliation` o estados equivalentes para no ocultar fallos de dependencias.
+
+La migracion se probo con ciclo reversible `0026 -> 0027 -> 0026 -> 0027` exclusivamente en Local.
+
+## 28. Capacidad multi-dia de Produccion (revision 20260825_0029)
+
+- `production.recipe_versions.suggested_duration_days` propone el horizonte inicial; `production.production_orders.planned_duration_days` y `planned_end_date` conservan la decision aplicada a la orden.
+- `production.capacity_commitments` admite una fila por `(tenant_id, production_order_id, resource_type, resource_ref_id, planned_date)`. Cada fila contiene solo los minutos asignados en esa fecha.
+- Production genera dias productivos lunes-viernes, resta compromisos activos y distribuye mano de obra/maquinaria en orden cronologico. Los materiales no se multiplican por el horizonte.
+- El downgrade agrega minutos por orden/recurso sobre su primera fecha antes de restaurar la unicidad anterior, evitando perder el total comprometido.

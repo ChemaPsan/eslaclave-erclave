@@ -49,6 +49,8 @@ foreach ($portSpec in @(
     @{ Port = 8004; Name = "Inventory API" },
     @{ Port = 8006; Name = "HR API" },
     @{ Port = 8008; Name = "Sales API" },
+    @{ Port = 8010; Name = "Purchasing API" },
+    @{ Port = 8012; Name = "Maintenance API" },
     @{ Port = $FirebaseAuthPort; Name = "Firebase Auth Emulator" },
     @{ Port = $FirebaseUiPort; Name = "Firebase Emulator UI" }
 )) { Assert-Port-Free $portSpec.Port $portSpec.Name }
@@ -65,14 +67,19 @@ $env:ERCLAVE_DATABASE_URL = $localDbUrl
 $env:ERCLAVE_INVENTORY_DATABASE_URL = $localDbUrl
 $env:ERCLAVE_HR_DATABASE_URL = $localDbUrl
 $env:ERCLAVE_SALES_DATABASE_URL = $localDbUrl
+$env:ERCLAVE_PURCHASING_DATABASE_URL = $localDbUrl
+$env:ERCLAVE_MAINTENANCE_DATABASE_URL = $localDbUrl
 $env:ERCLAVE_API_PUBLIC_BASE_URL = "http://127.0.0.1:8000"
 $env:ERCLAVE_APP_PUBLIC_BASE_URL = "http://127.0.0.1:4173"
 $env:ERCLAVE_ADMIN_SERVICE_URL = "http://127.0.0.1:8000"
 $env:ERCLAVE_HR_SERVICE_URL = "http://127.0.0.1:8006"
 $env:ERCLAVE_INVENTORY_SERVICE_URL = "http://127.0.0.1:8004"
 $env:ERCLAVE_PRODUCTION_SERVICE_URL = "http://127.0.0.1:8002"
+$env:ERCLAVE_MAINTENANCE_SERVICE_URL = "http://127.0.0.1:8012"
 $env:ERCLAVE_BACKOFFICE_ADMIN_EMAILS = $localEmail
 
+& $pythonPath (Join-Path $PSScriptRoot "seed_admin_mvp.py")
+if ($LASTEXITCODE -ne 0) { throw "No se pudo sincronizar el catalogo de permisos local." }
 & $pythonPath (Join-Path $PSScriptRoot "seed_local_demo.py")
 if ($LASTEXITCODE -ne 0) { throw "No se pudo preparar el tenant demo local." }
 
@@ -97,7 +104,9 @@ $services = @(
     @{ Adapter = "services.production_service_adapter:app"; Port = 8002; Name = "production-local" },
     @{ Adapter = "services.inventory_service_adapter:app"; Port = 8004; Name = "inventory-local" },
     @{ Adapter = "services.hr_service_adapter:app"; Port = 8006; Name = "hr-local" },
-    @{ Adapter = "services.sales_service_adapter:app"; Port = 8008; Name = "sales-local" }
+    @{ Adapter = "services.sales_service_adapter:app"; Port = 8008; Name = "sales-local" },
+    @{ Adapter = "services.purchasing_service_adapter:app"; Port = 8010; Name = "purchasing-local" },
+    @{ Adapter = "services.maintenance_service_adapter:app"; Port = 8012; Name = "maintenance-local" }
 )
 foreach ($service in $services) {
     Start-Process -FilePath $pythonPath -ArgumentList "-m", "uvicorn", $service.Adapter, "--host", "127.0.0.1", "--port", "$($service.Port)" -WorkingDirectory $backendRoot -RedirectStandardOutput (Join-Path $backendRoot "$($service.Name).out.log") -RedirectStandardError (Join-Path $backendRoot "$($service.Name).err.log") -WindowStyle Hidden
@@ -109,7 +118,7 @@ Write-Output "Ambiente: Local aislado"
 Write-Output "Firebase Auth Emulator: http://127.0.0.1:$FirebaseAuthPort"
 Write-Output "Firebase Emulator UI: http://127.0.0.1:$FirebaseUiPort"
 Write-Output "Frontend: http://127.0.0.1:4173"
-Write-Output "APIs: 8000, 8002, 8004, 8006, 8008"
+Write-Output "APIs: 8000, 8002, 8004, 8006, 8008, 8010, 8012"
 Write-Output "PostgreSQL: 127.0.0.1:$PostgresPort/erclave_local"
 Write-Output "Tenant: $localTenantId"
 Write-Output "Actor: $localActorId ($localEmail)"

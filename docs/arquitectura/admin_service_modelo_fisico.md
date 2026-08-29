@@ -118,6 +118,9 @@ El primer seed versionado define estos codigos de modulo:
 | `production` | `production-service` | Si |
 | `inventory` | `inventory-service` | Si |
 | `sales` | `sales-service` | Si; Clientes/Cotizaciones implementados solo en Local, resto `planned` |
+| `purchasing` | `purchasing-service` | Si; implementado solo en Local |
+| `maintenance` | `maintenance-service` | Si; correctivos implementados solo en Local |
+| `hr` | `hr-service` | Si; implementado en Local y QA |
 | `billing` | `billing-service` | No |
 | `provisioning` | `provisioning-service` | No |
 | `integrations` | `integration-service` | Si; `planned` hasta que exista runtime validado |

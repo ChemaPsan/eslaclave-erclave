@@ -26,11 +26,16 @@ def digest(payload, path=None):
     return hashlib.sha256(json.dumps({"body":payload.model_dump(mode="json") if payload else {},"path":path or {}},sort_keys=True,separators=(",",":")).encode()).hexdigest()
 
 @router.get("/warehouses",response_model=WarehouseListResponse)
-def warehouses(x_tenant_id: str|None=Header(None,alias="X-Tenant-Id"), q: str|None=None, repository: InventoryRepository=Depends(get_inventory_repository), _=Depends(require_inventory_access("inventory.warehouse.read"))): return WarehouseListResponse(data=repository.list_warehouses(tenant(x_tenant_id),q))
+def warehouses(x_tenant_id: str|None=Header(None,alias="X-Tenant-Id"), q: str|None=None, repository: InventoryRepository=Depends(get_inventory_repository), _=Depends(require_inventory_access(("inventory.warehouse.read","maintenance.material_request.read","maintenance.material_request.create")))): return WarehouseListResponse(data=repository.list_warehouses(tenant(x_tenant_id),q))
 @router.post("/warehouses",response_model=WarehouseResponse,status_code=201)
 def create_warehouse(payload: WarehouseCreate,x_tenant_id: str|None=Header(None,alias="X-Tenant-Id"),idempotency_key: str|None=Header(None,alias="Idempotency-Key"),repository: InventoryRepository=Depends(get_inventory_repository),access: AuthorizedContext=Depends(require_inventory_access("inventory.warehouse.create"))):
     result=repository.create_warehouse(tenant(x_tenant_id),payload,key(idempotency_key),digest(payload),access.actor_id)
     if not result: raise ErclaveError("warehouse_conflict","Warehouse code already exists.",status_code=409)
+    return WarehouseResponse(data=result)
+@router.get("/warehouses/{warehouse_id}",response_model=WarehouseResponse)
+def get_warehouse(warehouse_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access(("inventory.warehouse.read","purchasing.receipt.create","maintenance.material_request.create")))):
+    result=repository.get_warehouse(tenant(x_tenant_id),warehouse_id)
+    if not result:raise ErclaveError("warehouse_not_found","Warehouse not found.",status_code=404)
     return WarehouseResponse(data=result)
 @router.patch("/warehouses/{warehouse_id}",response_model=WarehouseResponse)
 def update_warehouse(warehouse_id:str,payload:WarehouseUpdate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access("inventory.warehouse.update"))):
@@ -39,7 +44,7 @@ def update_warehouse(warehouse_id:str,payload:WarehouseUpdate,x_tenant_id:str|No
     return WarehouseResponse(data=result)
 
 @router.get("/items",response_model=ItemListResponse)
-def items(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),q:str|None=None,use_in_recipe:bool|None=None,status:Status|None=None,repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access("inventory.item.read"))): return ItemListResponse(data=repository.list_items(tenant(x_tenant_id),q,use_in_recipe,status))
+def items(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),q:str|None=None,use_in_recipe:bool|None=None,status:Status|None=None,repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access(("inventory.item.read","production.product_service.create","production.product_service.update","sales.order.fulfill","maintenance.material_request.read","maintenance.material_request.create")))): return ItemListResponse(data=repository.list_items(tenant(x_tenant_id),q,use_in_recipe,status))
 @router.post("/items",response_model=ItemResponse,status_code=201)
 def create_item(payload:ItemCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),unit_catalog:UnitCatalogClient=Depends(get_unit_catalog_client),access:AuthorizedContext=Depends(require_inventory_access("inventory.item.create"))):
     resolved_tenant=tenant(x_tenant_id); unit_catalog.require_active(resolved_tenant,payload.base_unit,authorization)
@@ -47,7 +52,7 @@ def create_item(payload:ItemCreate,x_tenant_id:str|None=Header(None,alias="X-Ten
     if not result: raise ErclaveError("item_conflict","Item code or warehouse is invalid.",status_code=409)
     return ItemResponse(data=result)
 @router.get("/items/{item_id}",response_model=ItemResponse)
-def get_item(item_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access(("inventory.item.read","production.product_service.create","production.product_service.update","sales.order.fulfill")))):
+def get_item(item_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access(("inventory.item.read","production.product_service.create","production.product_service.update","sales.order.fulfill","maintenance.material_request.create")))):
     result=repository.get_item(tenant(x_tenant_id),item_id)
     if not result: raise ErclaveError("item_not_found","Item not found.",status_code=404)
     return ItemResponse(data=result)
@@ -87,14 +92,23 @@ def create_movement(payload:MovementCreate,x_tenant_id:str|None=Header(None,alia
     except ValueError as exc: raise ErclaveError(str(exc),"Movement violates inventory rules.",status_code=409) from exc
     if not result: raise ErclaveError("movement_reference_invalid","Item or warehouse was not found.",status_code=404)
     return MovementResponse(data=result)
+@router.post("/purchase-receipts",response_model=MovementResponse,status_code=201)
+def create_purchase_receipt_movement(payload:MovementCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),unit_catalog:UnitCatalogClient=Depends(get_unit_catalog_client),access:AuthorizedContext=Depends(require_inventory_access("purchasing.receipt.create"))):
+    if payload.movement_type!="entry" or payload.source.type!="purchase_order" or not payload.source.line_id or payload.destination_warehouse_id:
+        raise ErclaveError("purchase_receipt_payload_invalid","Purchasing receipts only accept purchase-order entries with an order line.",status_code=422)
+    unit_catalog.require_active(tenant(x_tenant_id),payload.unit,authorization)
+    try:result=repository.create_movement(tenant(x_tenant_id),payload,key(idempotency_key),digest(payload),access.actor_id)
+    except ValueError as exc:raise ErclaveError(str(exc),"Purchase receipt violates inventory rules.",status_code=409) from exc
+    if not result:raise ErclaveError("purchase_receipt_reference_invalid","Item or warehouse was not found.",status_code=404)
+    return MovementResponse(data=result)
 @router.get("/finished-goods-receipts",response_model=FinishedGoodsReceiptListResponse)
-def finished_goods_receipts(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access("inventory.movement.read"))):
+def finished_goods_receipts(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access("inventory.finished_goods_receipt.read"))):
     return FinishedGoodsReceiptListResponse(data=repository.list_finished_goods_receipts(tenant(x_tenant_id)))
 @router.post("/finished-goods-receipts",response_model=FinishedGoodsReceiptResponse,status_code=201)
-def create_finished_goods_receipt(payload:FinishedGoodsReceiptCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),production:ProductionOrderClient=Depends(get_production_order_client),access:AuthorizedContext=Depends(require_inventory_access("inventory.movement.create"))):
-    resolved_tenant=tenant(x_tenant_id);order=production.get_order(resolved_tenant,payload.production_order_id,authorization)
+def create_finished_goods_receipt(payload:FinishedGoodsReceiptCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),production:ProductionOrderClient=Depends(get_production_order_client),access:AuthorizedContext=Depends(require_inventory_access("inventory.finished_goods_receipt.receive"))):
+    resolved_tenant=tenant(x_tenant_id);candidate=production.get_finished_goods_candidate(resolved_tenant,payload.production_order_id,authorization)
+    order=candidate.get("order") or {};product=candidate.get("product") or {}
     if order.get("status")!="completed":raise ErclaveError("production_order_not_completed","Only a completed production order can be received.",status_code=409)
-    product=production.get_product(resolved_tenant,order.get("product_service_id"),authorization)
     if product.get("type")!="product" or product.get("status")!="active" or not product.get("inventory_item_id"):
         raise ErclaveError("finished_good_mapping_required","The production product must be active and linked to a finished-goods inventory item.",status_code=409)
     try:result=repository.create_finished_goods_receipt(resolved_tenant,payload,order,product,key(idempotency_key),digest(payload),access.actor_id)
@@ -129,24 +143,24 @@ def balances(
 def kardex(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),inventory_item_id:str|None=None,warehouse_id:str|None=None,repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access("inventory.kardex.read"))): return MovementListResponse(data=repository.list_movements(tenant(x_tenant_id),inventory_item_id,warehouse_id))
 
 @router.post("/availability-checks",response_model=AvailabilityCheckResponse)
-def availability_check(payload:AvailabilityCheckRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access(("production.order.validate","production.order.create")))):
+def availability_check(payload:AvailabilityCheckRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access(("production.order.validate","production.order.release")))):
     key(idempotency_key)
     return AvailabilityCheckResponse(data=repository.check_availability(tenant(x_tenant_id),payload))
 
 @router.post("/reservation-requests",response_model=ReservationResponse,status_code=201)
-def create_reservation(payload:ReservationCreateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access(("production.order.create","sales.order.fulfill")))):
+def create_reservation(payload:ReservationCreateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access(("production.order.release","sales.order.fulfill","maintenance.material_request.create")))):
     try:result=repository.create_reservation(tenant(x_tenant_id),payload,key(idempotency_key),digest(payload),access.actor_id)
     except ValueError as exc:raise ErclaveError(str(exc),"Inventory could not reserve the requested material.",status_code=409) from exc
     return ReservationResponse(data=result)
 
 @router.post("/reservations/{reservation_id}/release",response_model=ReservationResponse)
-def release_reservation(reservation_id:str,payload:ReservationActionRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access(("production.order.status.update","sales.order.cancel")))):
+def release_reservation(reservation_id:str,payload:ReservationActionRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access(("production.order.cancel","sales.order.cancel","maintenance.material_request.cancel")))):
     result=repository.release_reservation(tenant(x_tenant_id),reservation_id,payload.reason,key(idempotency_key),digest(payload,{"id":reservation_id}),access.actor_id)
     if not result:raise ErclaveError("reservation_not_found","Reservation not found.",status_code=404)
     return ReservationResponse(data=result)
 
 @router.post("/reservations/{reservation_id}/consume",response_model=MovementResponse,status_code=201)
-def consume_reservation(reservation_id:str,payload:ReservationActionRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access(("production.order.status.update","sales.delivery.confirm")))):
+def consume_reservation(reservation_id:str,payload:ReservationActionRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access(("production.order.start","production.order.resume","sales.delivery.confirm","maintenance.order.resolve")))):
     try:result=repository.consume_reservation(tenant(x_tenant_id),reservation_id,payload.reason,key(idempotency_key),digest(payload,{"id":reservation_id}),access.actor_id,payload.quantity)
     except ValueError as exc:raise ErclaveError(str(exc),"Reservation cannot be consumed.",status_code=409) from exc
     if not result:raise ErclaveError("reservation_not_found","Reservation not found.",status_code=404)

@@ -155,6 +155,7 @@ class RecipeStageInput(BaseModel):
 class RecipeVersionPayload(UnitCodeMixin, BaseModel):
     base_quantity: float = Field(gt=0)
     base_unit: str = Field(min_length=1, max_length=40)
+    suggested_duration_days: int = Field(default=1, ge=1, le=365)
     change_reason: str | None = None
     resources: list[RecipeResourceInput] = Field(default_factory=list)
     stages: list[RecipeStageInput] = Field(default_factory=list)
@@ -218,6 +219,7 @@ class RecipeVersionRead(BaseModel):
     status: RecipeVersionStatus
     base_quantity: float
     base_unit: str
+    suggested_duration_days: int = 1
     standard_cost: float
     change_reason: str | None = None
     approved_at: datetime | None = None
@@ -307,6 +309,13 @@ class MachineResponse(BaseModel):
 class MachineListResponse(BaseModel):
     data: list[MachineRead]
 
+class MaintenanceMachineCommand(BaseModel):
+    maintenance_order_id: str = Field(min_length=1,max_length=40)
+    production_order_id: str | None = Field(default=None,max_length=40)
+
+class MaintenanceMachineCommandResponse(BaseModel):
+    data: dict
+
 
 class ResourceAvailabilityInput(BaseModel):
     resource_ref_id: str
@@ -324,6 +333,23 @@ class ResourceValidationRequest(UnitCodeMixin, BaseModel):
     quantity: float = Field(gt=0)
     unit: str = Field(min_length=1, max_length=40)
     planned_for: date | None = None
+    planned_start_date: date | None = None
+    planned_duration_days: int = Field(default=1, ge=1, le=365)
+
+    @model_validator(mode="after")
+    def consistent_planning_start(self):
+        if self.planned_for and self.planned_start_date and self.planned_for!=self.planned_start_date:
+            raise ValueError("planning_start_dates_must_match")
+        return self
+
+
+class ResourceDailyAllocation(BaseModel):
+    planned_date: date
+    gross_capacity: float
+    committed_quantity: float
+    available_quantity: float
+    allocated_quantity: float
+    remaining_capacity: float
 
 
 class ResourceValidationRow(BaseModel):
@@ -340,6 +366,7 @@ class ResourceValidationRow(BaseModel):
     ok: bool
     blocker_code: str | None = None
     allocations: list[dict] = Field(default_factory=list)
+    daily_allocations: list[ResourceDailyAllocation] = Field(default_factory=list)
 
 
 class ResourceValidationRead(BaseModel):
@@ -348,6 +375,10 @@ class ResourceValidationRead(BaseModel):
     unit: str
     can_release: bool
     planned_cost: float
+    planned_start_date: date
+    planned_end_date: date
+    planned_duration_days: int
+    minimum_duration_days: int
     validated_at: datetime
     rows: list[ResourceValidationRow]
     blockers: list[str]
@@ -458,6 +489,8 @@ class ProductionOrderRead(BaseModel):
     priority: Literal["low", "medium", "high"]
     required_at: datetime | None = None
     planned_start_at: datetime | None = None
+    planned_end_date: date | None = None
+    planned_duration_days: int = 1
     actual_start_at: datetime | None = None
     actual_end_at: datetime | None = None
     responsible_name: str
@@ -480,6 +513,40 @@ class ProductionOrderResponse(BaseModel):
 
 class ProductionOrderListResponse(BaseModel):
     data: list[ProductionOrderRead]
+    page: Page = Field(default_factory=Page)
+
+
+class FinishedGoodsOrderProjection(BaseModel):
+    id: str
+    code: str
+    product_service_id: str
+    quantity: float
+    unit: str
+    status: Literal["completed"]
+    unit_cost: float
+
+
+class FinishedGoodsProductProjection(BaseModel):
+    id: str
+    code: str
+    name: str
+    type: Literal["product"]
+    status: ProductServiceStatus
+    base_unit: str
+    inventory_item_id: str | None = None
+
+
+class FinishedGoodsCandidateRead(BaseModel):
+    order: FinishedGoodsOrderProjection
+    product: FinishedGoodsProductProjection
+
+
+class FinishedGoodsCandidateResponse(BaseModel):
+    data: FinishedGoodsCandidateRead
+
+
+class FinishedGoodsCandidateListResponse(BaseModel):
+    data: list[FinishedGoodsCandidateRead]
     page: Page = Field(default_factory=Page)
 
 

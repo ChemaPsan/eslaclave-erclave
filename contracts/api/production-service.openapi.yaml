@@ -227,7 +227,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RecipeResponse'
         '422':
-          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery must be active and linked to an active HR area.
+          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery may be active or under maintenance but must exist and not be inactive.
           content:
             application/json:
               schema:
@@ -276,7 +276,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RecipeVersionResponse'
         '422':
-          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery must be active and linked to an active HR area.
+          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery may be active or under maintenance but must exist and not be inactive.
           content:
             application/json:
               schema:
@@ -311,7 +311,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RecipeVersionResponse'
         '422':
-          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery must be active and linked to an active HR area.
+          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery may be active or under maintenance but must exist and not be inactive.
           content:
             application/json:
               schema:
@@ -445,9 +445,9 @@ paths:
     post:
       tags: [Orders]
       operationId: createProductionOrder
-      summary: Create manual production order from approved recipe.
+      summary: Validate, reserve and release a manual production order from an approved recipe.
       x-required-module: production
-      x-permissions: [production.order.create]
+      x-permissions: [production.order.release]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -465,6 +465,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductionOrderResponse'
+  /v1/production/finished-goods-candidates:
+    get:
+      tags: [Orders]
+      operationId: listFinishedGoodsCandidates
+      summary: List the minimum completed-order projection needed for Inventory receipt.
+      x-required-module: production
+      x-permissions: [inventory.finished_goods_receipt.read, inventory.finished_goods_receipt.receive]
+      x-permission-mode: any
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Minimal finished-goods receipt candidates.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FinishedGoodsCandidateListResponse'}
+  /v1/production/finished-goods-candidates/{id}:
+    get:
+      tags: [Orders]
+      operationId: getFinishedGoodsCandidate
+      summary: Get one minimum completed-order projection for Inventory validation.
+      x-required-module: production
+      x-permissions: [inventory.finished_goods_receipt.read, inventory.finished_goods_receipt.receive]
+      x-permission-mode: any
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Minimal finished-goods receipt candidate.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FinishedGoodsCandidateResponse'}
+        '409': {$ref: '#/components/responses/Conflict'}
   /v1/production/order-requests:
     get:
       tags: [Orders]
@@ -529,7 +566,8 @@ paths:
       summary: Change production order status.
       description: All local transition, stage, reservation-snapshot and actual-usage preconditions are checked before any external Inventory effect. Materials are reserved when an order is released. The first transition from released or waiting_resources to in_progress consumes each reservation through Inventory, which records one immutable outbound movement in the warehouse that owned the reservation. Resuming from paused or returning from validation does not consume again. Completion requires every stage to be completed or skipped and never duplicates the material issue. Cancelling before start releases reservations; cancelling after start preserves the recorded physical issues.
       x-required-module: production
-      x-permissions: [production.order.status.update]
+      x-permissions: [production.order.release, production.order.wait_resources, production.order.start, production.order.pause, production.order.resume, production.order.send_to_validation, production.order.complete, production.order.cancel]
+      x-permission-mode: by-requested-transition
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -584,7 +622,8 @@ paths:
       summary: Update order stage.
       description: Starting a stage requires its production order to already be in_progress. The client must first change the order status so Inventory can confirm all material issues; this endpoint never bypasses that rule.
       x-required-module: production
-      x-permissions: [production.order_stage.update]
+      x-permissions: [production.order_stage.reset, production.order_stage.update, production.order_stage.complete, production.order_stage.block, production.order_stage.skip]
+      x-permission-mode: by-requested-status
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -650,6 +689,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/MachineResponse'
   /v1/production/machines/{machine_id}:
+    get:
+      tags: [Machines]
+      operationId: getMachine
+      summary: Get a tenant-owned machine for Production or Maintenance validation.
+      x-required-module: production
+      x-permissions: [production.machine.read, maintenance.order.create]
+      x-permission-mode: any
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: machine_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Machine, content: { application/json: { schema: { $ref: '#/components/schemas/MachineResponse' } } } }
     patch:
       tags: [Machines]
       operationId: updateMachine
@@ -677,6 +731,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MachineResponse'
+  /v1/production/machines/{machine_id}/maintenance-block:
+    post:
+      tags: [Machines]
+      operationId: blockMachineForMaintenance
+      summary: Mark a machine in maintenance and pause an eligible linked Production order.
+      x-required-module: production
+      x-permissions: [maintenance.order.request, maintenance.order.reopen]
+      x-permission-mode: any
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: machine_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MaintenanceMachineCommand' } } } }
+      responses: { '200': { description: Machine blocked and Production order left waiting or paused. } }
+  /v1/production/machines/{machine_id}/maintenance-release:
+    post:
+      tags: [Machines]
+      operationId: releaseMachineFromMaintenance
+      summary: Return a maintained machine to active without automatically resuming Production.
+      x-required-module: production
+      x-permissions: [maintenance.order.resolve, maintenance.order.cancel]
+      x-permission-mode: any
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: machine_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MaintenanceMachineCommand' } } } }
+      responses: { '200': { description: Machine released; Production remains paused or waiting. } }
 components:
   securitySchemes:
     bearerAuth:
@@ -948,6 +1036,7 @@ components:
           type: string
         name:
           type: string
+        suggested_duration_days: {type: integer, minimum: 1, maximum: 365, default: 1}
     RecipeVersion:
       type: object
       properties:
@@ -964,6 +1053,7 @@ components:
           type: number
         base_unit:
           type: string
+        suggested_duration_days: {type: integer, minimum: 1, maximum: 365, default: 1}
         standard_cost:
           type: number
     RecipeVersionResponse:
@@ -979,6 +1069,7 @@ components:
           type: number
         base_unit:
           type: string
+        suggested_duration_days: {type: integer, minimum: 1, maximum: 365, default: 1}
         change_reason:
           type: string
         resources:
@@ -1059,6 +1150,8 @@ components:
         unit:
           type: string
         planned_for: {type: [string, 'null'], format: date}
+        planned_start_date: {type: [string, 'null'], format: date}
+        planned_duration_days: {type: integer, minimum: 1, maximum: 365, default: 1}
     ResourceValidationResponse:
       type: object
       properties:
@@ -1072,6 +1165,10 @@ components:
               items:
                 type: string
             planned_cost: {type: number}
+            planned_start_date: {type: string, format: date}
+            planned_end_date: {type: string, format: date}
+            planned_duration_days: {type: integer, minimum: 1, maximum: 365}
+            minimum_duration_days: {type: integer, minimum: 1, maximum: 365}
             validated_at: {type: string, format: date-time}
             rows:
               type: array
@@ -1103,6 +1200,9 @@ components:
         recipe_id: {type: string}
         priority: {type: string, enum: [low, medium, high]}
         required_at: {type: string, format: date-time}
+        planned_start_at: {type: string, format: date-time}
+        planned_end_date: {type: string, format: date}
+        planned_duration_days: {type: integer, minimum: 1, maximum: 365}
         responsible_name: {type: string}
         responsible_worker_id: {type: string, description: External HR worker reference retained with the name snapshot.}
         planned_cost: {type: number}
@@ -1130,6 +1230,45 @@ components:
             $ref: '#/components/schemas/ProductionOrder'
         page:
           $ref: '#/components/schemas/Page'
+    FinishedGoodsOrderProjection:
+      type: object
+      required: [id, code, product_service_id, quantity, unit, status, unit_cost]
+      properties:
+        id: {type: string}
+        code: {type: string}
+        product_service_id: {type: string}
+        quantity: {type: number}
+        unit: {type: string}
+        status: {type: string, const: completed}
+        unit_cost: {type: number, minimum: 0}
+    FinishedGoodsProductProjection:
+      type: object
+      required: [id, code, name, type, status, base_unit]
+      properties:
+        id: {type: string}
+        code: {type: string}
+        name: {type: string}
+        type: {type: string, const: product}
+        status: {type: string, enum: [active, inactive, pending_approval]}
+        base_unit: {type: string}
+        inventory_item_id: {type: [string, 'null']}
+    FinishedGoodsCandidate:
+      type: object
+      required: [order, product]
+      properties:
+        order: {$ref: '#/components/schemas/FinishedGoodsOrderProjection'}
+        product: {$ref: '#/components/schemas/FinishedGoodsProductProjection'}
+    FinishedGoodsCandidateResponse:
+      type: object
+      required: [data]
+      properties:
+        data: {$ref: '#/components/schemas/FinishedGoodsCandidate'}
+    FinishedGoodsCandidateListResponse:
+      type: object
+      required: [data]
+      properties:
+        data: {type: array, items: {$ref: '#/components/schemas/FinishedGoodsCandidate'}}
+        page: {$ref: '#/components/schemas/Page'}
     ProductionOrderCreateRequest:
       type: object
       required: [recipe_version_id, quantity, unit, responsible_worker_id, stage_assignments]
@@ -1144,6 +1283,8 @@ components:
         unit:
           type: string
         planned_for: {type: [string, 'null'], format: date}
+        planned_start_date: {type: [string, 'null'], format: date}
+        planned_duration_days: {type: integer, minimum: 1, maximum: 365, default: 1}
         planned_start_at:
           type: string
           format: date-time
@@ -1408,3 +1549,9 @@ components:
           items:
             type: object
             additionalProperties: true
+    MaintenanceMachineCommand:
+      type: object
+      required: [maintenance_order_id]
+      properties:
+        maintenance_order_id: { type: string }
+        production_order_id: { type: [string, 'null'] }

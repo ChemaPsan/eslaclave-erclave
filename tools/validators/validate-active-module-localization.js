@@ -1,14 +1,23 @@
 const vm = require("vm");
 const { fail, ok, readText } = require("./shared");
 
-const activeModuleIds = ["produccion", "almacenes", "ventas", "administracion"];
+const activeModuleIds = ["produccion", "almacenes", "ventas", "compras", "mantenimiento", "recursos-humanos", "administracion"];
 
 function loadModules() {
   const source = readText("frontend/data/modules.js");
   const transformed = `${source
     .replace("export const modules =", "const modules =")
-    .replace("export const erpSubmoduleCatalog =", "const erpSubmoduleCatalog =")}\nmodules;`;
+    .replace("export const erpSubmoduleCatalog =", "const erpSubmoduleCatalog =")}\n({ modules, erpSubmoduleCatalog });`;
   return vm.runInNewContext(transformed, {}, { filename: "frontend/data/modules.js" });
+}
+
+function slugify(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 function isBlank(value) {
@@ -51,7 +60,7 @@ function validateTable(module, errors) {
   }
 }
 
-const modules = loadModules();
+const { modules, erpSubmoduleCatalog } = loadModules();
 const errors = [];
 
 for (const id of activeModuleIds) {
@@ -74,6 +83,23 @@ for (const id of activeModuleIds) {
   validateNestedRows(module, "form", "formEn", errors);
   validateNestedRows(module, "records", "recordsEn", errors);
   validateTable(module, errors);
+  for (const [name, detail, explicitId] of module.submodules || []) {
+    const submoduleId = explicitId || slugify(name);
+    const localized = erpSubmoduleCatalog[module.id]?.[submoduleId];
+    if (!localized) {
+      errors.push(`${id}: missing bilingual submodule catalog entry for ${submoduleId}.`);
+      continue;
+    }
+    if (isBlank(localized.enName) || isBlank(localized.enDetail)) {
+      errors.push(`${id}/${submoduleId}: enName and enDetail are required.`);
+    }
+    if (!Array.isArray(localized.focus?.es) || !Array.isArray(localized.focus?.en) || localized.focus.es.length !== localized.focus.en.length) {
+      errors.push(`${id}/${submoduleId}: focus.es/focus.en must be mirrored arrays.`);
+    }
+    if (isBlank(name) || isBlank(detail)) {
+      errors.push(`${id}/${submoduleId}: Spanish name and detail are required in module metadata.`);
+    }
+  }
 }
 
 if (errors.length) {

@@ -30,10 +30,10 @@ class PermissionSeed:
 MODULE_LABELS = {
     "admin": ("Administracion", "Administration"), "production": ("Produccion", "Production"),
     "hr": ("Recursos Humanos", "Human Resources"), "inventory": ("Almacenes", "Inventory"),
-    "sales": ("Ventas", "Sales"), "billing": ("Suscripcion", "Subscription"),
+    "sales": ("Ventas", "Sales"), "purchasing": ("Compras", "Purchasing"), "maintenance": ("Mantenimiento", "Maintenance"), "billing": ("Suscripcion", "Subscription"),
     "integrations": ("Integraciones", "Integrations"),
 }
-MODULE_ORDER = {"admin": 10, "production": 20, "hr": 25, "inventory": 30, "sales": 40, "billing": 50, "integrations": 70}
+MODULE_ORDER = {"admin": 10, "production": 20, "hr": 25, "inventory": 30, "sales": 40, "purchasing": 45, "maintenance": 47, "billing": 50, "integrations": 70}
 RESOURCE_LABELS = {
     "business_unit": ("unidades de negocio", "business units"), "entitlement": ("modulos del tenant", "tenant modules"),
     "role": ("roles", "roles"), "role.permissions": ("permisos de roles", "role permissions"),
@@ -44,7 +44,10 @@ RESOURCE_LABELS = {
     "recipe": ("recetas", "recipes"), "availability": ("disponibilidad", "availability"), "balance": ("inventario", "inventory balances"),
     "item": ("articulos", "items"), "kardex": ("kardex", "kardex"), "location": ("ubicaciones", "locations"),
     "movement": ("movimientos", "movements"), "reservation": ("reservas", "reservations"), "warehouse": ("almacenes", "warehouses"),
+    "finished_goods_receipt": ("recepciones de producto terminado", "finished-goods receipts"),
     "customer": ("clientes", "customers"), "delivery": ("entregas", "deliveries"), "quote": ("cotizaciones", "quotes"),
+    "supplier": ("proveedores", "suppliers"), "requisition": ("requisiciones", "requisitions"), "receipt": ("recepciones", "receipts"),
+    "time": ("tiempos de mantenimiento", "maintenance time"), "material_request": ("solicitudes de refacciones", "spare-parts requests"), "report": ("reportes", "reports"),
     "catalog": ("catalogos", "catalogs"),
     "return": ("devoluciones", "returns"), "subscription": ("suscripciones", "subscriptions"),
     "api_client": ("clientes API", "API clients"), "scope": ("alcances de integracion", "integration scopes"), "usage": ("uso de integraciones", "integration usage"),
@@ -55,8 +58,12 @@ ACTION_LABELS = {
     "manage": ("Administrar", "Manage"), "approve": ("Aprobar", "Approve"), "submit": ("Enviar", "Submit"),
     "obsolete": ("Marcar obsoletas", "Mark obsolete"), "validate": ("Validar", "Validate"), "reverse": ("Revertir", "Reverse"),
     "release": ("Liberar", "Release"), "fulfill": ("Surtir", "Fulfill"), "expire": ("Vencer", "Expire"),
-    "cancel": ("Cancelar", "Cancel"), "suspend": ("Suspender", "Suspend"), "reactivate": ("Reactivar", "Reactivate"),
-    "confirm": ("Confirmar", "Confirm"),
+    "cancel": ("Cancelar", "Cancel"), "transition": ("Cambiar estado de", "Transition"), "resolve": ("Resolver", "Resolve"), "close": ("Cerrar", "Close"), "assign": ("Asignar", "Assign"), "suspend": ("Suspender", "Suspend"), "reactivate": ("Reactivar", "Reactivate"),
+    "confirm": ("Confirmar", "Confirm"), "reject": ("Rechazar", "Reject"), "issue": ("Emitir", "Issue"), "reconcile": ("Reconciliar", "Reconcile"),
+    "request": ("Solicitar", "Request"), "start": ("Iniciar", "Start"), "pause": ("Pausar", "Pause"), "resume": ("Reanudar", "Resume"),
+    "complete": ("Finalizar", "Complete"), "wait_resources": ("Declarar espera de recursos en", "Mark resource wait for"),
+    "wait_for_parts": ("Declarar espera de refacciones en", "Mark parts wait for"), "send_to_validation": ("Enviar a validacion", "Send to validation"),
+    "reset": ("Reiniciar", "Reset"), "block": ("Bloquear", "Block"), "skip": ("Omitir", "Skip"), "receive": ("Recibir", "Receive"),
     "rotate_secret": ("Rotar secreto de", "Rotate secret for"), "check": ("Consultar", "Check"),
 }
 ACTION_ORDER = {"read": 10, "list": 10, "create": 20, "update": 30, "submit": 40, "approve": 50, "confirm": 52, "validate": 55, "manage": 60, "disable": 70, "delete": 90}

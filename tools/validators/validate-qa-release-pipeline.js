@@ -174,6 +174,16 @@ if (!errors.length) {
   const deployerIdentity = identityPlan.serviceAccounts.find(
     (account) => account.accountId === "erclave-github-deployer-qa"
   );
+  const adminIdentity = identityPlan.serviceAccounts.find(
+    (account) => account.accountId === "erclave-admin-qa"
+  );
+  if (!adminIdentity?.projectRoles?.includes("roles/firebaseauth.admin")) {
+    errors.push("QA Admin runtime identity must include roles/firebaseauth.admin for Backoffice identity lifecycle.");
+  }
+  const releaseWorkflow = readText(".github/workflows/qa-release.yml");
+  if (!releaseWorkflow.includes("ERCLAVE_FIREBASE_WEB_API_KEY=${{ vars.QA_FIREBASE_API_KEY }}")) {
+    errors.push("QA Admin runtime must receive the public Firebase Web API key so tenant invitations send email.");
+  }
   if (!deployerIdentity?.projectRoles?.includes("roles/firebasehosting.admin")) {
     errors.push("QA deployer identity must include roles/firebasehosting.admin for the gated frontend release.");
   }

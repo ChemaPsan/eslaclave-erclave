@@ -15,6 +15,8 @@ from .schemas import (
     ProductServiceResponse,
     ProductServiceUpdateRequest,
     FinishedGoodLinkRequest, FinishedGoodLinkRead, FinishedGoodLinkResponse,
+    FinishedGoodsCandidateListResponse, FinishedGoodsCandidateRead, FinishedGoodsCandidateResponse,
+    FinishedGoodsOrderProjection, FinishedGoodsProductProjection,
     RecipeApprovalRequest,
     RecipeCreateRequest,
     RecipeListResponse,
@@ -23,7 +25,7 @@ from .schemas import (
     RecipeVersionResponse,
     RecipeVersionUpdateRequest,
     StatusChangeRequest,
-    MachineCreateRequest, MachineListResponse, MachineResponse, MachineUpdateRequest,
+    MachineCreateRequest, MachineListResponse, MachineResponse, MachineUpdateRequest, MaintenanceMachineCommand, MaintenanceMachineCommandResponse,
     OrderStageResponse, OrderStageUpdateRequest, ProductionOrderCreateRequest,
     ProductionOrderListResponse, ProductionOrderResponse, ProductionOrderStatusRequest,
     ProductionSalesRequestCreate, ProductionSalesRequestListResponse, ProductionSalesRequestResponse,
@@ -33,6 +35,71 @@ from .schemas import (
 
 
 router = APIRouter(prefix="/v1/production")
+
+ORDER_ACTION_PERMISSIONS = (
+    "production.order.release", "production.order.wait_resources", "production.order.start",
+    "production.order.pause", "production.order.resume", "production.order.send_to_validation",
+    "production.order.complete", "production.order.cancel",
+)
+ORDER_STAGE_ACTION_PERMISSIONS = (
+    "production.order_stage.reset", "production.order_stage.update", "production.order_stage.complete",
+    "production.order_stage.block", "production.order_stage.skip",
+)
+
+def order_action_permission(current_status: str, target_status: str) -> str:
+    if target_status == "released": return "production.order.release"
+    if target_status == "waiting_resources": return "production.order.wait_resources"
+    if target_status == "in_progress": return "production.order.start" if current_status in {"released", "waiting_resources"} else "production.order.resume"
+    if target_status == "paused": return "production.order.pause"
+    if target_status == "in_validation": return "production.order.send_to_validation"
+    if target_status == "completed": return "production.order.complete"
+    if target_status == "cancelled": return "production.order.cancel"
+    raise ErclaveError("invalid_order_transition", "Production order status transition is invalid.", status_code=409)
+
+def order_stage_action_permission(target_status: str) -> str:
+    return {"pending":"production.order_stage.reset","in_progress":"production.order_stage.update","completed":"production.order_stage.complete","blocked":"production.order_stage.block","skipped":"production.order_stage.skip"}[target_status]
+
+def require_order_action_access(access: AuthorizedContext, target_status: str) -> None:
+    if target_status == "in_progress":
+        allowed = {"production.order.start", "production.order.resume"}
+        if not allowed.intersection(access.permissions):
+            raise ErclaveError(
+                "permission_denied",
+                "Authenticated actor does not have a permission that can enter production.",
+                status_code=403,
+                details={"permissions_any": sorted(allowed)},
+            )
+        return
+    access.require(order_action_permission("", target_status))
+
+def finished_goods_candidate(repository: ProductionRepository, tenant_id: str, order) -> FinishedGoodsCandidateRead | None:
+    product = repository.get_product_service(tenant_id, order.product_service_id)
+    if product is None:
+        raise ErclaveError("product_service_not_found", "Production product was not found.", status_code=404)
+    if product.type != "product":
+        return None
+    total_cost = order.actual_cost if order.actual_cost is not None else order.planned_cost
+    unit_cost = float(total_cost or 0) / float(order.quantity) if order.quantity else 0
+    return FinishedGoodsCandidateRead(
+        order=FinishedGoodsOrderProjection(
+            id=order.id,
+            code=order.code,
+            product_service_id=order.product_service_id,
+            quantity=order.quantity,
+            unit=order.unit,
+            status="completed",
+            unit_cost=unit_cost,
+        ),
+        product=FinishedGoodsProductProjection(
+            id=product.id,
+            code=product.code,
+            name=product.name,
+            type=product.type,
+            status=product.status,
+            base_unit=product.base_unit,
+            inventory_item_id=product.inventory_item_id,
+        ),
+    )
 
 class HrWorkerClient:
     def __init__(self,settings):self.base_url=settings.hr_service_url.rstrip("/");self.timeout=settings.authorization_timeout_seconds
@@ -60,7 +127,7 @@ def get_unit_catalog_client(settings:Settings=Depends(get_settings)):return Unit
 RECIPE_NORMALIZATION_ERRORS = {
     "active_product_service_required": "Recipe requires an active product or service.",
     "recipe_unit_must_match_product_base_unit": "Recipe base unit must match the product or service base unit.",
-    "machine_resource_invalid": "Recipe machinery must be active and linked to an active Human Resources area.",
+    "machine_resource_invalid": "Recipe machinery must exist and must not be inactive.",
     "timed_resource_unit_must_be_minute": "Labor and machinery resources must be measured in minutes.",
     "resource_type_not_authoritative": "Recipe resources must come from Inventory, Human Resources, or Machinery catalogs.",
 }
@@ -259,7 +326,8 @@ def create_product_service(
 def create_and_link_finished_good(product_service_id: str, payload: FinishedGoodLinkRequest,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: ProductionRepository = Depends(get_production_repository),
-    _access: AuthorizedContext = Depends(require_production_access("production.product_service.update")), authorities: ResourceAuthorityClient = Depends(get_resource_authority_client)) -> FinishedGoodLinkResponse:
+    access: AuthorizedContext = Depends(require_production_access(("production.product_service.update","inventory.item.create"))), authorities: ResourceAuthorityClient = Depends(get_resource_authority_client)) -> FinishedGoodLinkResponse:
+    access.require("production.product_service.update");access.require("inventory.item.create")
     tenant_id=require_tenant_id(x_tenant_id); command_key=require_idempotency_key(idempotency_key)
     product=repository.get_product_service(tenant_id,product_service_id)
     if product is None: raise ErclaveError("product_service_not_found","Product or service not found.",status_code=404)
@@ -466,7 +534,7 @@ def approve_recipe_version(version_id: str, payload: RecipeApprovalRequest, x_te
     key = require_idempotency_key(idempotency_key)
     tenant_id=require_tenant_id(x_tenant_id);version=repository.get_recipe_version(tenant_id,version_id)
     if version is None:raise ErclaveError("recipe_version_not_found","Recipe version not found.",status_code=404)
-    validation_payload=RecipeVersionUpdateRequest(base_quantity=version.base_quantity,base_unit=version.base_unit,change_reason=version.change_reason,resources=[{"resource_type":item.resource_type,"resource_ref_id":item.resource_ref_id,"resource_code":item.resource_code,"resource_name":item.resource_name,"quantity":item.quantity,"unit":item.unit,"unit_cost":item.unit_cost,"sort_order":item.sort_order} for item in version.resources],stages=[{"labor_area_ref_id":item.labor_area_ref_id,"labor_area_name":item.labor_area_name or item.name,"name":item.name,"description":item.description,"expected_minutes":item.expected_minutes,"sort_order":item.sort_order,"weight_percent":item.weight_percent,"status":item.status} for item in version.stages])
+    validation_payload=RecipeVersionUpdateRequest(base_quantity=version.base_quantity,base_unit=version.base_unit,suggested_duration_days=version.suggested_duration_days,change_reason=version.change_reason,resources=[{"resource_type":item.resource_type,"resource_ref_id":item.resource_ref_id,"resource_code":item.resource_code,"resource_name":item.resource_name,"quantity":item.quantity,"unit":item.unit,"unit_cost":item.unit_cost,"sort_order":item.sort_order} for item in version.resources],stages=[{"labor_area_ref_id":item.labor_area_ref_id,"labor_area_name":item.labor_area_name or item.name,"name":item.name,"description":item.description,"expected_minutes":item.expected_minutes,"sort_order":item.sort_order,"weight_percent":item.weight_percent,"status":item.status} for item in version.stages])
     for code in {validation_payload.base_unit,*(item.unit for item in validation_payload.resources)}:unit_catalog.require_active(tenant_id,code,authorization)
     repository.normalize_recipe_payload(tenant_id,authorities.normalize_recipe(tenant_id,validation_payload,authorization),recipe_id=version.recipe_id)
     return _transition_version(version_id, "approve", tenant_id, repository, key, request_fingerprint(payload, {"version_id": version_id, "action": "approve"}), access.actor_id, payload.approval_notes, payload.effective_from)
@@ -481,6 +549,28 @@ def obsolete_recipe_version(version_id: str, x_tenant_id: str | None = Header(de
 @router.get("/machines", response_model=MachineListResponse)
 def list_machines(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),q:str|None=None,status_filter:str|None=Query(None,alias="status"),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access("production.machine.read"))):
     return MachineListResponse(data=repository.list_machines(require_tenant_id(x_tenant_id),q,status_filter))
+
+@router.get("/machines/{machine_id}",response_model=MachineResponse)
+def get_machine(machine_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access(("production.machine.read","maintenance.order.create")))):
+    value=repository.get_machine(require_tenant_id(x_tenant_id),machine_id)
+    if value is None:raise ErclaveError("machine_not_found","Machine not found.",status_code=404)
+    return MachineResponse(data=value)
+
+@router.post("/machines/{machine_id}/maintenance-block",response_model=MaintenanceMachineCommandResponse)
+def block_machine_for_maintenance(machine_id:str,payload:MaintenanceMachineCommand,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access(("maintenance.order.request","maintenance.order.reopen")))):
+    key=require_idempotency_key(idempotency_key)
+    try:value=repository.maintenance_machine_command(require_tenant_id(x_tenant_id),machine_id,payload,"block",key,request_fingerprint(payload,{"machine_id":machine_id}),access.actor_id)
+    except ValueError as exc:raise ErclaveError(str(exc),"Machine cannot be blocked for this maintenance order.",status_code=409) from exc
+    if value is None:raise ErclaveError("machine_not_found","Machine not found.",status_code=404)
+    return MaintenanceMachineCommandResponse(data=value)
+
+@router.post("/machines/{machine_id}/maintenance-release",response_model=MaintenanceMachineCommandResponse)
+def release_machine_from_maintenance(machine_id:str,payload:MaintenanceMachineCommand,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access(("maintenance.order.resolve","maintenance.order.cancel")))):
+    key=require_idempotency_key(idempotency_key)
+    try:value=repository.maintenance_machine_command(require_tenant_id(x_tenant_id),machine_id,payload,"release",key,request_fingerprint(payload,{"machine_id":machine_id}),access.actor_id)
+    except ValueError as exc:raise ErclaveError(str(exc),"Machine cannot be released for this maintenance order.",status_code=409) from exc
+    if value is None:raise ErclaveError("machine_not_found","Machine not found.",status_code=404)
+    return MaintenanceMachineCommandResponse(data=value)
 
 
 @router.post("/machines",response_model=MachineResponse,status_code=201)
@@ -514,6 +604,25 @@ def list_orders(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),limit:int=
     return ProductionOrderListResponse(data=repository.list_orders(require_tenant_id(x_tenant_id),limit,status_filter))
 
 
+@router.get("/finished-goods-candidates",response_model=FinishedGoodsCandidateListResponse)
+def list_finished_goods_candidates(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),limit:int=Query(50,ge=1,le=200),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access(("inventory.finished_goods_receipt.read","inventory.finished_goods_receipt.receive")))):
+    tenant_id=require_tenant_id(x_tenant_id)
+    orders=repository.list_orders(tenant_id,limit,"completed")
+    candidates=[finished_goods_candidate(repository,tenant_id,order) for order in orders]
+    return FinishedGoodsCandidateListResponse(data=[candidate for candidate in candidates if candidate is not None])
+
+
+@router.get("/finished-goods-candidates/{order_id}",response_model=FinishedGoodsCandidateResponse)
+def get_finished_goods_candidate(order_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access(("inventory.finished_goods_receipt.read","inventory.finished_goods_receipt.receive")))):
+    tenant_id=require_tenant_id(x_tenant_id)
+    order=repository.get_order(tenant_id,order_id)
+    if order is None:raise ErclaveError("production_order_not_found","Production order not found.",status_code=404)
+    if order.status!="completed":raise ErclaveError("production_order_not_completed","Only completed production orders are exposed for receipt.",status_code=409)
+    candidate=finished_goods_candidate(repository,tenant_id,order)
+    if candidate is None:raise ErclaveError("finished_good_product_required","Only product orders are eligible for finished-goods receipt.",status_code=409)
+    return FinishedGoodsCandidateResponse(data=candidate)
+
+
 @router.get("/order-requests",response_model=ProductionSalesRequestListResponse)
 def list_sales_order_requests(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),status_filter:str|None=Query(None,alias="status"),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access("production.order.read"))):
     return ProductionSalesRequestListResponse(data=repository.list_sales_order_requests(require_tenant_id(x_tenant_id),status_filter))
@@ -528,7 +637,7 @@ def create_sales_order_request(payload:ProductionSalesRequestCreate,x_tenant_id:
 
 
 @router.post("/orders",response_model=ProductionOrderResponse,status_code=201)
-def create_order(payload:ProductionOrderCreateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),hr_client:HrWorkerClient=Depends(get_hr_worker_client),authorities:ResourceAuthorityClient=Depends(get_resource_authority_client),access:AuthorizedContext=Depends(require_production_access("production.order.create"))):
+def create_order(payload:ProductionOrderCreateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),hr_client:HrWorkerClient=Depends(get_hr_worker_client),authorities:ResourceAuthorityClient=Depends(get_resource_authority_client),access:AuthorizedContext=Depends(require_production_access("production.order.release"))):
     key=require_idempotency_key(idempotency_key)
     tenant_id=require_tenant_id(x_tenant_id);eligible={item["id"]:item for item in hr_client.eligible(tenant_id,authorization)}
     worker=eligible.get(payload.responsible_worker_id)
@@ -544,6 +653,7 @@ def create_order(payload:ProductionOrderCreateRequest,x_tenant_id:str|None=Heade
     observations=authorities.observations(tenant_id,version,payload,authorization,key)
     preview=repository.preview_resources(tenant_id,payload,observations)
     if preview is None or not preview.can_release:raise ErclaveError("resources_unavailable","Order cannot be released because authoritative resources are unavailable.",status_code=422,details={"blockers":preview.blockers if preview else []})
+    if payload.required_at and payload.required_at.date()<preview.planned_end_date:raise ErclaveError("required_date_precedes_planned_end","Required date cannot precede the planned production end date.",status_code=422,details={"planned_end_date":str(preview.planned_end_date)})
     order_id=f"ord_{hashlib.sha256(f'{tenant_id}:{key}'.encode()).hexdigest()[:26]}";reservation_refs={};reserved=[]
     try:
         for row in preview.rows:
@@ -567,9 +677,13 @@ def get_order(order_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id")
 
 
 @router.patch("/orders/{order_id}/status",response_model=ProductionOrderResponse)
-def update_order_status(order_id:str,payload:ProductionOrderStatusRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),authorities:ResourceAuthorityClient=Depends(get_resource_authority_client),access:AuthorizedContext=Depends(require_production_access("production.order.status.update"))):
+def update_order_status(order_id:str,payload:ProductionOrderStatusRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),authorities:ResourceAuthorityClient=Depends(get_resource_authority_client),access:AuthorizedContext=Depends(require_production_access(ORDER_ACTION_PERMISSIONS))):
     key=require_idempotency_key(idempotency_key)
     tenant_id=require_tenant_id(x_tenant_id)
+    require_order_action_access(access,payload.status)
+    current=repository.get_order(tenant_id,order_id)
+    if current is None:raise ErclaveError("production_order_not_found","Production order not found.",status_code=404)
+    access.require(order_action_permission(current.status,payload.status))
     try:before=repository.preflight_order_status(tenant_id,order_id,payload.status)
     except ValueError as exc:raise ErclaveError(str(exc),"Production order status preconditions are not satisfied.",status_code=409) from exc
     if before is None:raise ErclaveError("production_order_not_found","Production order not found.",status_code=404)
@@ -603,8 +717,9 @@ def update_order_resource_actual(order_id:str,resource_id:str,payload:Production
 
 
 @router.patch("/order-stages/{stage_id}",response_model=OrderStageResponse)
-def update_order_stage(stage_id:str,payload:OrderStageUpdateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access("production.order_stage.update"))):
+def update_order_stage(stage_id:str,payload:OrderStageUpdateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access(ORDER_STAGE_ACTION_PERMISSIONS))):
     key=require_idempotency_key(idempotency_key)
+    access.require(order_stage_action_permission(payload.status))
     try: value=repository.update_order_stage(require_tenant_id(x_tenant_id),stage_id,payload,key,request_fingerprint(payload,{"stage_id":stage_id}),access.actor_id)
     except ValueError as exc: raise ErclaveError(str(exc),"Production order stage transition is invalid.",status_code=409) from exc
     if value is None: raise ErclaveError("production_order_stage_not_found","Production order stage not found.",status_code=404)

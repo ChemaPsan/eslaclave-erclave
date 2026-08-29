@@ -57,16 +57,16 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 | `admin-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | `production-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | Firebase Auth | Integrado | Login y sesion QA documentados |
-| Cloud SQL `erclave_qa` | Migrado | Revision documentada `20260805_0013` |
+| Cloud SQL `erclave_qa` | Migrado | Revision documentada `20260821_0023` |
 | Administracion | Real QA | Tenant, sesion, permisos, roles, entitlements y organizacion |
 | Productos y servicios | Real QA | API de Produccion desplegada |
 | Recetas y versiones | Real QA | Integracion publicada y documentada |
 | Ordenes de produccion | Real QA | API, snapshots, etapas y validacion observada persistidos; no reserva Inventario |
-| `inventory-service` | Activo QA | Servicio, contrato y Cloud SQL reales; catalogos sin carga funcional |
-| Schema `inventory` | Presente en QA | Catalogos documentados en cero registros |
-| `hr-service` | Activo QA | Servicio, contrato y entitlement estructural activos |
-| Schema `hr` | Presente en QA | Areas y puestos en cero registros |
-| Ventas | Prototipo local | No candidata a Produccion |
+| `inventory-service` | Activo QA | Revision `inventory-service-qa-00006-ceb`; servicio y Cloud SQL reales |
+| Schema `inventory` | Presente en QA | Migrado hasta `20260821_0023`; datos solo por UAT autorizada |
+| `hr-service` | Activo QA | Revision `hr-service-qa-00006-xey`; servicio y entitlement estructural activos |
+| Schema `hr` | Presente en QA | Migrado hasta `20260821_0023`; datos solo por UAT autorizada |
+| Ventas | Activo QA | Revision `sales-service-qa-00001-gez`; activacion efectiva depende del entitlement |
 | Compras, Gastos, Costos, Contabilidad y Reportes | Demo o futuro | Sin backend productivo certificado |
 | Infraestructura de Produccion | No confirmada | No hay evidencia documental de ambiente productivo desplegado |
 

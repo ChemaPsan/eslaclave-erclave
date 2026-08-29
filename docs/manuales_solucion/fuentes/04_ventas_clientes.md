@@ -1,8 +1,8 @@
 # Manual funcional de Ventas: codigos de negocio
 
 - Audiencia: ejecutivos y responsables comerciales
-- Alcance por ambiente: Local; no promovido a QA
-- Ultima revision: 2026-08-21
+- Alcance por ambiente: Local y QA
+- Ultima revision: 2026-08-23
 - Capacidades cubiertas: codigos de clientes, cotizaciones, pedidos y entregas
 
 ## Proposito

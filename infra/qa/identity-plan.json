@@ -10,7 +10,7 @@
     {
       "accountId": "erclave-admin-qa",
       "purpose": "Runtime identity for admin-service-qa",
-      "projectRoles": ["roles/cloudsql.client"],
+      "projectRoles": ["roles/cloudsql.client", "roles/firebaseauth.admin"],
       "secretAccess": ["erclave-database-url-qa"]
     },
     {

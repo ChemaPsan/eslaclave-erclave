@@ -8,9 +8,9 @@ class AreaCreate(BaseModel): code:str=Field(min_length=1,max_length=80);name:str
 class AreaUpdate(BaseModel): name:str|None=None;description:str|None=None;status:Status|None=None
 class AreaResponse(BaseModel): data:AreaRead
 class AreaListResponse(BaseModel): data:list[AreaRead]
-class RoleRead(BaseModel): id:str;labor_area_id:str;position:str;recipe_name:str;resource_quantity:int;minutes_per_resource:int;hourly_cost:float;intervenes_in_production:bool;status:Status
-class RoleCreate(BaseModel): labor_area_id:str;position:str=Field(min_length=1,max_length=160);recipe_name:str=Field(min_length=1,max_length=160);resource_quantity:int=Field(default=1,gt=0);minutes_per_resource:int=Field(default=480,gt=0);hourly_cost:float=Field(default=0,ge=0);intervenes_in_production:bool=False
-class RoleUpdate(BaseModel): labor_area_id:str|None=None;position:str|None=None;recipe_name:str|None=None;resource_quantity:int|None=Field(default=None,gt=0);minutes_per_resource:int|None=Field(default=None,gt=0);hourly_cost:float|None=Field(default=None,ge=0);intervenes_in_production:bool|None=None;status:Status|None=None
+class RoleRead(BaseModel): id:str;labor_area_id:str;position:str;recipe_name:str;resource_quantity:int;minutes_per_resource:int;hourly_cost:float;intervenes_in_production:bool;intervenes_in_maintenance:bool=False;status:Status
+class RoleCreate(BaseModel): labor_area_id:str;position:str=Field(min_length=1,max_length=160);recipe_name:str=Field(min_length=1,max_length=160);resource_quantity:int=Field(default=1,gt=0);minutes_per_resource:int=Field(default=480,gt=0);hourly_cost:float=Field(default=0,ge=0);intervenes_in_production:bool=False;intervenes_in_maintenance:bool=False
+class RoleUpdate(BaseModel): labor_area_id:str|None=None;position:str|None=None;recipe_name:str|None=None;resource_quantity:int|None=Field(default=None,gt=0);minutes_per_resource:int|None=Field(default=None,gt=0);hourly_cost:float|None=Field(default=None,ge=0);intervenes_in_production:bool|None=None;intervenes_in_maintenance:bool|None=None;status:Status|None=None
 class RoleResponse(BaseModel): data:RoleRead
 class RoleListResponse(BaseModel): data:list[RoleRead]
 
@@ -49,7 +49,7 @@ class WorkerUpdate(BaseModel):
     first_names:str|None=Field(default=None,min_length=1,max_length=120);first_last_name:str|None=Field(default=None,min_length=1,max_length=100);second_last_name:str|None=Field(default=None,max_length=100);labor_position_id:str|None=None;status:WorkerStatus|None=None
     personal_email:str|None=Field(default=None,max_length=254);phone:str|None=Field(default=None,max_length=30);nationality:str|None=Field(default=None,max_length=80);marital_status:str|None=Field(default=None,max_length=40);address:str|None=Field(default=None,max_length=500);emergency_contact_name:str|None=Field(default=None,max_length=200);emergency_contact_phone:str|None=Field(default=None,max_length=30);notes:str|None=Field(default=None,max_length=2000)
 class WorkerRead(WorkerBase):
-    id:str;status:WorkerStatus;full_name:str;position_name:str;labor_area_id:str;labor_area_name:str;intervenes_in_production:bool
+    id:str;status:WorkerStatus;full_name:str;position_name:str;labor_area_id:str;labor_area_name:str;intervenes_in_production:bool;intervenes_in_maintenance:bool=False
 class WorkerResponse(BaseModel):data:WorkerRead
 class WorkerListResponse(BaseModel):data:list[WorkerRead]
 

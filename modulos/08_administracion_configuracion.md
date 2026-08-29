@@ -148,11 +148,11 @@ Administracion tambien es propietaria de `document.template`: logo, color primar
 
 ### 8.1 Unidades de medida
 
-Estado: implementado en Local. El catalogo pertenece a Administracion, se aisla por tenant y se provisiona con 50 unidades UN/CEFACT Rec. 20. La tarjeta de Configuracion base abre una vista dedicada, sin extender indefinidamente el panel principal. Soporta consulta bilingue, alta de unidades propias, edicion e inactivacion; cada comando exige `Idempotency-Key`, conserva `X-Correlation-Id` y genera auditoria. Produccion e Inventarios resuelven `GET /v1/catalogs/units-of-measure/by-code/{code}`, validan el codigo activo y sus formularios usan seleccion en lugar de captura libre.
+Estado: implementado en Local y QA. El catalogo pertenece a Administracion, se aisla por tenant y se provisiona con 50 unidades UN/CEFACT Rec. 20. La tarjeta de Configuracion base abre una vista dedicada, sin extender indefinidamente el panel principal. Soporta consulta bilingue, alta de unidades propias, edicion e inactivacion; cada comando exige `Idempotency-Key`, conserva `X-Correlation-Id` y genera auditoria. Produccion e Inventarios resuelven `GET /v1/catalogs/units-of-measure/by-code/{code}`, validan el codigo activo y sus formularios usan seleccion en lugar de captura libre.
 
 ### 8.2 Folios y consecutivos
 
-Estado: implementado en Local. Cada tenant recibe configuraciones iniciales para productos, recetas, ordenes de produccion, maquinaria, almacenes, articulos, movimientos, areas, puestos, empleados, clientes, cotizaciones, pedidos y entregas.
+Estado: implementado en Local y QA. Cada tenant recibe configuraciones iniciales para productos, recetas, ordenes de produccion, maquinaria, almacenes, articulos, movimientos, areas, puestos, empleados, clientes, cotizaciones, pedidos y entregas.
 
 | Campo | Significado |
 |---|---|
@@ -215,7 +215,7 @@ Administración deberá permitir configurar dependencias como:
 
 ## 11.1 Gobierno de modulos por tenant
 
-Estado: implementado en Local.
+Estado: implementado en Local y QA.
 
 La disponibilidad de un modulo se resuelve en dos niveles que no pueden sustituirse entre si:
 
@@ -226,11 +226,15 @@ Un modulo es efectivo cuando `status = active` y `tenant_enabled = true`. El cat
 
 El catalogo declara dependencias efectivas. En el corte actual `sales` requiere `hr` y `production`: Backoffice, onboarding y Administracion rechazan activar Ventas si falta alguna, y rechazan apagar RH o Produccion mientras Ventas siga efectivo. La validacion se repite dentro de la transaccion que bloquea los entitlements del tenant para evitar combinaciones invalidas por concurrencia. Durante onboarding se insertan primero los modulos y despues se asignan al owner sus permisos, de modo que el primer `session/context` coincide con lo contratado.
 
+En ambientes con Firebase, Backoffice tambien coordina el ciclo de identidad del owner. La persistencia administrativa y la entrega/limpieza Firebase se informan como resultados separados: una invitacion puede quedar `pending` despues de crear el tenant, y una eliminacion confirmada puede devolver `firebase_identity_cleanup.status=pending` para reconciliacion. El runtime Admin necesita el rol minimo `roles/firebaseauth.admin`; ese rol administra identidades del proveedor, pero no concede membresias, modulos ni permisos ERClave.
+
 ---
 
 ## 12. Editor de permisos por rol
 
 El editor administra un rol a la vez y conserva personalizacion permiso por permiso. No incluye plantillas, presets ni seleccion automatica basada en el nombre del rol.
+
+CHG-236 incorpora en Local capacidades puntuales para cada transicion de Produccion y Mantenimiento y para recibir producto terminado. El catalogo las deriva de OpenAPI y las presenta como asignaciones independientes. Un permiso nuevo nace sin asignarse a roles existentes; el administrador decide que rol y, por herencia, que usuarios reciben cada autoridad.
 
 Flujo:
 

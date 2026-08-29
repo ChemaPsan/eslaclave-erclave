@@ -98,6 +98,26 @@ export function getSalesApiBaseUrl() {
   return runtimeBaseUrl;
 }
 
+export function getPurchasingApiBaseUrl() {
+  const runtimeBaseUrl = getRuntimeConfigValue("purchasingApiBaseUrl") || "http://127.0.0.1:8010";
+  if (isLocalPreviewHost()) {
+    const override = localStorage.getItem("erclave-purchasing-api-base-url") || "";
+    const localBaseUrl = getRuntimeConfigValue("localPurchasingApiBaseUrl");
+    return getSafeLocalBaseUrl(override || localBaseUrl || runtimeBaseUrl, "http://127.0.0.1:8010");
+  }
+  return runtimeBaseUrl;
+}
+
+export function getMaintenanceApiBaseUrl() {
+  const runtimeBaseUrl = getRuntimeConfigValue("maintenanceApiBaseUrl") || "http://127.0.0.1:8012";
+  if (isLocalPreviewHost()) {
+    const override = localStorage.getItem("erclave-maintenance-api-base-url") || "";
+    const localBaseUrl = getRuntimeConfigValue("localMaintenanceApiBaseUrl");
+    return getSafeLocalBaseUrl(override || localBaseUrl || runtimeBaseUrl, "http://127.0.0.1:8012");
+  }
+  return runtimeBaseUrl;
+}
+
 
 export function getDemoTenantId() {
   if (!isLocalPreviewHost()) return activeTenantId || getRuntimeConfigValue("tenantId");

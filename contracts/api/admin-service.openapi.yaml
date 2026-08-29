@@ -170,6 +170,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationError'
+        '502':
+          description: Firebase identity lifecycle is unavailable or not authorized before tenant persistence.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/backoffice/usage:
     get:
       tags: [Backoffice]
@@ -296,7 +302,7 @@ paths:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
-          description: Tenant deletion result.
+          description: Tenant deletion result. Firebase identity cleanup is reported independently as completed or pending.
           content: {application/json: {schema: {$ref: '#/components/schemas/BackofficeTenantDeleteResponse'}}}
         '404': {$ref: '#/components/responses/NotFound'}
   /v1/backoffice/tenants/{tenant_id}/entitlements/{module_code}:
@@ -974,7 +980,8 @@ paths:
       operationId: listUnitsOfMeasure
       summary: List the tenant unit-of-measure catalog.
       x-required-module: admin
-      x-permissions: [admin.unit.read]
+      x-permissions: [admin.unit.read, sales.quote.create, sales.quote.update]
+      x-permission-mode: any
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - name: include_inactive
@@ -1046,7 +1053,7 @@ paths:
       operationId: allocateBusinessCode
       summary: Atomically allocate the next managed code or validate a manual code.
       x-required-module: admin
-      x-permissions: [production.product_service.create, production.recipe.create, production.order.create, production.machine.create, inventory.warehouse.create, inventory.item.create, inventory.movement.create, hr.area.create, hr.position.create, hr.worker.create, sales.customer.create, sales.quote.create, sales.order.create, sales.delivery.create]
+      x-permissions: [production.product_service.create, production.recipe.create, production.order.release, production.machine.create, inventory.warehouse.create, inventory.item.create, inventory.movement.create, hr.area.create, hr.position.create, hr.worker.create, sales.customer.create, sales.quote.create, sales.order.create, sales.delivery.create]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - name: document_type
@@ -1068,7 +1075,8 @@ paths:
       operationId: getUnitOfMeasureByCode
       summary: Resolve an active unit by stable code.
       x-required-module: admin
-      x-permissions: [admin.unit.read]
+      x-permissions: [admin.unit.read, sales.quote.create, sales.quote.update]
+      x-permission-mode: any
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - name: code
@@ -1413,7 +1421,42 @@ components:
     BackofficeTenantDeleteResponse:
       type: object
       required: [data]
-      properties: {data: {type: object, additionalProperties: true}}
+      properties:
+        data:
+          $ref: '#/components/schemas/BackofficeTenantDeleteResult'
+    BackofficeTenantDeleteResult:
+      type: object
+      required: [tenant, deleted, removed_memberships, removed_global_users, firebase_identity_cleanup]
+      properties:
+        tenant:
+          $ref: '#/components/schemas/Tenant'
+        deleted:
+          type: boolean
+        removed_memberships:
+          type: integer
+          minimum: 0
+        removed_global_users:
+          type: integer
+          minimum: 0
+        firebase_identity_cleanup:
+          $ref: '#/components/schemas/FirebaseIdentityCleanup'
+    FirebaseIdentityCleanup:
+      type: object
+      required: [status, requested, failed, error_codes]
+      properties:
+        status:
+          type: string
+          enum: [completed, pending]
+        requested:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        error_codes:
+          type: array
+          items:
+            type: string
     ErrorResponse:
       type: object
       required: [error]
@@ -1593,7 +1636,10 @@ components:
           description: Present only when backend generated a Firebase reset link instead of sending the Firebase email directly.
         delivery:
           type: string
-          enum: [firebase_email, generated_link, disabled]
+          enum: [firebase_email, generated_link, disabled, pending]
+        error_code:
+          type: string
+          description: Safe operational code present when the tenant was created but invitation delivery remains pending.
     TenantOnboardingResponse:
       type: object
       properties:

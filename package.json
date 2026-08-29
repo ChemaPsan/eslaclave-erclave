@@ -9,6 +9,7 @@
     "validate:documentation": "node tools/validators/validate-documentation-freshness.js",
     "validate:agents": "node tools/validators/validate-agents.js",
     "validate:i18n": "node tools/validators/validate-i18n.js",
+    "validate:error-feedback": "node tools/validators/validate-error-feedback.js",
     "validate:active-localization": "node tools/validators/validate-active-module-localization.js",
     "validate:responsive": "node tools/validators/validate-responsive-ui.js",
     "validate:selectors": "node tools/validators/validate-scalable-selectors.js",
@@ -16,6 +17,8 @@
     "validate:permission-editor": "node tools/validators/validate-permission-editor.js",
     "validate:labor-catalog": "node tools/validators/validate-labor-catalog.js",
     "validate:sales-cycle": "node tools/validators/validate-sales-cycle.js",
+    "validate:purchasing-cycle": "node tools/validators/validate-purchasing-cycle.js",
+    "validate:maintenance-cycle": "node tools/validators/validate-maintenance-cycle.js",
     "validate:architecture": "node tools/validators/validate-architecture.js",
     "validate:backend-scaffold": "node tools/validators/validate-backend-scaffold.js",
     "validate:cross-platform": "node tools/validators/validate-cross-platform.js",
@@ -27,6 +30,7 @@
     "traceability:draft": "node tools/traceability-draft.js",
     "session:context": "node tools/session-context.js",
     "build:frontend:qa": "node tools/build-qa-frontend.js",
-    "qa:document": "python tools/generate-qa-document.py"
+    "qa:document": "python tools/generate-qa-document.py",
+    "smoke:maintenance:local": "backend\\.venv\\Scripts\\python.exe backend\\scripts\\smoke_maintenance_local.py"
   }
 }

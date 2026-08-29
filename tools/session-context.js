@@ -83,6 +83,8 @@ async function main() {
     probe("Inventory API", 8004),
     probe("HR API", 8006),
     probe("Sales API", 8008),
+    probe("Purchasing API", 8010),
+    probe("Maintenance API", 8012),
     probe("PostgreSQL local", 5434)
   ]);
   section("SERVICIOS LOCALES", services.join("\n"));

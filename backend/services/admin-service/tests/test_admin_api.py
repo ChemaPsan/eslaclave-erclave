@@ -1,12 +1,15 @@
 from datetime import date
 
 from fastapi.testclient import TestClient
+import pytest
 
 import app.api as admin_api
+import app.auth as admin_auth
 from app.main import app
 from app.auth import AuthenticatedActor, get_authenticated_actor
 from app.repositories import get_admin_repository
 from erclave_common.config import Settings, get_settings
+from erclave_common.errors import ErclaveError
 from app.schemas import (
     BackofficeTenantRead,
     BackofficeUsageDailyRead,
@@ -76,7 +79,7 @@ class FakeAdminRepository:
         "admin.unit.read",
         "admin.unit.create",
         "admin.unit.update",
-        "production.order.create",
+        "production.order.release",
     ]
 
     def get_tenant(self, tenant_id: str):
@@ -848,6 +851,111 @@ def test_onboard_tenant_sends_firebase_invitation_when_enabled(monkeypatch):
     assert calls["invited"] == [("owner.nuevo@cliente.com", "fake-api-key")]
 
 
+def test_firebase_identity_permission_error_is_safe_and_actionable(monkeypatch):
+    from firebase_admin import auth as firebase_auth
+    from firebase_admin import exceptions as firebase_exceptions
+
+    monkeypatch.setattr(admin_auth, "_ensure_firebase_app", lambda settings: None)
+    monkeypatch.setattr(
+        firebase_auth,
+        "get_user_by_email",
+        lambda email: (_ for _ in ()).throw(firebase_exceptions.PermissionDeniedError("sensitive provider detail")),
+    )
+
+    with pytest.raises(ErclaveError) as captured:
+        admin_auth.ensure_firebase_user(
+            "owner.nuevo@cliente.com",
+            "Owner Cliente Nuevo",
+            Settings(auth_mode="firebase"),
+        )
+
+    assert captured.value.code == "firebase_identity_permission_denied"
+    assert captured.value.status_code == 502
+    assert captured.value.details == {"action": "lookup_user"}
+    assert "sensitive provider detail" not in captured.value.message
+
+
+def test_onboard_tenant_returns_cors_safe_firebase_permission_error(monkeypatch):
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        auth_mode="firebase",
+        backoffice_admin_emails="backoffice@erclave.local",
+    )
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-backoffice",
+        email="backoffice@erclave.local",
+        name="Backoffice",
+    )
+    monkeypatch.setattr(
+        admin_api,
+        "ensure_firebase_user",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            ErclaveError(
+                "firebase_identity_permission_denied",
+                "Firebase identity management is not authorized for Admin Service.",
+                status_code=502,
+                details={"action": "lookup_user"},
+            )
+        ),
+    )
+
+    response = TestClient(app).post(
+        "/v1/provisioning/tenant-onboarding",
+        headers={
+            "Idempotency-Key": "test-tenant-onboarding-firebase-denied",
+            "Origin": "http://127.0.0.1:4173",
+        },
+        json={
+            "slug": "Cliente-Nuevo",
+            "commercial_name": "Cliente Nuevo",
+            "source": {"type": "manual", "id": "qa-onboarding"},
+            "owner": {"email": "owner.nuevo@cliente.com", "display_name": "Owner Cliente Nuevo"},
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:4173"
+    assert response.json()["error"]["code"] == "firebase_identity_permission_denied"
+    app.dependency_overrides.clear()
+
+
+def test_onboard_tenant_reports_pending_invitation_after_tenant_creation(monkeypatch):
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        auth_mode="firebase",
+        backoffice_admin_emails="backoffice@erclave.local",
+    )
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-backoffice",
+        email="backoffice@erclave.local",
+        name="Backoffice",
+    )
+    monkeypatch.setattr(admin_api, "ensure_firebase_user", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        admin_api,
+        "create_firebase_password_invitation",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            ErclaveError("firebase_identity_unavailable", "Firebase unavailable.", status_code=502)
+        ),
+    )
+
+    response = TestClient(app).post(
+        "/v1/provisioning/tenant-onboarding",
+        headers={"Idempotency-Key": "test-tenant-onboarding-invitation-pending"},
+        json={
+            "slug": "Cliente-Nuevo",
+            "commercial_name": "Cliente Nuevo",
+            "source": {"type": "manual", "id": "qa-onboarding"},
+            "owner": {"email": "owner.nuevo@cliente.com", "display_name": "Owner Cliente Nuevo"},
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["invitation"]["delivery"] == "pending"
+    assert response.json()["data"]["invitation"]["error_code"] == "firebase_identity_unavailable"
+    app.dependency_overrides.clear()
+
+
 def test_onboard_tenant_requires_backoffice_allowlist_in_firebase_mode(monkeypatch):
     app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
     app.dependency_overrides[get_settings] = lambda: Settings(
@@ -896,6 +1004,12 @@ def test_backoffice_lists_module_catalog_with_runtime_status():
     assert modules["production"]["implementation_status"] == "implemented"
     assert modules["sales"]["implementation_status"] == "implemented"
     assert modules["sales"]["dependencies"] == ["hr", "production"]
+    assert modules["purchasing"]["implementation_status"] == "implemented"
+    assert modules["purchasing"]["owner_service"] == "purchasing-service"
+    assert modules["purchasing"]["dependencies"] == ["inventory"]
+    assert modules["maintenance"]["implementation_status"] == "implemented"
+    assert modules["maintenance"]["owner_service"] == "maintenance-service"
+    assert modules["maintenance"]["dependencies"] == ["hr", "inventory"]
 
 
 def test_backoffice_module_catalog_requires_internal_allowlist():
@@ -957,6 +1071,29 @@ def test_backoffice_rejects_enabling_planned_module():
     assert response.json()["error"]["code"] == "module_not_implemented"
 
 
+def test_backoffice_enables_implemented_maintenance_module():
+    response = client_with_fake_repo().put(
+        f"/v1/backoffice/tenants/{TENANT_ID}/entitlements/maintenance",
+        headers={"Idempotency-Key": "test-maintenance-entitlement-implemented"},
+        json={"status": "active"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["module_code"] == "maintenance"
+
+
+def test_backoffice_enables_purchasing_when_inventory_dependency_is_active():
+    response = client_with_fake_repo().put(
+        f"/v1/backoffice/tenants/{TENANT_ID}/entitlements/purchasing",
+        headers={"Idempotency-Key": "test-purchasing-entitlement-implemented"},
+        json={"status": "active"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["module_code"] == "purchasing"
+    assert response.json()["data"]["status"] == "active"
+
+
 def test_backoffice_suspends_tenant():
     client = client_with_fake_repo()
 
@@ -983,7 +1120,44 @@ def test_backoffice_deletes_tenant_and_firebase_identity(monkeypatch):
     assert response.status_code == 200
     assert response.json()["data"]["deleted"] is True
     assert response.json()["data"]["removed_memberships"] == 1
+    assert response.json()["data"]["firebase_identity_cleanup"] == {
+        "status": "completed",
+        "requested": 1,
+        "failed": 0,
+        "error_codes": [],
+    }
+    assert "firebase_emails" not in response.json()["data"]
     assert deleted_emails == ["admin.qa@erclave.local"]
+
+
+def test_backoffice_reports_pending_firebase_cleanup_without_failing_delete(monkeypatch):
+    client = client_with_fake_repo()
+    monkeypatch.setattr(
+        admin_api,
+        "delete_firebase_user_by_email",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            ErclaveError(
+                "firebase_identity_permission_denied",
+                "Firebase identity management is not authorized for Admin Service.",
+                status_code=502,
+            )
+        ),
+    )
+
+    response = client.delete(
+        f"/v1/backoffice/tenants/{TENANT_ID}",
+        headers={"Idempotency-Key": "test-backoffice-delete-cleanup-pending"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["deleted"] is True
+    assert response.json()["data"]["firebase_identity_cleanup"] == {
+        "status": "pending",
+        "requested": 1,
+        "failed": 1,
+        "error_codes": ["firebase_identity_permission_denied"],
+    }
+    assert "firebase_emails" not in response.json()["data"]
 
 
 def test_backoffice_lists_usage_metrics():

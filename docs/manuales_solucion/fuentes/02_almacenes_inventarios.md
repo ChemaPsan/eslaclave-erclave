@@ -1,8 +1,8 @@
 # Manual funcional de Almacenes e Inventarios
 
 - Audiencia: almacenistas, supervisores y planeadores
-- Alcance por ambiente: Local; no promovido a QA
-- Ultima revision: 2026-08-21
+- Alcance por ambiente: Local y QA
+- Ultima revision: 2026-08-24
 - Capacidades cubiertas: articulos, costo unitario, conversiones y vinculo con Produccion
 
 ## Proposito
@@ -46,6 +46,8 @@ Produccion usa el costo unitario base para estimar materiales. Los movimientos c
 Una orden liberada crea reservas y reduce la cantidad disponible, no la existencia fisica. La primera entrada de la orden a **En produccion** consume esas reservas y registra una salida inmutable en el almacen que suministro cada material. Reanudar o terminar la orden no vuelve a descontar. Cancelar antes de iniciar libera las reservas; cancelar despues conserva las salidas ya registradas. No registre una salida manual duplicada para el mismo consumo.
 
 ## Recibir producto terminado
+
+En Local, consultar pendientes exige `inventory.finished_goods_receipt.read` y confirmar la recepcion fisica exige `inventory.finished_goods_receipt.receive`. El permiso general para crear movimientos no habilita esta accion. Produccion entrega exclusivamente folio, producto vinculado, cantidad, unidad, estado terminado y costo unitario para valuacion; el rol receptor no obtiene la receta, recursos, responsable ni costos totales. Esto permite reservar la confirmacion al rol de almacen definido por cada tenant.
 
 1. Confirme en Produccion que la orden ya esta **Terminada** y que su producto esta vinculado con un articulo activo de tipo producto terminado.
 2. Abra **Almacenes > Movimientos**. En **Entradas de produccion terminada** se muestran las ordenes con cantidad pendiente de recibir.

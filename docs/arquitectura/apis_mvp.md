@@ -10,9 +10,14 @@ Aplica a:
 - `production-service`;
 - `inventory-service`;
 - `sales-service`;
+- `purchasing-service` (runtime Local en `:8010`; proveedor fiscal, requisicion multipardida y ciclo hasta recepcion implementados, sin despliegue QA/Produccion);
+- `maintenance-service` (Local implementado en `8012`; ordenes correctivas, tiempos y refacciones);
+- Purchasing Local expone edicion/cancelacion de requisiciones y ordenes, recepcion multipardida y conciliacion manual durable. Inventory aporta `GET /v1/inventory/warehouses/{id}` para validar tenant, estado y destino antes de cada entrada.
 - `billing-service`;
 - `provisioning-service`;
 - `integration-service`.
+
+Mantenimiento expone `GET/POST /v1/maintenance/orders`, lectura/edicion por ID, transiciones idempotentes, tiempos y solicitudes multi-linea de material. RH publica trabajadores con `intervenes_in_maintenance`; Production bloquea/libera maquinas y pausa ordenes; Inventory reserva, consume o libera refacciones. Ninguno admite escritura cruzada ni exito supuesto ante una respuesta incierta.
 
 Estos contratos no sustituyen una especificacion OpenAPI formal. Son la fuente funcional y tecnica para construir los archivos OpenAPI, modelos Pydantic, rutas FastAPI, pruebas de contrato y validadores posteriores.
 
@@ -55,7 +60,7 @@ docs/arquitectura/plan_implementacion_backend_mvp.md
 | `X-Tenant-Id` | Solo permitido para clientes internos confiables; debe coincidir con permisos del token. |
 | `X-Correlation-Id` | Trazabilidad entre servicios. Si no viene, el gateway lo genera. |
 | `Idempotency-Key` | Obligatorio en comandos reintentables o con efectos economicos/operativos. |
-| `Accept-Language` | Idioma preferido para mensajes controlados, por ejemplo `es-MX` o `en-US`. |
+| `Accept-Language` | Reservado para clientes que lo implementen; el frontend vigente localiza por `error.code` y no depende de este header. |
 
 Regla:
 
@@ -117,6 +122,8 @@ Reglas:
 
 ### 3.5 Errores comunes
 
+`error.code` es el contrato estable consumido por UI y automatizaciones. `message` sirve como diagnóstico del servicio y no se inserta directamente en pantalla; el cliente lo resuelve en ES/EN conforme a `feedback_operativo_y_errores.md`. `correlation_id` debe propagarse y se presenta como referencia sólo cuando el resultado es técnico, inesperado o incierto.
+
 ```json
 {
   "error": {
@@ -162,6 +169,9 @@ Reglas:
 | `PROVISIONING_ALREADY_COMPLETED` | Provisioning |
 | `API_SCOPE_DENIED` | Integraciones |
 | `API_RATE_LIMIT_EXCEEDED` | Integraciones |
+| `PURCHASING_ORDER_NOT_RECEIVABLE` | Compras Local |
+| `PURCHASING_RECEIPT_EXCEEDS_OPEN_QUANTITY` | Compras Local |
+| `PURCHASING_RECEIPT_NEEDS_RECONCILIATION` | Compras Local |
 
 ---
 
@@ -300,14 +310,15 @@ Administra productos/servicios, recetas, versiones, recursos productivos, maquin
 | `POST` | `/v1/production/recipe-versions/{version_id}/submit` | `production.recipe.submit` | Si | Enviar a aprobacion. |
 | `POST` | `/v1/production/recipe-versions/{version_id}/approve` | `production.recipe.approve` | Si | Aprobar version. |
 | `POST` | `/v1/production/recipe-versions/{version_id}/obsolete` | `production.recipe.obsolete` | Si | Marcar obsoleta. |
-| `POST` | `/v1/production/resource-validations` | `production.order.validate` | Si | Validar recursos para una cantidad. |
+| `POST` | `/v1/production/resource-validations` | `production.order.validate` | Si | Validar recursos para una cantidad, inicio y horizonte de dias productivos; devolver asignacion diaria de mano de obra/maquinaria. |
 | `GET` | `/v1/production/orders` | `production.order.read` | No | Buscar ordenes. |
-| `POST` | `/v1/production/orders` | `production.order.create` | Si | Crear orden manual. |
+| `POST` | `/v1/production/orders` | `production.order.release` | Si | Validar recursos, reservar y crear la orden ya liberada. |
+| `GET` | `/v1/production/finished-goods-candidates[/{id}]` | `inventory.finished_goods_receipt.read` o `.receive` | No | Exponer a Almacenes solo orden terminada, producto vinculado y costo unitario. |
 | `GET/POST` | `/v1/production/order-requests` | `production.order.read` / `sales.order.fulfill` | POST | Registrar/listar solicitud de produccion originada por Ventas; no libera una orden automaticamente. |
 | `GET` | `/v1/production/orders/{id}` | `production.order.read` | No | Consultar orden. |
-| `PATCH` | `/v1/production/orders/{id}/status` | `production.order.status.update` | Si | Cambiar estatus de orden. |
+| `PATCH` | `/v1/production/orders/{id}/status` | `production.order.release|wait_resources|start|pause|resume|send_to_validation|complete|cancel` | Si | Exigir la capacidad exacta antes de evaluar precondiciones de la transicion. |
 | `PATCH` | `/v1/production/orders/{id}/resources/{resource_id}` | `production.order.update` | Si | Registrar cantidad real de mano de obra o maquinaria. |
-| `PATCH` | `/v1/production/order-stages/{stage_id}` | `production.order_stage.update` | Si | Actualizar etapa. |
+| `PATCH` | `/v1/production/order-stages/{stage_id}` | `production.order_stage.reset|update|complete|block|skip` | Si | Exigir la capacidad exacta del resultado solicitado. |
 | `GET` | `/v1/production/machines` | `production.machine.read` | No | Listar maquinaria. |
 | `POST` | `/v1/production/machines` | `production.machine.create` | Si | Crear maquinaria. |
 | `PATCH` | `/v1/production/machines/{machine_id}` | `production.machine.update` | No | Editar maquinaria. |
@@ -387,7 +398,7 @@ Es dueno de areas y puestos. Requiere tenant activo, membresia vigente, entitlem
 | `GET` | `/v1/hr/positions` | `hr.position.read` | No | Listar puestos; admite `area_id` y `production_only`. |
 | `POST` | `/v1/hr/positions` | `hr.position.create` | Si | Crear puesto dentro de un area activa existente. |
 | `PATCH` | `/v1/hr/positions/{id}` | `hr.position.update` | Si | Editar, mover o inactivar puesto. |
-| `GET` | `/v1/hr/production-capacity` | `production.order.validate` o `production.order.create` | No | Calcular capacidad diaria desde trabajadores activos. |
+| `GET` | `/v1/hr/production-capacity` | `production.order.validate` o `production.order.release` | No | Calcular capacidad diaria desde trabajadores activos. |
 
 El contrato canonico es `contracts/api/hr-service.openapi.yaml`. Todas las consultas se filtran por tenant y el FK compuesto impide referencias cruzadas.
 
@@ -417,13 +428,13 @@ Administra almacenes, articulos, ubicaciones, movimientos, existencias, kardex, 
 | `GET` | `/v1/inventory/movements` | `inventory.movement.read` | No | Buscar movimientos. |
 | `POST` | `/v1/inventory/movements` | `inventory.movement.create` | Si | Registrar movimiento manual. |
 | `POST` | `/v1/inventory/movements/{id}/reverse` | `inventory.movement.reverse` | Si | Reversar movimiento. |
-| `POST` | `/v1/inventory/availability-checks` | `production.order.validate` o `production.order.create` | Si | Consultar existencia menos reservas y costo promedio. |
+| `POST` | `/v1/inventory/availability-checks` | `production.order.validate` o `production.order.release` | Si | Consultar existencia menos reservas y costo promedio. |
 | `POST` | `/v1/inventory/consumption-requests` | interno `production` | Si | Registrar consumo solicitado por Produccion. |
-| `GET` | `/v1/inventory/finished-goods-receipts` | `inventory.movement.read` | No | Consultar recepciones agrupadas por orden. |
-| `POST` | `/v1/inventory/finished-goods-receipts` | `inventory.movement.create` | Si | Confirmar entrada total o parcial de una orden terminada. |
-| `POST` | `/v1/inventory/reservation-requests` | `production.order.create` | Si | Reservar material por almacen para una orden. |
-| `POST` | `/v1/inventory/reservations/{id}/release` | `production.order.status.update` | Si | Liberar reserva. |
-| `POST` | `/v1/inventory/reservations/{id}/consume` | `production.order.status.update` | Si | Convertir reserva en salida inmutable al primer inicio de la orden; el almacen proviene de la reserva. |
+| `GET` | `/v1/inventory/finished-goods-receipts` | `inventory.finished_goods_receipt.read` | No | Consultar recepciones agrupadas por orden. |
+| `POST` | `/v1/inventory/finished-goods-receipts` | `inventory.finished_goods_receipt.receive` | Si | Confirmar entrada total o parcial usando la proyeccion minima de Produccion. |
+| `POST` | `/v1/inventory/reservation-requests` | `production.order.release` | Si | Reservar material por almacen para una orden. |
+| `POST` | `/v1/inventory/reservations/{id}/release` | `production.order.cancel`, `sales.order.cancel` o `maintenance.material_request.cancel` | Si | Liberar una reserva desde el comando propietario autorizado. |
+| `POST` | `/v1/inventory/reservations/{id}/consume` | `production.order.start|resume`, `sales.delivery.confirm` o `maintenance.order.resolve` | Si | Convertir reserva en salida inmutable desde el comando propietario. |
 
 ### 7.3 Request ejemplo: movimiento manual
 
@@ -479,6 +490,37 @@ Administra almacenes, articulos, ubicaciones, movimientos, existencias, kardex, 
 - `inventory_movement.reversed`
 - `inventory_reservation.created`
 - `inventory_reservation.released`
+
+---
+
+## 7A. `purchasing-service`
+
+Implementado solo en Local. Es dueno de proveedores, requisiciones multipardida, ordenes de compra y recepciones conciliables; Inventory recibe las entradas mediante contrato.
+
+| Metodo | Ruta | Permiso | Idempotencia | Proposito |
+|---|---|---|---|---|
+| `GET/POST` | `/v1/purchasing/suppliers` | `purchasing.supplier.read|create` | POST | Listar o crear proveedor con perfil fiscal. |
+| `PATCH` | `/v1/purchasing/suppliers/{id}` | `purchasing.supplier.update` | Si | Editar maestro y datos fiscales. |
+| `GET/POST/PATCH` | `/v1/purchasing/requisitions[/{id}]` | `purchasing.requisition.read|create|update` | Escrituras | Administrar borradores multipardida. |
+| `POST` | `/v1/purchasing/requisitions/{id}/{submit|approve|reject|cancel}` | permiso puntual del verbo | Si | Ejecutar cada decision con autoridad independiente. |
+| `GET/POST/PATCH` | `/v1/purchasing/orders[/{id}]` | `purchasing.order.read|create|update` | Escrituras | Administrar ordenes y precios por partida. |
+| `POST` | `/v1/purchasing/orders/{id}/{issue|cancel}` | `purchasing.order.issue|cancel` | Si | Emitir o cancelar sin borrar evidencia. |
+| `GET/POST` | `/v1/purchasing/receipts` | `purchasing.receipt.read|create` | POST | Recibir una o varias partidas en Inventory. |
+| `POST` | `/v1/purchasing/receipts/{id}/reconcile` | `purchasing.receipt.reconcile` | Si | Reintentar exclusivamente lineas pendientes. |
+
+## 7B. `maintenance-service`
+
+Implementado solo en Local. Es dueno de la orden correctiva y coordina referencias RH, bloqueo de maquinaria Production y reservas/consumos de refacciones Inventory.
+
+| Metodo | Ruta | Permiso | Idempotencia | Proposito |
+|---|---|---|---|---|
+| `GET/POST/PATCH` | `/v1/maintenance/orders[/{id}]` | `maintenance.order.read|create|update` | Escrituras | Consultar, levantar y documentar una orden. |
+| `POST` | `/v1/maintenance/orders/{id}/transitions` | `maintenance.order.request|assign|start|wait_for_parts|resume|resolve|close|reopen|cancel` | Si | Exigir el permiso exacto de la transicion solicitada. |
+| `POST` | `/v1/maintenance/orders/{id}/reconcile` | `maintenance.order.reconcile` | Si | Reintentar una operacion externa pendiente. |
+| `GET/POST` | `/v1/maintenance/orders/{id}/time-entries` | `maintenance.time.read|create` | POST | Consultar o registrar tiempo del tecnico elegible. |
+| `GET/POST` | `/v1/maintenance/orders/{id}/material-requests` | `maintenance.material_request.read|create` | POST | Consultar o reservar solicitud multipardida. |
+| `POST` | `/v1/maintenance/material-requests/{id}/cancel` | `maintenance.material_request.cancel` | Si | Liberar reservas activas y cancelar. |
+| `POST` | `/v1/maintenance/material-requests/{id}/reconcile` | `maintenance.material_request.reconcile` | Si | Reanudar lineas pendientes con claves estables. |
 
 ---
 

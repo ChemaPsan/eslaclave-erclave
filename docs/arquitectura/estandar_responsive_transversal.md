@@ -55,6 +55,8 @@ Nunca se comprimen columnas hasta cortar identificadores, cantidades o acciones.
 - Acciones primarias y destructivas no cambian de significado ni de orden accidentalmente al apilarse.
 - Modales y drawers caben en alto y ancho, con scroll interno predecible y cierre siempre alcanzable.
 - Targets tactiles miden al menos 44 x 44 CSS px cuando el control no tiene una superficie mayor equivalente.
+- Las acciones secundarias usan una superficie neutra y reservan el color de marca para foco, hover y acciones primarias. En tarjetas estrechas pueden envolver por espacios, pero nunca partir letras.
+- Los estados usan color semantico contenido, borde y texto legible; no dependen solo del color y conservan contraste equivalente en tema claro y oscuro.
 
 ## Flujos, filtros y alertas
 
@@ -66,6 +68,15 @@ Nunca se comprimen columnas hasta cortar identificadores, cantidades o acciones.
 - Chips de filtros activos se envuelven, se retiran individualmente y no empujan acciones fuera del panel.
 - Alertas no cubren formularios, tablas, menus ni botones. En ancho intermedio pueden reubicarse en el flujo; en estrecho ocupan una columna.
 - Banners y errores conservan titulo, mensaje, accion y cierre sin truncamiento destructivo.
+
+## Jerarquia del shell y tarjetas operativas
+
+- En escritorio, identidad de sesion, sucursal, salida, busqueda y accion contextual comparten una sola franja superior cuando el contenido cabe. En ancho intermedio se compactan etiquetas y controles antes de crear una fila adicional; en estrecho se apilan sin superposicion.
+- La cabecera previa a un hero de submodulo funciona como breadcrumb y retorno, no repite el titulo principal. El hero conserva una sola identidad, descripcion breve y, cuando aplica, la accion contextual.
+- Los indicadores transversales viven inmediatamente antes de **Alertas operativas** y responden al ancho real del panel lateral: dos columnas en el aside habitual, cuatro cuando el panel ocupa una fila amplia y una en estrecho.
+- El shell no repite una identidad generica encima del titulo activo. Cada pantalla muestra una sola identidad principal y evita badges tecnicos de API, base de datos, mock, QA o persistencia que no cambien una decision del usuario.
+- Una tarjeta con identidad, responsable, estados, partidas y acciones no puede reutilizar un `flex` horizontal generico con todos esos elementos como hijos directos. Debe declarar layout operativo propio, agrupar contenido semanticamente y apilarse antes de comprimir palabras o controles.
+- Un modal es un contenedor independiente del panel que lo abre. Sus formularios, validaciones y partidas declaran tambien reglas bajo el contenedor del modal; una regla de `module-panel` nunca se considera suficiente para overlays.
 
 ## Viewports y combinaciones minimas
 
