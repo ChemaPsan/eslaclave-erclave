@@ -1,6 +1,7 @@
 const { fail, ok, readText } = require("./shared");
 
 const frontend = readText("frontend/app.js");
+const frontendMarkup = readText("frontend/index.html");
 const errors = [];
 
 for (const token of [
@@ -33,6 +34,14 @@ for (const token of [
 
 if (/action==="resolve"[^}]*prompt\(/s.test(frontend) || /action==="cancel"[^}]*prompt\(/s.test(frontend)) {
   errors.push("Maintenance transitions must use ERClave forms instead of browser prompts.");
+}
+
+if (!/async function loadMaintenanceApiData\(\)[\s\S]*?\n\s*render\(\);\n}/.test(frontend)) {
+  errors.push("Maintenance API loading must repaint the UI after success or failure.");
+}
+
+if (!frontendMarkup.includes("app.js?v=20260828-chg252-maintenance-load")) {
+  errors.push("The frontend cachebuster must publish the CHG-252 Maintenance loading fix.");
 }
 
 if (errors.length) fail("maintenance cycle validation failed", errors);

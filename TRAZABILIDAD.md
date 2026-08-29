@@ -3997,6 +3997,25 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Rollback | Revertir catálogo/imports, helper semántico, tonos CSS, validador, cachebuster y documentos CHG-251. El mensaje diagnóstico volvería a atravesar la UI; no existe dato ni schema que revertir. |
 | Observaciones | Operación `local-write` sólo sobre archivos del repositorio. No hubo migración, seed, carga de datos, llamadas mutantes, despliegue ni acceso a QA/Producción. La estandarización backend completa quedó registrada como pendiente separado. |
 
+### CHG-252
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-28 12:26 |
+| Cambio | Corrige continuidad de carga de Mantenimiento |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/index.html`, `tools/validators/validate-maintenance-cycle.js`, `tools/validators/validate-responsive-ui.js`, `modulos/11_mantenimiento.md`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Mantenimiento / Carga inicial API / Estado visual / Local / Preparacion QA |
+| Agentes consultados | Agentes funcional y tecnico de Mantenimiento; Arquitectura SaaS, Seguridad, QA/Release, Datos/Custodio DB, Arquitectura API y frontend/UX definidos en `AGENTES.md`. No hubo delegacion. |
+| Diagnostico | La certificacion visual Local confirmo que `GET /v1/maintenance/orders` respondia `200`, pero `loadMaintenanceApiData()` no solicitaba un nuevo render despues de cambiar `maintenanceApi.status` de `loading` a `ready`; la pantalla permanecia indefinidamente en `Cargando Mantenimiento`. |
+| Descripcion | Se agrega el repintado al final de la carga de Mantenimiento, cubriendo tanto respuesta exitosa como error recuperable, y se publica mediante un cachebuster CHG-252. El validador del ciclo exige ambas condiciones para impedir la regresion. |
+| Motivo | Eliminar un bloqueo de interfaz detectado durante la certificacion previa al candidato QA y hacer visible la proyeccion autoritativa ya recibida. |
+| Impacto | Frontend y guardrail Local de Mantenimiento. No cambia contratos, payloads, permisos, schemas, datos, ownership ni runtime backend. QA y Produccion no fueron modificados. |
+| APIs afectadas | Contratos modificados: ninguno. Endpoint consumido sin cambio: `GET /v1/maintenance/orders` de `maintenance-service`, permiso `maintenance.order.read`. APIs no tocadas: todos los contratos y servicios backend. |
+| Validacion | Smoke Local de Mantenimiento completo; respuesta `200` observada; validador de Mantenimiento, documentacion viva, sintaxis y `npm.cmd run verify`; recarga y navegacion autenticada en navegador Local. |
+| Rollback | Retirar la llamada final a `render()`, el guardrail y la documentacion CHG-252. No existe schema ni dato que revertir. |
+| Observaciones | Operacion `local-write`. Durante la preparacion se aplicaron seeds idempotentes solo a `127.0.0.1:5434/erclave_local` para el tenant `ten_739ee59d765d5e14818674800d`; los smoke generaron y limpiaron datos sinteticos. No hubo acceso, migracion, seed, despliegue ni escritura en QA/Produccion. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

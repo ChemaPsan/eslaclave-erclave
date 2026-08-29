@@ -49,8 +49,8 @@ if (!mainApp.includes('renderFlowGuide(getPurchasingFlowTitle(title),getPurchasi
 if (!mainStyles.includes("content: attr(data-open-label)") || !mainApp.includes('data-open-label="${escapeAttribute(openCopy)}"')) {
   errors.push("Collapsed flow guides must expose their localized open label.");
 }
-if (!mainMarkup.includes("app.js?v=20260827-chg251-error-feedback")) {
-  errors.push("frontend/index.html: the main app cachebuster must expose CHG-251 localized error feedback to open sessions.");
+if (!mainMarkup.includes("app.js?v=20260828-chg252-maintenance-load")) {
+  errors.push("frontend/index.html: the main app cachebuster must expose CHG-252 while preserving localized error feedback.");
 }
 if (!mainMarkup.includes("styles.css?v=20260827-chg251-error-feedback")) {
   errors.push("frontend/index.html: the main stylesheet cachebuster must expose CHG-251 semantic feedback styling to open sessions.");

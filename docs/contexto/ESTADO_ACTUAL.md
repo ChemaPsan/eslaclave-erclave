@@ -41,6 +41,7 @@ Ultima actualizacion: 2026-08-27.
 
 ### Mantenimiento
 
+- CHG-252 corrige en Local la continuidad de carga del frontend: al terminar las consultas autoritativas, Mantenimiento vuelve a renderizar y deja el estado `Cargando Mantenimiento`; un guardrail evita reintroducir el bloqueo.
 - CHG-234 implementa Mantenimiento correctivo en Local: API `8012`, schema `maintenance`, ordenes manuales o ligadas a maquina/Produccion, responsable RH elegible, tiempos y solicitudes multi-linea al almacen de refacciones.
 - Solicitar una orden bloquea la maquina y pausa una orden productiva `in_progress`; resolver consume reservas y libera la maquina sin reanudar Produccion. Backoffice ya permite activar el modulo y el tenant demo Local lo tiene activo.
 - CHG-235 endurece el flujo en Local con revision `20260824_0028`: conciliacion manual durable, compensacion de reservas al cancelar, rebloqueo al reabrir, revalidacion RH al iniciar, asignacion primaria unica e indices de consulta por orden.

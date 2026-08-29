@@ -190,3 +190,8 @@ MTBF queda pendiente hasta contar con horas reales de operacion; no se inferira 
 - Refacciones muestra Orden, Almacen, Reserva y Conciliacion, manteniendo Inventory como autoridad de almacenes, reservas y movimientos.
 - Ambas rutas reutilizan el riel vertical colapsable estandar, con contenido equivalente ES/EN y reacomodo por ancho real del contenedor.
 - La guia es ayuda contextual: no sustituye permisos `maintenance.*`, validaciones backend, conciliacion durable ni evidencia tecnica de cierre.
+
+## Continuidad de carga Local CHG-252
+
+- La carga inicial de Mantenimiento repinta la interfaz al terminar sus consultas API, tanto si obtiene datos como si debe presentar un error recuperable.
+- El modulo no permanece indefinidamente en `Cargando Mantenimiento` despues de recibir la respuesta autoritativa de `maintenance-service`.
