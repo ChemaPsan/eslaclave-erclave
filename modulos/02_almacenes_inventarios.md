@@ -1,5 +1,9 @@
 # ERClave — Módulo de Almacenes e Inventarios
 
+## Autorizacion de producto terminado Local
+
+Leer recepciones y confirmar la recepcion fisica usan `inventory.finished_goods_receipt.read` y `inventory.finished_goods_receipt.receive`. Crear movimientos generales no concede esta aceptacion. Produccion expone al rol receptor solo las proyecciones de orden terminada y producto necesarias.
+
 ## 1. Objetivo
 
 El módulo de Almacenes e Inventarios permitirá controlar existencias, movimientos, ubicaciones, reservas, consumos, producto en proceso, producto terminado, merma y trazabilidad de recursos.
@@ -89,13 +93,12 @@ Campos base sugeridos:
 | Descripcion | Uso, restricciones, equivalencias o notas. |
 | Usar en receta | Autoriza que Produccion ofrezca el articulo como recurso de receta. No modifica existencias. |
 
-Cuando se implemente usuarios y permisos, la creacion y edicion de articulos debera protegerse con permisos como:
+La creacion, consulta y edicion de articulos ya se protege en backend con permisos asignables a roles:
 
 ```text
-warehouses.items.read
-warehouses.items.create
-warehouses.items.update
-warehouses.items.block
+inventory.item.read
+inventory.item.create
+inventory.item.update
 ```
 
 ---
@@ -117,7 +120,7 @@ Los movimientos usan exclusivamente articulos dados de alta en el catalogo maest
 | Merma | Registra desperdicio o pérdida. |
 | Devolución de cliente | Regresa producto vendido. |
 | Devolución a proveedor | Reduce inventario recibido. |
-| Reserva | Aparta inventario para una orden de Produccion. Implementada en codigo Local; aun no desplegada en QA. |
+| Reserva | Aparta inventario para una orden de Produccion o un compromiso comercial. Implementada en Local y QA. |
 | Liberación de reserva | Regresa inventario apartado a disponible cuando una orden se cancela. Implementada para Produccion en codigo Local. |
 | Consumo de reserva | Convierte una reserva de Produccion en una salida inmutable cuando la orden inicia por primera vez. Implementado en codigo Local. |
 
@@ -129,7 +132,7 @@ Limites actuales:
 
 - QA conserva el corte anterior hasta una promocion gobernada;
 - no existe todavia una interfaz independiente para administrar reservas manuales;
-- Las reservas de pedidos de Ventas estan implementadas en Local y admiten consumo parcial; lotes y otros origenes permanecen futuros;
+- Las reservas de pedidos de Ventas estan implementadas en Local y QA y admiten consumo parcial; lotes y otros origenes permanecen futuros;
 - la recepcion total o parcial de producto terminado desde ordenes terminadas esta implementada en Local; merma, bloqueos, transito, lotes y series siguen fuera de este corte.
 
 Produccion es consumidor del contrato; Inventory conserva ownership de reservas, movimientos, disponibilidad y valuacion.
@@ -296,7 +299,7 @@ Cuando Producción solicite validar una receta u orden, Almacenes deberá respon
 - Definir e implementar lotes, series, cuarentena, bloqueos y transito.
 - Definir si ubicaciones fisicas creceran a catalogo independiente en fases posteriores.
 - Definir proceso de conteo físico.
-- Definir permisos para ajustes y cancelaciones.
+- Separar en un corte futuro los permisos de ajustes manuales respecto de otros movimientos y conservar reversas auditables.
 - Implementar recepcion de merma desde Produccion.
 - Extender reservas a Ventas solo cuando exista su corte vertical real.
 - Ejecutar pruebas de contencion paralela con carga antes de promover la revision Local a QA.
@@ -335,4 +338,4 @@ Almacenes consulta ordenes terminadas y confirma la recepcion fisica total o par
 
 ## CHG-214: alias heredados de unidad
 
-La revision Local `20260821_0023` reconoce exclusivamente dos equivalencias empresariales inequivocas heredadas: `LTS` como `LTR` y `MT` como `MTR`. La normalizacion actualiza de forma atomica el articulo, sus movimientos y los snapshots relacionados, sin cambiar cantidad, costo, identidad ni almacen, y registra una auditoria por fila. Cualquier otro cambio de unidad conserva la regla general: si existen movimientos o reservas, no se permite reinterpretar la historia y se requiere un articulo sustituto con regularizacion autorizada.
+La revision `20260821_0023`, desplegada en Local y QA, reconoce exclusivamente dos equivalencias empresariales inequivocas heredadas: `LTS` como `LTR` y `MT` como `MTR`. La normalizacion actualiza de forma atomica el articulo, sus movimientos y los snapshots relacionados, sin cambiar cantidad, costo, identidad ni almacen, y registra una auditoria por fila. Cualquier otro cambio de unidad conserva la regla general: si existen movimientos o reservas, no se permite reinterpretar la historia y se requiere un articulo sustituto con regularizacion autorizada.

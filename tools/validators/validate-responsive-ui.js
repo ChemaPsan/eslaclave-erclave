@@ -35,11 +35,49 @@ for (const [file, fragments] of checks) {
 }
 
 const mainStyles = readText("frontend/styles.css");
+const mainMarkup = readText("frontend/index.html");
+const mainApp = readText("frontend/app.js");
 if (mainStyles.includes(".flow-guide-card[open] .flow-guide-steps")) {
   errors.push("frontend/styles.css: open flow guides must keep the standard vertical rail; scope layout exceptions to an explicit screen class.");
 }
 if (!mainStyles.includes("grid-template-columns: minmax(220px, 280px) minmax(0, 1fr)")) {
   errors.push("frontend/styles.css: missing the standard vertical flow rail layout.");
+}
+
+const insightStart = mainMarkup.indexOf('<aside class="insight-panel">');
+const insightEnd = mainMarkup.indexOf("</aside>", insightStart);
+const statusPosition = mainMarkup.indexOf('<section class="status-strip"', insightStart);
+const alertsPosition = mainMarkup.indexOf('data-i18n="alertsTitle"', insightStart);
+if (insightStart < 0 || insightEnd < 0 || statusPosition < insightStart || statusPosition > insightEnd || alertsPosition < statusPosition || alertsPosition > insightEnd) {
+  errors.push("frontend/index.html: operational indicators must live inside insight-panel immediately before operational alerts.");
+}
+
+if (!mainStyles.includes("container: insight-panel / inline-size") || !mainStyles.includes("@container insight-panel")) {
+  errors.push("frontend/styles.css: the relocated KPI strip must respond to the real insight-panel width.");
+}
+const topbarStart = mainMarkup.indexOf('<header class="topbar">');
+const topbarEnd = mainMarkup.indexOf("</header>", topbarStart);
+const contextPosition = mainMarkup.indexOf('<section class="context-bar"', topbarStart);
+if (topbarStart < 0 || topbarEnd < 0 || contextPosition < topbarStart || contextPosition > topbarEnd) {
+  errors.push("frontend/index.html: session context and contextual actions must share the compact topbar.");
+}
+if (!/\.main-panel\s*>\s*\.panel-head h2\s*\{[^}]*display:\s*none/s.test(mainStyles) || !/\.submodule-screen-head\s*\{[^}]*min-height:\s*88px/s.test(mainStyles)) {
+  errors.push("frontend/styles.css: submodules must not repeat the primary title in an oversized pre-hero header.");
+}
+if (!mainStyles.includes("container: maintenance-order-card / inline-size") || !mainApp.includes('class="catalog-card maintenance-order-card"')) {
+  errors.push("Maintenance orders must use their dedicated responsive card container.");
+}
+if (/\.resource-check\s+p\s*\{[^}]*white-space:\s*nowrap/s.test(mainStyles)) {
+  errors.push("frontend/styles.css: resource validation results must wrap instead of forcing modal overflow.");
+}
+if (!/@container modal-sheet \(max-width: 680px\)[\s\S]*?\.resource-check-grid[\s\S]*?\.purchasing-requisition-line/.test(mainStyles)) {
+  errors.push("frontend/styles.css: modal container rules must compact resource checks and purchasing lines.");
+}
+if (!/\.small-action\s*\{[^}]*min-height:\s*44px/s.test(mainStyles)) {
+  errors.push("frontend/styles.css: small operational actions must preserve the 44px touch target.");
+}
+if (mainApp.includes('<span class="chip active">${moduleStatus}</span>')) {
+  errors.push("frontend/app.js: internal module persistence status must not be exposed as a user-facing badge.");
 }
 
 if (errors.length) {

@@ -584,6 +584,15 @@ No basta cambiar el viewport: reducir el ancho real del panel abriendo sidebar, 
 - [ ] Alertas y banners conservan titulo, mensaje, accion y cierre sin tapar la operacion.
 - [ ] El foco es visible y no queda detras de contenido sticky, modal o panel lateral.
 
+### QA-RESP-07 - Regresiones operativas CHG-244
+
+- [ ] Los cuatro indicadores aparecen dentro del panel lateral, inmediatamente antes de **Alertas operativas**, en 2x2, 4x1 o 1x4 segun el ancho real disponible.
+- [ ] El titulo del modulo no queda precedido por “Centro operativo” ni se duplica con un badge tecnico de API/persistencia.
+- [ ] La vista previa de Receta con seis recursos y nombres largos no produce scroll horizontal del modal; el resultado y la unidad envuelven sin dividir palabras letra por letra.
+- [ ] Una orden de Mantenimiento con tecnico, conciliacion, varias refacciones y todas sus acciones conserva lectura y targets de al menos 44 px.
+- [ ] Proveedores, Requisiciones, Ordenes de compra y Recepciones apilan sus tarjetas antes de comprimir identidad, partidas, estados o acciones.
+- [ ] En consola, `document.documentElement.scrollWidth === document.documentElement.clientWidth`; cualquier scroll horizontal justificado permanece dentro de su tabla.
+
 ### Evidencia
 
 Adjuntar capturas de al menos un estado amplio, uno intermedio y uno estrecho, indicando viewport, ancho aproximado del panel, zoom, idioma, navegador y paneles laterales activos. Registrar como P1 cualquier bloqueo operativo, contenido esencial inaccesible o accion fuera de pantalla; defectos cosmeticos con alternativa pueden clasificarse P2.

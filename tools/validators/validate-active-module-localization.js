@@ -1,7 +1,7 @@
 const vm = require("vm");
 const { fail, ok, readText } = require("./shared");
 
-const activeModuleIds = ["produccion", "almacenes", "ventas", "administracion"];
+const activeModuleIds = ["produccion", "almacenes", "ventas", "compras", "mantenimiento", "recursos-humanos", "administracion"];
 
 function loadModules() {
   const source = readText("frontend/data/modules.js");

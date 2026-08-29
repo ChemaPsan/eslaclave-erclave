@@ -8,7 +8,7 @@ Esta carpeta declara la configuracion necesaria para preparar el candidato. No a
 
 Antes de aprovisionar se debe revisar el plan con el usuario aprobador y conceder cada rol mediante una actividad `qa-write` independiente.
 
-Estado comprobado el 2026-08-22: las siete cuentas dedicadas declaradas, Artifact Registry `erclave-qa` y el provider WIF limitado a `ChemaPsan/eslaclave-erclave` estan aprovisionados. CHG-225 creo `erclave-sales-qa` sin llaves administradas por usuario, con `roles/cloudsql.client`, acceso solo a `erclave-database-url-qa` y `roles/run.invoker` sobre sus cuatro autoridades QA. La identidad desplegadora cuenta con `roles/firebasehosting.admin` para publicar exclusivamente mediante el gate `qa-frontend`. No existen llaves JSON del pipeline.
+Estado comprobado el 2026-08-23: las siete cuentas dedicadas declaradas, Artifact Registry `erclave-qa` y el provider WIF limitado a `ChemaPsan/eslaclave-erclave` estan aprovisionados. CHG-225 creo `erclave-sales-qa` sin llaves administradas por usuario, con `roles/cloudsql.client`, acceso solo a `erclave-database-url-qa` y `roles/run.invoker` sobre sus cuatro autoridades QA. Admin runtime conserva `roles/firebaseauth.admin` porque Backoffice crea, actualiza y elimina identidades Firebase durante el ciclo de vida de tenants; no concede autorizacion ERClave ni acceso a datos operativos. La identidad desplegadora cuenta con `roles/firebasehosting.admin` para publicar exclusivamente mediante el gate `qa-frontend`. No existen llaves JSON del pipeline.
 
 ## GitHub Environments obligatorios
 
@@ -45,6 +45,8 @@ Estado comprobado el 2026-08-08: los cinco environments existen y requieren apro
 | `QA_SALES_API_URL` | URL HTTPS estable de Ventas QA |
 | `QA_BACKOFFICE_ADMIN_EMAILS` | Allowlist separada por comas de administradores internos; no concede roles dentro de tenants |
 | `QA_FIREBASE_*` | Configuracion web publica del proyecto Firebase `erclave` |
+
+`QA_FIREBASE_API_KEY` se publica en el artefacto frontend y tambien se entrega como `ERCLAVE_FIREBASE_WEB_API_KEY` exclusivamente a Admin. Admin la usa con Identity Toolkit para enviar el correo de restablecimiento al owner durante onboarding; no reemplaza la identidad runtime ni los permisos Firebase Admin.
 
 El secreto `erclave-database-url-qa` permanece exclusivamente en Secret Manager y se monta por referencia. Su valor no pertenece a GitHub.
 

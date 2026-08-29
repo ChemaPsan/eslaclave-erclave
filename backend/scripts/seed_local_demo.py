@@ -13,7 +13,7 @@ from seed_admin_qa_demo import (
 )
 
 
-LOCAL_RELEASE_MODULES = ("admin", "production", "inventory", "sales", "integrations", "hr")
+LOCAL_RELEASE_MODULES = ("admin", "production", "inventory", "sales", "purchasing", "maintenance", "integrations", "hr")
 
 
 def require_local_database(database_url: str) -> None:

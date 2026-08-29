@@ -3503,6 +3503,424 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Rollback | Eliminar las dos variables; retirar los cuatro bindings `run.invoker`, el binding del secreto y `roles/cloudsql.client`; finalmente eliminar la cuenta de servicio. No hay datos ni revision Cloud Run que revertir. |
 | Observaciones | La URL Sales se derivo del nombre estable `sales-service-qa` y del sufijo QA comprobado en los cuatro servicios existentes: `https://sales-service-qa-kgnfw5neua-uc.a.run.app`. La configuracion activa de `gcloud` no se cambio; todos los comandos QA declararon cuenta y proyecto explicitamente. |
 
+### CHG-226
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-23 |
+| Cambio | Correccion IAM y endurecimiento del ciclo Firebase de tenants en Backoffice QA |
+| Autor | Codex |
+| Archivos | Admin auth/API/pruebas/README y OpenAPI; workflow, plan y validadores QA; `AGENTES.md`; contexto, decisiones, pendientes, arquitectura, diagramas e indice/fichas modulares; fuentes, registro y cinco Word funcionales; expediente de release y `TRAZABILIDAD.md` |
+| Secciones | QA / Backoffice / Tenants / Firebase / IAM / Onboarding / Eliminacion / Errores seguros / Reconciliacion |
+| Agentes consultados | Reglas versionadas de Administracion, arquitectura SaaS, seguridad/IAM, datos multi-tenant, APIs, QA/release y gobierno documental en `AGENTES.md`. Se aplicaron los limites de ambiente y release QA; no se delegaron tareas nuevas. |
+| Diagnostico | UAT mostro `500` al crear y eliminar tenants. CORS, health y lectura de Admin funcionaban. Cloud Logging ubico ambos fallos en Firebase Admin SDK con `INSUFFICIENT_PERMISSION`: la cuenta runtime Admin no tenia autoridad de ciclo de identidad. El borrado de PostgreSQL ya habia confirmado antes de fallar la limpieza, por lo que el listado del navegador quedo obsoleto y el mensaje generico indujo a pensar que nada se elimino. |
+| Descripcion | Con autorizacion explicita se concedio solo `roles/firebaseauth.admin` a `erclave-admin-qa@erclave.iam.gserviceaccount.com` y se incorporo el rol al plan/guardrail QA. Tras comprobar que un onboarding `201` solo generaba enlace, se entrego al runtime Admin la clave web publica ya usada por el frontend y se fijo en el pipeline desde `QA_FIREBASE_API_KEY`. El codigo traduce errores Firebase a envelopes 502 seguros; si la invitacion falla despues de persistir, responde `delivery=pending`; si la limpieza falla despues de borrar, responde `firebase_identity_cleanup=pending` sin filtrar `firebase_emails`. |
+| Motivo | Restaurar el ciclo real de alta/baja en QA con minimo privilegio y evitar que un efecto secundario de identidad oculte el resultado transaccional ya confirmado. |
+| Impacto | El binding IAM y el envio automatico de invitacion estan configurados en QA revision `admin-service-qa-00021-669`, con la misma imagen y SHA certificado. El endurecimiento de API queda en la rama `agent/chg-226-admin-firebase-iam` y requiere otra promocion gobernada; el runtime QA actual todavia no contiene esos nuevos envelopes. No hay migracion ni cambio de request. |
+| APIs afectadas | **Contrato modificado:** `POST /v1/provisioning/tenant-onboarding` (`internal.provisioning.tenant.create`) conserva request y puede devolver invitacion `pending` o 502 seguro antes de persistir. `DELETE /v1/backoffice/tenants/{tenant_id}` (`internal.backoffice.tenant.delete`) conserva request y agrega `firebase_identity_cleanup` al 200. **Autoridad externa:** Firebase Admin SDK/Identity Toolkit, consumida solo por Admin. |
+| Validacion | Admin dirigida: `80 passed`. `npm.cmd run verify` aprobo agentes, documentacion, ambientes, contratos, arquitectura, sintaxis, compilacion y `210 passed, 8 skipped`. Los cinco Word regenerados abren con `python-docx` y sus ZIP no contienen errores. En QA se verifico el binding exacto y cinco health `200`. Un job efimero con la imagen certificada y la misma cuenta intento localizar exclusivamente la identidad asociada al tenant eliminado; Firebase respondio `UserNotFound`, confirmando que no habia identidad huerfana. El job fue eliminado. La revision de configuracion respondio `/health=200` y `/version` con SHA `7aa5c674b605d8268b6bfe00e0812b6a300277cb` antes de recibir 100% del trafico. |
+| Rollback | Para la configuracion de correo, devolver 100% a `admin-service-qa-00022-hey`. Para IAM, retirar solamente `roles/firebaseauth.admin` de la cuenta runtime Admin y revertir CHG-226; esto vuelve a romper alta/baja de identidades y solo procede si se deshabilita antes ese flujo. No hay migracion ni dato creado por el job que restaurar. |
+| Observaciones | La promocion previa ya habia llevado el SHA `7aa5c674b605d8268b6bfe00e0812b6a300277cb`, Alembic `20260821_0023` y cinco servicios a QA mediante run `32621200718`. CHG-226 no ejecuto seed, migracion, datos ni frontend; si creo y promovio una revision de configuracion Admin con la misma imagen/SHA. La reconciliacion durable de limpiezas/invitaciones pendientes permanece como mejora posterior. |
+
+### CHG-227
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Feedback transversal y bloqueo de acciones durante mutaciones del frontend |
+| Autor | Codex |
+| Archivos | Cliente API compartido; utilidad, estilos y shells de frontend/Backoffice; traducciones; estado, indice modular y `TRAZABILIDAD.md` |
+| Secciones | Frontend / UX / Accesibilidad / i18n / Mutaciones / Prevencion de duplicados |
+| Agentes consultados | Especialista UX/UI de marca, experiencia operativa y lenguaje bilingue; especialista tecnico de frontend, sistema visual e i18n; arquitectura transversal y QA documental conforme a `AGENTES.md`. Se aplicaron `$erclave-environment-boundaries` y `$erclave-feature`. |
+| Diagnostico | Guardar o cambiar estatus podia tardar sin una respuesta visual transversal. El usuario conservaba controles accionables y podia repetir el comando al interpretar que el primer clic no habia funcionado. |
+| Descripcion | El cliente HTTP emite inicio y fin para cada `POST`, `PUT`, `PATCH` o `DELETE`. Los dos shells instalan un indicador reutilizable con spinner y texto ES/EN, `aria-live` y `aria-busy`; mientras exista una mutacion pendiente bloquean botones, clics y activaciones Enter/Espacio. El contador soporta concurrencia y la liberacion vive en `finally` para cubrir exito, error, timeout y fallback local. |
+| Motivo | Dar confirmacion inmediata de que ERClave esta procesando y evitar reintentos manuales que produzcan comandos duplicados o confundan el estado final. |
+| Impacto | Mejora visual transversal implementada solo en Local. No cambia reglas de negocio, payloads, permisos, persistencia ni contratos backend. Las lecturas permanecen operables sin mostrar bloqueo global. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** todas las mutaciones HTTP ya existentes del frontend principal y Backoffice pasan por el cliente compartido; no se agregan rutas ni se modifican request/response. **APIs no tocadas:** backend y OpenAPI completos. |
+| Validacion | `validate:syntax`, `validate:i18n` y `validate:responsive` aprobaron de forma dirigida. `npm.cmd run verify` aprobo todos los validadores, compilacion backend y `210 passed, 8 skipped`. |
+| Rollback | Revertir la emision de eventos, la instalacion del indicador, sus estilos y textos. No hay datos, migraciones, seeds ni recursos externos que restaurar. |
+| Observaciones | El stack usado fue Local aislado con Firebase Emulator y PostgreSQL `erclave_local`; no se escribio en QA/Produccion ni se desplego. |
+
+### CHG-228
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Preparacion funcional, agentes y gobierno Backoffice del modulo Compras |
+| Autor | Codex |
+| Archivos | `AGENTES.md`; ficha, ownership, mapa API y contexto; catalogo/permisos/pruebas Admin; manifiesto y etiqueta Backoffice; README y OpenAPI planeado de Purchasing; validador OpenAPI y `TRAZABILIDAD.md` |
+| Secciones | Compras / Proveedores / Requisiciones / Ordenes / Recepciones / Inventory / Backoffice / Entitlements / Agentes |
+| Agentes consultados | Especialista de negocio en abastecimiento; especialista tecnico de compras; Arquitectura SaaS, Datos multi-tenant, Seguridad/IAM, APIs, UX/i18n, Sinergia modular, Inventory y QA/documentacion conforme a `AGENTES.md`. Se aplicaron `$erclave-environment-boundaries` y `$erclave-feature`. |
+| Diagnostico | Compras existia como maqueta, ficha preliminar, manifiesto `planned` vacio y carpeta placeholder, pero no formaba parte del catalogo autoritativo de Admin. Backoffice no podia mostrarlo ni gobernar su dependencia, y faltaban alcance inicial, maquinas de estado, permisos y contrato verificable. |
+| Descripcion | Se definio el primer corte supplier-to-receipt: proveedores, requisiciones, aprobacion/rechazo, ordenes y recepcion inventariable parcial/total. Se formalizaron agentes, segregacion, ownership, estados e idempotencia/reconciliacion con Inventory. Admin incorpora `purchasing` con owner `purchasing-service`, dependencia `inventory` y estado `planned`; Backoffice lo muestra como Planeado y bloquea su activacion. El contrato OpenAPI planned deriva permisos puntuales y no se confunde con runtime. |
+| Motivo | Preparar Compras como dominio gobernado antes de crear tablas o UI operativa, evitando activar una maqueta sin autorizacion, persistencia, contratos reales ni aislamiento. |
+| Impacto | Preparacion Local sin runtime ni datos de Compras. El siguiente corte puede implementar schema, servicio y frontend contra decisiones ya cerradas. Los tenants existentes no reciben entitlement y la navegacion no cambia. |
+| APIs afectadas | **Contrato nuevo planeado:** `purchasing-service` documenta proveedores, requisiciones/transiciones, ordenes/emision y recepciones con permisos `purchasing.*`; todas las operaciones declaran `x-implementation-status: planned` por herencia y no existen en runtime. **Endpoint Admin consumido sin cambio de schema:** `GET /v1/backoffice/modules` agrega la fila `purchasing`. **Guardrail existente:** `PUT /v1/backoffice/tenants/{tenant_id}/entitlements/purchasing` sigue rechazando activacion con `409 module_not_implemented`. **APIs no tocadas:** Inventory y demas runtimes. |
+| Validacion | Admin dirigido: `81 passed`. `validate:openapi`, `validate:architecture`, `validate:agents` y `validate:documentation` aprobaron. `npm.cmd run verify` aprobo todos los validadores, compilacion backend y `211 passed, 8 skipped`. Tras reiniciar Local, `GET /v1/backoffice/modules` devolvio `purchasing`, owner `purchasing-service`, estado `planned` y dependencia `inventory`; el intento controlado de activacion respondio `409 module_not_implemented` sin crear entitlement. |
+| Rollback | Retirar la fila planned del catalogo, contrato, permisos derivados, etiqueta/manifiesto y documentacion CHG-228. No hay migracion, schema, seed operativo, datos ni recursos externos que restaurar. |
+| Observaciones | Factura/XML/PDF, CxP, pago, devolucion, evaluacion avanzada, activo fijo y asiento permanecen `planned`. No se cambio el costo base de Inventory ni se autorizo QA. |
+
+### CHG-229
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Primer corte operativo supplier-to-receipt del modulo Compras |
+| Autor | Codex |
+| Archivos | Migracion `0024`; purchasing-service, adapter, pruebas y README; contrato Purchasing y frontera Inventory; configuracion/arranque/seed Local; catalogo/permisos/pruebas Admin; cliente, manifiesto, Backoffice y UI ES/EN; arquitectura, contexto, pendientes y `TRAZABILIDAD.md` |
+| Secciones | Compras / Proveedores / Requisiciones / Ordenes / Recepciones / Inventory / Backoffice / Permisos / Local |
+| Agentes consultados | Agentes especializados de Compras, arquitectura SaaS, datos multi-tenant, seguridad, APIs, UX/i18n, Inventory y QA definidos en `AGENTES.md`. Se aplicaron `$erclave-feature`, `$erclave-db-migration` y `$erclave-environment-boundaries`; no hubo delegacion. |
+| Diagnostico | CHG-228 habia cerrado alcance, ownership y contrato, pero Compras seguia bloqueado como `planned`: no tenia schema, runtime, autorizacion, persistencia, UI operativa ni integracion fisica con Inventory. |
+| Descripcion | Se creo el schema tenant-safe `purchasing` con proveedores, requisiciones/partidas, ordenes/partidas, recepciones/partidas, idempotencia y auditoria. El servicio valida estados, proveedor activo, origen de compra, unidades/catalogos autoritativos, recepcion parcial y sobre-recepcion. Inventory agrega una frontera dedicada que solo admite entradas ligadas a orden/partida usando `purchasing.receipt.create`. Admin y manifiesto cambian a `implemented`; Backoffice permite activarlo con dependencia `inventory`. La interfaz bilingue opera proveedor, requisicion, aprobacion, orden, emision y recepcion con feedback transversal. |
+| Motivo | Entregar el siguiente corte definido como modulo activable y usable de extremo a extremo sin romper ownership ni conceder al receptor permisos de movimiento manual arbitrario. |
+| Impacto | Exclusivamente Local. Alembic avanzo `erclave_local` de `20260821_0023` a `20260824_0024`; el tenant demo activo ahora incluye Compras y el owner recibe permisos derivados. QA permanece en `20260821_0023` y no se desplego ni modifico. |
+| APIs afectadas | **Nuevo runtime:** rutas `GET/POST/PATCH /v1/purchasing/suppliers`, `GET/POST/PATCH /v1/purchasing/requisitions`, transiciones `submit/approve/reject`, `GET/POST /v1/purchasing/orders`, `POST /orders/{id}/issue`, `GET/POST /v1/purchasing/receipts`. **Inventory ampliado:** `POST /v1/inventory/purchase-receipts`, limitado a `entry + source.type=purchase_order + line_id`. **Admin:** el catalogo declara `purchasing` implementado y permite entitlement si `inventory` esta activo. |
+| Validacion | Migracion Local transaccional aplicada a `20260824_0024`. Pruebas reales de repositorio aprobaron ciclo supplier-to-partial-receipt, rechazo de sobre-recepcion y replay/conflicto idempotente. Health de Purchasing `200`; sesion Firebase Local resolvio Compras activo con 14 permisos; listado autenticado funciono; alta HTTP temporal y replay devolvieron el mismo ID y sus tres filas de validacion se eliminaron despues. La validacion completa queda registrada al cierre. |
+| Rollback | Antes de datos importantes en Local: `alembic downgrade 20260821_0023` elimina el schema `purchasing`; revertir catalogo/manifiesto/arranque/contratos y retirar el entitlement demo. En ambientes futuros con datos se usara forward-fix. |
+| Observaciones | Reabastecimiento automatico, factura/XML/PDF, CxP, pago, devolucion, evaluacion avanzada y contabilidad permanecen planeados. La reconciliacion durable automatica queda para el siguiente corte; hoy el fallo se conserva visible como `needs_reconciliation`. No hubo escritura en QA o Produccion. |
+
+### CHG-230
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Perfil fiscal editable de proveedores |
+| Autor | Codex |
+| Archivos | Migracion `0025`; schemas, repositorio, API, pruebas y README de Purchasing; contrato OpenAPI; cliente y UI de Compras; arquitectura, agentes, estado, decisiones, ficha modular, diagrama, validadores y `TRAZABILIDAD.md` |
+| Secciones | Compras / Proveedores / Fiscal / Edicion / Multi-tenant / Frontend / Local |
+| Agentes consultados | Especialistas de negocio y tecnologia de Compras; arquitectura SaaS, Datos/DB multi-tenant, APIs, Seguridad/IAM, UX/i18n y QA/documentacion definidos en `AGENTES.md`. Se aplicaron `$erclave-feature`, `$erclave-db-migration` y `$erclave-environment-boundaries`; no hubo delegacion. |
+| Diagnostico | El proveedor operativo solo conservaba identificacion comercial y contacto basico. La UI no permitia reabrirlo para corregir datos y no existian regimen, correo de facturacion ni domicilio fiscal, dejando incompleto el maestro para alcances posteriores de factura y CxP. |
+| Descripcion | Se amplio `purchasing.suppliers` con perfil fiscal, contacto y domicilio. Los proveedores nuevos exigen razon social, RFC mexicano, regimen, correo de facturacion y codigo postal fiscal; RFC/correos se normalizan y el RFC es unico por tenant. `PATCH` combina cambios parciales con el registro vigente e impide dejar incompleto el conjunto fiscal. La vista bilingue permite crear, editar, cancelar la edicion y ver el estado del perfil usando el feedback transversal de mutaciones. Los proveedores heredados siguen legibles y pueden completarse sin backfill inventado. |
+| Motivo | Preparar un maestro de proveedores util para operacion fiscal posterior y permitir correcciones controladas sin recurrir a SQL ni duplicar proveedores. |
+| Impacto | Solo Local. Alembic avanza a `20260824_0025`; QA permanece en `20260821_0023`. No se modifican ordenes ni recepciones existentes. Los futuros documentos fiscales deberan guardar snapshot propio y no depender retrospectivamente del maestro editable. |
+| APIs afectadas | **Contrato modificado:** `POST /v1/purchasing/suppliers` exige perfil fiscal minimo y `PATCH /v1/purchasing/suppliers/{id}` admite datos comerciales, contacto, domicilio y fiscal con permisos `purchasing.supplier.create|update`. `GET /v1/purchasing/suppliers` devuelve los nuevos campos. **Consumidos sin cambio:** catalogos Admin de moneda/condiciones. **No tocadas:** Inventory y demas runtimes. |
+| Validacion | Alembic Local confirma `20260824_0025 (head)` y no se ejecuto downgrade porque existe un proveedor real que debe preservarse. `4 passed` de repositorio PostgreSQL cubren alta, normalizacion, edicion, unicidad tenant-safe, perfil incompleto, RFC invalido e idempotencia. En HTTP autenticado, crear/editar/listar funciono, RFC/correo se normalizaron y el duplicado respondio `409`; los datos temporales quedaron eliminados. `npm.cmd run verify` aprobo todos los validadores, compilacion backend y `219 passed`. |
+| Rollback | En una base sin datos fiscales: `alembic downgrade 20260824_0024` elimina indice y columnas de `0025`; luego revertir contrato, backend y UI. Como Local ya contiene un proveedor, no se ejecuta downgrade destructivo y se prefiere forward-fix. En ambientes con datos nunca eliminar columnas sin exportacion y autorizacion explicita. |
+| Observaciones | Factura/XML/PDF, CxP, pago y constancias fiscales permanecen planeados. No hubo escritura ni despliegue en QA o Produccion. |
+
+### CHG-231
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Requisiciones multipardida de Compras |
+| Autor | Codex |
+| Archivos | UI y estilos de Compras; schema, pruebas y README de Purchasing; OpenAPI `1.2.0`; ficha modular, decisiones, estado, pendientes, seleccion escalable, mapa API y `TRAZABILIDAD.md` |
+| Secciones | Compras / Requisiciones / Partidas / Ordenes / UX / Responsive / Local |
+| Agentes consultados | Especialistas de negocio y tecnologia de Compras; arquitectura SaaS, API, UX/i18n, seleccion escalable y QA/documentacion definidos en `AGENTES.md`. Se aplicaron `$erclave-feature` y `$erclave-environment-boundaries`; no hubo delegacion. |
+| Diagnostico | Persistencia y contrato ya aceptaban una lista de partidas, pero el formulario solo capturaba un articulo y la conversion a orden reutilizaba un unico precio para todas las lineas. Esto forzaba requisiciones duplicadas o precios comercialmente incorrectos. |
+| Descripcion | La interfaz permite agregar o quitar partidas, buscar cada articulo por codigo/nombre, tomar su unidad base y capturar cantidad/descripcion. El resumen muestra todas las lineas. Backend exige al menos una y rechaza el mismo articulo repetido. Al convertir una requisicion aprobada, la Orden solicita un precio unitario independiente por partida. Los selectores crecientes de articulo, proveedor y requisicion usan el patron buscable. |
+| Motivo | Representar una necesidad de compra completa en un solo documento y conservar precios correctos al avanzar al siguiente documento del ciclo. |
+| Impacto | Implementado solo en Local, sin migracion ni cambio de cabeza Alembic. Requisiciones existentes son compatibles porque `lines` ya era una coleccion. El primer corte conserva una orden/un proveedor para todas las partidas; adjudicacion entre proveedores queda pendiente. |
+| APIs afectadas | **Contrato modificado:** `POST/PATCH /v1/purchasing/requisitions` (`purchasing-service`, permisos `purchasing.requisition.create|update`) mantiene `lines[]` y formaliza que un articulo no puede repetirse. **Consumido sin cambio:** `POST /v1/purchasing/orders` con permiso `purchasing.order.create`; la UI ahora envia un `unit_price` diferente en cada linea. **No tocadas:** Admin, Inventory y demas runtimes. |
+| Validacion | `6 passed` dirigidas de Purchasing cubren creacion, orden y reemplazo de multiples partidas, bloqueo fuera de borrador y rechazo de articulo duplicado. El smoke HTTP autenticado creo una requisicion temporal con dos articulos reales, devolvio lineas `1,2` y unidades `H87,LTR`; repetir el articulo respondio `422` y los datos temporales se eliminaron. Validadores OpenAPI, sintaxis, i18n, responsive y selectores aprobaron. `npm.cmd run verify` aprobo todos los validadores, compilacion backend y `219 passed`. |
+| Rollback | Revertir editor/estilos multipardida, regla de duplicado y contrato `1.2.0`. No hay migracion ni transformacion de datos que deshacer; requisiciones ya guardadas permanecen validas bajo el modelo previo. |
+| Observaciones | Dividir o adjudicar partidas entre varios proveedores permanece planeado y se registra en `PENDIENTES.md`. No hubo escritura ni despliegue en QA o Produccion. |
+
+### CHG-232
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Cierre source-to-receipt de Compras de extremo a extremo |
+| Autor | Codex |
+| Archivos | Migracion `0026`; backend, pruebas y README de Purchasing; lectura puntual de almacen en Inventory; contratos OpenAPI; permisos Local; cliente/UI de Compras; arquitectura, contexto, ficha modular, diagramas, validadores y `TRAZABILIDAD.md` |
+| Secciones | Compras / Requisiciones / Ordenes / Recepciones / Conciliacion / Concurrencia / Inventory / Frontend / Local |
+| Agentes consultados | Especialistas de negocio y tecnologia de Compras, arquitectura SaaS, datos multi-tenant, APIs, seguridad/IAM, Inventory, UX/i18n y QA/documentacion definidos en `AGENTES.md`. Se aplicaron `$erclave-feature`, `$erclave-db-migration` y `$erclave-environment-boundaries`; no hubo delegacion. |
+| Diagnostico | El flujo feliz existia, pero una orden podia apartarse de su requisicion, Inventory no exponia la lectura puntual de almacen que Purchasing consumia, las recepciones fallidas no tenian reintento, solicitudes simultaneas podian competir por el mismo saldo y la UI no editaba/cancelaba borradores ni recibia varias partidas. |
+| Descripcion | La orden ligada exige coincidencia exacta de partidas salvo precio y los borradores se editan con snapshots autoritativos. Requisiciones y ordenes se cancelan con motivo/actor; cancelar una orden sin recepcion libera su requisicion. La recepcion bloquea orden/partidas, descuenta reclamos pendientes, persiste una clave Inventory por linea y aplica exitos parciales una sola vez. La conciliacion manual reintenta solo lineas incompletas. Inventory agrega `GET /warehouses/{id}` tenant-safe. La UI incorpora edicion, cancelacion, recepcion multipardida y conciliacion, todo bajo el feedback transversal de mutaciones. |
+| Motivo | Cerrar el proceso operativo real, hacer visibles/reparables los fallos distribuidos y evitar duplicados por doble clic o concurrencia antes de considerar Compras candidato a QA. |
+| Impacto | Solo Local. Alembic avanzo `erclave_local` de `20260824_0025` a `20260824_0026`; el ciclo reversible upgrade/downgrade/upgrade aprobo antes de crear nuevos datos. QA permanece en `20260821_0023` y no se leyo, migro, sembro ni desplego. Los permisos derivados de Purchasing pasan de 14 a 18. |
+| APIs afectadas | **Purchasing nuevo/modificado:** `POST /requisitions/{id}/cancel`, `PATCH /orders/{id}`, `POST /orders/{id}/cancel`, `POST /receipts/{id}/reconcile`; crear orden exige partidas exactas y crear recepcion admite varias lineas con almacenes por partida. **Inventory nuevo:** `GET /v1/inventory/warehouses/{id}`, autorizado para lectura Inventory o validacion de recepcion Purchasing. **Consumidos sin cambio:** catalogos comerciales Admin, articulo Inventory y entrada `POST /v1/inventory/purchase-receipts`. |
+| Validacion | Ciclo Alembic Local `0025 -> 0026 -> 0025 -> 0026` aprobado. `10 passed` de repositorio PostgreSQL cubren flujo, cancelacion, mismatch, fallo parcial/conciliacion, idempotencia, multi-tenant y contencion concurrente. `npm.cmd run verify` aprobo validadores, contratos, compilacion y `211 passed, 8 skipped`. El smoke HTTP autenticado valido lectura puntual de almacen, rechazo `422` antes de persistir almacen invalido, rechazo `409` de orden distinta, edicion/emision, recepcion de dos lineas con dos movimientos Inventory y cancelacion posterior preservando cantidades; la limpieza dejo 1 proveedor, 1 requisicion, 0 ordenes, 0 recepciones y 0 filas smoke. |
+| Rollback | En una base sin nuevas recepciones: `alembic downgrade 20260824_0025` retira columnas/constraints de `0026` y se revierten rutas/UI/contratos. Con datos de conciliacion o claves de linea se aplica forward-fix; nunca se elimina evidencia de movimientos Inventory para forzar rollback. |
+| Observaciones | La adjudicacion de una requisicion entre varios proveedores, paginacion server-side y reintento automatico programado permanecen pendientes. Factura/CxP/pago/devolucion/contabilidad siguen fuera de este corte. |
+
+### CHG-233
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Preparacion funcional y arquitectonica del modulo Mantenimiento |
+| Autor | Codex |
+| Archivos | Ficha modular, agentes, manifiesto, catalogo Backoffice, README de servicio objetivo, contrato OpenAPI, ownership/modelo/APIs, seleccion escalable, reportes estandar, contexto, validadores, prueba Admin y trazabilidad |
+| Secciones | Mantenimiento / RH / Production / Inventory / Backoffice / Arquitectura / Contratos |
+| Agentes consultados | Especialista de negocio en mantenimiento y confiabilidad; especialista tecnico de ordenes e integraciones; arquitectura SaaS, datos multi-tenant, APIs, seguridad, RH, Production, Inventory, UX/i18n y QA/documentacion definidos en `AGENTES.md`. Se aplicaron `$erclave-feature` y `$erclave-environment-boundaries`; no hubo delegacion. |
+| Diagnostico | El producto no tenia dominio de Mantenimiento. Production ya posee maquinas y estados productivos; RH posee areas/puestos/trabajadores; Inventory posee articulos, almacenes, reservas y movimientos. Modelar todo dentro de Mantenimiento habria duplicado autoridades y confundido articulos con activos. |
+| Descripcion | Se define el primer corte correctivo: orden manual o desde Produccion, objetivo maquina o ubicacion libre, responsable RH elegible, tiempos, diagnostico, verificacion y solicitud multi-linea al almacen de refacciones. RH e Inventory son dependencias duras y Production integracion opcional. Una falla bloquea maquina y deja la orden productiva en espera o pausada; resolver libera la maquina sin reanudar automaticamente. El modulo se registra como `planned` y Backoffice rechaza activarlo. |
+| Motivo | Acordar estados, ownership, invariantes, agentes, integraciones y criterios de terminado antes de crear persistencia o exponer una capacidad incompleta. |
+| Impacto | Solo preparacion de repositorio. No existe runtime, schema, migracion, seed funcional, servicio iniciado ni entitlement activo de Mantenimiento. Local conserva cabeza `20260824_0026`; QA conserva `20260821_0023`. No hubo lectura/escritura externa, despliegue ni cambio de datos. |
+| APIs afectadas | **Nuevo contrato objetivo, no implementado:** `maintenance-service.openapi.yaml` con ordenes, transiciones, tiempos y solicitudes de material. **Consumidores futuros documentados, sin cambiar sus contratos/runtime:** RH validara elegibilidad; Production bloqueara/liberara maquina y pausara orden; Inventory reservara/entregara/devolvera refacciones. **Admin Local modificado:** catalogo Backoffice lista `maintenance` como `planned`, owner `maintenance-service`, dependencias `hr,inventory`, y rechaza su activacion con `module_not_implemented`. |
+| Validacion | `validate:architecture`, `validate:openapi` y `validate:documentation` aprobaron; OpenAPI parseo como 3.1.0 y todas sus operaciones permanecen `planned`. Pruebas dirigidas de Admin: `82 passed`, incluida visibilidad de catalogo y rechazo de activacion. `npm.cmd run verify` aprobo todos los validadores, compilacion backend y `212 passed, 8 skipped`. |
+| Rollback | Retirar la semilla `maintenance`, opcion/manifiesto, contrato/README, validadores, prueba y documentacion CHG-233. No hay tablas, datos ni efectos externos que revertir. |
+| Observaciones | Preventivos, Activos generales, adjuntos, garantias, MTBF por horas reales y escalamiento automatico a Compras quedan deliberadamente fuera. Los contratos propietarios complementarios y la implementacion extremo a extremo son el siguiente corte; no debe activarse antes. |
+
+### CHG-234
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Implementacion Local del primer corte correctivo de Mantenimiento |
+| Autor | Codex |
+| Archivos | Migracion `0027`; `maintenance-service` y pruebas; adaptador/configuracion/arranque Local; integraciones RH, Production e Inventory; catalogo/permisos Admin; contratos OpenAPI; cliente/UI/manifiesto; arquitectura, contexto, validadores y `TRAZABILIDAD.md` |
+| Secciones | Mantenimiento / RH / Production / Inventory / Backoffice / Frontend / Local / Arquitectura |
+| Agentes consultados | Especialistas de negocio y tecnologia de Mantenimiento, RH, Production, Inventory, arquitectura SaaS, datos multi-tenant, APIs, seguridad/IAM, UX/i18n y QA/documentacion definidos en `AGENTES.md`. Se aplicaron `$erclave-feature`, `$erclave-db-migration` y `$erclave-environment-boundaries`; no hubo delegacion. |
+| Diagnostico | CHG-233 habia definido el dominio, pero Mantenimiento seguia sin schema, runtime, permisos efectivos, UI ni comandos propietarios. Una accion desde Produccion no podia inmovilizar de forma trazable la maquina; tampoco existian asignacion RH, captura de tiempo o reserva/consumo de refacciones. |
+| Descripcion | Se implementa el flujo `draft -> requested -> assigned -> in_progress|waiting_parts -> resolved -> closed`, con cancelacion temprana y reapertura. Las ordenes pueden referir una maquina o una ubicacion libre; RH valida al responsable mediante `intervenes_in_maintenance`; Inventory reserva multiples refacciones y las consume al resolver; Production conserva el hold de la orden, marca la maquina en mantenimiento y pausa una orden en proceso, sin reanudarla automaticamente. La resolucion valida evidencia y tiempo antes de cualquier consumo externo. Todas las mutaciones conservan idempotencia, auditoria, aislamiento tenant y feedback visual anti doble clic. |
+| Motivo | Entregar un primer corte operable de extremo a extremo sin duplicar autoridades de RH, Production o Inventory y sin ocultar demoras o fallos de integracion al usuario. |
+| Impacto | Solo Local. Alembic avanzo `erclave_local` de `20260824_0026` a `20260824_0027`; se probo downgrade y reaplicacion antes del seed. El tenant demo habilita `maintenance`, el servicio escucha en `8012` y Backoffice permite activarlo al cumplir dependencias RH/Inventory. QA conserva `20260821_0023`; no se leyo, migro, sembro ni desplego fuera de Local. |
+| APIs afectadas | **Maintenance nuevo:** ordenes `GET/POST /v1/maintenance/orders`, lectura/edicion por ID, `POST /orders/{id}/transitions`, tiempos y solicitudes/cancelacion de material con permisos `maintenance.*`. **RH:** filtro `maintenance_only`, `GET /v1/hr/workers/maintenance-eligible` y bandera de puesto/trabajador. **Production:** lectura puntual de maquina y comandos idempotentes `/maintenance-block|release`; la maquina conserva `maintenance_order_ref_id`. **Inventory:** las lecturas de almacenes/articulos y comandos de reserva/liberacion/consumo aceptan permisos Maintenance. **Admin:** catalogo y permisos cambian el modulo a `implemented`. |
+| Validacion | Ciclo Alembic Local `0026 -> 0027 -> 0026 -> 0027`; `8 passed` de Maintenance (4 API y 4 PostgreSQL real), `13 passed` RH, `40 passed` Production, `26 passed` Inventory y `120 passed, 4 skipped` Admin. Las siete APIs y frontend levantaron en Local; `session/context` confirmo `maintenance` activo y su API respondio autenticada. `npm.cmd run verify` aprobo validadores, OpenAPI, compilacion, sintaxis y `213 passed, 8 skipped`. |
+| Rollback | Sin datos operativos nuevos, deshabilitar el entitlement y ejecutar `alembic downgrade 20260824_0026`, lo cual elimina schema `maintenance`, las banderas/holds agregados y luego permite revertir runtime/UI/contratos. Con ordenes reales se prefiere forward-fix y exportar evidencia antes de cualquier rollback destructivo. |
+| Observaciones | Reintento durable de `needs_reconciliation`, devolucion de sobrantes, participantes secundarios, adjuntos, preventivos, activos generales y analitica avanzada permanecen para cortes posteriores. No hubo escritura ni despliegue en QA o Produccion. |
+
+### CHG-235
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Endurecimiento y conciliacion de Mantenimiento antes de matriz |
+| Autor | Codex |
+| Archivos | Migracion `0028`; dominio/API/pruebas de Maintenance; comando de maquina Production; cliente/UI/manifiesto; smoke HTTP Local; OpenAPI; permisos Admin; manual funcional Word/fuente; ficha modular, agentes, contexto, ownership/modelo, diagramas, README y trazabilidad |
+| Secciones | Mantenimiento / Conciliacion / Refacciones / Production / RH / Inventory / Frontend / Permisos / Local / Documentacion |
+| Agentes consultados | Especialistas de negocio y tecnologia de Mantenimiento, RH, Production, Inventory, arquitectura SaaS, datos multi-tenant, APIs, seguridad/IAM, UX/i18n y QA/documentacion definidos en `AGENTES.md`. Se aplicaron `$erclave-feature`, `$erclave-db-migration` y `$erclave-environment-boundaries`; no hubo delegacion. |
+| Diagnostico | El corte CHG-234 arrancaba y pasaba unitarios, pero Inventory creaba `spareParts` mientras Maintenance exigia `spare_parts`; cancelaciones podian dejar reservas, reabrir no rebloqueaba, `needs_reconciliation` no tenia reintento, una reasignacion permitia varios principales, iniciar no revalidaba RH y la UI de lectura dependia de catalogos no autorizados. El contrato y la documentacion tambien conservaban deriva. |
+| Descripcion | Ordenes y solicitudes conservan operacion pendiente, intentos, error y fecha. Se agregan reintentos manuales idempotentes, claves externas estables, compensacion de reservas antes de cancelar, rebloqueo al reabrir y bloqueo de cierre/asignacion/inicio ante conciliacion. La cancelacion de material persiste exitos parciales y reanuda solo lineas activas. Solo el responsable RH vigente inicia/captura tiempo; se rechazan tiempos futuros y existe un principal unico. La UI carga ordenes aunque fallen catalogos, oculta mutaciones sin permiso, muestra estados parciales y permite cancelar/conciliar. `spare_parts` queda canonico con compatibilidad histórica. |
+| Motivo | Eliminar doble interpretacion de exito, reservas huerfanas y liberaciones inseguras antes de ejecutar la matriz funcional, y convertir fallas distribuidas temporales en operaciones visibles y recuperables. |
+| Impacto | Solo Local. Alembic avanzo `erclave_local` de `20260824_0027` a `20260824_0028` mediante ciclo reversible. Se sincronizaron 135 permisos idempotentes y el tenant demo recibio `maintenance.order.reconcile` y `maintenance.material_request.reconcile`. Production y Maintenance se reiniciaron en `8002/8012`; QA y Produccion no fueron leidos, migrados, sembrados ni desplegados. |
+| APIs afectadas | **Maintenance nuevas:** `POST /v1/maintenance/orders/{id}/reconcile` (`maintenance.order.reconcile`) y `POST /v1/maintenance/material-requests/{id}/reconcile` (`maintenance.material_request.reconcile`). **Maintenance modificadas:** `POST /orders/{id}/transitions` compensa, rebloquea, revalida y usa estado durable; `POST /orders/{id}/material-requests` acepta el alias historico y reporta parcialidad; `POST /material-requests/{id}/cancel` queda reanudable. **Production modificada:** `POST /v1/production/machines/{id}/maintenance-release` devuelve conflicto controlado y tolera replay tras respuesta perdida sin liberar un hold ajeno. **Consumidas sin cambiar contrato:** RH elegibles e Inventory warehouse/item/reserva/consume/release. |
+| Validacion | Ciclo Alembic Local `0027 -> 0028 -> 0027 -> 0028`; `6 passed` API Maintenance, `6 passed` PostgreSQL real tenant-safe y `41 passed` Production. OpenAPI, sintaxis e i18n dirigidos aprobaron. `npm.cmd run smoke:maintenance:local` recorrio APIs autenticadas reales `machine -> assignment -> time -> parts -> resolve -> close`, comprobo liberacion y elimino exclusivamente sus fixtures. `npm.cmd run verify` aprobo validadores, compilacion y `214 passed, 8 skipped`. |
+| Rollback | Detener runtime Local, ejecutar `alembic downgrade 20260824_0027` y revertir endpoints/UI/contrato/permisos. La revision elimina solo metadatos e indices nuevos; con conciliaciones operativas se prefiere forward-fix y conservar auditoria antes de retirar columnas. |
+| Observaciones | Permanecen deliberadamente fuera: reintento automatico programado, devolucion de sobrantes, participantes secundarios, adjuntos, preventivos, activos generales y analitica avanzada. El manual `11_mantenimiento.docx` queda listo para acompañar la matriz. |
+
+### CHG-236
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Autorizacion granular de transiciones operativas |
+| Autor | Codex |
+| Archivos | Autorizacion/API/pruebas de Production y Maintenance; API/pruebas Inventory; proyecciones HR/Admin; OpenAPI de Admin, Production, Inventory, HR y Maintenance; frontend y manifiestos; catalogo de permisos; matriz de autorizacion, decisiones, estado, pendientes, fichas modulares, agentes y manuales funcionales fuente/Word |
+| Secciones | IAM / Roles / Produccion / Mantenimiento / Almacenes / Frontend / Contratos / Local / Documentacion |
+| Agentes consultados | Especialistas de negocio y tecnologia de Produccion, Almacenes, Compras, Ventas, Mantenimiento, RH y Administracion; arquitectura SaaS y APIs, seguridad/IAM, UX/i18n, QA/documentacion y custodio de manuales definidos en `AGENTES.md`. Se aplicaron `$erclave-feature`, `$erclave-environment-boundaries` y `$erclave-solution-manuals`; no hubo delegacion. |
+| Diagnostico | Compras, Ventas y Recetas ya separaban sus aprobaciones y aceptaciones. Produccion agrupaba todas las transiciones en `production.order.status.update`, las etapas en `production.order_stage.update`; Mantenimiento agrupaba nueve acciones en `maintenance.order.transition`; y recibir producto terminado heredaba `inventory.movement.create`. La UI de Produccion tampoco filtraba esas acciones por permiso. |
+| Descripcion | Production resuelve permisos independientes para liberar, esperar recursos, iniciar, pausar, reanudar, enviar a validacion, finalizar y cancelar; terminar, bloquear, omitir, reiniciar o actualizar una etapa tambien queda separado. Maintenance deriva el permiso exacto de la transicion solicitada. Inventory separa lectura y recepcion fisica de producto terminado. Las proyecciones cruzadas aceptan solo las capacidades minimas del consumidor. El frontend presenta cada accion segun `session/context`; el backend rechaza poseer otro permiso del mismo endpoint. Los codigos se derivan de OpenAPI y quedan asignables desde Roles sin codificar nombres de puestos. |
+| Motivo | Permitir segregacion real de funciones por tenant y evitar que un usuario con una capacidad operativa pueda aprobar, finalizar o recibir por compartir endpoint o permiso generico. |
+| Impacto | Solo Local. No hubo migracion ni cambio de schema. El seed idempotente sincronizo el catalogo sobre `127.0.0.1:5434/erclave_local` para el tenant autorizado `ten_739ee59d765d5e14818674800d`; no se copiaron datos ni se expandieron roles configurables. Como excepcion explicita del seed demo, el rol sistemico `owner` conserva todos los permisos tenant activos y asignables de sus modulos habilitados. QA y Produccion no fueron leidos, sembrados, migrados ni desplegados. |
+| APIs afectadas | **Production modificadas:** `POST /v1/production/orders` ahora exige `production.order.release`; `PATCH /orders/{id}/status` deriva uno de ocho permisos; `PATCH /order-stages/{id}` deriva uno de cinco; lecturas de orden/producto aceptan las recepciones Inventory; comandos de maquina aceptan acciones Maintenance puntuales. **Maintenance modificada:** `POST /v1/maintenance/orders/{id}/transitions` deriva uno de nueve permisos. **Inventory modificadas:** `GET/POST /v1/inventory/finished-goods-receipts` usan `.read`/`.receive`; reservas aceptan las acciones Production/Maintenance puntuales. **HR/Admin consumidas/modificadas:** elegibles/capacidad y reserva de folio aceptan `production.order.release`. **Auditadas sin cambio:** comandos granulares de Purchasing, Sales y Recipe. |
+| Validacion | Pruebas dirigidas: Production `43 passed`, Maintenance `7 passed, 6 skipped`, Inventory `27 passed`; OpenAPI, sintaxis Python/JS, i18n y responsive aprobaron. `npm.cmd run validate:documentation` confirmo coherencia de fuentes vivas y `npm.cmd run verify` aprobo todos los validadores, compilacion y `217 passed, 8 skipped`. |
+| Rollback | Revertir contratos, autorización, UI y documentacion; resincronizar el seed Local para retirar del contexto efectivo los codigos nuevos. No hay migracion ni datos operativos que revertir. |
+| Observaciones | El runtime actual crea la orden de Produccion ya liberada; separar un borrador previo queda registrado como pendiente. Los cuatro manuales afectados fueron regenerados desde Markdown. |
+
+### CHG-237
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Cierre de auditoria de autorizacion, contratos y documentacion viva |
+| Autor | Codex |
+| Archivos | APIs, schemas y pruebas de Production/Inventory; contratos OpenAPI de Production, Inventory, Admin y Sales; cliente/UI; validador runtime/OpenAPI; mapa API, ownership, matriz IAM, contexto, fichas, README, manuales fuente/Word y trazabilidad |
+| Secciones | IAM / Minimo privilegio / Production / Inventory / OpenAPI / Validadores / Documentacion / Local |
+| Agentes consultados | Especialistas de negocio y tecnologia de Produccion, Almacenes, Administracion y Ventas; arquitectura SaaS/APIs, seguridad/IAM, UX, QA/documentacion y custodio de manuales definidos en `AGENTES.md`. No hubo delegacion. |
+| Diagnostico | El permiso de recepcion Inventory reutilizaba lecturas generales de orden y producto Production, exponiendo receta, recursos, responsables y costos totales. Production evaluaba precondiciones antes del permiso exacto. OpenAPI y runtime discrepaban en varias lecturas porque el validador solo comparaba metodo/ruta. El mapa API, ficha Inventory y nombres canonicos de dos manuales conservaban referencias historicas. |
+| Descripcion | Production publica lista y detalle `finished-goods-candidates` con folio, producto vinculado, cantidad, unidad, estado terminado y costo unitario. Inventory usa exclusivamente ese contrato. Las lecturas generales vuelven a permisos propietarios. Cambiar estatus exige la capacidad exacta antes de preflight; entrar a produccion acepta inicialmente start/resume y luego resuelve la exacta segun estado. El validador AST compara permisos estaticos runtime/OpenAPI y el primer pase corrigio seis derivas preexistentes. Documentacion viva y manuales canonicos quedan sincronizados. |
+| Motivo | Aplicar minimo privilegio real entre modulos, evitar filtracion por errores de precondicion y convertir la paridad de permisos en una regla automatica antes de iniciar otro dominio. |
+| Impacto | Solo Local y repositorio. No hubo migracion ni escritura de datos operativos. El reinicio canonico ejecuto los seeds idempotentes habituales: sincronizo los mismos 155 permisos y restauro el tenant demo sin agregar codigos nuevos; el owner sistemico conserva su piso esperado. Se reduce el alcance de lectura que reciben los roles de Almacenes. QA y Produccion no fueron leidos, modificados ni desplegados. |
+| APIs afectadas | **Production nuevas:** `GET /v1/production/finished-goods-candidates` y `GET /v1/production/finished-goods-candidates/{id}`, permisos Inventory `.read|.receive`. **Production restringidas:** ordenes y productos generales ya no aceptan permisos de recepcion; status autoriza antes de preflight; vincular producto terminado exige Production update e Inventory item create. **Inventory consumidor modificado:** recepcion usa candidato minimo. **Contratos corregidos sin cambiar flujo:** unidades Admin, articulos Inventory y referencias Sales alinean permisos `any` con runtime. |
+| Validacion | Pruebas dirigidas Production/Inventory `63 passed`; OpenAPI y documentacion aprobaron. `npm.cmd run verify` aprobo validadores, compilacion y `220 passed, 8 skipped`. Las ocho superficies Local respondieron HTTP `200` despues del reinicio. |
+| Rollback | Revertir endpoints/proyecciones, cliente Inventory/frontend, orden de autorizacion, contratos, validador y documentacion. No hay schema ni datos que revertir. No se recomienda restaurar las lecturas generales para Almacenes; ante incompatibilidad se aplica forward-fix sobre la proyeccion minima. |
+| Observaciones | El costo unitario se conserva porque Inventory lo necesita para valuar la entrada; los importes totales permanecen privados de Produccion. Los manuales canonicos vuelven a `01_produccion.docx` y `02_almacenes_inventarios.docx`; los artefactos CHG historicos se conservan como evidencia. |
+
+### CHG-238
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Flujo guiado para crear, emitir y recibir ordenes de compra |
+| Autor | Codex |
+| Archivos | Frontend y manifiesto de Compras; validador del ciclo; ficha modular; estado y decisiones; manual funcional fuente/Word; registro y trazabilidad |
+| Secciones | Compras / Requisiciones / Ordenes / Recepciones / IAM / Frontend / Documentacion / Local |
+| Agentes consultados | Especialistas de negocio y tecnologia de Compras, Inventory, seguridad/IAM, UX y QA/documentacion definidos en `AGENTES.md`; no hubo delegacion. |
+| Diagnostico | El backend ya cerraba el ciclo requisicion aprobada -> orden -> emision -> recepcion, pero la aprobacion no presentaba el siguiente paso y cada submodulo exigia que el usuario reconstruyera manualmente el contexto. Esto hacia parecer que crear la orden no existia. El manifiesto ademas solo declaraba permisos de lectura aunque la UI ofreciera mutaciones. |
+| Descripcion | Aprobar precarga la requisicion y abre Ordenes; la tarjeta aprobada permite retomar la creacion. La orden muestra la secuencia, captura proveedor y precios por partida, y al emitir abre Recepciones con la orden precargada. Ordenes emitidas o parciales conservan un acceso de recepcion. Formularios y botones se filtran por cada permiso puntual, sin sustituir la autorizacion backend. |
+| Motivo | Hacer visible el proceso existente, reducir clics repetidos y errores de contexto, y conservar segregacion entre aprobar, comprar, emitir y recibir. |
+| Impacto | Solo codigo y documentacion Local. No hubo migracion, cambio de API, seed, escritura de datos operativos ni acceso a QA/Produccion. |
+| APIs afectadas | Sin contratos nuevos. Se consumen los comandos existentes de requisiciones, ordenes y recepciones de `purchasing-service`. |
+| Validacion | Validador dirigido `validate:purchasing-cycle`, sintaxis JS, pruebas PostgreSQL de Purchasing y suite integral del repositorio. |
+| Rollback | Revertir estado transitorio, navegacion guiada, filtros visuales, manifiesto, validador y documentacion. No hay datos o schema que revertir. |
+| Observaciones | Crear y emitir permanecen separados. Division de requisicion entre proveedores, facturacion/CxP y reabastecimiento automatico siguen fuera del corte. |
+
+### CHG-239
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Visibilidad de asignacion y solicitud de refacciones en Mantenimiento |
+| Autor | Codex |
+| Archivos | Frontend; validador de Mantenimiento; ficha modular; estado; manual funcional fuente/Word; registro y trazabilidad |
+| Secciones | Mantenimiento / Refacciones / Asignacion RH / Inventory / UX / Local |
+| Agentes consultados | Especialistas de negocio y tecnologia de Mantenimiento, RH, Inventory, seguridad/IAM, UX y QA/documentacion definidos en `AGENTES.md`; no hubo delegacion. |
+| Diagnostico | La orden Local `MTO_001` conserva correctamente a `MIGUEL DEMO DELTA`, pero la tarjeta mezclaba el nombre con la ubicacion y el selector quedaba sin seleccion visible. Refacciones tenia API y formulario, pero Local carece de almacen `spare_parts`; la UI reemplazaba el flujo con texto y las solicitudes existentes no enumeraban sus partidas. |
+| Descripcion | La tarjeta muestra el tecnico bajo una etiqueta propia, conserva la opcion asignada y diferencia reasignacion. Ordenes elegibles presentan **Solicitar refacciones** y precargan el folio. La vista enumera las partidas solicitadas y, cuando falta el almacen requerido, abre el alta de Inventario preconfigurada si el usuario posee permiso; de lo contrario indica la coordinacion necesaria. |
+| Motivo | Hacer visibles relaciones ya persistidas y convertir una precondicion de maestro faltante en un siguiente paso accionable sin aceptar almacenes incompatibles. |
+| Impacto | Solo frontend y documentacion Local. Se leyeron APIs loopback para diagnostico; no se crearon almacenes, articulos, solicitudes ni otras filas. Sin migracion, seed o cambio de contrato; QA/Produccion no fueron accedidos. |
+| APIs afectadas | Sin cambios. Se conservan los contratos existentes de Maintenance, RH e Inventory. |
+| Validacion | Sintaxis JS, validador dirigido `validate:maintenance-cycle`, documentacion y suite integral del repositorio. |
+| Rollback | Revertir navegacion, precarga, detalle de partidas, presentacion de responsable, defaults opcionales de modales, validador y documentacion. No hay datos o schema que revertir. |
+| Observaciones | El sistema no inventa un almacen de refacciones ni convierte almacenes de materia prima. El maestro sigue bajo autoridad de Inventory. |
+
+### CHG-240
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-24 |
+| Cambio | Historial completo de OC y separacion de Reabastecimiento |
+| Autor | Codex |
+| Archivos | Catalogo de modulos; frontend; validador de Compras; ficha modular; estado; manual funcional fuente/Word; registro y trazabilidad |
+| Secciones | Compras / Ordenes de compra / Requisiciones / Reabastecimiento / UX / Local |
+| Agentes consultados | Especialistas de negocio y tecnologia de Compras, Inventory, UX y QA/documentacion definidos en `AGENTES.md`; no hubo delegacion. |
+| Diagnostico | La API y repositorio ya devolvian todas las OC sin filtro, pero la captura vacia aparecia antes del historial y hacia confusa la diferencia con Reabastecimiento. Local contiene `OC_0001` y `OC_0002` emitidas; no tiene requisiciones aprobadas pendientes porque dos fueron convertidas y una cancelada. Los IDs de submodulo se derivaban implicitamente del texto. |
+| Descripcion | OC presenta primero todo el historial, con origen y estado, y condiciona el formulario a candidatas `approved` o edicion `draft`. Sin candidatas muestra una explicacion y acceso a Requisiciones. Reabastecimiento queda como pantalla planeada independiente sin listar o crear OC. El catalogo declara IDs estables para cada ruta. |
+| Motivo | Mostrar la realidad operativa completa, evitar formularios imposibles y separar documentos transaccionales de la planeacion futura de inventario. |
+| Impacto | Solo frontend y documentacion Local. Se realizaron lecturas autenticadas loopback para verificar los estados; no hubo escritura de datos, migracion, seed ni acceso a QA/Produccion. |
+| APIs afectadas | Sin cambios. `GET /v1/purchasing/orders` ya retorna el historial completo y `GET /v1/purchasing/requisitions` determina candidatas. |
+| Validacion | Sintaxis JS, validador `validate:purchasing-cycle`, documentacion y suite integral del repositorio. |
+| Rollback | Revertir IDs explicitos, orden visual, condicion de captura, pantalla planeada, validador y documentacion. No hay datos o schema que revertir. |
+| Observaciones | Compra directa continua soportada por backend pero no se habilita en esta pantalla; el alta guiada del primer corte exige requisicion aprobada. |
+
+### CHG-241
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-25 |
+| Cambio | Planeacion y compromisos multi-dia de capacidad productiva |
+| Autor | Codex |
+| Archivos | Migracion 0029; schemas, repositorio, API y pruebas de Production; contrato OpenAPI; frontend; README, decisiones, estado, pendientes, ficha modular y trazabilidad |
+| Secciones | Produccion / Recetas / Ordenes / Capacidad / RH / Maquinaria / Frontend / Base de datos / Local |
+| Agentes consultados | Especialistas de negocio y tecnologia de Produccion, RH, Mantenimiento, arquitectura, UX y QA/documentacion definidos en `AGENTES.md`; no hubo delegacion. |
+| Diagnostico | El calculo escalaba correctamente los minutos de receta por cantidad, pero comparaba todo contra una sola fecha y guardaba un unico compromiso por recurso/orden. El frontend enviaba la fecha requerida como `planned_for`, no capturaba inicio ni duracion y conservaba una fecha fija vencida. |
+| Descripcion | La receta conserva duracion sugerida; la orden captura inicio, dias productivos y fecha requerida. Production genera fechas lunes-viernes, descuenta compromisos diarios, calcula el minimo requerido, devuelve desglose por recurso/dia y persiste cada asignacion positiva. Materiales conservan validacion y reserva unica. La fecha requerida anterior al fin planeado se rechaza. |
+| Motivo | Planear lotes con la capacidad diaria real disponible, hacer visible el horizonte al operador y evitar que una produccion viable en varios dias quede bloqueada por intentar terminarla artificialmente en uno. |
+| Impacto | Solo Local. La revision `20260825_0029` agrego tres campos de planeacion, cambio la unicidad de compromisos para incluir fecha y se valido con ciclo upgrade/downgrade/upgrade en `127.0.0.1:5434/erclave_local`. No se modificaron filas operativas ni se accedio a QA/Produccion. |
+| APIs afectadas | `POST /v1/production/resource-validations`, `POST /v1/production/orders`, lecturas de recetas/versiones y lecturas de ordenes incorporan duracion, horizonte y asignaciones diarias. `planned_for` permanece compatible; clientes nuevos usan `planned_start_date` y `planned_duration_days`. |
+| Validacion | Pruebas dirigidas de Production, sintaxis JavaScript, OpenAPI, ciclo reversible Alembic Local y verificacion integral del repositorio. |
+| Rollback | Downgrade 0029 agrega por orden/recurso los minutos diarios sobre la primera fecha antes de restaurar la unicidad anterior; luego revertir backend, contrato, frontend y documentacion. |
+| Observaciones | El calendario de este corte es lunes-viernes. Turnos, festivos, ausencias y excepciones de mantenimiento configurables permanecen pendientes deliberados. |
+
+### CHG-242
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-25 |
+| Cambio | Permite maquinaria operativamente no disponible en la definicion de receta |
+| Autor | Codex |
+| Archivos | Repositorio/API/pruebas y contrato de Production; frontend e i18n; estado, decisiones, ficha, manual funcional y trazabilidad |
+| Secciones | Produccion / Recetas / Maquinaria / Capacidad / UX / Documentacion / Local |
+| Agentes consultados | Especialistas de negocio y tecnologia de Produccion, RH, Mantenimiento, arquitectura, UX y QA/documentacion definidos en `AGENTES.md`; no hubo delegacion. |
+| Diagnostico | El selector quedaba vacio porque filtraba maquinas en mantenimiento y tambien exigia `area_ref_id`. Esa regla mezclaba la definicion estable del proceso con la disponibilidad temporal necesaria para liberar una orden. |
+| Descripcion | Recetas ofrecen maquinas activas o en mantenimiento y admiten area RH pendiente. El selector identifica mantenimiento y advierte sobre el area. Backend normaliza codigo/nombre/costo desde el maestro y rechaza solo maquinas inexistentes o inactivas. La validacion de orden conserva la regla estricta: mantenimiento equivale a cero capacidad. |
+| Motivo | Permitir documentar correctamente una receta aunque el equipo este detenido temporalmente, sin fingir que esta disponible para producir ni forzar una relacion RH que no participa en el calculo de capacidad. |
+| Impacto | Solo codigo y documentacion Local. No hubo migracion ni escritura de maestros u ordenes; `h_002` conserva su estado y su referencia de area actuales. QA y Produccion no fueron modificados. |
+| APIs afectadas | Crear/versionar/actualizar/aprobar recetas acepta maquinaria `active|maintenance`; `machine_resource_invalid` queda reservado a referencia inexistente o estado `inactive`. Validar/liberar ordenes no cambia y sigue bloqueando mantenimiento. |
+| Validacion | Pruebas dirigidas de Production, contrato OpenAPI, i18n, sintaxis frontend, validadores y comprobacion Local con el catalogo real. |
+| Rollback | Restaurar el filtro de maquinaria activa con area y la validacion anterior del repositorio. No existe schema ni dato que revertir. |
+| Observaciones | CHG-242 reemplaza funcionalmente la restriccion de CHG-215 sin alterar su evidencia historica. Vincular el area sigue recomendado y requiere confirmacion explicita del operador. |
+
+### CHG-243
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-25 |
+| Cambio | Separa validacion de definicion de receta y disponibilidad de orden |
+| Autor | Codex |
+| Archivos | Utilidad y frontend de Produccion; i18n y validador del ciclo; decisiones, estado, ficha, manual funcional y trazabilidad |
+| Secciones | Produccion / Recetas / Ordenes / Recursos / Capacidad / UX / Documentacion / Local |
+| Agentes consultados | Especialistas de negocio y tecnologia de Produccion, Inventory, RH, Mantenimiento, arquitectura, UX y QA/documentacion definidos en `AGENTES.md`; no hubo delegacion. |
+| Diagnostico | La vista previa y pantalla de validacion de Recetas reutilizaban la calculadora mock de liberacion y comparaban cantidades contra inventario y minutos diarios sin fecha ni horizonte. Esto podia marcar una definicion correcta como faltante y sugerir que debia terminarse en un dia. |
+| Descripcion | Se agrego una validacion de definicion que comprueba existencia/elegibilidad por catalogo y calcula cantidad/costo, sin leer `available`. El editor, lista y validacion de Recetas usan esa funcion y explican la frontera. Generar la orden conserva la validacion remota autoritativa multi-dia de materiales, mano de obra y maquinaria. |
+| Motivo | Evitar que condiciones transitorias de inventario, personal o mantenimiento invaliden el maestro de proceso y reservar la capacidad para el documento que si contiene fechas y duracion. |
+| Impacto | Solo frontend, protecciones y documentacion Local. Backend ya validaba elegibilidad de receta sin reservar recursos. No hubo migracion, seed ni escritura de datos; QA y Produccion no fueron modificados. |
+| APIs afectadas | Sin cambio de contrato. Recetas siguen usando normalizacion autoritativa al guardar/aprobar; ordenes siguen usando `POST /v1/production/resource-validations` y `POST /v1/production/orders` con inicio/duracion. |
+| Validacion | Sintaxis JavaScript, validador dirigido de Produccion, i18n, pruebas backend sin regresion y suite integral del repositorio. |
+| Rollback | Restaurar el uso de `calculateRecipe` en vistas de Recetas y sus textos. No existe schema ni dato que revertir. |
+| Observaciones | La cantidad simulada en Receta permanece para proyectar consumo teorico y costo, no para afirmar disponibilidad. La duracion sugerida solo precarga la orden. |
+
+### CHG-244
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-25 |
+| Cambio | Endurecimiento responsive transversal y compactacion del shell |
+| Autor | Codex |
+| Archivos | Shell, frontend principal y Backoffice; catalogo ES/EN; validadores responsive/localizacion; estandar, checklist QA, decisiones, estado y trazabilidad |
+| Secciones | Shell / Alertas / Recetas / Mantenimiento / Compras / Backoffice / Responsive / Accesibilidad / i18n / Local |
+| Agentes consultados | Se delegaron auditorias independientes a los agentes especializados de arquitectura frontend, UX responsive y QA responsive; sus causas, matriz y guardrails se integraron al corte. Tambien se aplicaron las reglas de arquitectura, UX, i18n, QA/documentacion y especialistas funcionales definidas en `AGENTES.md`. |
+| Diagnostico | Los breakpoints de `module-panel` no alcanzaban modales; validaciones de recursos forzaban `nowrap`; Mantenimiento y Compras comprimian muchos hijos dentro de tarjetas flex; el shell repetia “Centro operativo”, titulos y badges tecnicos; el validador responsive solo comprobaba tokens. |
+| Descripcion | Indicadores reubicados encima de Alertas y compactados por contenedor; identidad generica y badge tecnico retirados; titulos/hero reducidos; modal sin overflow horizontal y con partidas/recursos apilables; tarjetas operativas dedicadas; targets de 44 px; tabs de Backoffice con scroll contenido; cobertura ES/EN ampliada a Compras, Mantenimiento y RH; guardrails de regresion agregados. |
+| Motivo | Mantener lectura y operacion cuando sidebar, alertas, rejillas, textos largos o modales reducen el ancho real, aprovechando mejor el espacio sin exponer detalles tecnicos irrelevantes. |
+| Impacto | Solo frontend, metadatos visibles, validadores y documentacion Local. Sin cambios de API, schema, migraciones, seeds ni datos; QA y Produccion no fueron accedidos. |
+| APIs afectadas | Ninguna. |
+| Validacion | Validadores responsive endurecido, localizacion activa ampliada, i18n, selectores, sintaxis, documentacion y suite integral. Matriz manual especifica documentada para viewports, zoom 200%, ES/EN y estados extremos. |
+| Rollback | Restaurar estructura del shell, estilos/markup anteriores, cobertura de validadores y documentacion. No existe dato o schema que revertir. |
+| Observaciones | El repositorio no incluye un runner visual de navegador; el corte convierte las causas observadas en invariantes estaticas y deja la matriz visual lista para ejecucion manual en Local. |
+
+### CHG-245
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-25 |
+| Cambio | Compactacion transversal de cabeceras y espacio superior |
+| Autor | Codex |
+| Archivos | `frontend/index.html`, `frontend/styles.css`, estandar y validador responsive, trazabilidad |
+| Secciones | Shell / Contexto de sesion / Topbar / Modulos / Submodulos / Responsive / Local |
+| Agentes consultados | Arquitecto SaaS, Seguridad/IAM, QA/Release, especialista UX/UI y especialista tecnico de frontend definidos en `AGENTES.md`; no hubo delegacion. |
+| Diagnostico | Contexto de usuario/sucursal y acciones ocupaban dos filas; cada submodulo repetia su titulo en la cabecera blanca y el hero, retrasando el contenido operativo en todas las pantallas. |
+| Descripcion | Contexto, busqueda y acciones comparten una topbar adaptable; workspace y paneles reducen padding; la cabecera previa al hero queda como breadcrumb/retorno; heroes de modulo y submodulo reducen altura sin fijar el contenido traducible. En ancho intermedio se ocultan etiquetas auxiliares y se acotan controles antes del apilado movil. |
+| Motivo | Aprovechar la zona visible inicial para mostrar operacion real, sin perder identidad de sesion, navegacion, acciones, traducciones ni objetivos tactiles. |
+| Impacto | Solo shell y presentacion compartida en Local. Aplica a todos los modulos y secciones; no cambia reglas funcionales, APIs, schema, datos ni permisos. |
+| APIs afectadas | Ninguna. |
+| Validacion | Validadores responsive, i18n y sintaxis; verificacion de estructura del topbar y guardrail contra titulos duplicados. |
+| Rollback | Restaurar la ubicacion independiente de `context-bar`, paddings y alturas previas, junto con el guardrail documental. No existe dato que revertir. |
+| Observaciones | Los servicios Local permanecieron activos. No hubo migraciones, seeds adicionales, despliegues ni acceso a QA/Produccion. |
+
+### CHG-246
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-25 |
+| Cambio | Formularios integrados para resolver y cancelar Mantenimiento |
+| Autor | Codex |
+| Archivos | Frontend principal; validador de Mantenimiento; manual Markdown/Word, registro, estado y trazabilidad |
+| Secciones | Mantenimiento / Ordenes / Resolver / Cancelar / Modal / ES-EN / Local |
+| Agentes consultados | Especialistas funcional y tecnico de Mantenimiento, UX/UI, frontend/i18n y QA/documentacion definidos en `AGENTES.md`; no hubo delegacion. |
+| Diagnostico | Resolver encadenaba tres `prompt()` nativos y Cancelar usaba otro. Estos cuadros no seguian identidad visual, no mostraban contexto de la orden ni permitian validar todos los campos juntos. |
+| Descripcion | Resolver abre un modal ERClave con orden visible, ayudas, diagnostico, causa raiz opcional, trabajo realizado y verificacion; valida los campos obligatorios y conserva errores en pantalla. Cancelar usa el mismo patron con motivo auditable. Se agrego guardrail que rechaza reintroducir prompts en esas transiciones. |
+| Motivo | Mantener continuidad visual y operativa, permitir revisar la evidencia completa antes de guardar y evitar interacciones nativas inconsistentes. |
+| Impacto | Solo interfaz y documentacion Local. Conserva permisos, actualizacion previa y transicion backend existentes. |
+| APIs afectadas | Contratos modificados: ninguno. Endpoints consumidos sin cambio: `PATCH /v1/maintenance/orders/{order_id}` con `maintenance.order.update`; `POST /v1/maintenance/orders/{order_id}/transitions` con `maintenance.order.resolve` o `maintenance.order.cancel`. |
+| Validacion | Sintaxis, i18n, responsive, ciclo de Mantenimiento, documentacion viva y suite integral. |
+| Rollback | Restaurar los manejadores anteriores y retirar modal/guardrail/documentacion. No existe schema ni dato que revertir. |
+| Observaciones | No hubo migracion, seed, despliegue ni acceso a QA/Produccion. |
+
+### CHG-247
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-25 |
+| Cambio | Captura de tiempo visible e integrada al cierre tecnico de Mantenimiento |
+| Autor | Codex |
+| Archivos | Frontend principal; validador de Mantenimiento; manual Markdown/Word, registro, estado y trazabilidad |
+| Secciones | Mantenimiento / Ordenes / Tiempo / Resolver / Permisos / ES-EN / Local |
+| Agentes consultados | Especialistas funcional y tecnico de Mantenimiento, RH, UX/UI, frontend/i18n y QA/documentacion definidos en `AGENTES.md`; no hubo delegacion. |
+| Diagnostico | El backend exige al menos un registro de tiempo para Resolver, pero la captura estaba ubicada en Refacciones y no era descubrible desde la orden ni desde el formulario de resolucion. |
+| Descripcion | Las ordenes activas muestran **Registrar tiempo** con tecnico asignado, inicio, fin y notas. Resolver informa el total acumulado y, con cero minutos, integra la misma captura antes de actualizar evidencia y ejecutar la transicion. Roles sin `maintenance.time.create` reciben una instruccion accionable. |
+| Motivo | Colocar el prerrequisito en el punto donde el usuario lo necesita y evitar errores backend sin camino visible de correccion. |
+| Impacto | Solo interfaz, guardrail y documentacion Local. Se conservan la autoridad del tecnico asignado, las validaciones de intervalos y la maquina de estados backend. |
+| APIs afectadas | Contratos modificados: ninguno. Endpoint consumido sin cambio: `POST /v1/maintenance/orders/{order_id}/time-entries`, permiso `maintenance.time.create`; se mantienen `PATCH /v1/maintenance/orders/{order_id}` y `POST /v1/maintenance/orders/{order_id}/transitions`. |
+| Validacion | Sintaxis, i18n, responsive, ciclo de Mantenimiento, documentacion viva y suite integral. |
+| Rollback | Retirar el boton/modal de tiempo y la seccion integrada de Resolver, restaurando el flujo anterior de Refacciones. No existe schema ni dato que revertir. |
+| Observaciones | No hubo migracion, seed, despliegue ni acceso a QA/Produccion. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

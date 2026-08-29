@@ -1,6 +1,7 @@
 import { getApiBaseUrl } from "../api/config.js";
 import { deleteBackofficeTenant, listBackofficeModules, listBackofficeTenants, listBackofficeUsage, onboardTenant, setBackofficeTenantEntitlement, setBackofficeTenantStatus, updateBackofficeTenant } from "../api/backoffice.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "../auth.js";
+import { installMutationFeedback } from "../utils/mutation-feedback.js";
 
 
 const app = document.getElementById("backofficeApp");
@@ -33,9 +34,12 @@ const backofficeCopy = {
     module_hr: "Recursos Humanos",
     module_inventory: "Almacenes e inventarios",
     module_sales: "Ventas",
+    module_purchasing: "Compras",
+    module_maintenance: "Mantenimiento",
     module_billing: "Facturacion SaaS",
     module_provisioning: "Aprovisionamiento",
-    module_integrations: "Integraciones"
+    module_integrations: "Integraciones",
+    operationInProgress: "Procesando la operacion..."
   },
   en: {
     manage: "Manage",
@@ -63,18 +67,24 @@ const backofficeCopy = {
     module_hr: "Human Resources",
     module_inventory: "Warehouses and inventory",
     module_sales: "Sales",
+    module_purchasing: "Purchasing",
+    module_maintenance: "Maintenance",
     module_billing: "SaaS billing",
     module_provisioning: "Provisioning",
-    module_integrations: "Integrations"
+    module_integrations: "Integrations",
+    operationInProgress: "Processing the operation..."
   }
 };
 const bt = (key) => backofficeCopy[backofficeLanguage][key] || key;
+installMutationFeedback({ getMessage: () => bt("operationInProgress") });
 const moduleOptions = [
   { code: "admin", label: "Administracion", required: true },
   { code: "production", label: "Produccion" },
   { code: "hr", label: "Recursos Humanos" },
   { code: "inventory", label: "Almacenes" },
-  { code: "sales", label: "Ventas", dependencies: ["hr", "production"] }
+  { code: "sales", label: "Ventas", dependencies: ["hr", "production"] },
+  { code: "purchasing", label: "Compras", dependencies: ["inventory"] },
+  { code: "maintenance", label: "Mantenimiento", dependencies: ["hr", "inventory"] }
 ];
 const defaultUsageToDate = new Date().toISOString().slice(0, 10);
 const defaultUsageFromDate = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);

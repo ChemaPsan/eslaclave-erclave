@@ -42,7 +42,7 @@ El seed de permisos reconcilia de forma idempotente los contratos: conserva los 
 
 ## Operación segura
 
-El schema base de RH nacio en `20260730_0010`; expedientes de trabajadores se agregaron en `20260817_0014` y la capacidad autoritativa forma parte del corte acumulado Local `20260818_0017`. Siempre se ejecuta la cadena Alembic completa hasta la cabeza autorizada del ambiente, nunca una revision aislada como procedimiento operativo. Ninguna migracion, seed, activacion o dato de prueba se aplica a QA sin autorizacion explicita; consultar `docs/contexto/ESTADO_ACTUAL.md` para las cabezas vigentes de Local y QA.
+El schema base de RH nacio en `20260730_0010`; expedientes de trabajadores se agregaron en `20260817_0014` y la capacidad autoritativa forma parte del corte acumulado `20260818_0017`, hoy desplegado en Local y QA dentro de la cabeza `20260821_0023`. Siempre se ejecuta la cadena Alembic completa hasta la cabeza autorizada del ambiente, nunca una revision aislada como procedimiento operativo. Ninguna migracion, seed, activacion o dato de prueba se aplica a QA sin autorizacion explicita; consultar `docs/contexto/ESTADO_ACTUAL.md` para las cabezas vigentes de Local y QA.
 
 ## CHG-209: seleccion escalable
 

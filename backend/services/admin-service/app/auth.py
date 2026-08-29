@@ -3,7 +3,7 @@ import json
 import os
 from urllib import request
 from urllib.error import HTTPError, URLError
-from typing import Callable
+from typing import Callable, NoReturn
 
 from fastapi import Depends, Header
 
@@ -21,6 +21,24 @@ class AuthenticatedActor:
 
 
 _firebase_app_initialized = False
+
+
+def _raise_firebase_identity_error(exc: Exception, action: str) -> NoReturn:
+    from firebase_admin import exceptions as firebase_exceptions
+
+    if isinstance(exc, firebase_exceptions.PermissionDeniedError):
+        raise ErclaveError(
+            "firebase_identity_permission_denied",
+            "Firebase identity management is not authorized for Admin Service.",
+            status_code=502,
+            details={"action": action},
+        ) from exc
+    raise ErclaveError(
+        "firebase_identity_unavailable",
+        "Firebase identity service could not complete the requested operation.",
+        status_code=502,
+        details={"action": action},
+    ) from exc
 
 
 def _ensure_firebase_app(settings: Settings) -> None:
@@ -89,14 +107,23 @@ def ensure_firebase_user(email: str, display_name: str, settings: Settings) -> N
         return
     _ensure_firebase_app(settings)
     from firebase_admin import auth as firebase_auth
+    from firebase_admin import exceptions as firebase_exceptions
 
     normalized_email = email.lower()
     try:
         user = firebase_auth.get_user_by_email(normalized_email)
     except firebase_auth.UserNotFoundError:
-        firebase_auth.create_user(email=normalized_email, display_name=display_name, disabled=False)
+        try:
+            firebase_auth.create_user(email=normalized_email, display_name=display_name, disabled=False)
+        except firebase_exceptions.FirebaseError as exc:
+            _raise_firebase_identity_error(exc, "create_user")
         return
-    firebase_auth.update_user(user.uid, display_name=display_name, disabled=False)
+    except firebase_exceptions.FirebaseError as exc:
+        _raise_firebase_identity_error(exc, "lookup_user")
+    try:
+        firebase_auth.update_user(user.uid, display_name=display_name, disabled=False)
+    except firebase_exceptions.FirebaseError as exc:
+        _raise_firebase_identity_error(exc, "update_user")
 
 
 def create_firebase_password_invitation(email: str, settings: Settings) -> dict:
@@ -156,12 +183,16 @@ def create_firebase_password_invitation(email: str, settings: Settings) -> dict:
 
     _ensure_firebase_app(settings)
     from firebase_admin import auth as firebase_auth
+    from firebase_admin import exceptions as firebase_exceptions
 
     action_code_settings = firebase_auth.ActionCodeSettings(
         url=settings.app_public_base_url,
         handle_code_in_app=False,
     )
-    reset_link = firebase_auth.generate_password_reset_link(normalized_email, action_code_settings)
+    try:
+        reset_link = firebase_auth.generate_password_reset_link(normalized_email, action_code_settings)
+    except firebase_exceptions.FirebaseError as exc:
+        _raise_firebase_identity_error(exc, "create_password_invitation")
     return {
         "provider": "firebase",
         "email": normalized_email,
@@ -176,12 +207,18 @@ def delete_firebase_user_by_email(email: str, settings: Settings) -> None:
         return
     _ensure_firebase_app(settings)
     from firebase_admin import auth as firebase_auth
+    from firebase_admin import exceptions as firebase_exceptions
 
     try:
         user = firebase_auth.get_user_by_email(email.lower())
     except firebase_auth.UserNotFoundError:
         return
-    firebase_auth.delete_user(user.uid)
+    except firebase_exceptions.FirebaseError as exc:
+        _raise_firebase_identity_error(exc, "lookup_user_for_delete")
+    try:
+        firebase_auth.delete_user(user.uid)
+    except firebase_exceptions.FirebaseError as exc:
+        _raise_firebase_identity_error(exc, "delete_user")
 
 
 def get_authenticated_actor(

@@ -19,6 +19,8 @@ const validators = [
   "validate-inventory-movement-flow.js",
   "validate-production-cycle.js",
   "validate-sales-cycle.js",
+  "validate-purchasing-cycle.js",
+  "validate-maintenance-cycle.js",
   "validate-agents.js",
   "validate-architecture.js",
   "validate-backend-scaffold.js",

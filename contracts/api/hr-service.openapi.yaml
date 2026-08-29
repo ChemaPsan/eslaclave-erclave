@@ -89,9 +89,18 @@ paths:
       tags: [Workers]
       operationId: listProductionEligibleWorkers
       x-required-module: hr
-      x-permissions: [production.order.create]
+      x-permissions: [production.order.release]
       parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
       responses: { '200': { description: Active workers in active production positions, content: { application/json: { schema: { $ref: '#/components/schemas/WorkerListResponse' } } } } }
+  /v1/hr/workers/maintenance-eligible:
+    get:
+      tags: [Workers]
+      operationId: listMaintenanceEligibleWorkers
+      x-required-module: hr
+      x-permissions: [maintenance.order.assign, maintenance.order.start, maintenance.time.create]
+      x-permission-mode: any
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
+      responses: { '200': { description: Active workers in active maintenance-enabled positions, content: { application/json: { schema: { $ref: '#/components/schemas/WorkerListResponse' } } } } }
   /v1/hr/workers/sales-eligible:
     get:
       tags: [Workers]
@@ -106,7 +115,7 @@ paths:
       tags: [Positions]
       operationId: listProductionCapacity
       x-required-module: hr
-      x-permissions: [production.order.validate, production.order.create]
+      x-permissions: [production.order.validate, production.order.release]
       x-permission-mode: any
       parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
       responses: { '200': { description: Authoritative daily capacity based on active workers, content: { application/json: { schema: { $ref: '#/components/schemas/ProductionCapacityListResponse' } } } } }
@@ -144,9 +153,9 @@ components:
     AreaUpdate: { type: object, properties: { name: { type: string }, description: { type: [string, 'null'] }, status: { type: string, enum: [active, inactive] } } }
     AreaResponse: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Area' } } }
     AreaListResponse: { type: object, required: [data], properties: { data: { type: array, items: { $ref: '#/components/schemas/Area' } } } }
-    Position: { type: object, required: [id, labor_area_id, position, recipe_name, resource_quantity, minutes_per_resource, hourly_cost, intervenes_in_production, status], properties: { id: { type: string }, labor_area_id: { type: string }, position: { type: string }, recipe_name: { type: string }, resource_quantity: { type: integer }, minutes_per_resource: { type: integer }, hourly_cost: { type: number }, intervenes_in_production: { type: boolean }, status: { type: string, enum: [active, inactive] } } }
-    PositionCreate: { type: object, required: [labor_area_id, position, recipe_name], properties: { labor_area_id: { type: string }, position: { type: string }, recipe_name: { type: string }, resource_quantity: { type: integer, minimum: 1 }, minutes_per_resource: { type: integer, minimum: 1 }, hourly_cost: { type: number, minimum: 0 }, intervenes_in_production: { type: boolean } } }
-    PositionUpdate: { type: object, properties: { labor_area_id: { type: string }, position: { type: string }, recipe_name: { type: string }, resource_quantity: { type: integer, minimum: 1 }, minutes_per_resource: { type: integer, minimum: 1 }, hourly_cost: { type: number, minimum: 0 }, intervenes_in_production: { type: boolean }, status: { type: string, enum: [active, inactive] } } }
+    Position: { type: object, required: [id, labor_area_id, position, recipe_name, resource_quantity, minutes_per_resource, hourly_cost, intervenes_in_production, intervenes_in_maintenance, status], properties: { id: { type: string }, labor_area_id: { type: string }, position: { type: string }, recipe_name: { type: string }, resource_quantity: { type: integer }, minutes_per_resource: { type: integer }, hourly_cost: { type: number }, intervenes_in_production: { type: boolean }, intervenes_in_maintenance: { type: boolean }, status: { type: string, enum: [active, inactive] } } }
+    PositionCreate: { type: object, required: [labor_area_id, position, recipe_name], properties: { labor_area_id: { type: string }, position: { type: string }, recipe_name: { type: string }, resource_quantity: { type: integer, minimum: 1 }, minutes_per_resource: { type: integer, minimum: 1 }, hourly_cost: { type: number, minimum: 0 }, intervenes_in_production: { type: boolean }, intervenes_in_maintenance: { type: boolean } } }
+    PositionUpdate: { type: object, properties: { labor_area_id: { type: string }, position: { type: string }, recipe_name: { type: string }, resource_quantity: { type: integer, minimum: 1 }, minutes_per_resource: { type: integer, minimum: 1 }, hourly_cost: { type: number, minimum: 0 }, intervenes_in_production: { type: boolean }, intervenes_in_maintenance: { type: boolean }, status: { type: string, enum: [active, inactive] } } }
     PositionResponse: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Position' } } }
     PositionListResponse: { type: object, required: [data], properties: { data: { type: array, items: { $ref: '#/components/schemas/Position' } } } }
     WorkerCreate:
@@ -157,7 +166,7 @@ components:
     Worker:
       allOf:
         - { $ref: '#/components/schemas/WorkerCreate' }
-        - { type: object, required: [id, status, full_name, position_name, labor_area_id, labor_area_name, intervenes_in_production], properties: { id: { type: string }, status: { type: string, enum: [active, inactive, terminated] }, full_name: { type: string }, position_name: { type: string }, labor_area_id: { type: string }, labor_area_name: { type: string }, intervenes_in_production: { type: boolean } } }
+        - { type: object, required: [id, status, full_name, position_name, labor_area_id, labor_area_name, intervenes_in_production, intervenes_in_maintenance], properties: { id: { type: string }, status: { type: string, enum: [active, inactive, terminated] }, full_name: { type: string }, position_name: { type: string }, labor_area_id: { type: string }, labor_area_name: { type: string }, intervenes_in_production: { type: boolean }, intervenes_in_maintenance: { type: boolean } } }
     WorkerResponse: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Worker' } } }
     WorkerListResponse: { type: object, required: [data], properties: { data: { type: array, items: { $ref: '#/components/schemas/Worker' } } } }
     ProductionCapacity:

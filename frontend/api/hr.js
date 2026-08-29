@@ -11,5 +11,6 @@ export async function updateHrPosition(id,payload){return (await request(`/v1/hr
 export async function getHrWorkers(filters={}){const query=new URLSearchParams();Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=="")query.set(k,String(v));});return (await request(`/v1/hr/workers?${query}`)).data;}
 export async function getProductionEligibleWorkers(){return (await request("/v1/hr/workers/production-eligible")).data;}
 export async function getSalesEligibleWorkers(){return (await request("/v1/hr/workers/sales-eligible")).data;}
+export async function getMaintenanceEligibleWorkers(){return (await request("/v1/hr/workers/maintenance-eligible")).data;}
 export async function createHrWorker(payload){return (await request("/v1/hr/workers",{method:"POST",body:JSON.stringify(payload)})).data;}
 export async function updateHrWorker(id,payload){return (await request(`/v1/hr/workers/${id}`,{method:"PATCH",body:JSON.stringify(payload)})).data;}

@@ -36,12 +36,13 @@ class HrRepository:
             if data:c.execute(text("update hr.labor_areas set "+",".join(f"{x}=:{x}" for x in data)+",updated_at=now() where tenant_id=:t and id=:i"),{"t":t,"i":i,**data})
             value=self._area(c,t,i);self._audit(c,t,a,"hr.area.update","area",i,{"before":before.model_dump(),"after":value.model_dump()});self._done(c,t,"area.update",k,value);return value
     def _role(self,c,t,i):
-        row=c.execute(text("select id,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production,status from hr.labor_roles where tenant_id=:t and id=:i"),{"t":t,"i":i}).mappings().first();return RoleRead.model_validate(dict(row)) if row else None
-    def list_roles(self,t,area=None,production_only=False):
+        row=c.execute(text("select id,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production,intervenes_in_maintenance,status from hr.labor_roles where tenant_id=:t and id=:i"),{"t":t,"i":i}).mappings().first();return RoleRead.model_validate(dict(row)) if row else None
+    def list_roles(self,t,area=None,production_only=False,maintenance_only=False):
         where=["tenant_id=:t"];params={"t":t}
         if area:where.append("labor_area_id=:area");params["area"]=area
         if production_only:where.extend(["intervenes_in_production=true","status='active'"])
-        with self.engine.connect() as c:rows=c.execute(text("select id,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production,status from hr.labor_roles where "+" and ".join(where)+" order by recipe_name"),params).mappings()
+        if maintenance_only:where.extend(["intervenes_in_maintenance=true","status='active'"])
+        with self.engine.connect() as c:rows=c.execute(text("select id,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production,intervenes_in_maintenance,status from hr.labor_roles where "+" and ".join(where)+" order by recipe_name"),params).mappings()
         return [RoleRead.model_validate(dict(x)) for x in rows]
     def create_role(self,t,p,k,h,a):
         with self.engine.begin() as c:
@@ -49,7 +50,7 @@ class HrRepository:
             if replay:return RoleRead.model_validate(replay)
             area=self._area(c,t,p.labor_area_id)
             if not area or area.status!="active":self._release(c,t,"position.create",k);raise ValueError("labor_area_invalid")
-            i=f"hrp_{uuid4().hex[:26]}";row=c.execute(text("insert into hr.labor_roles(id,tenant_id,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production) values(:i,:t,:labor_area_id,:position,:recipe_name,:resource_quantity,:minutes_per_resource,:hourly_cost,:intervenes_in_production) on conflict(tenant_id,labor_area_id,position) do nothing returning id"),{"i":i,"t":t,**p.model_dump()}).first()
+            i=f"hrp_{uuid4().hex[:26]}";row=c.execute(text("insert into hr.labor_roles(id,tenant_id,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production,intervenes_in_maintenance) values(:i,:t,:labor_area_id,:position,:recipe_name,:resource_quantity,:minutes_per_resource,:hourly_cost,:intervenes_in_production,:intervenes_in_maintenance) on conflict(tenant_id,labor_area_id,position) do nothing returning id"),{"i":i,"t":t,**p.model_dump()}).first()
             if not row:self._release(c,t,"position.create",k);return None
             value=self._role(c,t,i);self._audit(c,t,a,"hr.position.create","position",i,p.model_dump());self._done(c,t,"position.create",k,value);return value
     def update_role(self,t,i,p,k,h,a):
@@ -65,13 +66,14 @@ class HrRepository:
             if data:c.execute(text("update hr.labor_roles set "+",".join(f"{x}=:{x}" for x in data)+",updated_at=now() where tenant_id=:t and id=:i"),{"t":t,"i":i,**data})
             value=self._role(c,t,i);self._audit(c,t,a,"hr.position.update","position",i,{"before":before.model_dump(),"after":value.model_dump()});self._done(c,t,"position.update",k,value);return value
     def _worker(self,c,t,i):
-        row=c.execute(text("""select w.*,concat_ws(' ',w.first_names,w.first_last_name,w.second_last_name) full_name,r.position position_name,r.labor_area_id,a.name labor_area_name,r.intervenes_in_production from hr.workers w join hr.labor_roles r on r.tenant_id=w.tenant_id and r.id=w.labor_position_id join hr.labor_areas a on a.tenant_id=r.tenant_id and a.id=r.labor_area_id where w.tenant_id=:t and w.id=:i"""),{"t":t,"i":i}).mappings().first()
+        row=c.execute(text("""select w.*,concat_ws(' ',w.first_names,w.first_last_name,w.second_last_name) full_name,r.position position_name,r.labor_area_id,a.name labor_area_name,r.intervenes_in_production,r.intervenes_in_maintenance from hr.workers w join hr.labor_roles r on r.tenant_id=w.tenant_id and r.id=w.labor_position_id join hr.labor_areas a on a.tenant_id=r.tenant_id and a.id=r.labor_area_id where w.tenant_id=:t and w.id=:i"""),{"t":t,"i":i}).mappings().first()
         return WorkerRead.model_validate(dict(row)) if row else None
-    def list_workers(self,t,position=None,production_only=False,active_only=False):
+    def list_workers(self,t,position=None,production_only=False,active_only=False,maintenance_only=False):
         where=["w.tenant_id=:t"];params={"t":t}
         if position:where.append("w.labor_position_id=:position");params["position"]=position
-        if active_only or production_only:where.extend(["w.status='active'","r.status='active'","a.status='active'"])
+        if active_only or production_only or maintenance_only:where.extend(["w.status='active'","r.status='active'","a.status='active'"])
         if production_only:where.append("r.intervenes_in_production=true")
+        if maintenance_only:where.append("r.intervenes_in_maintenance=true")
         with self.engine.connect() as c:
             ids=c.execute(text("select w.id from hr.workers w join hr.labor_roles r on r.tenant_id=w.tenant_id and r.id=w.labor_position_id join hr.labor_areas a on a.tenant_id=r.tenant_id and a.id=r.labor_area_id where "+" and ".join(where)+" order by w.first_last_name,w.first_names"),params).scalars().all()
             return [self._worker(c,t,i) for i in ids]

@@ -1,9 +1,9 @@
 # Manual funcional de Produccion
 
 - Audiencia: planeadores, supervisores y responsables de produccion
-- Alcance por ambiente: Local; no promovido a QA
-- Ultima revision: 2026-08-21
-- Capacidades cubiertas: productos/servicios, recetas, fases ponderadas, ordenes y entregables por area
+- Alcance por ambiente: Local y QA
+- Ultima revision: 2026-08-25
+- Capacidades cubiertas: productos/servicios, recetas, fases ponderadas, planeacion multi-dia, ordenes y entregables por area
 
 ## Proposito
 
@@ -19,9 +19,11 @@ Produccion define que se fabrica o ejecuta, que recursos consume y como se mide 
 
 ## Acceso y prerequisitos
 
+En Local, liberar, iniciar, pausar, reanudar, enviar a validacion, finalizar y cancelar requieren permisos independientes. Terminar una etapa exige `production.order_stage.complete`; capturar avance con `production.order_stage.update` no concede esa declaracion. La alta actual valida, reserva y nace liberada, por lo que requiere `production.order.release`.
+
 Se requieren permisos `production.recipe.*`, `production.order.*` o `production.order_stage.update`, segun la tarea. La asignacion automatica de folio usa el permiso de alta; editar su configuracion pertenece a Administracion.
 
-El producto debe estar activo. Una receta productiva requiere materiales elegibles de Almacenes con una unidad activa del catalogo de Administracion, puestos y areas productivas de RH y, cuando aplique, maquinaria activa vinculada con un area activa de RH. Una orden requiere una version aprobada vigente.
+El producto debe estar activo. Una receta productiva requiere materiales elegibles de Almacenes con una unidad activa del catalogo de Administracion, puestos y areas productivas de RH y, cuando aplique, maquinaria existente que no este inactiva. Una maquina en mantenimiento puede formar parte de la receta, pero bloqueara la orden mientras no vuelva a estar activa. El area RH de la maquina es recomendable para asignacion y reportes, no un requisito para definir el proceso. Una orden requiere una version aprobada vigente.
 
 ## Crear una receta
 
@@ -37,7 +39,9 @@ Un articulo cuya unidad base no exista o este inactiva se muestra como no dispon
 
 ## Generar y seguir una orden
 
-Seleccione receta aprobada, cantidad, fecha, prioridad y responsables. Antes de asignar el folio, el sistema valida existencia disponible, capacidad laboral y maquinaria para la fecha. Si falta un recurso, muestra su nombre, cantidad requerida, disponible y unidad. La orden copia recursos, costos, areas, numero y peso de cada fase; cambios posteriores en la receta no la alteran.
+Seleccione receta aprobada, cantidad, inicio planeado, dias productivos, fecha requerida, prioridad y responsables. La receta propone una duracion que puede ajustar en la orden. Antes de asignar el folio, el sistema valida materiales una sola vez y distribuye los minutos de capacidad laboral y maquinaria de lunes a viernes; muestra el horizonte, el minimo calculado y el desglose por fecha. Si falta un recurso, muestra su nombre, cantidad requerida, disponible y unidad. La fecha requerida no puede quedar antes del fin planeado. La orden copia recursos, costos, areas, numero y peso de cada fase; cambios posteriores en la receta no la alteran.
+
+En el editor de Recetas, **Validar definicion** solo confirma que materiales, puestos y maquinas existan y sean elegibles, y proyecta cantidades y costo. No revisa inventario ni disponibilidad de horas. Es normal que una receta sea valida aunque una orden concreta no pueda liberarse por faltantes o mantenimiento; esa disponibilidad se comprueba al generar la orden usando sus dias planeados.
 
 El avance es ponderado. Ejemplo: Fundicion pesa 70% y va al 50%; Empaque pesa 30% y va al 100%. El avance general es 65%, no 75%.
 
@@ -76,6 +80,7 @@ Los minutos reales y la eficiencia de mano de obra/maquinaria no son obligatorio
 - **Maquinaria sin area de RH vinculada:** abra **Produccion > Maquinaria**, edite el equipo, seleccione un area activa de Recursos Humanos y actualice. Despues vuelva a abrir la receta; el sistema no vincula por coincidencia de nombre.
 - **Unidad de medida no activa:** el material usa un codigo que no pertenece al catalogo activo; corriga o sustituya el articulo de Almacenes.
 - **Capacidad laboral insuficiente:** asigne trabajadores activos al puesto requerido por la receta. El responsable general o de fase no reemplaza una necesidad de mano de obra distinta.
+- **Los dias productivos no alcanzan:** aumente el horizonte o libere capacidad ya comprometida. El calendario actual considera lunes a viernes; turnos, festivos, ausencias y mantenimiento configurable se incorporaran en una evolucion posterior.
 
 ## Integraciones y limitaciones
 
@@ -83,7 +88,7 @@ Almacenes es autoridad de existencias y costo; RH de areas, puestos y trabajador
 
 La reserva y la salida son hechos distintos: liberar la orden aparta material y reduce la disponibilidad, pero no la existencia fisica. La primera entrada a **En produccion** confirma el inicio operativo: Produccion solicita consumir cada reserva y Almacenes crea una salida inmutable en el almacen que la otorgo. Si una orden pausada se reanuda o vuelve desde validacion, no se genera otra salida. El cierre tampoco vuelve a descontar; consolida materiales ya consumidos. Cancelar antes de iniciar libera lo apartado, mientras que cancelar despues conserva el Kardex real. No registre salidas manuales duplicadas.
 
-Cuando la orden llega a **Terminada**, queda disponible en **Almacenes > Movimientos > Entradas de produccion terminada**. El almacenista valida la recepcion fisica total o parcial; Almacenes registra la entrada contra el articulo terminado vinculado. Produccion no escribe existencias ni da por recibido automaticamente lo que aun no fue contado. La recepcion de merma permanece pendiente.
+Cuando la orden llega a **Terminada**, queda disponible en **Almacenes > Movimientos > Entradas de produccion terminada**. El almacenista valida la recepcion fisica total o parcial; Almacenes registra la entrada contra el articulo terminado vinculado. Su permiso solo obtiene una proyeccion de recepcion con folio, producto, cantidad, unidad y costo unitario: no expone receta, recursos, responsables ni costos totales de Produccion. Produccion no escribe existencias ni da por recibido automaticamente lo que aun no fue contado. La recepcion de merma permanece pendiente.
 
 ## Cobertura
 

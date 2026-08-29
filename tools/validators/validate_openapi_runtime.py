@@ -19,6 +19,8 @@ SERVICE_APIS = {
     "inventory-service.openapi.yaml": ROOT / "backend" / "services" / "inventory-service" / "app" / "api.py",
     "hr-service.openapi.yaml": ROOT / "backend" / "services" / "hr-service" / "app" / "api.py",
     "sales-service.openapi.yaml": ROOT / "backend" / "services" / "sales-service" / "app" / "api.py",
+    "purchasing-service.openapi.yaml": ROOT / "backend" / "services" / "purchasing-service" / "app" / "api.py",
+    "maintenance-service.openapi.yaml": ROOT / "backend" / "services" / "maintenance-service" / "app" / "api.py",
 }
 
 
@@ -26,17 +28,26 @@ def normalized_path(value: str) -> str:
     return re.sub(r"\{[^}/]+\}", "{}", value)
 
 
-def runtime_operations(api_path: Path) -> set[tuple[str, str]]:
+def runtime_operations(api_path: Path) -> dict[tuple[str, str], frozenset[str] | None]:
     tree = ast.parse(api_path.read_text(encoding="utf-8"), filename=str(api_path))
     prefix = ""
+    constants: dict[str, object] = {}
     for node in tree.body:
-        if not isinstance(node, ast.Assign) or not any(isinstance(target, ast.Name) and target.id == "router" for target in node.targets):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                try:
+                    constants[target.id] = ast.literal_eval(node.value)
+                except (ValueError, TypeError):
+                    pass
+        if not any(isinstance(target, ast.Name) and target.id == "router" for target in node.targets):
             continue
         if isinstance(node.value, ast.Call):
             for keyword in node.value.keywords:
                 if keyword.arg == "prefix" and isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
                     prefix = keyword.value.value
-    operations: set[tuple[str, str]] = set()
+    operations: dict[tuple[str, str], frozenset[str] | None] = {}
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -48,7 +59,27 @@ def runtime_operations(api_path: Path) -> set[tuple[str, str]]:
                 continue
             route = decorator.args[0]
             if isinstance(route, ast.Constant) and isinstance(route.value, str):
-                operations.add((method, normalized_path(prefix + route.value)))
+                permissions: set[str] = set()
+                defaults = [*node.args.defaults, *(item for item in node.args.kw_defaults if item is not None)]
+                for default in defaults:
+                    for call in ast.walk(default):
+                        if not isinstance(call, ast.Call) or not call.args:
+                            continue
+                        name = call.func.id if isinstance(call.func, ast.Name) else ""
+                        if not name.startswith("require_"):
+                            continue
+                        value_node = call.args[0]
+                        value = constants.get(value_node.id) if isinstance(value_node, ast.Name) else None
+                        if value is None:
+                            try:
+                                value = ast.literal_eval(value_node)
+                            except (ValueError, TypeError):
+                                continue
+                        if isinstance(value, str):
+                            permissions.add(value)
+                        elif isinstance(value, (tuple, list, set)):
+                            permissions.update(item for item in value if isinstance(item, str))
+                operations[(method, normalized_path(prefix + route.value))] = frozenset(permissions) if permissions else None
     return operations
 
 
@@ -124,10 +155,21 @@ def main() -> int:
                 for key, operation in contract_operations.items()
                 if operation.get("x-implementation-status", default_status) == "implemented"
             }
-            for method, route in sorted(runtime - implemented):
+            for method, route in sorted(set(runtime) - implemented):
                 errors.append(f"{contract_path.name} runtime route missing from implemented contract: {method.upper()} {route}")
-            for method, route in sorted(implemented - runtime):
+            for method, route in sorted(implemented - set(runtime)):
                 errors.append(f"{contract_path.name} contract route is not implemented or marked planned: {method.upper()} {route}")
+            for key in sorted(implemented & set(runtime)):
+                runtime_permissions = runtime[key]
+                if runtime_permissions is None:
+                    continue
+                contract_permissions = frozenset(contract_operations[key].get("x-permissions") or [])
+                if runtime_permissions != contract_permissions:
+                    method, route = key
+                    errors.append(
+                        f"{contract_path.name} {method.upper()} {route} permission drift: "
+                        f"runtime={sorted(runtime_permissions)} contract={sorted(contract_permissions)}"
+                    )
         elif default_status != "planned":
             errors.append(f"{contract_path.name} has no runtime validator mapping and must declare top-level x-implementation-status: planned")
 

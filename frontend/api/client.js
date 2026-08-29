@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from "./config.js";
 import { getAuthToken } from "../auth.js";
+import { MUTATION_FINISHED_EVENT, MUTATION_STARTED_EVENT } from "../utils/mutation-feedback.js";
 
 const API_REQUEST_TIMEOUT_MS = 15000;
 
@@ -41,6 +42,10 @@ export async function apiRequest(path, options = {}) {
 }
 
 export async function apiRequestAt(baseUrl, path, options = {}, apiLabel = "API") {
+  const method = String(options.method || "GET").toUpperCase();
+  const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
+  if (isMutation) window.dispatchEvent(new CustomEvent(MUTATION_STARTED_EVENT));
+  try {
   const url = `${baseUrl}${path}`;
   const token = await getAuthToken();
   let response;
@@ -74,4 +79,7 @@ export async function apiRequestAt(baseUrl, path, options = {}, apiLabel = "API"
   }
 
   return payload;
+  } finally {
+    if (isMutation) window.dispatchEvent(new CustomEvent(MUTATION_FINISHED_EVENT));
+  }
 }

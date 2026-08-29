@@ -45,6 +45,8 @@ Complemento recomendado:
 | `production-service` | Produccion | Productos/servicios, recetas, versiones de receta, recursos productivos, maquinaria, ordenes y avance por etapas. |
 | `inventory-service` | Almacenes | Almacenes, articulos inventariables, ubicaciones, movimientos, existencias, kardex, reservas y valuacion de materiales. |
 | `sales-service` | Ventas | Local real: clientes, contactos, cotizaciones, pedidos, surtido y entregas. Devoluciones permanecen planeadas. |
+| `purchasing-service` | Compras | Local: proveedores, requisiciones, ordenes, recepciones comerciales y reconciliacion con entradas de Inventory. |
+| `maintenance-service` | Mantenimiento (Local) | Ordenes correctivas, asignaciones, tiempos, solicitudes internas de refacciones y estado de sus efectos. |
 | `billing-service` | Billing / SaaS | Planes comerciales, suscripciones, eventos de pago, activaciones manuales y estado de cobro. |
 | `provisioning-service` | Provisioning | Orquestacion de alta de tenant, activacion de modulos e invitacion del administrador inicial. |
 | `integration-service` | Integraciones | Clientes API, scopes, cuotas, llaves, uso de API y politicas de integracion. |
@@ -173,9 +175,27 @@ Reglas:
 - Kardex y existencias no se editan manualmente.
 - Todo cambio de saldo nace de un movimiento.
 - Salidas y ajustes negativos no deben exceder existencia disponible.
-- Reservas para ordenes de Produccion y Pedidos de Ventas estan implementadas en codigo Local mediante comandos de reserva, liberacion y consumo parcial/total; QA conserva el corte anterior hasta su promocion.
+- Reservas para ordenes de Produccion y Pedidos de Ventas estan implementadas en Local y QA mediante comandos de reserva, liberacion y consumo parcial/total. Cada ambiente conserva datos aislados y QA solo recibe capturas UAT autorizadas.
 
-### 5.4 Ventas
+### 5.4 Compras (primer corte Local)
+
+| Entidad | Servicio dueno | Puede crear/editar | Puede consultar | Eventos principales |
+|---|---|---|---|---|
+| `supplier` | `purchasing-service` | Compras autorizadas | Perfil comercial, contacto y fiscal editable; Compras, Gastos y Reportes futuros | `purchasing.supplier.updated` planeado |
+| `purchase_requisition` | `purchasing-service` | Solicitante y aprobador mediante permisos puntuales | Compras, Produccion/Inventory por referencia | `purchasing.requisition.created` planeado |
+| `purchase_order` | `purchasing-service` | Comprador autorizado | Compras, Inventory, Gastos y Reportes futuros | `purchasing.order.issued` planeado |
+| `purchase_receipt` | `purchasing-service` | Receptor autorizado | Compras, Inventory, Gastos futuro | `purchasing.receipt.completed` planeado |
+| `inventory_movement` de recepcion | `inventory-service` | Inventory por comando idempotente solicitado por Compras | Compras conserva solo referencia/resultado | `inventory.movement.recorded` |
+
+Reglas:
+
+- Compras no escribe el schema `inventory`; solicita una entrada por contrato y conserva IDs externos.
+- Inventory valida articulo, almacen, unidad, cantidad y valuacion fisica. Compras valida proveedor, orden, precio pactado, saldo por recibir y estado comercial.
+- Una recepcion que pierde la respuesta despues de confirmar Inventory queda `needs_reconciliation` y reintenta con clave estable; no duplica ni revierte movimientos por SQL cruzado.
+- Compras es autoridad del reclamo de saldo y estado de conciliacion; Inventory es autoridad del movimiento. La lectura puntual de almacen y la entrada de compra cruzan exclusivamente por API tenant-safe, nunca por FK o escritura directa.
+- Factura, cuenta por pagar, pago, devolucion y asiento permanecen planeados y tendran owners propios.
+
+### 5.5 Ventas
 
 | Entidad | Servicio dueno | Puede crear/editar | Puede consultar | Eventos principales |
 |---|---|---|---|---|
@@ -197,7 +217,7 @@ Reglas:
 - Entregas Local reservan cantidad comercial al crear el borrador y consumen reservas mediante Inventory al confirmar. Servicio exige captura de costo real; Production queda pendiente hasta su callback.
 - Surtido, cancelacion y confirmacion guardan reclamo, clave y hash antes del efecto externo; una interrupcion queda visible como `needs_reconciliation` y reanuda con la clave original.
 
-### 5.5 Billing / SaaS
+### 5.6 Billing / SaaS
 
 | Entidad | Servicio dueno | Puede crear/editar | Puede consultar | Eventos principales |
 |---|---|---|---|---|
@@ -213,7 +233,7 @@ Reglas:
 - La activacion manual debe registrar responsable, motivo, plan, vigencia y modulos.
 - Billing no crea tenants directamente; solicita provisioning.
 
-### 5.6 Provisioning
+### 5.7 Provisioning
 
 | Entidad | Servicio dueno | Puede crear/editar | Puede consultar | Eventos principales |
 |---|---|---|---|---|
@@ -226,7 +246,7 @@ Reglas:
 - Si falla a mitad, debe poder reintentarse sin duplicar tenant ni usuario admin.
 - Debe crear tenant mediante contrato de `admin-service`.
 
-### 5.7 Integraciones
+### 5.8 Integraciones
 
 | Entidad | Servicio dueno | Puede crear/editar | Puede consultar | Eventos principales |
 |---|---|---|---|---|
@@ -292,6 +312,7 @@ Payload minimo de `POST /v1/policy/evaluate`:
 | `POST /v1/inventory/reservations/{id}/release` | Command HTTP Local | Produccion | Almacenes | Liberar una reserva al cancelar o compensar una orden. |
 | `POST /v1/inventory/reservations/{id}/consume` | Command HTTP Local | Produccion | Almacenes | Convertir la reserva en salida inmutable y conservar su valuacion. |
 | `POST /v1/inventory/consumption-requests` | Command HTTP planeado | Produccion | Almacenes | Solicitar consumo directo sin reserva; no implementado. |
+| `GET /v1/production/finished-goods-candidates[/{id}]` | Query HTTP Local | Almacenes UI/API | Produccion | Entregar solo folio, producto vinculado, cantidad, unidad, estado terminado y costo unitario para recepcion. |
 | `GET /v1/inventory/finished-goods-receipts` | Query HTTP Local | Almacenes UI | Almacenes | Consultar cantidades recibidas por orden terminada. |
 | `POST /v1/inventory/finished-goods-receipts` | Command HTTP Local | Almacenes UI | Almacenes | Confirmar recepcion fisica total o parcial de una orden terminada. |
 | `inventory_movement.recorded` | Event Pub/Sub | Almacenes | Almacenes | Notificar movimiento registrado. |
@@ -396,7 +417,7 @@ Estas lecturas son necesarias para el MVP, pero no transfieren ownership.
 |---|---|---|
 | Ventas | Produccion | Productos/servicios activos, unidad, precio objetivo si existe, costo estandar resumido. |
 | Produccion | Almacenes | Disponibilidad de articulos inventariables, almacenes sugeridos, faltantes. |
-| Almacenes | Produccion | Referencia de orden, producto terminado esperado, unidad y cantidad. |
+| Almacenes | Produccion | Proyeccion minima de recepcion: referencia de orden, producto terminado vinculado, unidad, cantidad y costo unitario; nunca receta, recursos, responsable ni costos totales. |
 | Produccion | Administracion | Permisos, modulos activos, centros de negocio. |
 | Almacenes | Administracion | Permisos, modulos activos, centros de negocio. |
 | Ventas | Administracion | Permisos, modulos activos, centros de negocio. |
@@ -544,6 +565,17 @@ Queda prohibido:
 - que una regla critica exista solo en frontend.
 
 ---
+
+## 11.1 Ownership implementado de Mantenimiento (Local)
+
+| Entidad o efecto | Owner | Escritura | Consumo |
+|---|---|---|---|
+| orden, asignacion, tiempo y solicitud interna | `maintenance-service` | usuarios con permisos de Mantenimiento | Mantenimiento y reportes futuros |
+| area, puesto, trabajador y elegibilidad | `hr-service` | RH | Mantenimiento por query tenant-safe |
+| maquina, estado de maquina y orden productiva | `production-service` | Production mediante comando propietario | Mantenimiento conserva ID/snapshot |
+| articulo, almacen, reserva, movimiento y costo | `inventory-service` | Inventory mediante comando propietario | Mantenimiento conserva ID/snapshot/conciliacion |
+
+RH e Inventory son dependencias duras de activacion; Production es integracion opcional. Una ubicacion libre no crea un activo ficticio. Los comandos implementados de bloqueo, liberacion, reserva, consumo y cancelacion son idempotentes; Mantenimiento conserva operacion, intentos y error para reintentar efectos parciales. Devoluciones de sobrantes permanecen planeadas.
 
 ## 12. Resultado esperado
 

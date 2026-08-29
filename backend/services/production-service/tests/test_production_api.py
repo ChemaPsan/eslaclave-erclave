@@ -1,8 +1,9 @@
 import importlib
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -21,6 +22,9 @@ from erclave_common.config import Settings
 
 app = main_module.app
 get_production_repository = repositories_module.get_production_repository
+production_dates = repositories_module.production_dates
+ProductionRepository = repositories_module.ProductionRepository
+RecipeCreateRequest = schemas_module.RecipeCreateRequest
 ProductServiceRead = schemas_module.ProductServiceRead
 RecipeRead = schemas_module.RecipeRead
 RecipeVersionRead = schemas_module.RecipeVersionRead
@@ -187,11 +191,14 @@ class FakeProductionRepository:
         return MachineRead(id="maq_demo",code="recta",name="Recta",machine_type="Costura",area_name="Produccion",available_minutes_per_day=480,cost_per_minute=1.5,status="active")
 
     def list_machines(self, tenant_id, q=None, status=None): return [self._machine()] if tenant_id == TENANT_ID else []
+    def get_machine(self, tenant_id, machine_id): return self._machine() if tenant_id == TENANT_ID and machine_id == "maq_demo" else None
+    def maintenance_machine_command(self, tenant_id, machine_id, payload, action, key, request_hash, actor_id):
+        return {"machine": self._machine().model_dump(), "production_order_id": payload.production_order_id, "production_order_status": None, "maintenance_order_id": payload.maintenance_order_id} if tenant_id == TENANT_ID and machine_id == "maq_demo" else None
     def create_machine(self, tenant_id, payload, key, request_hash, actor_id): return self._machine() if tenant_id == TENANT_ID else None
     def update_machine(self, tenant_id, machine_id, payload, key, request_hash, actor_id): return self._machine() if tenant_id == TENANT_ID and machine_id == "maq_demo" else None
 
     def _validation(self):
-        return ResourceValidationRead(recipe_version_id="rcv_demo",quantity=2,unit="pza",can_release=True,planned_cost=4,validated_at=datetime.now(timezone.utc),rows=[],blockers=[])
+        return ResourceValidationRead(recipe_version_id="rcv_demo",quantity=2,unit="pza",can_release=True,planned_cost=4,planned_start_date=date(2026,8,25),planned_end_date=date(2026,8,27),planned_duration_days=3,minimum_duration_days=2,validated_at=datetime.now(timezone.utc),rows=[],blockers=[])
     def validate_resources(self, tenant_id, payload, observations, key, request_hash, actor_id): return self._validation() if tenant_id == TENANT_ID else None
     def preview_resources(self,tenant_id,payload,observations):return self._validation() if tenant_id==TENANT_ID else None
 
@@ -299,13 +306,35 @@ def test_machine_commands_use_contract_and_tenant():
     assert response.status_code==201 and response.json()["data"]["id"]=="maq_demo"
 
 
+def test_maintenance_release_conflict_is_controlled():
+    class ConflictingReleaseRepository(FakeProductionRepository):
+        def maintenance_machine_command(self, *args):
+            raise ValueError("maintenance_order_does_not_hold_machine")
+    client=client_with_fake_repo()
+    app.dependency_overrides[get_production_repository]=lambda:ConflictingReleaseRepository()
+    response=client.post("/v1/production/machines/maq_demo/maintenance-release",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"maintenance-release-conflict"},json={"maintenance_order_id":"mwo_other"})
+    assert response.status_code==409
+    assert response.json()["error"]["code"]=="maintenance_order_does_not_hold_machine"
+
+
 def test_resource_validation_returns_backend_decision():
     response=client_with_fake_repo().post("/v1/production/resource-validations",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"resource-validation-test"},json={"recipe_version_id":"rcv_demo","quantity":2,"unit":"PZA"})
     assert response.status_code==200 and response.json()["data"]["can_release"] is True
+    assert response.json()["data"]["planned_duration_days"]==3
+    assert response.json()["data"]["minimum_duration_days"]==2
+
+
+def test_production_dates_skip_weekends():
+    assert production_dates(date(2026,8,28),3)==[date(2026,8,28),date(2026,8,31),date(2026,9,1)]
 
 
 def test_resource_validation_rejects_client_observed_availability():
     response=client_with_fake_repo().post("/v1/production/resource-validations",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"resource-validation-observed"},json={"recipe_version_id":"rcv_demo","quantity":2,"unit":"PZA","observed_resources":[]})
+    assert response.status_code==422
+
+
+def test_resource_validation_rejects_conflicting_planning_dates():
+    response=client_with_fake_repo().post("/v1/production/resource-validations",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"resource-validation-conflicting-dates"},json={"recipe_version_id":"rcv_demo","quantity":2,"unit":"PZA","planned_for":"2026-08-25","planned_start_date":"2026-08-26"})
     assert response.status_code==422
 
 
@@ -315,6 +344,12 @@ def test_order_create_and_state_commands_are_exposed():
     assert created.status_code==201 and created.json()["data"]["status"]=="released"
     changed=client.patch("/v1/production/orders/ord_demo/status",headers={**headers,"Idempotency-Key":"order-status-test"},json={"status":"in_progress","reason":"Inicio autorizado"})
     assert changed.status_code==200 and changed.json()["data"]["status"]=="in_progress"
+
+
+def test_order_rejects_required_date_before_planned_end():
+    response=client_with_fake_repo().post("/v1/production/orders",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"order-invalid-window"},json={"recipe_version_id":"rcv_demo","quantity":2,"unit":"pza","planned_start_date":"2026-08-25","planned_duration_days":3,"required_at":"2026-08-26T23:59:59Z","responsible_worker_id":"hrw_demo","stage_assignments":[{"recipe_stage_id":"rst_demo","responsible_worker_id":"hrw_demo"}]})
+    assert response.status_code==422
+    assert response.json()["error"]["code"]=="required_date_precedes_planned_end"
 
 
 def test_first_start_consumes_material_reservations_with_stable_key():
@@ -434,6 +469,68 @@ def test_new_production_routes_require_exact_permission_in_firebase_mode():
     assert response.status_code==403 and response.json()["error"]["details"]["permission"]=="production.order.read"
 
 
+def test_production_status_permission_is_resolved_from_requested_transition():
+    denied=firebase_client(["production.order.start"]).patch(
+        "/v1/production/orders/ord_demo/status",
+        headers={"X-Tenant-Id":TENANT_ID,"Authorization":"Bearer test-token","Idempotency-Key":"status-permission-denied"},
+        json={"status":"paused","reason":"Pausa operativa"},
+    )
+    assert denied.status_code==403
+    assert denied.json()["error"]["details"]["permission"]=="production.order.pause"
+    allowed=firebase_client(["production.order.pause"]).patch(
+        "/v1/production/orders/ord_demo/status",
+        headers={"X-Tenant-Id":TENANT_ID,"Authorization":"Bearer test-token","Idempotency-Key":"status-permission-allowed"},
+        json={"status":"paused","reason":"Pausa operativa"},
+    )
+    assert allowed.status_code==200
+
+
+def test_status_permission_is_checked_before_sensitive_preflight():
+    class PreflightSpyRepository(FakeProductionRepository):
+        called=False
+        def preflight_order_status(self,tenant_id,order_id,target_status):
+            self.called=True
+            raise ValueError("production_stages_incomplete")
+
+    repository=PreflightSpyRepository()
+    c=firebase_client(["production.order.start"])
+    app.dependency_overrides[get_production_repository]=lambda:repository
+    response=c.patch(
+        "/v1/production/orders/ord_demo/status",
+        headers={"X-Tenant-Id":TENANT_ID,"Authorization":"Bearer test-token","Idempotency-Key":"permission-before-preflight"},
+        json={"status":"completed","reason":"Probe"},
+    )
+    assert response.status_code==403
+    assert response.json()["error"]["details"]["permission"]=="production.order.complete"
+    assert repository.called is False
+
+
+def test_finished_goods_permission_only_exposes_minimum_projection():
+    c=firebase_client(["inventory.finished_goods_receipt.read"])
+    headers={"X-Tenant-Id":TENANT_ID,"Authorization":"Bearer test-token"}
+    assert c.get("/v1/production/orders",headers=headers).status_code==403
+    assert c.get(f"/v1/production/product-services/{PRODUCT_SERVICE_ID}",headers=headers).status_code==403
+    repository=FakeProductionRepository()
+    app.dependency_overrides[get_production_repository]=lambda:repository
+    repository._order=lambda status="completed":FakeProductionRepository._order(repository,"completed")
+    response=c.get("/v1/production/finished-goods-candidates",headers=headers)
+    assert response.status_code==200
+    candidate=response.json()["data"][0]
+    assert set(candidate)=={"order","product"}
+    assert set(candidate["order"])=={"id","code","product_service_id","quantity","unit","status","unit_cost"}
+    assert "planned_cost" not in candidate["order"] and "recipe_snapshot" not in candidate["order"]
+
+
+def test_stage_completion_is_not_authorized_by_stage_update_permission():
+    denied=firebase_client(["production.order_stage.update"]).patch(
+        "/v1/production/order-stages/ost_demo",
+        headers={"X-Tenant-Id":TENANT_ID,"Authorization":"Bearer test-token","Idempotency-Key":"stage-complete-denied"},
+        json={"status":"completed","progress_percent":100},
+    )
+    assert denied.status_code==403
+    assert denied.json()["error"]["details"]["permission"]=="production.order_stage.complete"
+
+
 def test_list_product_services_requires_tenant_header():
     client = client_with_fake_repo()
 
@@ -491,6 +588,16 @@ def test_guided_finished_good_creation_links_by_id():
     assert response.status_code==200
     assert response.json()["data"]["product_service"]["inventory_item_id"]=="itm_new"
     assert response.json()["data"]["inventory_item"]["name"]=="Vela terminada"
+
+
+def test_guided_finished_good_link_requires_both_owner_permissions():
+    response=firebase_client(["production.product_service.update"]).put(
+        "/v1/production/product-services/prs_unlinked/finished-good-link",
+        headers={"X-Tenant-Id":TENANT_ID,"Authorization":"Bearer test-token","Idempotency-Key":"guided-finished-good-permission"},
+        json={"inventory_item":{"code":"VELA-PT","name":"Vela terminada","type":"finishedGood","base_unit":"pza","inventory_policy":"standard"}},
+    )
+    assert response.status_code==403
+    assert response.json()["error"]["details"]["permission"]=="inventory.item.create"
 
 def test_guided_finished_good_rejects_unit_mismatch():
     response=client_with_fake_repo().put("/v1/production/product-services/prs_unlinked/finished-good-link",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"guided-unit-mismatch"},json={"inventory_item":{"code":"VELA-PT","name":"Vela terminada","type":"finishedGood","base_unit":"kg"}})
@@ -601,6 +708,45 @@ RECIPE_PAYLOAD = {
 }
 
 
+class RecipeNormalizationResult:
+    def __init__(self,row):self.row=row
+    def mappings(self):return self
+    def first(self):return self.row
+
+
+class RecipeNormalizationConnection:
+    def __init__(self,machine_status):self.machine_status=machine_status
+    def __enter__(self):return self
+    def __exit__(self,*_):return False
+    def execute(self,statement,params):
+        sql=str(statement)
+        if "from production.product_services" in sql:
+            return RecipeNormalizationResult({"id":PRODUCT_SERVICE_ID,"status":"active","base_unit":"PZA"})
+        if "from production.machines" in sql:
+            return RecipeNormalizationResult({"id":"maq_demo","code":"horno","name":"Horno","area_ref_id":None,"cost_per_minute":2,"status":self.machine_status})
+        raise AssertionError(sql)
+
+
+class RecipeNormalizationEngine:
+    def __init__(self,machine_status):self.machine_status=machine_status
+    def connect(self):return RecipeNormalizationConnection(self.machine_status)
+
+
+def machine_recipe_payload():
+    return RecipeCreateRequest.model_validate({**RECIPE_PAYLOAD,"resources":[{"resource_type":"machine","resource_ref_id":"maq_demo","resource_code":"ignored","resource_name":"Ignored","quantity":60,"unit":"MIN","unit_cost":0}]})
+
+
+def test_recipe_accepts_machine_in_maintenance_without_hr_area():
+    normalized=ProductionRepository(RecipeNormalizationEngine("maintenance")).normalize_recipe_payload(TENANT_ID,machine_recipe_payload(),PRODUCT_SERVICE_ID)
+    assert normalized.resources[0].resource_code=="horno"
+    assert normalized.resources[0].resource_name=="Horno"
+
+
+def test_recipe_rejects_inactive_machine():
+    with pytest.raises(ValueError,match="machine_resource_invalid"):
+        ProductionRepository(RecipeNormalizationEngine("inactive")).normalize_recipe_payload(TENANT_ID,machine_recipe_payload(),PRODUCT_SERVICE_ID)
+
+
 def test_create_recipe_requires_idempotency_key():
     response = client_with_fake_repo().post("/v1/production/recipes", headers={"X-Tenant-Id": TENANT_ID}, json=RECIPE_PAYLOAD)
     assert response.status_code == 400
@@ -615,7 +761,7 @@ def test_create_recipe_returns_initial_draft_version():
     assert response.json()["data"]["versions"][0]["stages"][0]["weight_percent"] == 100
 
 
-def test_recipe_machine_without_hr_area_returns_actionable_422():
+def test_recipe_inactive_or_missing_machine_returns_actionable_422():
     class InvalidMachineRepository(FakeProductionRepository):
         def normalize_recipe_payload(self,tenant_id,payload,product_service_id=None,recipe_id=None):
             raise ValueError("machine_resource_invalid")
@@ -630,7 +776,7 @@ def test_recipe_machine_without_hr_area_returns_actionable_422():
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "machine_resource_invalid"
-    assert "Human Resources area" in response.json()["error"]["message"]
+    assert "must not be inactive" in response.json()["error"]["message"]
 
 
 def test_recipe_rejects_stage_weights_that_do_not_total_100():

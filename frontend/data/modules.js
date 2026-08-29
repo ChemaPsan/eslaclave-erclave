@@ -124,12 +124,12 @@ export const modules = [
     kpis: [
       ["Almacenes", "0", "positive"],
       ["Reservas", "No disponibles", "warning"],
-      ["Fuente", "Sin datos cargados", "positive"]
+      ["Almacenes activos", "0", "positive"]
     ],
     kpisEn: [
       ["Warehouses", "0", "positive"],
       ["Reservations", "Unavailable", "warning"],
-      ["Source", "No loaded data", "positive"]
+      ["Active warehouses", "0", "positive"]
     ],
     submodules: [
       ["Almacenes", "Materia prima, herramientas, producto en proceso y terminado."],
@@ -213,20 +213,29 @@ export const modules = [
     title: "Compras",
     titleEn: "Purchasing",
     eyebrow: "Abastecimiento",
+    eyebrowEn: "Supply operations",
     summary: "Requisiciones, ordenes de compra, recepciones y reabastecimiento.",
+    summaryEn: "Requisitions, purchase orders, receipts, and replenishment.",
     primary: "Nueva requisicion",
+    primaryEn: "New requisition",
     status: "5 compras pendientes",
+    statusEn: "5 pending purchases",
     kpis: [
       ["Requisiciones", "9", "warning"],
       ["Recepciones", "14", "positive"],
       ["Ahorro precio", "6.4%", "positive"]
     ],
+    kpisEn: [
+      ["Requisitions", "9", "warning"],
+      ["Receipts", "14", "positive"],
+      ["Price savings", "6.4%", "positive"]
+    ],
     submodules: [
-      ["Proveedores", "Datos fiscales, condiciones, tiempos y productos relacionados."],
-      ["Requisiciones", "Solicitudes desde faltantes, usuarios o ordenes de produccion."],
-      ["Ordenes de compra", "Autorizacion, envio, estado y seguimiento."],
-      ["Recepciones", "Parciales, totales y validacion contra pedido."],
-      ["Reabastecimiento", "Minimos, puntos de reorden y compras sugeridas."]
+      ["Proveedores", "Datos fiscales, condiciones, tiempos y productos relacionados.", "proveedores"],
+      ["Requisiciones", "Solicitudes desde faltantes, usuarios o ordenes de produccion.", "requisiciones"],
+      ["Ordenes de compra", "Historial completo de OC y creacion desde requisiciones aprobadas pendientes de convertir.", "ordenes-de-compra"],
+      ["Recepciones", "Parciales, totales y validacion contra pedido.", "recepciones"],
+      ["Reabastecimiento", "Planeacion futura por minimos, puntos de reorden y compras sugeridas; no contiene ordenes de compra.", "reabastecimiento"]
     ],
     workflow: [
       "Recibir necesidad o faltante",
@@ -236,6 +245,14 @@ export const modules = [
       "Registrar recepcion",
       "Enviar a inventario, gasto y contabilidad"
     ],
+    workflowEn: [
+      "Receive a need or shortage",
+      "Create requisition",
+      "Authorize by amount or cost center",
+      "Issue purchase order",
+      "Register receipt",
+      "Send to inventory, expenses, and accounting"
+    ],
     table: {
       columns: ["Documento", "Proveedor", "Estado", "Relacion"],
       rows: [
@@ -244,11 +261,25 @@ export const modules = [
         ["REC-044", "Avios Centro", "Parcial", "Almacen MP"]
       ]
     },
+    tableEn: {
+      columns: ["Document", "Supplier", "Status", "Relation"],
+      rows: [
+        ["REQ-087", "Demo supplier", "Requested", "OP-DEMO-01"],
+        ["OC-051", "Hilos MX", "Issued", "Shortage"],
+        ["REC-044", "Avios Centro", "Partial", "Raw materials warehouse"]
+      ]
+    },
     validations: [
       ["Almacenes", "Recepcion incrementa existencias y kardex."],
       ["Gastos", "Factura recibida crea cuenta por pagar."],
       ["Costos", "Actualiza costo de adquisicion y fletes."],
       ["Contabilidad", "Mapea inventario, proveedor, impuestos y pagos."]
+    ],
+    validationsEn: [
+      ["Warehouses", "Receipt increases stock and kardex."],
+      ["Expenses", "A received invoice creates an account payable."],
+      ["Costs", "Updates acquisition and freight costs."],
+      ["Accounting", "Maps inventory, supplier, taxes, and payments."]
     ],
     form: [
       ["Necesidad", "Componente B faltante"],
@@ -256,11 +287,50 @@ export const modules = [
       ["Fecha requerida", "24 mayo"],
       ["Centro de costos", "Produccion / General"]
     ],
+    formEn: [
+      ["Need", "Component B shortage"],
+      ["Suggested supplier", "Hilos MX"],
+      ["Required date", "May 24"],
+      ["Cost center", "Production / General"]
+    ],
     records: [
       ["REQ-087", "Componente B · OP-DEMO-01", "Solicitada"],
       ["OC-051", "Componente A · Proveedor demostrativo", "Enviada"],
       ["REC-044", "Recepcion parcial · 80%", "Parcial"]
+    ],
+    recordsEn: [
+      ["REQ-087", "Component B / OP-DEMO-01", "Requested"],
+      ["OC-051", "Component A / Demo supplier", "Issued"],
+      ["REC-044", "Partial receipt / 80%", "Partial"]
     ]
+  },
+  {
+    id: "mantenimiento",
+    icon: "MT",
+    count: 0,
+    title: "Mantenimiento",
+    titleEn: "Maintenance",
+    eyebrow: "Continuidad operativa",
+    eyebrowEn: "Operational continuity",
+    summary: "Ordenes correctivas, responsables, tiempos y refacciones conectadas con Produccion, RH e Inventario.",
+    summaryEn: "Corrective orders, assignees, labor time, and spare parts connected to Production, HR, and Inventory.",
+    primary: "Nueva orden",
+    primaryEn: "New order",
+    status: "Operacion correctiva",
+    statusEn: "Corrective operations",
+    kpis: [["Ordenes abiertas","0","positive"],["Esperando refacciones","0","warning"],["Minutos registrados","0","positive"]],
+    kpisEn: [["Open orders","0","positive"],["Waiting for parts","0","warning"],["Logged minutes","0","positive"]],
+    submodules: [
+      ["Ordenes", "Reporta, asigna, ejecuta y verifica mantenimiento correctivo.", "ordenes"],
+      ["Refacciones", "Solicitudes multipardida y conciliacion con el almacen de refacciones.", "refacciones"]
+    ],
+    workflow: ["Reportar falla","Solicitar orden","Asignar tecnico","Ejecutar mantenimiento","Conciliar refacciones","Verificar y cerrar"],
+    workflowEn: ["Report fault","Request order","Assign technician","Perform maintenance","Reconcile spare parts","Verify and close"],
+    table: {columns:["Orden","Objetivo","Estado","Responsable"],rows:[]},
+    tableEn: {columns:["Order","Target","Status","Assignee"],rows:[]},
+    validations: [["RH","Solo personal activo y elegible."],["Inventario","Reservas y salidas autoritativas."],["Produccion","Bloqueo seguro sin reanudacion automatica."]],
+    validationsEn: [["HR","Only active eligible personnel."],["Inventory","Authoritative reservations and issues."],["Production","Safe blocking without automatic resume."]],
+    form: [], formEn: [], records: [], recordsEn: []
   },
   {
     id: "ventas",

@@ -1,4 +1,5 @@
 import json
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -13,6 +14,17 @@ from .schemas import (
     RecipeRead, RecipeVersionRead, ProductServiceRead, ProductionSalesRequestRead, ResourceValidationRead,
     ResourceValidationRow,
 )
+
+
+def production_dates(start_date: date, duration_days: int) -> list[date]:
+    """Return consecutive Monday-Friday production dates from the requested start."""
+    dates: list[date] = []
+    current = start_date
+    while len(dates) < duration_days:
+        if current.weekday() < 5:
+            dates.append(current)
+        current += timedelta(days=1)
+    return dates
 
 
 class ProductionRepository:
@@ -267,7 +279,7 @@ class ProductionRepository:
             for item in payload.resources:
                 if item.resource_type=="machine":
                     machine=connection.execute(text("select id,code,name,area_ref_id,cost_per_minute,status from production.machines where tenant_id=:t and id=:i"),{"t":tenant_id,"i":item.resource_ref_id}).mappings().first()
-                    if not machine or machine["status"]!="active" or not machine["area_ref_id"]:raise ValueError("machine_resource_invalid")
+                    if not machine or machine["status"]=="inactive":raise ValueError("machine_resource_invalid")
                     if item.unit!="MIN":raise ValueError("timed_resource_unit_must_be_minute")
                     normalized.append(item.model_copy(update={"resource_code":machine["code"],"resource_name":machine["name"],"unit_cost":float(machine["cost_per_minute"])}))
                 elif item.resource_type=="other":raise ValueError("resource_type_not_authoritative")
@@ -330,9 +342,10 @@ class ProductionRepository:
             if row["product_status"]!="active" or row["product_unit"]!=payload.base_unit:raise ValueError("active_product_and_matching_unit_required")
             connection.execute(text("""
                 update production.recipe_versions set base_quantity=:base_quantity, base_unit=:base_unit,
+                suggested_duration_days=:suggested_duration_days,
                 change_reason=:change_reason, standard_cost=:standard_cost, updated_at=now()
                 where tenant_id=:tenant_id and id=:id
-            """), {"tenant_id": tenant_id, "id": version_id, "base_quantity": payload.base_quantity, "base_unit": payload.base_unit, "change_reason": payload.change_reason, "standard_cost": sum(item.quantity * item.unit_cost for item in payload.resources)})
+            """), {"tenant_id": tenant_id, "id": version_id, "base_quantity": payload.base_quantity, "base_unit": payload.base_unit, "suggested_duration_days": payload.suggested_duration_days, "change_reason": payload.change_reason, "standard_cost": sum(item.quantity * item.unit_cost for item in payload.resources)})
             connection.execute(text("delete from production.recipe_resources where tenant_id=:tenant_id and recipe_version_id=:id"), {"tenant_id": tenant_id, "id": version_id})
             connection.execute(text("delete from production.recipe_stages where tenant_id=:tenant_id and recipe_version_id=:id"), {"tenant_id": tenant_id, "id": version_id})
             self._insert_children(connection, tenant_id, version_id, payload)
@@ -389,6 +402,40 @@ class ProductionRepository:
             rows = connection.execute(text(f"select id,code,name,machine_type,area_ref_id,area_name,available_minutes_per_day,cost_per_minute,status from production.machines where {' and '.join(filters)} order by code"), params).mappings().all()
         return [MachineRead.model_validate(dict(row)) for row in rows]
 
+    def get_machine(self,tenant_id:str,machine_id:str)->MachineRead|None:
+        with self.engine.connect() as connection:
+            row=connection.execute(text("select id,code,name,machine_type,area_ref_id,area_name,available_minutes_per_day,cost_per_minute,status from production.machines where tenant_id=:t and id=:i"),{"t":tenant_id,"i":machine_id}).mappings().first()
+            return MachineRead.model_validate(dict(row)) if row else None
+
+    def maintenance_machine_command(self,tenant_id,machine_id,payload,action,key,request_hash,actor_id):
+        operation=f"machine.maintenance_{action}"
+        with self.engine.begin() as connection:
+            replay=self._claim_idempotency(connection,tenant_id,operation,key,request_hash,actor_id)
+            if replay is not None:return replay
+            machine=connection.execute(text("select id,code,name,machine_type,area_ref_id,area_name,available_minutes_per_day,cost_per_minute,status,maintenance_order_ref_id from production.machines where tenant_id=:t and id=:i for update"),{"t":tenant_id,"i":machine_id}).mappings().first()
+            if not machine:self._release_idempotency(connection,tenant_id,operation,key);return None
+            production_order=None
+            if payload.production_order_id:
+                production_order=connection.execute(text("select id,code,status from production.production_orders where tenant_id=:t and id=:i for update"),{"t":tenant_id,"i":payload.production_order_id}).mappings().first()
+                linked=connection.execute(text("select 1 from production.production_order_resources where tenant_id=:t and production_order_id=:o and resource_type='machine' and resource_ref_id=:m"),{"t":tenant_id,"o":payload.production_order_id,"m":machine_id}).first()
+                if not production_order or not linked:self._release_idempotency(connection,tenant_id,operation,key);raise ValueError("maintenance_machine_not_in_order")
+            if action=="block":
+                if machine["maintenance_order_ref_id"] and machine["maintenance_order_ref_id"] != payload.maintenance_order_id:
+                    self._release_idempotency(connection,tenant_id,operation,key);raise ValueError("machine_held_by_other_maintenance_order")
+                connection.execute(text("update production.machines set status='maintenance',maintenance_order_ref_id=:o,updated_at=now() where tenant_id=:t and id=:i"),{"t":tenant_id,"i":machine_id,"o":payload.maintenance_order_id})
+                if production_order:
+                    if production_order["status"]=="in_progress":connection.execute(text("update production.production_orders set status='paused',updated_at=now() where tenant_id=:t and id=:i"),{"t":tenant_id,"i":payload.production_order_id})
+                    elif production_order["status"]!="waiting_resources":self._release_idempotency(connection,tenant_id,operation,key);raise ValueError("production_order_not_maintenance_eligible")
+            else:
+                if machine["maintenance_order_ref_id"] != payload.maintenance_order_id:
+                    if machine["maintenance_order_ref_id"] is not None or machine["status"]!="active":
+                        self._release_idempotency(connection,tenant_id,operation,key);raise ValueError("maintenance_order_does_not_hold_machine")
+                else:
+                    connection.execute(text("update production.machines set status='active',maintenance_order_ref_id=null,updated_at=now() where tenant_id=:t and id=:i and status='maintenance'"),{"t":tenant_id,"i":machine_id})
+            after=connection.execute(text("select id,code,name,machine_type,area_ref_id,area_name,available_minutes_per_day,cost_per_minute,status from production.machines where tenant_id=:t and id=:i"),{"t":tenant_id,"i":machine_id}).mappings().one()
+            result={"machine":dict(after),"production_order_id":payload.production_order_id,"production_order_status":"paused" if production_order and production_order["status"]=="in_progress" and action=="block" else production_order["status"] if production_order else None,"maintenance_order_id":payload.maintenance_order_id}
+            self._audit(connection,tenant_id,actor_id,f"machine.maintenance_{action}","machine",machine_id,dict(machine),dict(after),key);self._complete_idempotency(connection,tenant_id,operation,key,result,200);return result
+
     def create_machine(self, tenant_id: str, payload, key: str, request_hash: str, actor_id: str) -> MachineRead | None:
         with self.engine.begin() as connection:
             replay = self._claim_idempotency(connection, tenant_id, "machine.create", key, request_hash, actor_id)
@@ -444,7 +491,6 @@ class ProductionRepository:
         with self.engine.connect() as connection:return self._validate_resources(connection,tenant_id,payload,observations)
 
     def _validate_resources(self, connection, tenant_id: str, payload,observations) -> ResourceValidationRead | None:
-        from datetime import date,datetime, timezone
         version = self._read_version(connection, tenant_id, payload.recipe_version_id)
         current=connection.execute(text("""select r.current_version_id,p.status product_status from production.recipes r join production.product_services p on p.tenant_id=r.tenant_id and p.id=r.product_service_id
             where r.tenant_id=:t and r.id=:i"""),{"t":tenant_id,"i":version.recipe_id if version else ""}).mappings().first()
@@ -452,33 +498,60 @@ class ProductionRepository:
             return None
         scale = payload.quantity / version.base_quantity
         observed = {(item.resource_type, item.resource_ref_id, item.unit): item for item in observations}
-        planned_date=payload.planned_for or date.today()
+        planned_start_date=payload.planned_start_date or payload.planned_for or date.today()
+        planned_days=production_dates(planned_start_date,payload.planned_duration_days)
         rows, blockers = [], []
+        minimum_duration_days = 1
         for resource in version.resources:
             required = resource.quantity * scale
             observation = observed.get((resource.resource_type, resource.resource_ref_id or "", resource.unit))
             available = observation.available_quantity if observation else 0
             source = observation.source if observation else "unavailable"
+            daily_allocations=[]
+            gross_capacity=0.0
             if resource.resource_type == "machine" and resource.resource_ref_id:
                 machine = connection.execute(text("select available_minutes_per_day,cost_per_minute,status from production.machines where tenant_id=:tenant_id and id=:id"), {"tenant_id": tenant_id, "id": resource.resource_ref_id}).mappings().first()
                 if machine:
-                    committed=float(connection.execute(text("select coalesce(sum(quantity_minutes),0) from production.capacity_commitments where tenant_id=:t and resource_type='machine' and resource_ref_id=:i and planned_date=:d and status='active'"),{"t":tenant_id,"i":resource.resource_ref_id,"d":planned_date}).scalar_one())
-                    available = max(0,float(machine["available_minutes_per_day"])-committed) if machine["status"] == "active" else 0
+                    gross_capacity=float(machine["available_minutes_per_day"]) if machine["status"] == "active" else 0
                     source = "production.machines"
                     unit_cost = float(machine["cost_per_minute"])
                 else:
+                    gross_capacity=0
                     unit_cost = resource.unit_cost
             elif resource.resource_type=="labor" and observation:
-                committed=float(connection.execute(text("select coalesce(sum(quantity_minutes),0) from production.capacity_commitments where tenant_id=:t and resource_type='labor' and resource_ref_id=:i and planned_date=:d and status='active'"),{"t":tenant_id,"i":resource.resource_ref_id,"d":planned_date}).scalar_one())
-                available=max(0,float(observation.available_quantity)-committed);unit_cost=observation.unit_cost if observation.unit_cost is not None else resource.unit_cost
+                gross_capacity=float(observation.available_quantity)
+                unit_cost=observation.unit_cost if observation.unit_cost is not None else resource.unit_cost
             else:
                 unit_cost = observation.unit_cost if observation and observation.unit_cost is not None else resource.unit_cost
-            ok = available >= required
+            if resource.resource_type in {"labor","machine"}:
+                horizon=production_dates(planned_start_date,365)
+                committed_rows=connection.execute(text("""select planned_date,sum(quantity_minutes) quantity
+                    from production.capacity_commitments where tenant_id=:t and resource_type=:type and resource_ref_id=:i
+                    and planned_date between :start and :end and status='active' group by planned_date"""),
+                    {"t":tenant_id,"type":resource.resource_type,"i":resource.resource_ref_id,"start":horizon[0],"end":horizon[-1]}).mappings().all()
+                committed_by_date={item["planned_date"]:float(item["quantity"]) for item in committed_rows}
+                remaining=required
+                cumulative_available=0.0
+                resource_minimum=None
+                for day_number,planned_date in enumerate(horizon,1):
+                    committed=committed_by_date.get(planned_date,0.0)
+                    net=max(0.0,gross_capacity-committed)
+                    cumulative_available+=net
+                    if resource_minimum is None and cumulative_available+0.000001>=required:
+                        resource_minimum=day_number
+                    if planned_date in planned_days:
+                        allocated=min(remaining,net)
+                        remaining=max(0.0,remaining-allocated)
+                        daily_allocations.append({"planned_date":planned_date,"gross_capacity":gross_capacity,"committed_quantity":committed,"available_quantity":net,"allocated_quantity":allocated,"remaining_capacity":max(0.0,net-allocated)})
+                available=sum(item["available_quantity"] for item in daily_allocations)
+                if resource_minimum is not None:
+                    minimum_duration_days=max(minimum_duration_days,resource_minimum)
+            ok = available+0.000001 >= required
             blocker = None if ok else (f"invalid_{resource.resource_type}:{resource.resource_code}" if not observation and resource.resource_type!="machine" else f"insufficient_{resource.resource_type}:{resource.resource_code}")
             if blocker:
                 blockers.append(blocker)
-            rows.append(ResourceValidationRow(resource_type=resource.resource_type,resource_ref_id=resource.resource_ref_id,resource_code=resource.resource_code,resource_name=resource.resource_name,unit=resource.unit,required_quantity=required,available_quantity=available,unit_cost=unit_cost,total_cost=required*unit_cost,source=source,ok=ok,blocker_code=blocker,allocations=observation.allocations if observation else []))
-        return ResourceValidationRead(recipe_version_id=version.id,quantity=payload.quantity,unit=payload.unit,can_release=not blockers,planned_cost=sum(row.total_cost for row in rows),validated_at=datetime.now(timezone.utc),rows=rows,blockers=blockers)
+            rows.append(ResourceValidationRow(resource_type=resource.resource_type,resource_ref_id=resource.resource_ref_id,resource_code=resource.resource_code,resource_name=resource.resource_name,unit=resource.unit,required_quantity=required,available_quantity=available,unit_cost=unit_cost,total_cost=required*unit_cost,source=source,ok=ok,blocker_code=blocker,allocations=observation.allocations if observation else [],daily_allocations=daily_allocations))
+        return ResourceValidationRead(recipe_version_id=version.id,quantity=payload.quantity,unit=payload.unit,can_release=not blockers,planned_cost=sum(row.total_cost for row in rows),planned_start_date=planned_days[0],planned_end_date=planned_days[-1],planned_duration_days=payload.planned_duration_days,minimum_duration_days=minimum_duration_days,validated_at=datetime.now(timezone.utc),rows=rows,blockers=blockers)
 
     def list_orders(self, tenant_id: str, limit: int = 50, status: str | None = None) -> list[ProductionOrderRead]:
         filters = ["tenant_id=:tenant_id"]
@@ -537,13 +610,18 @@ class ProductionRepository:
             replay = self._claim_idempotency(connection, tenant_id, "order.create", key, request_hash, actor_id)
             if replay is not None:
                 return ProductionOrderRead.model_validate(replay)
-            from datetime import date
-            for item in observations:
-                if item.resource_type in {"labor","machine"}:connection.execute(text("select pg_advisory_xact_lock(hashtextextended(:k,0))"),{"k":f"production:{tenant_id}:{item.resource_type}:{item.resource_ref_id}:{payload.planned_for or date.today()}"})
+            lock_dates=production_dates(payload.planned_start_date or payload.planned_for or date.today(),payload.planned_duration_days)
+            version_for_locks=self._read_version(connection,tenant_id,payload.recipe_version_id)
+            lock_keys=sorted(f"production:{tenant_id}:{item.resource_type}:{item.resource_ref_id}:{day}" for item in (version_for_locks.resources if version_for_locks else []) if item.resource_type in {"labor","machine"} for day in lock_dates)
+            for lock_key in lock_keys:
+                connection.execute(text("select pg_advisory_xact_lock(hashtextextended(:k,0))"),{"k":lock_key})
             validation = self._validate_resources(connection, tenant_id, payload,observations)
             if validation is None or not validation.can_release:
                 self._release_idempotency(connection, tenant_id, "order.create", key)
                 raise ValueError("resources_unavailable" if validation else "approved_recipe_required")
+            if payload.required_at and payload.required_at.date()<validation.planned_end_date:
+                self._release_idempotency(connection, tenant_id, "order.create", key)
+                raise ValueError("required_date_precedes_planned_end")
             version = self._read_version(connection, tenant_id, payload.recipe_version_id)
             recipe = self._read_recipe(connection, tenant_id, version.recipe_id)
             active_stage_ids={stage.id for stage in version.stages if stage.status=="active"}
@@ -554,11 +632,11 @@ class ProductionRepository:
                 self._release_idempotency(connection, tenant_id, "order.create", key)
                 raise ValueError("production_order_code_already_exists")
             recipe_snapshot = recipe.model_dump(mode="json")
+            planned_start_at=payload.planned_start_at if payload.planned_start_at and payload.planned_start_at.date()==validation.planned_start_date else datetime.combine(validation.planned_start_date,datetime.min.time(),tzinfo=timezone.utc)
             connection.execute(text("""
-                insert into production.production_orders(id,tenant_id,code,product_service_id,recipe_id,recipe_version_id,quantity,unit,status,priority,required_at,responsible_worker_ref_id,responsible_name_snapshot,planned_start_at,source_type,source_id,source_line_id,planned_cost,recipe_snapshot,resource_validation_snapshot,validated_at,created_by)
-                values(:id,:tenant_id,:code,:product_service_id,:recipe_id,:recipe_version_id,:quantity,:unit,'released',:priority,:required_at,:responsible_worker_id,:responsible,:planned_start_at,:source_type,:source_id,:source_line_id,:planned_cost,cast(:recipe_snapshot as jsonb),cast(:validation as jsonb),:validated_at,:actor_id)
-            """), {"id":order_id,"tenant_id":tenant_id,"code":code,"product_service_id":recipe.product_service_id,"recipe_id":recipe.id,"recipe_version_id":version.id,"quantity":payload.quantity,"unit":payload.unit,"priority":payload.priority,"required_at":payload.required_at,"responsible_worker_id":payload.responsible_worker_id,"responsible":payload.responsible_name,"planned_start_at":payload.planned_start_at,"source_type":payload.source_type,"source_id":payload.source_id,"source_line_id":payload.source_line_id,"planned_cost":validation.planned_cost,"recipe_snapshot":json.dumps(recipe_snapshot),"validation":json.dumps(validation.model_dump(mode="json")),"validated_at":validation.validated_at,"actor_id":actor_id})
-            planned_date=payload.planned_for or (payload.planned_start_at.date() if payload.planned_start_at else payload.required_at.date() if payload.required_at else date.today())
+                insert into production.production_orders(id,tenant_id,code,product_service_id,recipe_id,recipe_version_id,quantity,unit,status,priority,required_at,responsible_worker_ref_id,responsible_name_snapshot,planned_start_at,planned_end_date,planned_duration_days,source_type,source_id,source_line_id,planned_cost,recipe_snapshot,resource_validation_snapshot,validated_at,created_by)
+                values(:id,:tenant_id,:code,:product_service_id,:recipe_id,:recipe_version_id,:quantity,:unit,'released',:priority,:required_at,:responsible_worker_id,:responsible,:planned_start_at,:planned_end_date,:planned_duration_days,:source_type,:source_id,:source_line_id,:planned_cost,cast(:recipe_snapshot as jsonb),cast(:validation as jsonb),:validated_at,:actor_id)
+            """), {"id":order_id,"tenant_id":tenant_id,"code":code,"product_service_id":recipe.product_service_id,"recipe_id":recipe.id,"recipe_version_id":version.id,"quantity":payload.quantity,"unit":payload.unit,"priority":payload.priority,"required_at":payload.required_at,"responsible_worker_id":payload.responsible_worker_id,"responsible":payload.responsible_name,"planned_start_at":planned_start_at,"planned_end_date":validation.planned_end_date,"planned_duration_days":validation.planned_duration_days,"source_type":payload.source_type,"source_id":payload.source_id,"source_line_id":payload.source_line_id,"planned_cost":validation.planned_cost,"recipe_snapshot":json.dumps(recipe_snapshot),"validation":json.dumps(validation.model_dump(mode="json")),"validated_at":validation.validated_at,"actor_id":actor_id})
             for row in validation.rows:
                 resource_row_id=f"por_{uuid4().hex[:26]}";resource_reservations=reservation_refs.get((row.resource_ref_id or "",row.unit),[]);reservation_ref=resource_reservations[0] if resource_reservations else None
                 connection.execute(text("""insert into production.production_order_resources(id,tenant_id,production_order_id,resource_type,resource_ref_id,resource_code,resource_name_snapshot,unit,planned_quantity,unit_cost_snapshot,planned_cost,reservation_ref_id)
@@ -566,8 +644,11 @@ class ProductionRepository:
                 for reservation_id in resource_reservations:
                     connection.execute(text("""insert into production.production_order_resource_reservations(id,tenant_id,production_order_resource_id,reservation_ref_id)
                         values(:id,:tenant_id,:resource_id,:reservation_id)"""),{"id":f"prr_{uuid4().hex[:26]}","tenant_id":tenant_id,"resource_id":resource_row_id,"reservation_id":reservation_id})
-                if row.resource_type in {"labor","machine"}:connection.execute(text("""insert into production.capacity_commitments(id,tenant_id,production_order_id,resource_type,resource_ref_id,planned_date,quantity_minutes)
-                    values(:id,:t,:order_id,:type,:ref,:planned_date,:quantity)"""),{"id":f"cap_{uuid4().hex[:26]}","t":tenant_id,"order_id":order_id,"type":row.resource_type,"ref":row.resource_ref_id,"planned_date":planned_date,"quantity":row.required_quantity})
+                if row.resource_type in {"labor","machine"}:
+                    for allocation in row.daily_allocations:
+                        if allocation.allocated_quantity<=0:continue
+                        connection.execute(text("""insert into production.capacity_commitments(id,tenant_id,production_order_id,resource_type,resource_ref_id,planned_date,quantity_minutes)
+                            values(:id,:t,:order_id,:type,:ref,:planned_date,:quantity)"""),{"id":f"cap_{uuid4().hex[:26]}","t":tenant_id,"order_id":order_id,"type":row.resource_type,"ref":row.resource_ref_id,"planned_date":allocation.planned_date,"quantity":allocation.allocated_quantity})
             for stage in version.stages:
                 if stage.status != "active": continue
                 connection.execute(text("""
@@ -683,7 +764,7 @@ class ProductionRepository:
 
     def _read_order(self, connection, tenant_id: str, order_id: str) -> ProductionOrderRead | None:
         row = connection.execute(text("""
-            select id,code,product_service_id,recipe_id,recipe_version_id,quantity,unit,status,priority,required_at,planned_start_at,actual_start_at,actual_end_at,responsible_worker_ref_id responsible_worker_id,responsible_name_snapshot responsible_name,source_type,source_id,planned_cost,actual_cost,recipe_snapshot,resource_validation_snapshot,created_at
+            select id,code,product_service_id,recipe_id,recipe_version_id,quantity,unit,status,priority,required_at,planned_start_at,planned_end_date,planned_duration_days,actual_start_at,actual_end_at,responsible_worker_ref_id responsible_worker_id,responsible_name_snapshot responsible_name,source_type,source_id,planned_cost,actual_cost,recipe_snapshot,resource_validation_snapshot,created_at
             from production.production_orders where tenant_id=:tenant_id and id=:id
         """), {"tenant_id":tenant_id,"id":order_id}).mappings().first()
         if row is None: return None
@@ -784,7 +865,7 @@ class ProductionRepository:
             set state='completed', response_payload=cast(:payload as jsonb), status_code=:status_code,
                 completed_at=now(), updated_at=now()
             where tenant_id=:tenant_id and operation=:operation and idempotency_key=:key
-        """), {"tenant_id": tenant_id, "operation": operation, "key": key, "payload": json.dumps(payload), "status_code": status_code})
+        """), {"tenant_id": tenant_id, "operation": operation, "key": key, "payload": json.dumps(payload, default=str), "status_code": status_code})
 
     def _release_idempotency(self, connection, tenant_id: str, operation: str, key: str) -> None:
         connection.execute(text("delete from production.idempotency_records where tenant_id=:tenant_id and operation=:operation and idempotency_key=:key and state='processing'"), {"tenant_id": tenant_id, "operation": operation, "key": key})
@@ -792,9 +873,9 @@ class ProductionRepository:
     def _insert_version(self, connection, tenant_id: str, recipe_id: str, version_id: str, version_number: int, payload) -> None:
         standard_cost = sum(item.quantity * item.unit_cost for item in payload.resources)
         connection.execute(text("""
-            insert into production.recipe_versions (id, tenant_id, recipe_id, version_number, base_quantity, base_unit, standard_cost, change_reason)
-            values (:id, :tenant_id, :recipe_id, :version_number, :base_quantity, :base_unit, :standard_cost, :change_reason)
-        """), {"id": version_id, "tenant_id": tenant_id, "recipe_id": recipe_id, "version_number": version_number, "base_quantity": payload.base_quantity, "base_unit": payload.base_unit, "standard_cost": standard_cost, "change_reason": payload.change_reason})
+            insert into production.recipe_versions (id, tenant_id, recipe_id, version_number, base_quantity, base_unit, suggested_duration_days, standard_cost, change_reason)
+            values (:id, :tenant_id, :recipe_id, :version_number, :base_quantity, :base_unit, :suggested_duration_days, :standard_cost, :change_reason)
+        """), {"id": version_id, "tenant_id": tenant_id, "recipe_id": recipe_id, "version_number": version_number, "base_quantity": payload.base_quantity, "base_unit": payload.base_unit, "suggested_duration_days": payload.suggested_duration_days, "standard_cost": standard_cost, "change_reason": payload.change_reason})
         self._insert_children(connection, tenant_id, version_id, payload)
 
     def _insert_children(self, connection, tenant_id: str, version_id: str, payload) -> None:
@@ -817,7 +898,7 @@ class ProductionRepository:
         return RecipeRead(**dict(row), versions=[self._read_version(connection, tenant_id, item) for item in version_ids])
 
     def _read_version(self, connection, tenant_id: str, version_id: str) -> RecipeVersionRead | None:
-        row = connection.execute(text("select id, recipe_id, version_number, status, base_quantity, base_unit, standard_cost, change_reason, approved_at, approved_by from production.recipe_versions where tenant_id=:tenant_id and id=:id"), {"tenant_id": tenant_id, "id": version_id}).mappings().first()
+        row = connection.execute(text("select id, recipe_id, version_number, status, base_quantity, base_unit, suggested_duration_days, standard_cost, change_reason, approved_at, approved_by from production.recipe_versions where tenant_id=:tenant_id and id=:id"), {"tenant_id": tenant_id, "id": version_id}).mappings().first()
         if row is None:
             return None
         resources = connection.execute(text("select id, resource_type, resource_ref_id, resource_code, resource_name, quantity, unit, unit_cost, total_cost, sort_order from production.recipe_resources where tenant_id=:tenant_id and recipe_version_id=:id order by sort_order"), {"tenant_id": tenant_id, "id": version_id}).mappings().all()

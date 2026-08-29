@@ -15,6 +15,10 @@ Un `select` HTML es adecuado para catalogos pequenos y estables. Entidades que c
 | Orden de compra | folio, proveedor, articulo | estatus, almacen destino, comprador, fecha esperada | fecha esperada mas cercana | aprobada/abierta y con saldo por recibir |
 | Recepcion | orden, proveedor, articulo | almacen, fecha, recepcion parcial | recientes | orden con saldo pendiente |
 | Orden de Produccion | folio, producto, receta | estatus, prioridad, responsable, fecha requerida | prioridad y fecha | compatible con la accion solicitada |
+| Orden de mantenimiento | folio, titulo, maquina/ubicacion | estado, prioridad, responsable, antiguedad | prioridad y fecha | tenant y estado compatibles con la accion |
+| Maquina de Produccion | codigo, nombre | area, estado | area y codigo | activa o seleccionable para reportar falla |
+| Trabajador elegible de Mantenimiento | nombre, numero de empleado | area, puesto, estado | nombre y numero | activo y puesto con `intervenes_in_maintenance` |
+| Refaccion/almacen | SKU, nombre, almacen | existencia, unidad, tipo de almacen | SKU y nombre | articulo activo y almacen `spare_parts` |
 | Articulo de Inventario | SKU, nombre, categoria | tipo, estatus, almacen, unidad, politica, disponibilidad | SKU / relevancia | activo y compatible con unidad/operacion |
 | Trabajador | nombre, numero, puesto, area | estatus, area, puesto, elegibilidad | nombre | trabajador, puesto y area activos |
 | Almacen | codigo, nombre, ubicacion | tipo, estatus, centro | codigo | activo y permitido para la operacion |
@@ -42,7 +46,9 @@ CHG-209 extiende el patrón Local a todas las referencias crecientes presentes e
 | Ventas | cliente, producto/servicio, responsable, cotización, pedido y almacén de surtido | lookup especializado en documentos y lookup transversal en maestros |
 | Recursos Humanos | área y puesto | búsqueda por código, nombre, puesto o área según la etiqueta disponible |
 | Backoffice | no existen referencias operativas crecientes en formularios actuales | sin cambio; activar módulos sigue siendo una lista acotada de configuración |
-| Compras, Gastos, Costos, Contabilidad y Reportes | flujos todavía planeados | deberán adoptar el patrón al incorporar maestros o documentos reales |
+| Compras | articulo, proveedor, requisicion aprobada, orden abierta y almacen | busqueda por identidad visible; backend revalida tenant, estado, unidad y elegibilidad |
+| Mantenimiento (Local) | orden, maquina, trabajador elegible, refaccion y almacen de refacciones | busqueda server-side acotada, ID estable y snapshot; backend propietario revalida tenant, estado y elegibilidad |
+| Gastos, Costos, Contabilidad y Reportes | flujos todavia planeados | deberan adoptar el patron al incorporar maestros o documentos reales |
 
 ## Catalogos cerrados
 

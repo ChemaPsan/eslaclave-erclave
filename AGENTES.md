@@ -26,6 +26,7 @@ Reglas transversales vigentes:
 
 - Un contrato OpenAPI debe parsear y reflejar el runtime; toda operacion futura se identifica con `x-implementation-status: planned`.
 - Los manifiestos usan permisos puntuales con puntos y declaran si estan `implemented` o `planned`.
+- Toda aprobacion, aceptacion o transicion operativa usa una capacidad puntual asignable a roles. El backend deriva el permiso exacto de la accion solicitada y no confia solo en controles ocultos; los nombres de puestos o roles del tenant nunca se codifican como politica. La matriz vive en `docs/arquitectura/matriz_autorizacion_operativa.md`.
 - Unidades de medida se resuelven por el catalogo tenant-safe de Administracion. Altas y cambios son idempotentes, correlacionados y auditados; Produccion e Inventarios guardan el codigo estable.
 - Las referencias crecientes a maestros y documentos usan búsqueda con resultados acotados, etiqueta de negocio e ID estable; estatus, tipos y otras listas cerradas permanecen como selector directo. La cobertura exigible se documenta en `docs/arquitectura/seleccion_escalable_documentos.md` y se valida con `npm.cmd run validate:selectors`.
 - La primera vista de cada módulo operativo contiene únicamente reportes estándar de solo lectura sobre sus propios catálogos y documentos. Administración conserva excepcionalmente su centro de configuración. Toda captura o mutación operativa vive en un submódulo; Reportes queda reservado para análisis especializados entre módulos. La matriz vigente está en `docs/arquitectura/reportes_estandar_por_modulo.md`.
@@ -603,6 +604,7 @@ Preguntas obligatorias:
 | Recursos Humanos | Especialista en estructura organizacional y capacidad laboral | Especialista tecnico del modulo de Recursos Humanos |
 | Almacenes e inventarios | Especialista en inventario, reservas, kardex y ubicaciones | Especialista tecnico de inventarios, movimientos y existencias |
 | Compras y abastecimiento | Especialista en requisiciones, proveedores y reabastecimiento | Especialista tecnico de compras, recepciones e integracion con inventario |
+| Mantenimiento | Especialista en mantenimiento, confiabilidad y continuidad operativa | Especialista tecnico de ordenes, objetivos mantenibles y refacciones |
 | Ventas y clientes | Especialista comercial, pedidos, entregas y margen | Especialista tecnico de ventas, reservas y documentos comerciales |
 | Gastos y cuentas por pagar | Especialista en gastos, XML/PDF, pagos y vencimientos | Especialista tecnico de documentos fiscales, pagos y anexos |
 | Costos y centros de costos | Especialista en costeo, variaciones y rentabilidad | Especialista tecnico de acumulacion de costos y calculos |
@@ -715,7 +717,7 @@ El agente de negocio debe dominar:
 - Paleta de marca: morado principal `#9B0FC9`, morado intenso `#6106A0`, violeta oscuro `#300C57`, fondo premium `#190F34` y acentos magenta `#F557D3`.
 - Paleta semantica: verde para exito, rojo para riesgo/error, naranja para advertencia, azul para informacion y morado para seleccion/actividad.
 - Experiencia SaaS operativa: dashboards densos pero ordenados, navegacion clara, acciones visibles y poca friccion para tareas repetidas.
-- Consistencia entre modulos: Produccion, Recursos Humanos, Almacenes, Compras, Ventas, Gastos, Costos, Reportes, Administracion y Contabilidad deben sentirse como una sola app.
+- Consistencia entre modulos: Produccion, Recursos Humanos, Almacenes, Compras, Mantenimiento, Ventas, Gastos, Costos, Reportes, Administracion y Contabilidad deben sentirse como una sola app.
 - Redaccion de interfaz: textos breves, accionables, localizables, sin parrafos largos ni explicaciones innecesarias dentro de pantallas de trabajo.
 - Lenguaje bilingue: todo texto de interfaz debe poder entenderse en Espanol e Ingles sin perder tono, accion ni contexto operativo.
 - Glosario funcional: mantener consistencia en terminos como orden, receta, recurso, almacen, requisicion, pedido, gasto, costo, asiento, reporte y permiso.
@@ -1321,7 +1323,7 @@ Responsabilidad:
 
 - Custodiar `inventory-service`, su schema, OpenAPI, cliente frontend, movimientos inmutables, balances y Kardex calculados.
 - Validar que cada movimiento tenga documento origen, costo y trazabilidad.
-- Distinguir servicio, datos y capacidades por ambiente desde `ESTADO_ACTUAL.md`: Inventory base esta desplegado en QA; reservas, liberaciones, consumos, valuacion y protecciones concurrentes para Produccion y Ventas estan implementados solo en Local hasta su promocion gobernada.
+- Distinguir servicio, datos y capacidades por ambiente desde `ESTADO_ACTUAL.md`: Inventory, reservas, liberaciones, consumos, valuacion y protecciones concurrentes para Produccion y Ventas estan desplegados en QA desde el corte de cinco servicios. La existencia del servicio no autoriza seeds ni datos; cada captura QA sigue requiriendo tenant y alcance aprobados.
 - Validar conversiones solo con UOM activas, misma categoria y factor estandar inequivoco; rechazar equivalencias de empaque o personalizadas no configuradas.
 
 Preguntas que responde:
@@ -1395,6 +1397,10 @@ Responsabilidad:
 - Definir flujos de proveedores, requisiciones, autorizaciones, ordenes de compra, recepciones y reabastecimiento.
 - Validar compras sugeridas desde faltantes, minimos, produccion o solicitudes internas.
 - Cuidar tiempos de entrega, condiciones comerciales y autorizaciones.
+- Custodiar el ciclo source-to-receipt del primer corte: proveedor, requisicion, aprobacion, orden y recepcion parcial o total.
+- Separar compra inventariable, servicio/gasto y activo; ninguna linea cambia de naturaleza despues de emitir la orden.
+- Exigir segregacion de funciones configurable entre solicitante, aprobador, comprador y receptor, sin deducir autoridad por el nombre del rol.
+- Mantener factura, cuenta por pagar, pago, devolucion y evaluacion avanzada como alcances posteriores hasta que existan contratos propietarios.
 
 Preguntas que responde:
 
@@ -1402,6 +1408,8 @@ Preguntas que responde:
 - Quien autoriza segun monto, centro o urgencia?
 - Que pasa con recepciones parciales?
 - Como se compara factura contra orden y recepcion?
+- Que evidencia permite compra directa y que motivo auditado exige?
+- Que tolerancia de cantidad o precio puede aceptar una recepcion sin nueva autorizacion?
 
 Dependencias principales:
 
@@ -1418,6 +1426,10 @@ Responsabilidad:
 - Revisar entidades de proveedor, requisicion, orden de compra y recepcion.
 - Validar integracion con inventario, gastos, costos y contabilidad.
 - Detectar endpoints, estados y documentos origen faltantes.
+- Custodiar ownership exclusivo de `purchasing-service`, schema `purchasing`, contrato OpenAPI y microfrontend `compras`.
+- Exigir `tenant_id`, idempotencia, auditoria, locks por documento, transiciones backend y referencias externas sin FKs entre schemas.
+- Tratar Inventory como autoridad de articulos, almacenes, entradas y valuacion; Compras conserva orden, recepcion comercial y snapshots de precio/proveedor.
+- Mantener coherentes manifiesto, contrato, servicio, persistencia, permisos, pruebas y observabilidad para que la activacion implementada no exponga capacidades ficticias.
 
 Preguntas que responde:
 
@@ -1425,6 +1437,8 @@ Preguntas que responde:
 - Que datos se copian de requisicion a orden?
 - Que eventos actualizan almacen?
 - Que validaciones evitan recibir mas de lo autorizado?
+- Como se reanuda una recepcion si Inventory confirma la entrada pero Compras pierde la respuesta?
+- Que clave estable correlaciona cada linea recibida con un movimiento de Inventory sin duplicarlo?
 
 Entregables:
 
@@ -1432,6 +1446,8 @@ Entregables:
 - Contratos con almacenes y gastos.
 - Lista de validaciones backend.
 - Pendientes de UI y API.
+- Matriz de permisos `purchasing.supplier.*`, `purchasing.requisition.*`, `purchasing.order.*` y `purchasing.receipt.*`.
+- Pruebas negativas de tenant, permiso, dependencia, sobre-recepcion, reintento y concurrencia.
 
 ### Ventas y clientes
 
@@ -1732,6 +1748,28 @@ Estas referencias sirven como base conceptual para entrenar a los agentes. No su
 | Arquitectura ERClave de microservicios y microfrontends | Fronteras por modulo, shell, microfrontends, microservicios, contratos, eventos y estrategia de migracion. |
 | Contratos ERClave | Contratos API, eventos y UI que evitan acoplar modulos por implementacion interna. |
 | `frontend/i18n/translations.js` | Fuente actual de textos localizables en Espanol e Ingles para el prototipo frontend. |
+
+### Mantenimiento
+
+#### Agente de negocio: mantenimiento y confiabilidad
+
+Debe validar criticidad, prioridad, seguridad, indisponibilidad, personal elegible, evidencias de cierre, tiempos, insumos, recurrencia y continuidad productiva. Debe rechazar automatismos que oculten una maquina insegura o reanuden Produccion sin verificacion.
+
+Preguntas obligatorias:
+
+- La falla corresponde a una maquina registrada o a una ubicacion libre?
+- Debe bloquear una maquina y pausar una orden productiva?
+- El responsable es elegible y existe segregacion suficiente para verificar el cierre?
+- Las refacciones entregadas, devueltas o consumidas quedaron conciliadas?
+- Existe evidencia suficiente para liberar el equipo con seguridad?
+
+#### Agente tecnico: ordenes e integraciones de mantenimiento
+
+Debe validar ownership exclusivo de `maintenance-service`, referencias por ID y snapshot sin FK cruzada, estados e invariantes, una sola falla bloqueante activa por maquina, comandos externos idempotentes, locks, reconciliacion durable, aislamiento tenant, auditoria, busqueda server-side y feedback de mutaciones.
+
+Para autorizar una conciliacion debe existir una operacion pendiente explicita, claves externas estables por entidad/partida, conteo de intentos y una accion manual permission-aware. Cancelar compensa reservas antes de cambiar la orden; reabrir vuelve a bloquear la maquina; cerrar queda prohibido mientras cualquier autoridad siga pendiente.
+
+No debe autorizar runtime hasta existir contrato complementario propietario en RH, Inventory y Production, pruebas de concurrencia y flujo extremo a extremo.
 
 ## Pendientes
 

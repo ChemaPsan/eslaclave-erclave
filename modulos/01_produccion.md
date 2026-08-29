@@ -1,5 +1,9 @@
 # ERClave - Modulo de Produccion
 
+## Autorizacion operativa Local
+
+Las autoridades de liberar, iniciar, pausar, reanudar, enviar a validacion, finalizar y cancelar una orden son permisos independientes. Actualizar avance no concede terminar una etapa. La matriz contractual vive en `docs/arquitectura/matriz_autorizacion_operativa.md`. La orden nueva vigente nace liberada, por lo que su alta exige `production.order.release`; el borrador previo a liberacion no esta implementado.
+
 ## 1. Objetivo
 
 El modulo de Produccion es el primer modulo funcional de ERClave. Su objetivo es permitir que una empresa administre productos y servicios, configure recetas operativas, valide recursos, libere ordenes y controle el avance productivo con costos estimados y reales.
@@ -438,7 +442,7 @@ El costo debe considerar:
 - Validar disponibilidad de recursos.
 - Mostrar el recurso insuficiente con requerido, disponible y unidad antes de asignar el folio.
 - Calcular costo planeado.
-- Reservar materiales y comprometer capacidad por fecha bajo bloqueo transaccional.
+- Reservar materiales y comprometer capacidad por cada fecha productiva bajo bloqueo transaccional por recurso/dia.
 - Registrar version de receta usada.
 - Generar etapas desde la receta.
 
@@ -492,7 +496,7 @@ La reserva al liberar y la salida al iniciar representan hechos distintos. La pr
 - Definir mermas, rechazos y retrabajos.
 - Definir cierre parcial de orden.
 - Implementar recepcion de merma y reglas de rechazo/retrabajo en Almacenes.
-- Definir calendarios, turnos, ausencias y mantenimiento para capacidad multi-dia.
+- Sustituir el calendario productivo base lunes-viernes por calendarios tenant con turnos, festivos, ausencias y excepciones de mantenimiento; la distribucion y los compromisos multi-dia ya estan implementados en Local.
 - Definir reportes gerenciales.
 - Promover y certificar en QA el corte Local autoritativo antes de presentarlo como desplegado.
 # CHG-206: vínculo con producto terminado
@@ -509,8 +513,12 @@ Una orden **Terminada** queda disponible para recepcion en Almacenes. El almacen
 
 ## CHG-214: consistencia de unidades heredadas
 
-La revision Local `20260821_0023` normaliza de forma auditada los alias inequivocos `LTS -> LTR` y `MT -> MTR` tanto en los articulos y movimientos de Inventory como en los recursos y snapshots de Produccion. Esto permite que una receta historica siga refiriendo la misma magnitud sin alterar cantidades ni costos. Produccion no infiere otras equivalencias y continua rechazando unidades ausentes o inactivas del catalogo del tenant.
+La revision `20260821_0023`, desplegada en Local y QA, normaliza de forma auditada los alias inequivocos `LTS -> LTR` y `MT -> MTR` tanto en los articulos y movimientos de Inventory como en los recursos y snapshots de Produccion. Esto permite que una receta historica siga refiriendo la misma magnitud sin alterar cantidades ni costos. Produccion no infiere otras equivalencias y continua rechazando unidades ausentes o inactivas del catalogo del tenant.
 
 ## CHG-215: maquinaria elegible para recetas
 
-Una maquina puede conservarse activa en su catalogo aunque todavia no este asignada a un area, pero no puede formar parte de una receta hasta tener `area_ref_id` estable hacia un area activa de RH. La UI no la ofrece como candidata y la identifica como pendiente de vinculacion. Si una receta envia una referencia que dejo de ser elegible, el backend responde `422 machine_resource_invalid`; nunca se vincula automaticamente comparando nombres visibles.
+CHG-242 reemplaza la restriccion operativa de CHG-215: una maquina activa o en mantenimiento puede formar parte de una receta aunque su `area_ref_id` siga pendiente. La receta define el proceso; la disponibilidad se decide al validar/liberar la orden, donde una maquina en mantenimiento aporta cero capacidad y bloquea correctamente. Una maquina inactiva o inexistente sigue rechazandose con `422 machine_resource_invalid`. El area RH permanece como dato recomendado para asignacion y reportes y nunca se infiere automaticamente por nombre.
+
+## CHG-243: validacion de definicion frente a disponibilidad
+
+El editor de Recetas valida que los recursos seleccionados sigan existiendo en sus catalogos elegibles y calcula cantidades/costo para el lote simulado. No usa existencias actuales ni compara horas-persona u horas-maquina; la duracion sugerida tampoco altera ese resultado. La orden de produccion realiza la validacion operativa autoritativa con inventario, capacidad diaria, compromisos e intervalo multi-dia.

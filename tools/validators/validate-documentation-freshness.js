@@ -65,9 +65,9 @@ if (localHead) {
 }
 
 const environmentBoundaries = readText("docs/arquitectura/fronteras_ambientes_local_qa_produccion.md");
-const qaHead = currentState.match(/QA permanece en `([^`]+)`/)?.[1];
+const qaHead = currentState.match(/La revision vigente de Cloud SQL QA es `([^`]+)`/)?.[1];
 if (!qaHead) {
-  errors.push("ESTADO_ACTUAL.md must declare the current QA Alembic revision with 'QA permanece en'.");
+  errors.push("ESTADO_ACTUAL.md must declare the current QA Alembic revision with 'La revision vigente de Cloud SQL QA es'.");
 } else {
   if (!environmentBoundaries.includes(`Revision documentada \`${qaHead}\``)) {
     errors.push(`Environment boundaries do not match QA revision ${qaHead}.`);

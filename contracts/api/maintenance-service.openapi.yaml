@@ -1,0 +1,317 @@
+openapi: 3.1.0
+x-implementation-status: implemented
+info:
+  title: ERClave Maintenance Service API
+  version: 1.0.0
+  summary: Corrective maintenance orders, assignments, labor and spare-parts requests.
+servers:
+  - url: http://127.0.0.1:8012
+security:
+  - bearerAuth: []
+tags:
+  - name: MaintenanceOrders
+  - name: Labor
+  - name: SpareParts
+paths:
+  /v1/maintenance/orders:
+    get:
+      tags: [MaintenanceOrders]
+      operationId: searchMaintenanceOrders
+      summary: Search maintenance orders with bounded, server-side filters.
+      x-required-module: maintenance
+      x-permissions: [maintenance.order.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Matching maintenance orders. }
+    post:
+      tags: [MaintenanceOrders]
+      operationId: createMaintenanceOrder
+      summary: Create a corrective order for a Production machine or a free-form facility target.
+      x-required-module: maintenance
+      x-permissions: [maintenance.order.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaintenanceOrderCreateRequest' }
+      responses:
+        '201':
+          description: Maintenance order created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceOrderResponse' }
+  /v1/maintenance/orders/{id}:
+    get:
+      tags: [MaintenanceOrders]
+      operationId: getMaintenanceOrder
+      x-required-module: maintenance
+      x-permissions: [maintenance.order.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Maintenance order detail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceOrderResponse' }
+    patch:
+      tags: [MaintenanceOrders]
+      operationId: updateMaintenanceOrder
+      summary: Edit an order in draft, requested, assigned, in-progress or waiting-parts state without bypassing commands.
+      x-required-module: maintenance
+      x-permissions: [maintenance.order.update]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaintenanceOrderUpdateRequest' }
+      responses:
+        '200': { description: Maintenance order updated. }
+  /v1/maintenance/orders/{id}/transitions:
+    post:
+      tags: [MaintenanceOrders]
+      operationId: transitionMaintenanceOrder
+      summary: Request, assign, start, wait for parts, resolve, close or cancel an order.
+      x-required-module: maintenance
+      x-permissions: [maintenance.order.request, maintenance.order.assign, maintenance.order.start, maintenance.order.wait_for_parts, maintenance.order.resume, maintenance.order.resolve, maintenance.order.close, maintenance.order.reopen, maintenance.order.cancel]
+      x-permission-mode: by-requested-transition
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaintenanceTransitionRequest' }
+      responses:
+        '200':
+          description: Transition applied or safely replayed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceOrderResponse' }
+        '409': { description: Invalid transition, duplicate active machine outage or external reconciliation required. }
+  /v1/maintenance/orders/{id}/reconcile:
+    post:
+      tags: [MaintenanceOrders]
+      operationId: reconcileMaintenanceOrder
+      summary: Retry the durable pending Inventory or Production operation without duplicating side effects.
+      x-required-module: maintenance
+      x-permissions: [maintenance.order.reconcile]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200': { description: Reconciliation attempted and current durable state returned. }
+  /v1/maintenance/orders/{id}/time-entries:
+    get:
+      tags: [Labor]
+      operationId: listMaintenanceTimeEntries
+      x-required-module: maintenance
+      x-permissions: [maintenance.time.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200': { description: Time entries. }
+    post:
+      tags: [Labor]
+      operationId: createMaintenanceTimeEntry
+      x-required-module: maintenance
+      x-permissions: [maintenance.time.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TimeEntryCreateRequest' }
+      responses:
+        '201': { description: Time entry created. }
+  /v1/maintenance/orders/{id}/material-requests:
+    get:
+      tags: [SpareParts]
+      operationId: listMaintenanceMaterialRequests
+      x-required-module: maintenance
+      x-permissions: [maintenance.material_request.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200': { description: Material requests and Inventory reconciliation status. }
+    post:
+      tags: [SpareParts]
+      operationId: createMaintenanceMaterialRequest
+      summary: Create a multi-line internal request against a spare-parts warehouse.
+      x-required-module: maintenance
+      x-permissions: [maintenance.material_request.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaterialRequestCreateRequest' }
+      responses:
+        '201': { description: Material request created and ready for Inventory reservation. }
+  /v1/maintenance/material-requests/{id}/cancel:
+    post:
+      tags: [SpareParts]
+      operationId: cancelMaintenanceMaterialRequest
+      x-required-module: maintenance
+      x-permissions: [maintenance.material_request.cancel]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200': { description: Request cancelled and active reservations released. }
+  /v1/maintenance/material-requests/{id}/reconcile:
+    post:
+      tags: [SpareParts]
+      operationId: reconcileMaintenanceMaterialRequest
+      summary: Retry only the pending reservation or release lines using stable Inventory keys.
+      x-required-module: maintenance
+      x-permissions: [maintenance.material_request.reconcile]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200': { description: Material reconciliation attempted and current durable state returned. }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantId:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 40 }
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      schema: { type: string, maxLength: 120 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 160 }
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 40 }
+    Search:
+      name: q
+      in: query
+      schema: { type: string, maxLength: 120 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+  schemas:
+    MaintenanceOrderCreateRequest:
+      type: object
+      required: [code, target_type, priority, title, description, location]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 60 }
+        target_type: { type: string, enum: [production_machine, facility, other] }
+        production_machine_id: { type: [string, 'null'], maxLength: 40 }
+        source_type: { type: string, enum: [manual, production_order], default: manual }
+        source_production_order_id: { type: [string, 'null'], maxLength: 40 }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        title: { type: string, minLength: 3, maxLength: 180 }
+        description: { type: string, minLength: 3, maxLength: 4000 }
+        location: { type: string, minLength: 2, maxLength: 300 }
+        safety_notes: { type: [string, 'null'], maxLength: 2000 }
+    MaintenanceOrderUpdateRequest:
+      type: object
+      properties:
+        priority: { type: string, enum: [low, medium, high, critical] }
+        title: { type: string, minLength: 3, maxLength: 180 }
+        description: { type: string, minLength: 3, maxLength: 4000 }
+        location: { type: string, minLength: 2, maxLength: 300 }
+        diagnosis: { type: [string, 'null'], maxLength: 4000 }
+        work_performed: { type: [string, 'null'], maxLength: 4000 }
+        root_cause: { type: [string, 'null'], maxLength: 2000 }
+        verification_notes: { type: [string, 'null'], maxLength: 2000 }
+    MaintenanceTransitionRequest:
+      type: object
+      required: [transition]
+      properties:
+        transition: { type: string, enum: [request, assign, start, wait_for_parts, resume, resolve, close, reopen, cancel] }
+        assigned_worker_id: { type: [string, 'null'], maxLength: 40 }
+        reason: { type: [string, 'null'], maxLength: 1000 }
+    TimeEntryCreateRequest:
+      type: object
+      required: [worker_id, started_at, ended_at]
+      properties:
+        worker_id: { type: string, maxLength: 40 }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        notes: { type: [string, 'null'], maxLength: 1000 }
+    MaterialRequestCreateRequest:
+      type: object
+      required: [warehouse_id, lines]
+      properties:
+        warehouse_id: { type: string, maxLength: 40 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [item_id, quantity, unit_code]
+            properties:
+              item_id: { type: string, maxLength: 40 }
+              quantity: { type: number, exclusiveMinimum: 0 }
+              unit_code: { type: string, minLength: 1, maxLength: 30 }
+    MaintenanceOrderResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, status, target_type, priority, title]
+          properties:
+            id: { type: string, maxLength: 40 }
+            status: { type: string, enum: [draft, requested, assigned, in_progress, waiting_parts, resolved, closed, cancelled] }
+            target_type: { type: string, enum: [production_machine, facility, other] }
+            priority: { type: string, enum: [low, medium, high, critical] }
+            title: { type: string }
+            assigned_worker_id: { type: [string, 'null'], maxLength: 40 }
+            integration_status: { type: string, enum: [not_required, processing, completed, needs_reconciliation] }
+            integration_operation: { type: [string, 'null'], enum: [block, release, null] }

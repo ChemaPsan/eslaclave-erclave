@@ -1,0 +1,257 @@
+openapi: 3.1.0
+x-implementation-status: implemented
+info:
+  title: ERClave Purchasing Service API
+  version: 1.3.0
+  summary: Source-to-receipt con edicion, cancelacion, concurrencia y reconciliacion segura en Local.
+servers:
+  - url: http://127.0.0.1:8010
+security:
+  - bearerAuth: []
+paths:
+  /v1/purchasing/suppliers:
+    get:
+      operationId: listPurchasingSuppliers
+      x-required-module: purchasing
+      x-permissions: [purchasing.supplier.read]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
+      responses: { '200': { description: Proveedores del tenant. } }
+    post:
+      operationId: createPurchasingSupplier
+      x-required-module: purchasing
+      x-permissions: [purchasing.supplier.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SupplierWrite' } } } }
+      responses: { '201': { description: Proveedor creado. } }
+  /v1/purchasing/suppliers/{id}:
+    patch:
+      operationId: updatePurchasingSupplier
+      x-required-module: purchasing
+      x-permissions: [purchasing.supplier.update]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SupplierUpdate' } } } }
+      responses: { '200': { description: Proveedor actualizado. } }
+  /v1/purchasing/requisitions:
+    get:
+      operationId: listPurchasingRequisitions
+      x-required-module: purchasing
+      x-permissions: [purchasing.requisition.read]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
+      responses: { '200': { description: Requisiciones del tenant. } }
+    post:
+      operationId: createPurchasingRequisition
+      x-required-module: purchasing
+      x-permissions: [purchasing.requisition.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RequisitionWrite' } } } }
+      responses: { '201': { description: Requisicion en borrador. } }
+  /v1/purchasing/requisitions/{id}:
+    patch:
+      operationId: updatePurchasingRequisition
+      x-required-module: purchasing
+      x-permissions: [purchasing.requisition.update]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RequisitionWrite' } } } }
+      responses: { '200': { description: Requisicion actualizada. } }
+  /v1/purchasing/requisitions/{id}/submit:
+    post:
+      operationId: submitPurchasingRequisition
+      x-required-module: purchasing
+      x-permissions: [purchasing.requisition.submit]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      responses: { '200': { description: Requisicion enviada. } }
+  /v1/purchasing/requisitions/{id}/approve:
+    post:
+      operationId: approvePurchasingRequisition
+      x-required-module: purchasing
+      x-permissions: [purchasing.requisition.approve]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      responses: { '200': { description: Requisicion aprobada. } }
+  /v1/purchasing/requisitions/{id}/reject:
+    post:
+      operationId: rejectPurchasingRequisition
+      x-required-module: purchasing
+      x-permissions: [purchasing.requisition.reject]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReasonRequest' } } } }
+      responses: { '200': { description: Requisicion rechazada. } }
+  /v1/purchasing/requisitions/{id}/cancel:
+    post:
+      operationId: cancelPurchasingRequisition
+      x-required-module: purchasing
+      x-permissions: [purchasing.requisition.cancel]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReasonRequest' } } } }
+      responses: { '200': { description: Requisicion cancelada con motivo auditable. } }
+  /v1/purchasing/orders:
+    get:
+      operationId: listPurchasingOrders
+      x-required-module: purchasing
+      x-permissions: [purchasing.order.read]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
+      responses: { '200': { description: Ordenes de compra del tenant. } }
+    post:
+      operationId: createPurchasingOrder
+      x-required-module: purchasing
+      x-permissions: [purchasing.order.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseOrderWrite' } } } }
+      responses: { '201': { description: Orden de compra en borrador; si nace de requisicion, sus partidas deben coincidir exactamente salvo precio. } }
+  /v1/purchasing/orders/{id}:
+    patch:
+      operationId: updatePurchasingOrder
+      x-required-module: purchasing
+      x-permissions: [purchasing.order.update]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseOrderWrite' } } } }
+      responses: { '200': { description: Orden en borrador actualizada sin cambiar su origen. } }
+  /v1/purchasing/orders/{id}/issue:
+    post:
+      operationId: issuePurchasingOrder
+      x-required-module: purchasing
+      x-permissions: [purchasing.order.issue]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      responses: { '200': { description: Orden emitida y congelada. } }
+  /v1/purchasing/orders/{id}/cancel:
+    post:
+      operationId: cancelPurchasingOrder
+      x-required-module: purchasing
+      x-permissions: [purchasing.order.cancel]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReasonRequest' } } } }
+      responses: { '200': { description: Orden cancelada; conserva recepciones previas y libera la requisicion si no hubo recepcion. } }
+  /v1/purchasing/receipts:
+    get:
+      operationId: listPurchasingReceipts
+      x-required-module: purchasing
+      x-permissions: [purchasing.receipt.read]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
+      responses: { '200': { description: Recepciones del tenant. } }
+    post:
+      operationId: createPurchasingReceipt
+      x-required-module: purchasing
+      x-permissions: [purchasing.receipt.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReceiptWrite' } } } }
+      responses: { '201': { description: Recepcion completada o pendiente de reconciliacion. } }
+  /v1/purchasing/receipts/{id}/reconcile:
+    post:
+      operationId: reconcilePurchasingReceipt
+      x-required-module: purchasing
+      x-permissions: [purchasing.receipt.reconcile]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      responses: { '200': { description: Reintenta solo partidas pendientes con claves estables de Inventory. } }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    TenantHeader: { name: X-Tenant-Id, in: header, required: true, schema: { type: string } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8 } }
+    IdPath: { name: id, in: path, required: true, schema: { type: string } }
+  schemas:
+    SupplierWrite:
+      type: object
+      required: [code, commercial_name, legal_name, tax_id, tax_regime, billing_email, fiscal_postal_code, currency, payment_terms]
+      properties:
+        code: { type: string, maxLength: 40 }
+        commercial_name: { type: string, maxLength: 240 }
+        legal_name: { type: [string, 'null'], maxLength: 240 }
+        tax_id: { type: [string, 'null'], maxLength: 40 }
+        tax_regime: { type: [string, 'null'], pattern: '^\d{3}$' }
+        billing_email: { type: [string, 'null'], format: email, maxLength: 254 }
+        contact_name: { type: [string, 'null'], maxLength: 200 }
+        email: { type: [string, 'null'], format: email, maxLength: 254 }
+        phone: { type: [string, 'null'], maxLength: 30 }
+        website: { type: [string, 'null'], maxLength: 300 }
+        fiscal_street: { type: [string, 'null'], maxLength: 200 }
+        fiscal_exterior_number: { type: [string, 'null'], maxLength: 40 }
+        fiscal_interior_number: { type: [string, 'null'], maxLength: 40 }
+        fiscal_neighborhood: { type: [string, 'null'], maxLength: 160 }
+        fiscal_municipality: { type: [string, 'null'], maxLength: 160 }
+        fiscal_state: { type: [string, 'null'], maxLength: 120 }
+        fiscal_postal_code: { type: [string, 'null'], maxLength: 12 }
+        fiscal_country: { type: [string, 'null'], minLength: 2, maxLength: 2 }
+        currency: { type: string, maxLength: 12 }
+        payment_terms: { type: string, maxLength: 40 }
+        lead_time_days: { type: integer, minimum: 0 }
+        status: { type: string, enum: [active, inactive] }
+    SupplierUpdate:
+      type: object
+      properties:
+        commercial_name: { type: string, maxLength: 240 }
+        legal_name: { type: [string, 'null'], maxLength: 240 }
+        tax_id: { type: [string, 'null'], maxLength: 40 }
+        tax_regime: { type: [string, 'null'], pattern: '^\d{3}$' }
+        billing_email: { type: [string, 'null'], format: email, maxLength: 254 }
+        contact_name: { type: [string, 'null'], maxLength: 200 }
+        email: { type: [string, 'null'], format: email, maxLength: 254 }
+        phone: { type: [string, 'null'], maxLength: 30 }
+        website: { type: [string, 'null'], maxLength: 300 }
+        fiscal_street: { type: [string, 'null'], maxLength: 200 }
+        fiscal_exterior_number: { type: [string, 'null'], maxLength: 40 }
+        fiscal_interior_number: { type: [string, 'null'], maxLength: 40 }
+        fiscal_neighborhood: { type: [string, 'null'], maxLength: 160 }
+        fiscal_municipality: { type: [string, 'null'], maxLength: 160 }
+        fiscal_state: { type: [string, 'null'], maxLength: 120 }
+        fiscal_postal_code: { type: [string, 'null'], maxLength: 12 }
+        fiscal_country: { type: [string, 'null'], minLength: 2, maxLength: 2 }
+        currency: { type: string, maxLength: 12 }
+        payment_terms: { type: string, maxLength: 40 }
+        lead_time_days: { type: integer, minimum: 0 }
+        status: { type: string, enum: [active, inactive] }
+    PurchaseLine:
+      type: object
+      required: [line_type, description, quantity, unit_code]
+      properties:
+        line_type: { type: string, enum: [inventory_item, service] }
+        inventory_item_id: { type: [string, 'null'] }
+        description: { type: string, maxLength: 300 }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        unit_code: { type: string, maxLength: 20 }
+        unit_price: { type: [number, 'null'], minimum: 0 }
+    RequisitionWrite:
+      type: object
+      required: [code, required_date, priority, lines]
+      properties:
+        code: { type: string, maxLength: 60 }
+        required_date: { type: string, format: date }
+        priority: { type: string, enum: [normal, urgent] }
+        source_type: { type: string, enum: [manual, inventory_shortage, production_shortage] }
+        source_id: { type: [string, 'null'] }
+        lines:
+          type: array
+          minItems: 1
+          description: Partidas solicitadas; un mismo articulo de Inventory no puede repetirse dentro de la requisicion.
+          items: { $ref: '#/components/schemas/PurchaseLine' }
+    PurchaseOrderWrite:
+      type: object
+      required: [code, supplier_id, currency, payment_terms, lines]
+      properties:
+        code: { type: string, maxLength: 60 }
+        requisition_id: { type: [string, 'null'] }
+        direct_purchase_reason: { type: [string, 'null'], maxLength: 500 }
+        supplier_id: { type: string }
+        currency: { type: string }
+        payment_terms: { type: string }
+        lines: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PurchaseLine' } }
+    ReceiptLine:
+      type: object
+      required: [order_line_id, quantity]
+      properties:
+        order_line_id: { type: string }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        warehouse_id: { type: [string, 'null'], description: Obligatorio para articulos inventariables y omitido para servicios. }
+    ReceiptWrite:
+      type: object
+      required: [code, purchase_order_id, received_at, lines]
+      properties:
+        code: { type: string, maxLength: 60 }
+        purchase_order_id: { type: string }
+        received_at: { type: string, format: date-time }
+        supplier_document_reference: { type: [string, 'null'], maxLength: 120 }
+        lines: { type: array, minItems: 1, items: { $ref: '#/components/schemas/ReceiptLine' } }
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }

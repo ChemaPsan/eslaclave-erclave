@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ERClave Inventory Service API
-  version: 0.1.0
+  version: 0.2.0
   summary: Warehouse, item, movement, balance, kardex and reservation APIs.
 servers:
   - url: https://api.eslaclave.com
@@ -20,7 +20,7 @@ paths:
       operationId: listWarehouses
       summary: List warehouses.
       x-required-module: inventory
-      x-permissions: [inventory.warehouse.read]
+      x-permissions: [inventory.warehouse.read, maintenance.material_request.read, maintenance.material_request.create]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -57,6 +57,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/WarehouseResponse'
   /v1/inventory/warehouses/{id}:
+    get:
+      tags: [Warehouses]
+      operationId: getWarehouse
+      summary: Get one tenant warehouse for Inventory or Purchasing validation.
+      x-required-module: inventory
+      x-permissions: [inventory.warehouse.read, purchasing.receipt.create, maintenance.material_request.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Warehouse.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseResponse'
     patch:
       tags: [Warehouses]
       operationId: updateWarehouse
@@ -112,7 +129,7 @@ paths:
       operationId: listInventoryItems
       summary: Search inventory items.
       x-required-module: inventory
-      x-permissions: [inventory.item.read, production.product_service.create, production.product_service.update, sales.order.fulfill]
+      x-permissions: [inventory.item.read, production.product_service.create, production.product_service.update, sales.order.fulfill, maintenance.material_request.read, maintenance.material_request.create]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -165,7 +182,8 @@ paths:
       operationId: getInventoryItem
       summary: Get inventory item.
       x-required-module: inventory
-      x-permissions: [inventory.item.read]
+      x-permissions: [inventory.item.read, production.product_service.create, production.product_service.update, sales.order.fulfill, maintenance.material_request.create]
+      x-permission-mode: any
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -356,6 +374,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MovementResponse'
+  /v1/inventory/purchase-receipts:
+    post:
+      tags: [Movements]
+      operationId: createInventoryPurchaseReceiptMovement
+      summary: Register a purchase-order entry requested by Purchasing.
+      x-required-module: inventory
+      x-permissions: [purchasing.receipt.create]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MovementCreateRequest'
+      responses:
+        '201':
+          description: Purchase receipt movement recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementResponse'
   /v1/inventory/movements/{id}/reverse:
     post:
       tags: [Movements]
@@ -387,7 +429,7 @@ paths:
       operationId: createAvailabilityCheck
       summary: Check item availability for production or sales.
       x-required-module: inventory
-      x-permissions: [production.order.validate, production.order.create]
+      x-permissions: [production.order.validate, production.order.release]
       x-permission-mode: any
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
@@ -437,7 +479,7 @@ paths:
       operationId: listFinishedGoodsReceipts
       summary: List received quantities grouped by production order.
       x-required-module: inventory
-      x-permissions: [inventory.movement.read]
+      x-permissions: [inventory.finished_goods_receipt.read]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -453,7 +495,7 @@ paths:
       operationId: createFinishedGoodsReceipt
       summary: Confirm physical receipt of a completed production order.
       x-required-module: inventory
-      x-permissions: [inventory.movement.create]
+      x-permissions: [inventory.finished_goods_receipt.receive]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -479,7 +521,7 @@ paths:
       operationId: createReservationRequest
       summary: Create inventory reservation.
       x-required-module: inventory
-      x-permissions: [production.order.create, sales.order.fulfill]
+      x-permissions: [production.order.release, sales.order.fulfill, maintenance.material_request.create]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -503,7 +545,7 @@ paths:
       operationId: releaseReservation
       summary: Release inventory reservation.
       x-required-module: inventory
-      x-permissions: [production.order.status.update, sales.order.cancel]
+      x-permissions: [production.order.cancel, sales.order.cancel, maintenance.material_request.cancel]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -528,7 +570,7 @@ paths:
       operationId: consumeReservation
       summary: Consume all or part of a reservation into an immutable inventory exit.
       x-required-module: inventory
-      x-permissions: [production.order.status.update, sales.delivery.confirm]
+      x-permissions: [production.order.start, production.order.resume, sales.delivery.confirm, maintenance.order.resolve]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'

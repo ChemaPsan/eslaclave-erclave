@@ -9,6 +9,8 @@ const requiredContracts = [
   "hr-service.openapi.yaml",
   "inventory-service.openapi.yaml",
   "sales-service.openapi.yaml",
+  "purchasing-service.openapi.yaml",
+  "maintenance-service.openapi.yaml",
   "billing-service.openapi.yaml",
   "provisioning-service.openapi.yaml",
   "integration-service.openapi.yaml"

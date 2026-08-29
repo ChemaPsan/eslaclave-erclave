@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Ventas conecta la relacion comercial con los maestros autoritativos de ERClave. El segundo corte real existe solo en Local y cubre Clientes, Cotizaciones, Pedidos, surtido y Entregas mediante `sales-service`; no convierte texto libre ni datos del navegador en maestros operativos.
+Ventas conecta la relacion comercial con los maestros autoritativos de ERClave. El segundo corte real esta desplegado en Local y QA y cubre Clientes, Cotizaciones, Pedidos, surtido y Entregas mediante `sales-service`; no convierte texto libre ni datos del navegador en maestros operativos.
 
 ## Alcance por ambiente
 
@@ -35,7 +35,7 @@ El detalle, evidencia y criterios de cierre viven en [`docs/auditorias/ventas_se
 
 ### Seleccion escalable de documentos
 
-Los catalogos pequenos y estables, como estatus, moneda o unidad, pueden usar selectores. Las entidades operativas crecientes no deben renderizar cientos de opciones: clientes, productos, cotizaciones, pedidos, ordenes de compra, recepciones y documentos equivalentes requieren busqueda por texto, filtros de negocio y resultados acotados. Ventas implementa el patron Local para Cotizacion -> Pedido y Pedido -> Entrega; los modulos aun no especializados deben adoptarlo al construir esos flujos. Para volumen superior al limite preventivo de 200, la busqueda y paginacion deben resolverse en el backend.
+Los catalogos pequenos y estables, como estatus, moneda o unidad, pueden usar selectores. Las entidades operativas crecientes no deben renderizar cientos de opciones: clientes, productos, cotizaciones, pedidos, ordenes de compra, recepciones y documentos equivalentes requieren busqueda por texto, filtros de negocio y resultados acotados. Ventas implementa el patron en Local y QA para Cotizacion -> Pedido y Pedido -> Entrega; los modulos aun no especializados deben adoptarlo al construir esos flujos. Para volumen superior al limite preventivo de 200, la busqueda y paginacion deben resolverse en el backend.
 
 ## Criterios de aceptacion del primer corte
 

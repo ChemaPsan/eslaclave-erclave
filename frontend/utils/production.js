@@ -65,6 +65,32 @@ export function calculateRecipe(recipe, batchQuantity = 100) {
   };
 }
 
+export function validateRecipeDefinition(recipe, batchQuantity = 100) {
+  const safeRecipe = recipe && typeof recipe === "object" ? recipe : {};
+  const resources = Array.isArray(safeRecipe.resources) ? safeRecipe.resources : [];
+  const baseQuantity = Math.max(1, Number(safeRecipe.quantityBase || 1));
+  const multiplier = Number(batchQuantity || 1) / baseQuantity;
+  const rows = resources.map((item) => {
+    const resource = getResource(item.resourceId);
+    const required = Number(item.quantity) * multiplier;
+    const eligible = Boolean(resource) && resource.unitActive !== false;
+    return {
+      name: resource?.name || item.resourceName || item.resourceId,
+      unit: resource?.unit || item.unit || "",
+      type: resource?.type || item.resourceType || "",
+      source: resource?.source || "Fuera del catalogo elegible",
+      required,
+      cost: required * Number(item.unitCost ?? resource?.cost ?? 0),
+      ok: eligible
+    };
+  });
+  return {
+    rows,
+    totalCost: rows.reduce((sum, row) => sum + row.cost, 0),
+    missing: rows.filter((row) => !row.ok)
+  };
+}
+
 export function getRecipeApprovalStatus(recipe) {
   return recipe.approvalStatus || (recipe.status === "Activa" ? "Aprobada" : "Borrador");
 }

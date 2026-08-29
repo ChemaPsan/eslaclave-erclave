@@ -23,7 +23,11 @@ export async function getProductionCatalog() {
   return { products: products.data, recipes: recipes.data, machines: machines.data, orders: orders.data };
 }
 export async function getProductionProducts(){return (await productionRequest("/v1/production/product-services?limit=200&status=active")).data;}
-export async function getCompletedProductionOrders(){return (await productionRequest("/v1/production/orders?limit=200&status=completed")).data;}
+export async function getFinishedGoodsCandidates(){
+  const candidates=(await productionRequest("/v1/production/finished-goods-candidates?limit=200")).data||[];
+  const products=[...new Map(candidates.map((candidate)=>[candidate.product.id,candidate.product])).values()];
+  return {orders:candidates.map((candidate)=>candidate.order),products};
+}
 export async function getUnlinkedProductionProducts(){return (await productionRequest("/v1/production/product-services?limit=200&status=active&type=product&inventory_mapping=missing")).data;}
 export async function createAndLinkFinishedGood(id,inventoryItem){return (await productionRequest(`/v1/production/product-services/${id}/finished-good-link`,{method:"PUT",headers:commandHeaders(),body:JSON.stringify({inventory_item:inventoryItem})})).data;}
 

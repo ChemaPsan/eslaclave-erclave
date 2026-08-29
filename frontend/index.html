@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ERClave | Propuesta Frontend</title>
-    <link rel="stylesheet" href="./styles.css?v=20260821-chg212-production-codes" />
+    <link rel="stylesheet" href="./styles.css?v=20260825-chg245-compact-header" />
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Saltar al contenido principal</a>
@@ -34,28 +34,23 @@
       </aside>
 
       <main class="workspace" id="mainWorkspace" tabindex="-1">
-        <section class="context-bar" aria-label="Contexto de sesion">
-          <div class="context-pill">
-            <span class="context-label">Usuario</span>
-            <strong id="contextUser">Sin sesion</strong>
-          </div>
-          <div class="context-pill branch-context" id="branchContext">
-            <span class="context-label">Sucursal</span>
-            <strong id="contextBranch">Matriz</strong>
-          </div>
-          <button class="context-logout" id="authButton" type="button" hidden>Cerrar sesion</button>
-        </section>
-
         <header class="topbar">
           <div class="topbar-title">
             <button class="back-button" id="backButton" type="button" aria-label="Volver a la pantalla anterior" title="Volver" disabled>
               <span>&lt;</span>
             </button>
-            <div>
-              <p class="eyebrow" data-i18n="tenant">Cliente piloto</p>
-              <h1 data-i18n="title">Centro operativo</h1>
-            </div>
           </div>
+          <section class="context-bar" aria-label="Contexto de sesion">
+            <div class="context-pill">
+              <span class="context-label">Usuario</span>
+              <strong id="contextUser">Sin sesion</strong>
+            </div>
+            <div class="context-pill branch-context" id="branchContext">
+              <span class="context-label">Sucursal</span>
+              <strong id="contextBranch">Matriz</strong>
+            </div>
+            <button class="context-logout" id="authButton" type="button" hidden>Cerrar sesion</button>
+          </section>
           <div class="topbar-actions">
             <label class="search-field">
               <span>⌕</span>
@@ -68,39 +63,15 @@
           </div>
         </header>
 
-        <section class="status-strip" aria-label="Indicadores principales">
-          <article class="metric-card">
-            <span class="metric-label" data-i18n="metricProduction">Produccion activa</span>
-            <strong>18</strong>
-            <small class="trend positive">+12%</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label" data-i18n="metricInventory">Inventario critico</span>
-            <strong>7</strong>
-            <small class="trend warning">3 faltantes</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label" data-i18n="metricMargin">Margen estimado</span>
-            <strong>32.4%</strong>
-            <small class="trend positive">estable</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label" data-i18n="metricAccounting">Pendiente contable</span>
-            <strong>11</strong>
-            <small class="trend danger">requiere mapeo</small>
-          </article>
-        </section>
-
         <section class="content-grid">
           <section class="main-panel" id="modulePanel"></section>
 
           <aside class="insight-panel">
+            <section class="status-strip" aria-label="Indicadores principales"></section>
             <div class="panel-head">
               <div>
-                <p class="eyebrow" data-i18n="notifications">Notificaciones</p>
                 <h2 data-i18n="alertsTitle">Alertas operativas</h2>
               </div>
-              <span class="chip active" data-i18n="alertNow">Ahora</span>
             </div>
 
             <div class="flow-list" id="flowList"></div>
@@ -121,6 +92,6 @@
     <div class="auth-gate" id="authGate" hidden></div>
 
     <script src="./env.js"></script>
-    <script type="module" src="./app.js?v=20260821-chg212-production-codes"></script>
+    <script type="module" src="./app.js?v=20260825-chg247-maintenance-time"></script>
   </body>
 </html>

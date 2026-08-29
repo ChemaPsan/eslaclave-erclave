@@ -2,6 +2,8 @@
 
 Microservicio propietario de Almacenes e Inventarios. El MVP implementa almacenes, articulos, movimientos manuales, transferencias atomicas, reversas, reservas, recepcion de producto terminado, existencias calculadas y Kardex.
 
+La recepcion consulta exclusivamente `production-service /v1/production/finished-goods-candidates/{id}`. Esa proyeccion contiene los datos minimos para validar y valuar la entrada; los permisos Inventory no abren ordenes, recetas o productos completos de Produccion.
+
 ## Reglas
 
 - Toda consulta y escritura filtra por `tenant_id`.

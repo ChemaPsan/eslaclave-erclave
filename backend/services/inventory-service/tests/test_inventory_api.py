@@ -51,8 +51,7 @@ class FakeUnitCatalogClient:
         normalized=code.upper(); return {"code":normalized,"category":categories.get(normalized,"custom"),"status":"active"}
 class FakeProductionOrderClient:
     status="completed"
-    def get_order(self,tenant_id,order_id,authorization=None): return {"id":order_id,"code":"OP-1","product_service_id":"prs_1","quantity":10,"unit":"H87","status":self.status,"actual_cost":200,"planned_cost":180}
-    def get_product(self,tenant_id,product_id,authorization=None): return {"id":product_id,"code":"VELA","name":"Vela","type":"product","status":"active","base_unit":"H87","inventory_item_id":"itm_fg"}
+    def get_finished_goods_candidate(self,tenant_id,order_id,authorization=None): return {"order":{"id":order_id,"code":"OP-1","product_service_id":"prs_1","quantity":10,"unit":"H87","status":self.status,"unit_cost":20},"product":{"id":"prs_1","code":"VELA","name":"Vela","type":"product","status":"active","base_unit":"H87","inventory_item_id":"itm_fg"}}
 def client(): app.dependency_overrides[repos.get_inventory_repository]=lambda:FakeRepo(); app.dependency_overrides[auth.get_settings]=lambda:Settings(auth_mode="demo"); app.dependency_overrides[auth.get_unit_catalog_client]=lambda:FakeUnitCatalogClient(); app.dependency_overrides[auth.get_production_order_client]=lambda:FakeProductionOrderClient(); return TestClient(app)
 def teardown_function(): app.dependency_overrides.clear()
 def headers(command=False,tenant=TENANT): return {"X-Tenant-Id":tenant,"X-Actor-Id":"usr_demo",**({"Idempotency-Key":"test-1"} if command else {})}
@@ -105,3 +104,11 @@ def test_production_availability_reservation_and_consumption_contracts():
     assert consumed.status_code==201 and consumed.json()["data"]["unit_cost"]==12
 def test_firebase_mode_requires_bearer_token():
     c=client(); app.dependency_overrides[auth.get_settings]=lambda:Settings(auth_mode="firebase"); response=c.get("/v1/inventory/warehouses",headers=headers()); assert response.status_code==401; assert response.json()["error"]["code"]=="auth_required"
+
+def test_finished_goods_receipt_is_not_authorized_by_generic_movement_permission():
+    class SessionClient:
+        def get_context(self,tenant_id,bearer):return {"tenant":{"id":TENANT,"status":"active"},"user":{"id":"usr_warehouse"},"active_modules":["inventory"],"permissions":["inventory.movement.create"]}
+    c=client();app.dependency_overrides[auth.get_settings]=lambda:Settings(auth_mode="firebase");app.dependency_overrides[auth.get_admin_session_client]=lambda:SessionClient()
+    response=c.post("/v1/inventory/finished-goods-receipts",headers={**headers(True),"Authorization":"Bearer test-token","Idempotency-Key":"fg-exact-permission"},json={"production_order_id":"ord_1","warehouse_id":"whs_1","quantity":1,"received_at":datetime.now(timezone.utc).isoformat()})
+    assert response.status_code==403
+    assert response.json()["error"]["details"]["permission"]=="inventory.finished_goods_receipt.receive"

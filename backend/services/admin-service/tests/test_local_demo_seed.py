@@ -19,10 +19,10 @@ def load_seed_module():
     return module
 
 
-def test_local_release_modules_include_hr_without_changing_qa_defaults():
+def test_local_release_modules_include_purchasing_and_hr_without_changing_qa_defaults():
     module = load_seed_module()
     assert module.LOCAL_RELEASE_MODULES == (
-        "admin", "production", "inventory", "sales", "integrations", "hr"
+        "admin", "production", "inventory", "sales", "purchasing", "maintenance", "integrations", "hr"
     )
 
 
