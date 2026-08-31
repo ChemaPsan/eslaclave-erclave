@@ -36,7 +36,7 @@ if (/action==="resolve"[^}]*prompt\(/s.test(frontend) || /action==="cancel"[^}]*
   errors.push("Maintenance transitions must use ERClave forms instead of browser prompts.");
 }
 
-if (!/async function loadMaintenanceApiData\(\)[\s\S]*?\n\s*render\(\);\n}/.test(frontend)) {
+if (!/async function loadMaintenanceApiData\(\)[\s\S]*?\r?\n\s*render\(\);\r?\n}/.test(frontend)) {
   errors.push("Maintenance API loading must repaint the UI after success or failure.");
 }
 

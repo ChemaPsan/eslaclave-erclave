@@ -155,21 +155,29 @@ if (!errors.length) {
   ]) {
     if (!release.includes(token)) errors.push(`QA release must explicitly reconcile the QA tenant: ${token}`);
   }
-  for (const service of ["admin", "production", "inventory", "hr", "sales"]) {
+  for (const service of ["admin", "production", "inventory", "hr", "sales", "purchasing", "maintenance"]) {
     if (!candidate.includes(`${service}_service_adapter`)) errors.push(`Candidate workflow must build ${service}-service.`);
     if (!identityPlan.serviceAccounts.some((account) => account.accountId === `erclave-${service}-qa`)) {
       errors.push(`Identity plan must include erclave-${service}-qa.`);
     }
   }
   for (const token of [
-    'test "$(wc -l < candidate/qa-images.env)" -eq 5',
+    'test "$(wc -l < candidate/qa-images.env)" -eq 7',
     "SALES_IMAGE",
     "QA_SALES_RUNTIME_SERVICE_ACCOUNT",
     "QA_SALES_API_URL",
+    "PURCHASING_IMAGE",
+    "MAINTENANCE_IMAGE",
+    "QA_PURCHASING_RUNTIME_SERVICE_ACCOUNT",
+    "QA_MAINTENANCE_RUNTIME_SERVICE_ACCOUNT",
+    "QA_PURCHASING_API_URL",
+    "QA_MAINTENANCE_API_URL",
     "deploy_candidate sales-service-qa",
+    "deploy_candidate purchasing-service-qa",
+    "deploy_candidate maintenance-service-qa",
     "ERCLAVE_PRODUCTION_SERVICE_URL=${{ vars.QA_PRODUCTION_API_URL }}"
   ]) {
-    if (!release.includes(token)) errors.push(`QA release must include the five-service runtime: ${token}`);
+    if (!release.includes(token)) errors.push(`QA release must include the seven-service runtime: ${token}`);
   }
   const deployerIdentity = identityPlan.serviceAccounts.find(
     (account) => account.accountId === "erclave-github-deployer-qa"
@@ -199,6 +207,8 @@ if (!errors.length) {
     "QA_INVENTORY_API_URL",
     "QA_HR_API_URL",
     "QA_SALES_API_URL",
+    "QA_PURCHASING_API_URL",
+    "QA_MAINTENANCE_API_URL",
     "authMode: \"firebase\""
   ]) {
     if (!builder.includes(token)) errors.push(`QA frontend builder must include: ${token}`);
@@ -243,7 +253,7 @@ if (!errors.length) {
   if (mockDbForApi.loadProductsServices()[0]?.id !== "api-record") {
     errors.push("API-mode frontend cache must retain freshly loaded API data in memory.");
   }
-  if (!qaSeed.includes('ACTIVE_DEMO_MODULES = ("admin", "production", "inventory", "hr", "sales")')) {
+  if (!qaSeed.includes('ACTIVE_DEMO_MODULES = ("admin", "production", "inventory", "hr", "sales", "purchasing", "maintenance")')) {
     errors.push("QA seed must enable only modules backed by deployed real services.");
   }
   if (!qaSeed.includes("module_code not in ({active_module_codes})")) {

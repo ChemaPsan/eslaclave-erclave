@@ -1,13 +1,15 @@
 # Pendientes priorizados de ERClave
 
-Ultima actualizacion: 2026-08-27.
+Ultima actualizacion: 2026-08-31.
 
 ## Validacion del release QA
+
+0. Aprovisionar y verificar, con autorizacion `qa-write` independiente, las identidades `erclave-purchasing-qa` y `erclave-maintenance-qa` y las cuatro variables QA asociadas. Despues certificar el SHA final y ejecutar secuencialmente los gates documentados en `docs/operaciones/preparacion_release_qa_20260831.md`.
 
 0. Repetir en QA el onboarding con un tenant ficticio y confirmar recepcion del correo Firebase, incluido folder de spam. Admin revision `admin-service-qa-00021-669` ya tiene `roles/firebaseauth.admin` y `ERCLAVE_FIREBASE_WEB_API_KEY`. Despues validar eliminacion y que el tenant deje de aparecer.
 1. Promover mediante un nuevo candidato gobernado el endurecimiento CHG-226 de respuestas Firebase. La correccion IAM ya esta activa en QA, pero `invitation.delivery=pending`, `firebase_identity_cleanup` y los errores 502 seguros existen solo en la rama hasta fusionar, construir y aprobar sus gates.
 2. Diseñar una reconciliacion durable/outbox para invitaciones o limpiezas Firebase pendientes; la respuesta explicita evita el falso fracaso, pero no sustituye un reintento persistente si el cliente pierde la respuesta.
-3. Completar la matriz UAT del SHA QA `7aa5c674b605d8268b6bfe00e0812b6a300277cb`: permisos, aislamiento entre tenants, dependencias modulares, referencias, reservas/consumos, recepcion de producto terminado, capacidad, valuacion, concurrencia, proteccion de datos e idempotencia.
+3. Completar la matriz UAT del SHA QA `a6524e44e5df9eaf6232adbe2a70bbfd65516f3c`: permisos, aislamiento entre tenants, dependencias modulares, referencias, reservas/consumos, recepcion de producto terminado, capacidad, valuacion, concurrencia, proteccion de datos e idempotencia.
 4. Comprobar que el administrador allowlisted accede a Backoffice mientras un owner ordinario conserva `403`, sin persistir tokens ni contraseñas.
 5. Comprobar con usuarios de tenants distintos que Admin, Produccion, Inventory, RH y Ventas seleccionan el tenant desde membresias, recargan datos de Cloud SQL y no muestran KPIs/transacciones simuladas; Integraciones permanece inactivo.
 

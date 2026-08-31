@@ -54,6 +54,28 @@
       ]
     },
     {
+      "accountId": "erclave-purchasing-qa",
+      "purpose": "Runtime identity for purchasing-service-qa",
+      "projectRoles": ["roles/cloudsql.client"],
+      "secretAccess": ["erclave-database-url-qa"],
+      "runInvokerOn": [
+        "admin-service-qa",
+        "inventory-service-qa"
+      ]
+    },
+    {
+      "accountId": "erclave-maintenance-qa",
+      "purpose": "Runtime identity for maintenance-service-qa",
+      "projectRoles": ["roles/cloudsql.client"],
+      "secretAccess": ["erclave-database-url-qa"],
+      "runInvokerOn": [
+        "admin-service-qa",
+        "hr-service-qa",
+        "production-service-qa",
+        "inventory-service-qa"
+      ]
+    },
+    {
       "accountId": "erclave-migrator-qa",
       "purpose": "Identity for the approved Alembic Cloud Run job",
       "projectRoles": ["roles/cloudsql.client"],
