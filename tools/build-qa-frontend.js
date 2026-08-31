@@ -11,6 +11,8 @@ const required = [
   "QA_INVENTORY_API_URL",
   "QA_HR_API_URL",
   "QA_SALES_API_URL",
+  "QA_PURCHASING_API_URL",
+  "QA_MAINTENANCE_API_URL",
   "QA_FIREBASE_API_KEY",
   "QA_FIREBASE_AUTH_DOMAIN",
   "QA_FIREBASE_PROJECT_ID",
@@ -40,6 +42,8 @@ const config = {
   inventoryApiBaseUrl: requirePublicHttps("QA_INVENTORY_API_URL"),
   hrApiBaseUrl: requirePublicHttps("QA_HR_API_URL"),
   salesApiBaseUrl: requirePublicHttps("QA_SALES_API_URL"),
+  purchasingApiBaseUrl: requirePublicHttps("QA_PURCHASING_API_URL"),
+  maintenanceApiBaseUrl: requirePublicHttps("QA_MAINTENANCE_API_URL"),
   firebaseConfig: {
     apiKey: process.env.QA_FIREBASE_API_KEY,
     authDomain: process.env.QA_FIREBASE_AUTH_DOMAIN,
@@ -84,7 +88,9 @@ const manifest = {
     production: config.productionApiBaseUrl,
     inventory: config.inventoryApiBaseUrl,
     hr: config.hrApiBaseUrl,
-    sales: config.salesApiBaseUrl
+    sales: config.salesApiBaseUrl,
+    purchasing: config.purchasingApiBaseUrl,
+    maintenance: config.maintenanceApiBaseUrl
   },
   firebaseProjectId: config.firebaseConfig.projectId
 };

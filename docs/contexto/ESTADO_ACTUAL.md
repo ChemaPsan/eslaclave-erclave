@@ -1,6 +1,14 @@
 # Estado actual de ERClave
 
-Ultima actualizacion: 2026-08-27.
+## Preparacion QA CHG-253
+
+- El repositorio queda preparado localmente para que el siguiente candidato QA construya y promueva siete servicios: Admin, Produccion, Inventory, RH, Ventas, Compras y Mantenimiento, junto con un frontend sanitizado para sus siete URLs.
+- QA no fue modificado. Antes de ejecutar el candidato deben aprovisionarse y verificarse las identidades/variables de Compras y Mantenimiento, certificar el SHA final con Node 20/npm, comprobar `/version` de los servicios vigentes y obtener cada aprobacion independiente del pipeline.
+- La migracion prevista es `20260821_0023 -> 20260825_0029`; el gate actual ejecuta conjuntamente Alembic y la reconciliacion estructural que habilitaria `purchasing` y `maintenance` para el tenant demo QA.
+- El plan, riesgos, gates y rollback estan en `docs/operaciones/preparacion_release_qa_20260831.md`. No hubo despliegue, migracion, seed, IAM, trafico ni publicacion externa durante la preparacion.
+- El preflight publico del 2026-08-31 confirmo `HTTP 200`, ambiente `qa`, readiness con base configurada y version comun `a6524e44e5df9eaf6232adbe2a70bbfd65516f3c` en Admin, Produccion, Inventory, RH y Ventas. El frontend publicado sigue declarando solamente esas cinco URLs.
+
+Ultima actualizacion: 2026-08-31.
 
 ## Ambiente local
 
@@ -67,7 +75,7 @@ Ultima actualizacion: 2026-08-27.
 - Los grants historicos internos pueden conservarse como relacion para no perder trazabilidad, pero ya no ingresan a `session/context` ni producen autorizacion efectiva. El owner conserva un piso administrativo y no puede inactivarse.
 - El payload anterior `permission_ids + scope` permanece compatible y esta deprecado; la interfaz nueva usa `assignments + expected_revision`.
 - Mientras un ambiente no tenga `admin.role.permissions.manage`, Roles permite abrir `Ver permisos` en modo de solo lectura y explica por que la edicion permanece bloqueada; no aplica fallback de escritura inseguro.
-- La revision vigente de Cloud SQL QA es `20260821_0023`. La promocion gobernada ejecuto la cadena `0013 -> 0023` sin copiar datos funcionales Local y publico el SHA inmutable `7aa5c674b605d8268b6bfe00e0812b6a300277cb` en los cinco servicios.
+- La revision vigente de Cloud SQL QA es `20260821_0023`. Los cinco servicios publicos reportan el SHA inmutable `a6524e44e5df9eaf6232adbe2a70bbfd65516f3c`; la promocion gobernada no copio datos funcionales Local.
 
 ### Produccion
 

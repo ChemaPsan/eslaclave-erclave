@@ -4016,6 +4016,25 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Rollback | Retirar la llamada final a `render()`, el guardrail y la documentacion CHG-252. No existe schema ni dato que revertir. |
 | Observaciones | Operacion `local-write`. Durante la preparacion se aplicaron seeds idempotentes solo a `127.0.0.1:5434/erclave_local` para el tenant `ten_739ee59d765d5e14818674800d`; los smoke generaron y limpiaron datos sinteticos. No hubo acceso, migracion, seed, despliegue ni escritura en QA/Produccion. |
 
+### CHG-253
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-08-31 |
+| Cambio | Preparacion del candidato QA de siete servicios |
+| Autor | Codex |
+| Archivos | Workflows QA; scripts de smoke, trafico y configuracion estructural; build frontend; plan IAM; validadores del pipeline y Mantenimiento; plan operativo, estado, pendientes y trazabilidad |
+| Secciones | Local a QA / Candidato inmutable / Compras / Mantenimiento / IAM / Migracion / Frontend / Rollback |
+| Agentes consultados | Arquitectura SaaS, Seguridad/IAM/supply chain, QA/Release, Datos/Custodio DB, Arquitectura API y especialistas funcional/tecnico de Compras y Mantenimiento definidos en `AGENTES.md`. No hubo delegacion. |
+| Diagnostico | El candidato vigente solo construia cinco servicios. Compras y Mantenimiento ya son reales en Local, pero no tenian imagenes, identidades, variables, smoke, promocion de trafico ni URLs en el artefacto QA. |
+| Descripcion | El pipeline queda preparado para siete imagenes/digests y siete revisiones; agrega Compras y Mantenimiento a smoke, promocion, frontend sanitizado, entitlements estructurales, identidades de minimo privilegio y guardrails. Se documentan delta `0023 -> 0029`, prerrequisitos, autorizaciones independientes y rollback. |
+| Motivo | Preparar el despliegue completo solicitado sin ejecutar anticipadamente ninguna mutacion sobre QA. |
+| Impacto | Solo archivos locales del repositorio. El futuro gate de base migrara Compras, Mantenimiento y capacidad multidia; los gates posteriores desplegaran dos servicios nuevos y actualizaran los cinco existentes y el frontend. QA y Produccion no fueron modificados en este cambio. |
+| APIs afectadas | Contratos modificados: ninguno. Endpoints consumidos sin cambio durante el futuro smoke: `GET /health`, `GET /ready` y `GET /version` de los siete servicios. El frontend futuro consumira las APIs OpenAPI ya implementadas de `purchasing-service` y `maintenance-service`. APIs no tocadas: todos los runtimes y contratos HTTP. |
+| Validacion | `npm.cmd run session:context` aprobado. La primera verificacion detecto que el guardrail CHG-252 no toleraba CRLF y que el Python global no incluia PyYAML; se hizo portable el patron y se selecciono `backend/.venv` conforme al soporte `PYTHON`. La segunda ejecucion aprobo todos los validadores y encontro una unica expectativa antigua de cinco modulos QA (`224 passed, 8 skipped`); se actualizo para el conjunto deliberado de siete. La ejecucion final aprobo todos los validadores, compilacion y `225 passed, 8 skipped`. El preflight publico confirmo los cinco servicios QA saludables/listos sobre el mismo SHA `a6524e44e5df9eaf6232adbe2a70bbfd65516f3c` y el frontend todavia limitado a sus cinco URLs. |
+| Rollback | Revertir CHG-253 antes de construir. Si el release ya se ejecutara: restaurar revisiones y Hosting anteriores, desactivar entitlements nuevos y usar PITR/forward-fix para datos; no improvisar downgrade. |
+| Observaciones | Operacion `local-write`. No se publico rama ni PR, no se fusiono, no se accedio a QA, no se creo IAM, no se leyeron secretos, no hubo migracion, configuracion, seed, datos, revisiones, trafico ni frontend externo. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

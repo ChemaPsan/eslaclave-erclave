@@ -14,7 +14,9 @@ $services = @(
     "inventory-service-qa",
     "hr-service-qa",
     "production-service-qa",
-    "sales-service-qa"
+    "sales-service-qa",
+    "purchasing-service-qa",
+    "maintenance-service-qa"
 )
 
 $targets = @()
