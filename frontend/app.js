@@ -215,9 +215,10 @@ function enhanceEntitySelect(select) {
   input.placeholder=select.dataset.searchPlaceholder||t("entitySelectorPlaceholder");
   input.setAttribute("role","combobox"); input.setAttribute("aria-autocomplete","list"); input.setAttribute("aria-expanded","false");
   const results=document.createElement("span"); results.className="lookup-results entity-select-results"; results.hidden=true;
-  const wasRequired=select.required; if(wasRequired){select.required=false;input.required=true;}
-  const sync=()=>{const selected=select.selectedOptions?.[0];if(document.activeElement!==input)input.value=selected&&selected.value?selected.textContent.trim():"";input.disabled=select.disabled;input.placeholder=select.dataset.searchPlaceholder||t("entitySelectorPlaceholder");input.setCustomValidity(wasRequired&&!select.value?t("entitySelectorChooseResult"):"");};
+  let lookupRequired=select.required; select.required=false;
+  const sync=()=>{const selected=select.selectedOptions?.[0];if(document.activeElement!==input)input.value=selected&&selected.value?selected.textContent.trim():"";input.disabled=select.disabled;input.required=lookupRequired&&!select.disabled;input.placeholder=select.dataset.searchPlaceholder||t("entitySelectorPlaceholder");input.setCustomValidity(input.required&&!select.value?t("entitySelectorChooseResult"):"");};
   select.syncEntityLookup=sync;
+  select.setEntityLookupRequired=(required)=>{lookupRequired=Boolean(required);select.required=false;sync();};
   select.parentNode.insertBefore(wrapper,select); wrapper.append(input,results,select); select.classList.add("entity-source-select");
   const render=(queryValue=input.value)=>{const query=normalizeDocumentSearch(queryValue);const options=[...select.options].filter(option=>!option.disabled&&normalizeDocumentSearch(option.textContent).includes(query)).slice(0,20);results.innerHTML=options.length?options.map(option=>`<button class="lookup-option" type="button" data-entity-value="${escapeAttribute(option.value)}"><strong>${escapeHtml(option.textContent.trim())}</strong></button>`).join(""):`<span class="lookup-empty">${t("entitySelectorEmpty")}</span>`;results.hidden=false;input.setAttribute("aria-expanded","true");};
   input.addEventListener("focus",()=>{input.select();render("");});
@@ -8757,10 +8758,12 @@ function openProductServiceModal(productServiceId = null) {
     if (!isProduct && !existingItem && normalizeUnitCode(baseUnitSelect.value) === "H87") {
       baseUnitSelect.value = "E48";
     }
-    inventorySelect.required = isProduct;
+    inventorySelect.disabled = !isProduct;
+    inventorySelect.setEntityLookupRequired?.(isProduct);
     inventorySelect.closest("label").hidden = !isProduct;
     serviceInventoryHelp.hidden = isProduct;
     if (!isProduct) inventorySelect.value = "";
+    inventorySelect.syncEntityLookup?.();
   };
   kindSelect.addEventListener("change", syncMappingRequirement);
   baseUnitSelect.addEventListener("change", () => {

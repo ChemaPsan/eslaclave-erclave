@@ -3213,6 +3213,10 @@ h3 {
   grid-column: 1 / -1;
 }
 
+[data-product-inventory-field][hidden] {
+  display: none !important;
+}
+
 .form-section-title {
   margin-top: 16px;
 }

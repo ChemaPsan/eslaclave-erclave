@@ -104,6 +104,7 @@ Ultima actualizacion: 2026-09-06.
 ### Produccion
 
 - En Local y QA, las ordenes nuevas ya no aceptan responsables libres: exigen trabajadores activos validados por `hr-service`, tanto para responsable general como por etapa, y conservan ID externo mas nombre snapshot.
+- CHG-260 corrige exclusivamente la interfaz Local de Productos y servicios: al elegir **Servicio**, el selector enriquecido de articulo de Inventario queda oculto, deshabilitado y sin validacion requerida; el alta envia `inventory_item_id: null`, conforme a la regla autoritativa ya vigente en `production-service`. Los productos fisicos conservan la vinculacion obligatoria.
 
 - Productos y servicios se presentan como catalogo maestro antes de consultar ordenes relacionadas.
 - En Local y QA, Productos/Servicios, Recetas/versiones, Maquinaria, Ordenes y etapas persisten mediante `production-service`; la UI recarga PostgreSQL y no degrada silenciosamente a `localStorage` cuando `apiMode=api`. La validacion autoritativa descrita a continuacion esta desplegada en ambos ambientes.

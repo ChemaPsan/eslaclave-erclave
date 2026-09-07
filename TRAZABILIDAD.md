@@ -4149,6 +4149,25 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Rollback | Revertir CHG-259 restaura tooling/pruebas y modulos frontend anteriores; revertir el ajuste de `complete_receipt` devuelve la clasificacion incompleta `pending`. El commit base `8dcff6b` permite separar con claridad la estabilizacion nueva. No existe schema ni dato persistente que revertir. |
 | Observaciones | Operacion `local-write` y pruebas contra `127.0.0.1:5434/erclave_local`; no se uso Cloud SQL Proxy, Firebase QA, APIs remotas ni Produccion. Las credenciales del emulador son exclusivamente dummy Local. |
 
+### CHG-260
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-06 |
+| Cambio | Corregir alta de servicios sin articulo de Inventario |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/styles.css`, `tests/e2e/current-flows.spec.js`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Produccion / Productos y servicios / Selector escalable / Validacion de formulario / E2E / Local |
+| Agentes consultados | Agentes de negocio y tecnico de Produccion; Arquitectura SaaS, frontend/i18n y QA definidos en `AGENTES.md`; skills transversales `erclave-feature` y `erclave-environment-boundaries`. No hubo delegacion. |
+| Diagnostico | La regla autoritativa ya permitia Servicios sin Inventory y el payload frontend ya proyectaba `inventory_item_id: null`. Sin embargo, el selector buscable capturaba como inmutable su estado `required` inicial de Producto y el estilo del formulario anulaba visualmente el atributo `hidden`; al cambiar a Servicio, su campo seguia visible y el `input` enriquecido bloqueaba el submit con validacion nativa. |
+| Descripcion | El selector enriquecido admite ahora cambiar dinamicamente su obligatoriedad y limpia la validez cuando queda deshabilitado. El formulario deshabilita y oculta por completo la vinculacion al elegir Servicio, conserva la ayuda operativa y vuelve a exigirla al elegir Producto. La regresion E2E recorre el formulario, simula solo las respuestas mutantes para no persistir datos y comprueba que el `POST` de Servicio contiene `inventory_item_id: null`. |
+| Motivo | Restituir en la interfaz la regla ya acordada: un Servicio no se almacena ni necesita articulo de Inventario; los productos fisicos si requieren su mapeo autoritativo. |
+| Impacto | Correccion frontend y prueba en Local. No cambia la regla backend, contrato HTTP, schema, migraciones, permisos ni datos. El cambio reutilizable permite que un selector buscable altere correctamente su obligatoriedad durante la vida del formulario. |
+| APIs afectadas | Contratos modificados: ninguno. Endpoint consumido sin cambio: `POST /v1/production/product-services`, servicio Production, permiso `production.product_service.create`; el request existente conserva `inventory_item_id: null` para `type: service` y la respuesta no cambia. La prueba tambien simula sin persistencia `POST /v1/catalogs/code-sequences/{document_type}/next`, servicio Admin, con el permiso consumidor vigente. APIs no tocadas: Inventory y el resto de rutas Production/Admin. |
+| Validacion | Prueba E2E focal `1 passed`; suite de `production-service` `51 passed`; cierre integral mediante `npm.cmd run verify` y regresion E2E completa. |
+| Rollback | Revertir CHG-260 restaura el manejo anterior del selector y su CSS. No existe schema, migracion, seed ni dato operativo que revertir. |
+| Observaciones | Operacion `local-write`. Las respuestas mutantes de la prueba de navegador fueron interceptadas localmente, por lo que no se creo ningun servicio ni se consumio consecutivo real. No hubo acceso, despliegue ni escritura en QA/Produccion. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

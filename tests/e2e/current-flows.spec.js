@@ -101,3 +101,50 @@ test("los listados extensos se paginan sin perder registros", async ({ page }) =
   await expect(page.locator("#paginationFixture .list-pagination span")).toHaveText("Mostrando 11-20 de 31");
   await expect(records).toHaveCount(10);
 });
+
+test("un servicio se guarda sin exigir ni enviar articulo de Inventario", async ({ page }) => {
+  let submittedPayload;
+  await page.route("http://127.0.0.1:8000/v1/catalogs/code-sequences/production.product_service/next", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { code: "E2E-SVC-001" } }) });
+  });
+  await page.route("http://127.0.0.1:8002/v1/production/product-services", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    submittedPayload = route.request().postDataJSON();
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ data: { id: "prs_e2e_service", code: submittedPayload.code, name: submittedPayload.name, type: "service", base_unit: submittedPayload.base_unit, status: "active", inventory_item_id: null } })
+    });
+  });
+
+  await signInAsLocalAdmin(page);
+  await page.locator("[data-module-root='produccion']").click();
+  await page.locator("[data-module='produccion'][data-submodule-nav='productos-servicios']").click();
+  await page.locator("[data-action='open-product-service']").click();
+
+  const form = page.locator("#productServiceForm");
+  await form.locator("[name='kind']").selectOption("Servicio");
+  await expect(form.locator("[data-product-inventory-field]")).toBeHidden();
+  await expect(form.locator("[name='inventoryItemId']")).toBeDisabled();
+  await expect(form.locator(".entity-select-search")).toBeDisabled();
+  await expect(form.locator("[data-service-inventory-help]")).toBeVisible();
+  await form.locator("[name='kind']").selectOption("Producto");
+  await expect(form.locator("[data-product-inventory-field]")).toBeVisible();
+  await expect(form.locator(".entity-select-search")).toBeEnabled();
+  await expect(form.locator(".entity-select-search")).toHaveAttribute("required", "");
+  await form.locator("[name='kind']").selectOption("Servicio");
+
+  await form.locator("[name='name']").fill("Servicio E2E sin inventario");
+  await form.locator("[name='category']").fill("Servicios");
+  await form.locator("[name='center']").fill("Operacion / Servicios");
+  await form.locator("[name='owner']").fill("Operacion");
+  await form.locator("[name='targetPrice']").fill("100");
+  await form.locator("[name='expectedMargin']").fill("25");
+  await form.locator("[name='description']").fill("Servicio validado sin articulo de Inventario");
+  await form.getByRole("button", { name: "Guardar en catalogo" }).click();
+
+  await expect.poll(() => submittedPayload).toBeTruthy();
+  expect(submittedPayload.type).toBe("service");
+  expect(submittedPayload.inventory_item_id).toBeNull();
+  await expect(page.locator("#productServiceForm")).toHaveCount(0);
+});
