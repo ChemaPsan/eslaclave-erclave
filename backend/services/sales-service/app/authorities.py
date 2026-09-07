@@ -70,6 +70,20 @@ class SalesAuthorityClient:
         row = self._get(f"{self.admin_url}/v1/catalogs/commercial/{parse.quote(catalog_code)}/by-code/{parse.quote(code)}", tenant_id, authorization)
         return str(row["code"])
 
+    def allocate_document_code(self, tenant_id: str, document_type: str, authorization: str | None, idempotency_key: str) -> str:
+        row = self._call(
+            f"{self.admin_url}/v1/catalogs/code-sequences/{parse.quote(document_type)}/next",
+            tenant_id,
+            authorization,
+            "POST",
+            {},
+            idempotency_key,
+        )
+        code = str(row.get("code") or "").strip()
+        if not code:
+            raise ErclaveError("service_order_code_unavailable", "Service order code could not be allocated.", status_code=503)
+        return code
+
     def reserve_stock(self, tenant_id: str, order_id: str, order_line_id: str, inventory_item_id: str, warehouse_id: str, quantity, unit: str, authorization: str | None, idempotency_key: str) -> dict:
         return self._call(f"{self.inventory_url}/v1/inventory/reservation-requests", tenant_id, authorization, "POST", {
             "inventory_item_id": inventory_item_id, "warehouse_id": warehouse_id, "quantity": str(quantity), "unit": unit,

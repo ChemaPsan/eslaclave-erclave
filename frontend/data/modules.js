@@ -340,8 +340,8 @@ export const modules = [
     titleEn: "Sales",
     eyebrow: "Demanda conectada",
     eyebrowEn: "Connected demand",
-    summary: "Clientes, cotizaciones, pedidos, reservas, entregas y margen.",
-    summaryEn: "Customers, quotes, orders, reservations, deliveries, and margin.",
+    summary: "Clientes, cotizaciones, pedidos, ordenes de servicio, entregas y margen.",
+    summaryEn: "Customers, quotes, orders, service orders, deliveries, and margin.",
     primary: "Crear cotizacion",
     primaryEn: "Create quote",
     status: "12 pedidos abiertos",
@@ -360,6 +360,7 @@ export const modules = [
       ["Clientes", "Datos comerciales, contactos, direcciones y condiciones."],
       ["Cotizaciones", "Precios, descuentos, vigencia y margen estimado."],
       ["Pedidos", "Aprobacion, reserva, produccion o surtido."],
+      ["Ordenes de servicio", "Planeacion, ejecucion, costos, evidencia y aceptacion.", "ordenes-de-servicio"],
       ["Entregas", "Parciales, totales, evidencia y devoluciones."],
       ["Margen", "Costo estimado, costo real y rentabilidad por cliente."]
     ],
@@ -918,6 +919,14 @@ export const erpSubmoduleCatalog = {
       focus: {
         es: ["Aprobacion", "Reserva", "Produccion ligada", "Promesa de entrega"],
         en: ["Approval", "Reservation", "Linked production", "Delivery promise"]
+      }
+    },
+    "ordenes-de-servicio": {
+      enName: "Service orders",
+      enDetail: "Planning, execution, actual time and cost, evidence, and customer acceptance.",
+      focus: {
+        es: ["Pedido y servicio origen", "Responsable y agenda", "Tiempo y costo real", "Evidencia y aceptacion"],
+        en: ["Source order and service", "Owner and schedule", "Actual time and cost", "Evidence and acceptance"]
       }
     },
     entregas: {

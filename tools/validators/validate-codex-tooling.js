@@ -44,7 +44,8 @@ if (!errors.length) {
 
   for (const name of ["erclave-feature", "erclave-db-migration", "erclave-environment-boundaries", "erclave-qa-release"]) {
     const skill = readText(path.join(".agents", "skills", name, "SKILL.md"));
-    if (!skill.startsWith(`---\nname: ${name}\n`)) {
+    const normalizedSkill = skill.replace(/\r\n/g, "\n");
+    if (!normalizedSkill.startsWith(`---\nname: ${name}\n`)) {
       errors.push(`${name}/SKILL.md has invalid frontmatter or name.`);
     }
     if (skill.includes("TODO")) errors.push(`${name}/SKILL.md still contains TODO placeholders.`);

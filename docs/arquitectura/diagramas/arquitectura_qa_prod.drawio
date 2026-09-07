@@ -1,106 +1,98 @@
-<mxfile host="app.diagrams.net" modified="2026-06-15T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
-  <diagram id="arquitectura-qa-prod" name="Arquitectura QA Prod">
-    <mxGraphModel dx="1434" dy="858" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" modified="2026-09-02T12:00:00.000Z" agent="ERClave documentation" version="24.7.17" type="device">
+  <diagram id="arquitectura_qa_prod.drawio" name="Vista vigente">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1300" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="title" value="ERClave - Arquitectura QA y Produccion" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#300C57;" vertex="1" parent="1">
-          <mxGeometry x="320" y="20" width="760" height="40" as="geometry" />
+        <mxCell id="title" value="ERClave - Arquitectura de entrega QA y Producción" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#351455;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="2120" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="dev" value="Equipo de desarrollo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ff;strokeColor=#9B0FC9;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="60" y="110" width="170" height="60" as="geometry" />
+        <mxCell id="subtitle" value="QA está operativo con siete servicios. Producción sigue como arquitectura objetivo sin infraestructura autorizada." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=14;fontColor=#555555;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="72" width="2120" height="46" as="geometry" />
         </mxCell>
-        <mxCell id="github" value="GitHub Repo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8e8ff;strokeColor=#6106A0;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="280" y="110" width="160" height="60" as="geometry" />
+        <mxCell id="delivery" value="CADENA DE ENTREGA" style="swimlane;html=1;rounded=1;horizontal=1;startSize=34;fillColor=#EDE2F5;swimlaneFillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#351455;fontStyle=1;fontSize=15;whiteSpace=wrap;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="130" width="600" height="1040" as="geometry" />
         </mxCell>
-        <mxCell id="actions" value="GitHub Actions&#xa;validadores + build" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8e8ff;strokeColor=#6106A0;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="490" y="110" width="190" height="60" as="geometry" />
+        <mxCell id="dev" value="Equipo / rama" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="90" y="210" width="220" height="90" as="geometry" />
         </mxCell>
-        <mxCell id="artifact" value="Artifact Registry" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ff;strokeColor=#9B0FC9;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="730" y="110" width="170" height="60" as="geometry" />
+        <mxCell id="repo" value="GitHub Repo&lt;br&gt;commit inmutable" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="370" y="210" width="220" height="90" as="geometry" />
         </mxCell>
-        <mxCell id="approval" value="Aprobacion&#xa;release prod" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#D97706;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="950" y="110" width="160" height="60" as="geometry" />
+        <mxCell id="actions" value="GitHub Actions&lt;br&gt;validadores + pruebas + build" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#5B2A86;strokeColor=#8A6AA3;fontColor=#FFFFFF;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="90" y="370" width="500" height="120" as="geometry" />
         </mxCell>
-        <mxCell id="qaBox" value="Ambiente QA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0F9FF;strokeColor=#2563EB;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" vertex="1" parent="1">
-          <mxGeometry x="90" y="240" width="560" height="420" as="geometry" />
+        <mxCell id="registry" value="Artifact Registry&lt;br&gt;imagen por digest" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="90" y="550" width="500" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="prodBox" value="Ambiente Produccion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" vertex="1" parent="1">
-          <mxGeometry x="750" y="240" width="560" height="420" as="geometry" />
+        <mxCell id="gates" value="Aprobaciones protegidas&lt;br&gt;DB/config · servicios · tráfico · frontend" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFF1CC;strokeColor=#8A6AA3;fontColor=#6A4A00;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="90" y="715" width="500" height="130" as="geometry" />
         </mxCell>
-        <mxCell id="qaFrontend" value="Frontend QA&#xa;Shell + microfrontends" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="130" y="305" width="190" height="70" as="geometry" />
+        <mxCell id="rollback" value="Rollback&lt;br&gt;revisión anterior / Hosting anterior&lt;br&gt;DB por PITR o forward-fix" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FBE2E2;strokeColor=#8A6AA3;fontColor=#8A1C1C;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="90" y="910" width="500" height="125" as="geometry" />
         </mxCell>
-        <mxCell id="qaGateway" value="API Gateway QA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="400" y="305" width="190" height="70" as="geometry" />
+        <mxCell id="qa" value="AMBIENTE QA - VIGENTE" style="swimlane;html=1;rounded=1;horizontal=1;startSize=34;fillColor=#D9EAF7;swimlaneFillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#17365D;fontStyle=1;fontSize=15;whiteSpace=wrap;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="690" y="130" width="700" height="1040" as="geometry" />
         </mxCell>
-        <mxCell id="qaServices" value="Cloud Run QA&#xa;production / inventory / sales / admin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="130" y="430" width="230" height="80" as="geometry" />
+        <mxCell id="qa_front" value="Firebase Hosting QA&lt;br&gt;shell + microfrontends&lt;br&gt;7 URL HTTPS sanitizadas" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="735" y="205" width="610" height="120" as="geometry" />
         </mxCell>
-        <mxCell id="qaData" value="Datos QA&#xa;Cloud SQL + Storage + Pub/Sub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="400" y="430" width="210" height="80" as="geometry" />
+        <mxCell id="qa_auth" value="Firebase Auth real&lt;br&gt;Admin Service resuelve contexto" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="735" y="380" width="610" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="qaObs" value="Observabilidad QA&#xa;logs, metricas, trazas" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="235" y="560" width="270" height="60" as="geometry" />
+        <mxCell id="qa_run" value="Cloud Run QA&lt;br&gt;Admin · Producción · Inventory · RH&lt;br&gt;Sales · Purchasing · Maintenance" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#D9EAF7;strokeColor=#8A6AA3;fontColor=#17365D;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="735" y="540" width="610" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="prodFrontend" value="Frontend Prod&#xa;Hosting/CDN + shell" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="790" y="305" width="190" height="70" as="geometry" />
+        <mxCell id="qa_data" value="Cloud SQL QA&lt;br&gt;schemas por servicio · Alembic 0029&lt;br&gt;sin datos funcionales copiados" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="735" y="735" width="610" height="125" as="geometry" />
         </mxCell>
-        <mxCell id="prodGateway" value="API Gateway / Apigee&#xa;+ Cloud Armor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="1060" y="305" width="210" height="70" as="geometry" />
+        <mxCell id="qa_obs" value="Observabilidad&lt;br&gt;health · ready · version&lt;br&gt;logs y correlation_id" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="735" y="915" width="610" height="115" as="geometry" />
         </mxCell>
-        <mxCell id="prodServices" value="Cloud Run Prod&#xa;production / inventory / sales / admin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="790" y="430" width="250" height="80" as="geometry" />
+        <mxCell id="prod" value="PRODUCCIÓN - OBJETIVO" style="swimlane;html=1;rounded=1;horizontal=1;startSize=34;fillColor=#F1F3F5;swimlaneFillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontStyle=1;fontSize=15;whiteSpace=wrap;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="130" width="720" height="1040" as="geometry" />
         </mxCell>
-        <mxCell id="prodData" value="Datos Prod&#xa;Cloud SQL + Storage + Pub/Sub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="1080" y="430" width="210" height="80" as="geometry" />
+        <mxCell id="prod_front" value="Hosting/CDN + dominio real&lt;br&gt;NO PROVISIONADO" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="1485" y="205" width="630" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="prodObs" value="Observabilidad Prod&#xa;alertas, logs, trazas, errores" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="900" y="560" width="290" height="60" as="geometry" />
+        <mxCell id="prod_edge" value="API Gateway / WAF / rate limit&lt;br&gt;NO PROVISIONADO" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="1485" y="365" width="630" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="tenant" value="Contexto obligatorio por request&#xa;tenant_id + usuario + permisos + modulo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8E8FF;strokeColor=#9B0FC9;fontColor=#1F1233;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="430" y="710" width="540" height="70" as="geometry" />
+        <mxCell id="prod_run" value="Cloud Run Producción&lt;br&gt;artefactos promovidos desde QA&lt;br&gt;NO PROVISIONADO" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="1485" y="525" width="630" height="125" as="geometry" />
         </mxCell>
-        <mxCell id="e1" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;" edge="1" parent="1" source="dev" target="github">
+        <mxCell id="prod_data" value="Cloud SQL + backups/PITR&lt;br&gt;RPO 15 min · RTO 2 h (objetivo)&lt;br&gt;NO PROVISIONADO" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="1485" y="705" width="630" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="prod_gate" value="Entrada futura&lt;br&gt;UAT aprobado · seguridad · observabilidad&lt;br&gt;recuperación ensayada · autorización propietaria" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FBE2E2;strokeColor=#8A6AA3;fontColor=#8A1C1C;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1485" y="890" width="630" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="dev" target="repo">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e2" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;" edge="1" parent="1" source="github" target="actions">
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="repo" target="actions">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e3" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;" edge="1" parent="1" source="actions" target="artifact">
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="actions" target="registry">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e4" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" edge="1" parent="1" source="artifact" target="qaBox">
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="registry" target="gates">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e5" style="endArrow=block;html=1;rounded=0;strokeColor=#D97706;" edge="1" parent="1" source="artifact" target="approval">
+        <mxCell id="e5" value="promoción QA" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="gates" target="qa_run">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e6" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;" edge="1" parent="1" source="approval" target="prodBox">
+        <mxCell id="e6" value="Bearer + tenant" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="qa_front" target="qa_run">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e7" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" edge="1" parent="1" source="qaFrontend" target="qaGateway">
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="qa_run" target="qa_data">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e8" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" edge="1" parent="1" source="qaGateway" target="qaServices">
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="qa_run" target="qa_obs">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e9" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" edge="1" parent="1" source="qaServices" target="qaData">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e10" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;" edge="1" parent="1" source="prodFrontend" target="prodGateway">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e11" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;" edge="1" parent="1" source="prodGateway" target="prodServices">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e12" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;" edge="1" parent="1" source="prodServices" target="prodData">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e13" style="endArrow=block;html=1;rounded=0;strokeColor=#9B0FC9;dashed=1;" edge="1" parent="1" source="tenant" target="qaServices">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e14" style="endArrow=block;html=1;rounded=0;strokeColor=#9B0FC9;dashed=1;" edge="1" parent="1" source="tenant" target="prodServices">
+        <mxCell id="e9" value="promoción futura" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#B71C1C;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=6 4;" edge="1" parent="1" source="qa_run" target="prod_run">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
       </root>

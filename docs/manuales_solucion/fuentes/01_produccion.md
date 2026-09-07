@@ -1,95 +1,131 @@
-# Manual funcional de Produccion
+# Manual funcional de Producción
 
-- Audiencia: planeadores, supervisores y responsables de produccion
+- Audiencia: planeadores, supervisores, responsables de etapa y personal de producción
 - Alcance por ambiente: Local y QA
-- Ultima revision: 2026-08-25
-- Capacidades cubiertas: productos/servicios, recetas, fases ponderadas, planeacion multi-dia, ordenes y entregables por area
+- Última revisión: 2026-09-06
+- Capacidades cubiertas: productos y servicios, recetas versionadas, maquinaria, planeación multídía, órdenes, etapas y entrega de producto terminado
 
-## Proposito
+## Propósito
 
-Produccion define que se fabrica o ejecuta, que recursos consume y como se mide el avance de cada orden.
+Producción define qué se fabrica, con qué receta y recursos, durante qué horizonte y cómo se confirma el avance. El servicio conserva la definición productiva y solicita a otros módulos las validaciones que les pertenecen; nunca modifica directamente Inventario o Recursos Humanos.
 
-## Conceptos
+## Disponibilidad por ambiente
 
-- **Codigo de receta:** folio de negocio propio de la receta; no es el SKU ni el ID tecnico.
-- **Version:** copia controlada de recursos y fases. Una orden conserva la version con la que fue liberada.
-- **Fase:** etapa numerada asignada a un area productiva.
-- **Peso de fase:** contribucion al avance total; las fases activas deben sumar 100%.
-- **Codigo de orden:** folio visible de la orden de produccion.
+| Capacidad | Local | QA |
+|---|---|---|
+| Productos/servicios y recetas versionadas | Disponible | Disponible |
+| Órdenes, etapas y avance ponderado | Disponible | Disponible |
+| Reservas y consumo de materiales | Disponible | Disponible |
+| Capacidad laboral y de maquinaria multídía | Disponible | Disponible |
+| Recepción de producto terminado en Almacenes | Disponible | Disponible |
+| Calendarios configurables, turnos, festivos y ausencias | No disponible | No disponible |
 
-## Acceso y prerequisitos
+## Mapa del módulo
 
-En Local, liberar, iniciar, pausar, reanudar, enviar a validacion, finalizar y cancelar requieren permisos independientes. Terminar una etapa exige `production.order_stage.complete`; capturar avance con `production.order_stage.update` no concede esa declaracion. La alta actual valida, reserva y nace liberada, por lo que requiere `production.order.release`.
+- **Productos y servicios:** catálogo maestro productivo.
+- **Recetas:** versiones, recursos, fases, pesos y aprobación.
+- **Órdenes:** liberación, planeación y transiciones operativas.
+- **Entregables por área:** avance y terminación de fases.
+- **Maquinaria:** capacidad, área responsable y estado de mantenimiento.
+- **Portada:** reportes estándar de sólo lectura; las altas viven en los submódulos.
 
-Se requieren permisos `production.recipe.*`, `production.order.*` o `production.order_stage.update`, segun la tarea. La asignacion automatica de folio usa el permiso de alta; editar su configuracion pertenece a Administracion.
+## Conceptos principales
 
-El producto debe estar activo. Una receta productiva requiere materiales elegibles de Almacenes con una unidad activa del catalogo de Administracion, puestos y areas productivas de RH y, cuando aplique, maquinaria existente que no este inactiva. Una maquina en mantenimiento puede formar parte de la receta, pero bloqueara la orden mientras no vuelva a estar activa. El area RH de la maquina es recomendable para asignacion y reportes, no un requisito para definir el proceso. Una orden requiere una version aprobada vigente.
-
-## Crear una receta
-
-1. Seleccione el producto o servicio.
-2. Revise el codigo. En modo administrado se asigna al guardar; en modo manual capture uno unico.
-3. Indique version, cantidad base, unidad y centro de costos.
-4. Agregue materiales, mano de obra y maquinaria.
-5. Seleccione las areas responsables; el sistema numera las fases.
-6. Capture el peso de cada fase y confirme que la suma sea 100%.
-7. Valide recursos, guarde y apruebe cuando corresponda.
-
-Un articulo cuya unidad base no exista o este inactiva se muestra como no disponible y no puede agregarse. Corrija el articulo en Almacenes. Los alias heredados administrados `LTS -> LTR` y `MT -> MTR` se normalizan de forma auditada. Si se trata de cualquier otra unidad y ya existen movimientos o reservas, la historia permanece protegida: cree un articulo sustituto con la unidad activa y regularice existencias mediante el procedimiento autorizado.
-
-## Generar y seguir una orden
-
-Seleccione receta aprobada, cantidad, inicio planeado, dias productivos, fecha requerida, prioridad y responsables. La receta propone una duracion que puede ajustar en la orden. Antes de asignar el folio, el sistema valida materiales una sola vez y distribuye los minutos de capacidad laboral y maquinaria de lunes a viernes; muestra el horizonte, el minimo calculado y el desglose por fecha. Si falta un recurso, muestra su nombre, cantidad requerida, disponible y unidad. La fecha requerida no puede quedar antes del fin planeado. La orden copia recursos, costos, areas, numero y peso de cada fase; cambios posteriores en la receta no la alteran.
-
-En el editor de Recetas, **Validar definicion** solo confirma que materiales, puestos y maquinas existan y sean elegibles, y proyecta cantidades y costo. No revisa inventario ni disponibilidad de horas. Es normal que una receta sea valida aunque una orden concreta no pueda liberarse por faltantes o mantenimiento; esa disponibilidad se comprueba al generar la orden usando sus dias planeados.
-
-El avance es ponderado. Ejemplo: Fundicion pesa 70% y va al 50%; Empaque pesa 30% y va al 100%. El avance general es 65%, no 75%.
-
-En **Entregables por area**, actualice la etapa de la orden. Se muestran folio, numero de fase, area, peso y avance general.
-
-## Estados principales
-
-| Estado | Significado |
+| Concepto | Significado |
 |---|---|
-| Liberada | Autorizada para iniciar. |
-| En espera de recursos | Tiene un faltante o confirmacion pendiente. Puede iniciar solo si conserva las reservas materiales requeridas. |
-| En produccion | Al entrar por primera vez, Almacenes consume las reservas y registra las salidas de materiales en sus almacenes de origen. |
-| Pausada | Detenida temporalmente con causa. |
-| En validacion | Las fases terminaron y el resultado se revisa. |
-| Terminada | Cierre operativo; exige fases concluidas y consolida costos sin volver a registrar salidas. |
-| Cancelada | No continuara. Antes de iniciar libera reservas; despues de iniciar conserva las salidas fisicas ya registradas. |
+| Producto/servicio | Resultado que Producción puede fabricar o ejecutar. |
+| Receta | Definición controlada de materiales, mano de obra, maquinaria y fases. |
+| Versión | Corte inmutable usado por una orden; cambios posteriores no alteran la historia. |
+| Peso de fase | Contribución de una fase al avance total; las fases activas suman 100%. |
+| Orden liberada | Orden creada después de validar y reservar materiales y capacidad. |
+| Días productivos | Horizonte usado para distribuir capacidad de lunes a viernes en el corte actual. |
 
-## Como terminar una orden
+## Acceso, permisos y prerrequisitos
 
-1. Mantenga la orden en **En produccion**.
-2. Pulse la tarjeta de una fase y capture el porcentaje realmente completado.
-3. Use de 1% a 99% mientras siga **En proceso**; capture 100% cuando la fase este **Terminada**.
-4. Repita hasta que todas las fases tengan 100%. La orden pasa automaticamente a **En validacion**.
-5. Seleccione **Terminada**. El cierre conserva el costo de materiales y no vuelve a descontarlos.
+Los permisos son granulares. Crear o editar una receta no concede aprobarla; iniciar una orden no concede terminarla; actualizar avance no concede declarar una etapa terminada. Entre los permisos relevantes están `production.recipe.*`, `production.order.*`, `production.order_stage.*` y `production.machine.*`.
 
-El selector solo muestra cambios validos para el estado actual. Si una orden heredada llego a **En validacion** con fases pendientes, vuelva a **En produccion** y lleve cada tarjeta a 100%; no registre otra salida manual en Almacenes.
+Antes de liberar una orden deben existir:
 
-Los minutos reales y la eficiencia de mano de obra/maquinaria no son obligatorios en este corte. Se incorporaran despues, cuando exista una base operativa suficiente para auditarlos sin inventar precision.
+- producto activo y versión de receta aprobada;
+- materiales elegibles de Almacenes con unidad activa;
+- puestos, áreas y trabajadores productivos vigentes en RH;
+- maquinaria activa o disponible para el horizonte;
+- permisos y entitlements vigentes para el tenant.
+
+La alta actual de una orden valida, reserva y nace liberada en una sola operación. No existe todavía un borrador separado de la liberación.
+
+## Crear y aprobar una receta
+
+1. Abra **Producción > Recetas** y seleccione el producto o servicio.
+2. Capture o reserve el código según la configuración de Administración.
+3. Defina cantidad base, unidad, centro de costos y vigencia.
+4. Agregue materiales, puestos y maquinaria mediante los buscadores de catálogo.
+5. Defina las fases, áreas responsables y su secuencia.
+6. Asigne pesos y confirme que las fases activas sumen 100%.
+7. Use **Validar definición**, envíe la versión y apruébela con el permiso correspondiente.
+
+**Validar definición** comprueba identidad, unidad y elegibilidad. La disponibilidad real se evalúa al liberar una orden, porque depende de cantidad, fecha y horizonte. Una receta puede ser válida aunque hoy no exista inventario o capacidad suficiente.
+
+## Liberar y ejecutar una orden
+
+1. Seleccione una receta aprobada, cantidad, inicio planeado, días productivos, fecha requerida, prioridad y responsables.
+2. Revise el horizonte y el desglose diario de material, mano de obra y maquinaria.
+3. Confirme la liberación. Inventario reserva material y Producción compromete capacidad.
+4. Inicie la orden. La primera entrada a **En producción** consume las reservas y crea salidas en Inventario.
+5. Actualice cada fase desde **Entregables por área**. El avance general se calcula con sus pesos.
+6. Cuando todas las fases lleguen a 100%, envíe o deje pasar la orden a **En validación**.
+7. Termine la orden. El cierre consolida costos y no vuelve a descontar materiales.
+
+Una pausa, reanudación o regreso desde validación no crea otra salida. Cancelar antes de iniciar libera reservas; cancelar después conserva las salidas físicas ya registradas.
+
+## Estados de la orden
+
+| Estado | Significado y acciones |
+|---|---|
+| Liberada | Recursos apartados; puede iniciar, esperar recursos o cancelarse. |
+| En espera de recursos | Existe una restricción o conciliación pendiente. |
+| En producción | Trabajo activo; los materiales reservados ya fueron consumidos una sola vez. |
+| Pausada | Detención temporal con causa; puede reanudarse cuando la restricción desaparece. |
+| En validación | Las fases terminaron y el resultado espera revisión. |
+| Terminada | Cierre operativo; habilita la recepción física en Almacenes. |
+| Cancelada | Estado terminal con reservas compensadas cuando corresponda. |
+
+## Maquinaria y Mantenimiento
+
+Una máquina puede pertenecer a una receta aunque no esté disponible hoy. Si Mantenimiento bloquea una máquina, Producción impide usarla y puede pausar la orden relacionada. Resolver Mantenimiento libera la máquina, pero nunca reanuda automáticamente Producción: el operador debe volver a validar y decidir.
+
+## Producto terminado
+
+Al terminar una orden, Producción expone a Almacenes una proyección mínima: folio, producto vinculado, cantidad, unidad y costo unitario. El almacenista confirma una o varias recepciones. Producción no incrementa existencias por sí misma y no expone receta, responsables o costos completos al rol receptor.
 
 ## Mensajes frecuentes
 
-- **La validacion requiere una receta aprobada vigente:** recargue y confirme que la version aparezca Aprobada.
-- **Los porcentajes deben sumar 100:** ajuste los pesos; ninguna fase activa puede valer cero.
-- **Recurso no disponible:** revise existencia, trabajador productivo o capacidad de maquinaria.
-- **Todas las fases deben tener 100%:** vuelva a **En produccion**, abra cada tarjeta y capture el porcentaje faltante.
-- **Maquinaria sin area de RH vinculada:** abra **Produccion > Maquinaria**, edite el equipo, seleccione un area activa de Recursos Humanos y actualice. Despues vuelva a abrir la receta; el sistema no vincula por coincidencia de nombre.
-- **Unidad de medida no activa:** el material usa un codigo que no pertenece al catalogo activo; corriga o sustituya el articulo de Almacenes.
-- **Capacidad laboral insuficiente:** asigne trabajadores activos al puesto requerido por la receta. El responsable general o de fase no reemplaza una necesidad de mano de obra distinta.
-- **Los dias productivos no alcanzan:** aumente el horizonte o libere capacidad ya comprometida. El calendario actual considera lunes a viernes; turnos, festivos, ausencias y mantenimiento configurable se incorporaran en una evolucion posterior.
+- **Receta aprobada vigente requerida:** seleccione una versión aprobada y activa.
+- **Los porcentajes deben sumar 100:** corrija los pesos de fase.
+- **Recurso no disponible:** revise existencia, reserva concurrente, trabajador, máquina u horizonte.
+- **Capacidad laboral insuficiente:** active trabajadores en el puesto exacto requerido.
+- **Unidad de medida no activa:** corrija el artículo o use una unidad vigente; no altere historia con movimientos.
+- **Todas las fases deben tener 100%:** regrese a **En producción** y complete las fases pendientes.
+- **Maquinaria en mantenimiento:** espere liberación y vuelva a validar la orden.
 
-## Integraciones y limitaciones
+## Integraciones y propiedad del dato
 
-Almacenes es autoridad de existencias y costo; RH de areas, puestos y trabajadores; Administracion de unidades y folios. Produccion conserva snapshots y no escribe schemas ajenos.
+- Administración es autoridad de unidades, folios, permisos y entitlements.
+- RH es autoridad de áreas, puestos, trabajadores y elegibilidad.
+- Inventario es autoridad de artículos, almacenes, existencias, reservas, movimientos y Kardex.
+- Mantenimiento solicita bloqueo o liberación; Producción decide la transición válida.
+- Ventas puede crear solicitudes de producción, pero no libera una orden automáticamente.
 
-La reserva y la salida son hechos distintos: liberar la orden aparta material y reduce la disponibilidad, pero no la existencia fisica. La primera entrada a **En produccion** confirma el inicio operativo: Produccion solicita consumir cada reserva y Almacenes crea una salida inmutable en el almacen que la otorgo. Si una orden pausada se reanuda o vuelve desde validacion, no se genera otra salida. El cierre tampoco vuelve a descontar; consolida materiales ya consumidos. Cancelar antes de iniciar libera lo apartado, mientras que cancelar despues conserva el Kardex real. No registre salidas manuales duplicadas.
+## Reportes estándar de portada (Local)
 
-Cuando la orden llega a **Terminada**, queda disponible en **Almacenes > Movimientos > Entradas de produccion terminada**. El almacenista valida la recepcion fisica total o parcial; Almacenes registra la entrada contra el articulo terminado vinculado. Su permiso solo obtiene una proyeccion de recepcion con folio, producto, cantidad, unidad y costo unitario: no expone receta, recursos, responsables ni costos totales de Produccion. Produccion no escribe existencias ni da por recibido automaticamente lo que aun no fue contado. La recepcion de merma permanece pendiente.
+La portada ofrece cinco reportes descargables: productos y servicios, recetas y versiones, órdenes, entregables por área y maquinaria. Abra la tarjeta, capture sólo los filtros necesarios y pulse **Generar**. Puede escribir para encontrar tipo, estatus o prioridad; la búsqueda general acepta texto libre y el periodo usa fechas. Si no hay coincidencias se informa el estado vacío y no se descarga un archivo.
 
-## Cobertura
+Cada reporte exige el permiso de lectura del recurso: `production.product_service.read`, `production.recipe.read`, `production.order.read` o `production.machine.read`. Estas descargas están disponibles sólo en Local en este corte; Reportes conservará los cruces, gráficas, PDF y Excel con formato.
 
-Revisado con especialistas de Produccion, Almacenes y Ventas. Promocion a QA y pruebas de carga quedan pendientes del proceso gobernado.
+## Limitaciones vigentes
+
+No están disponibles calendario configurable por tenant, turnos, festivos, ausencias, merma recibida, captura obligatoria de eficiencia real ni borrador separado de liberación. Los análisis configurables pertenecen a Reportes.
+
+## Soporte y trazabilidad visible
+
+Conserve folio de orden, estado, fase, fecha y referencia de correlación cuando aparezca. No registre salidas manuales para corregir una integración pendiente: reintente desde la acción autorizada o escale a soporte.

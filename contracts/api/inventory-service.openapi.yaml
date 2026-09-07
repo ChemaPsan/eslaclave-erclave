@@ -14,6 +14,30 @@ tags:
   - name: Balances
   - name: Reservations
 paths:
+  /v1/inventory/reports/{report_code}/export:
+    get:
+      tags: [Reports]
+      operationId: exportInventoryStandardReport
+      summary: Export a fixed Inventory report as UTF-8 CSV.
+      x-required-module: inventory
+      x-permissions: [inventory.warehouse.read, inventory.item.read, inventory.balance.read, inventory.kardex.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - { name: report_code, in: path, required: true, schema: { type: string } }
+        - { name: lang, in: query, schema: { type: string, enum: [es, en], default: es } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: warehouse_id, in: query, schema: { type: string } }
+        - { name: item_id, in: query, schema: { type: string } }
+        - { name: movement_type, in: query, schema: { type: string } }
+        - { name: condition, in: query, schema: { type: string } }
+      responses:
+        '200': { description: CSV export. }
+        '204': { description: No rows matched the filters. }
   /v1/inventory/warehouses:
     get:
       tags: [Warehouses]
@@ -129,7 +153,8 @@ paths:
       operationId: listInventoryItems
       summary: Search inventory items.
       x-required-module: inventory
-      x-permissions: [inventory.item.read, production.product_service.create, production.product_service.update, sales.order.fulfill, maintenance.material_request.read, maintenance.material_request.create]
+      x-permissions: [inventory.item.read, production.product_service.create, production.product_service.update, sales.order.fulfill, maintenance.material_request.read, maintenance.material_request.create, purchasing.requisition.create, purchasing.requisition.update, purchasing.order.create, purchasing.order.update, purchasing.order.issue]
+      x-permission-mode: any
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -182,7 +207,7 @@ paths:
       operationId: getInventoryItem
       summary: Get inventory item.
       x-required-module: inventory
-      x-permissions: [inventory.item.read, production.product_service.create, production.product_service.update, sales.order.fulfill, maintenance.material_request.create]
+      x-permissions: [inventory.item.read, production.product_service.create, production.product_service.update, sales.order.fulfill, maintenance.material_request.create, purchasing.requisition.create, purchasing.requisition.update, purchasing.order.create, purchasing.order.update, purchasing.order.issue]
       x-permission-mode: any
       parameters:
         - $ref: '#/components/parameters/TenantHeader'

@@ -9,10 +9,10 @@ Aplica a:
 - `admin-service`;
 - `production-service`;
 - `inventory-service`;
-- `sales-service`;
-- `purchasing-service` (runtime Local en `:8010`; proveedor fiscal, requisicion multipardida y ciclo hasta recepcion implementados, sin despliegue QA/Produccion);
-- `maintenance-service` (Local implementado en `8012`; ordenes correctivas, tiempos y refacciones);
-- Purchasing Local expone edicion/cancelacion de requisiciones y ordenes, recepcion multipardida y conciliacion manual durable. Inventory aporta `GET /v1/inventory/warehouses/{id}` para validar tenant, estado y destino antes de cada entrada.
+- `sales-service` (Local aplica y certifica Ordenes de servicio en `20260901_0030`; QA conserva Clientes, Cotizaciones, Pedidos y Entregas hasta `20260825_0029`);
+- `purchasing-service` (Local y QA cubren proveedor fiscal, requisicion multipardida y recepcion inventariable; Local aplica y certifica recepciones de servicio sin Inventory obligatorio en `20260901_0030`);
+- `maintenance-service` (Local y QA cubren ordenes correctivas, tiempos, refacciones y conciliacion durable);
+- Purchasing expone edicion/cancelacion de requisiciones y ordenes, recepcion multipardida y conciliacion manual durable. Inventory aporta `GET /v1/inventory/warehouses/{id}` para validar tenant, estado y destino de partidas inventariables.
 - `billing-service`;
 - `provisioning-service`;
 - `integration-service`.

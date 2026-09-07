@@ -1,12 +1,22 @@
 import hashlib, json
+from datetime import date
 from typing import Literal
 from fastapi import APIRouter, Depends, Header, Query
 from erclave_common.errors import ErclaveError
+from erclave_common.csv_reports import csv_report_response,validate_date_range
 from .authorization import AuthorizedContext, ProductionOrderClient, UnitCatalogClient, get_production_order_client, get_unit_catalog_client, require_inventory_access
 from .repositories import InventoryRepository, get_inventory_repository
+from .reports import REPORT_PERMISSIONS,build_report
 from .schemas import *
 
 router=APIRouter(prefix="/v1/inventory",tags=["inventory"])
+@router.get("/reports/{report_code}/export")
+def export_report(report_code:str,lang:Literal["es","en"]="es",date_from:date|None=None,date_to:date|None=None,status:str|None=None,type_filter:str|None=Query(None,alias="type"),category:str|None=None,q:str|None=Query(None,max_length=120),warehouse_id:str|None=None,item_id:str|None=None,movement_type:str|None=None,condition:str|None=None,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access(tuple(REPORT_PERMISSIONS.values())))):
+    validate_date_range(date_from,date_to);permission=REPORT_PERMISSIONS.get(report_code)
+    if not permission:raise ErclaveError("report_not_found","Inventory report does not exist.",status_code=404)
+    access.require(permission)
+    filters={"date_from":date_from,"date_to":date_to,"status":status,"type":type_filter,"category":category,"q":q,"warehouse_id":warehouse_id,"item_id":item_id,"movement_type":movement_type,"condition":condition}
+    return csv_report_response(build_report(repository,tenant(x_tenant_id),report_code,filters),lang)
 UNIT_FACTORS={
     "H87":("count",1),"C62":("count",1),"DZN":("count",12),"PR":("count",2),
     "KGM":("mass",1),"GRM":("mass",0.001),"MGM":("mass",0.000001),"TNE":("mass",1000),"LBR":("mass",0.45359237),"ONZ":("mass",0.028349523125),
@@ -44,7 +54,7 @@ def update_warehouse(warehouse_id:str,payload:WarehouseUpdate,x_tenant_id:str|No
     return WarehouseResponse(data=result)
 
 @router.get("/items",response_model=ItemListResponse)
-def items(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),q:str|None=None,use_in_recipe:bool|None=None,status:Status|None=None,repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access(("inventory.item.read","production.product_service.create","production.product_service.update","sales.order.fulfill","maintenance.material_request.read","maintenance.material_request.create")))): return ItemListResponse(data=repository.list_items(tenant(x_tenant_id),q,use_in_recipe,status))
+def items(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),q:str|None=None,use_in_recipe:bool|None=None,status:Status|None=None,repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access(("inventory.item.read","production.product_service.create","production.product_service.update","sales.order.fulfill","maintenance.material_request.read","maintenance.material_request.create","purchasing.requisition.create","purchasing.requisition.update","purchasing.order.create","purchasing.order.update","purchasing.order.issue")))): return ItemListResponse(data=repository.list_items(tenant(x_tenant_id),q,use_in_recipe,status))
 @router.post("/items",response_model=ItemResponse,status_code=201)
 def create_item(payload:ItemCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),unit_catalog:UnitCatalogClient=Depends(get_unit_catalog_client),access:AuthorizedContext=Depends(require_inventory_access("inventory.item.create"))):
     resolved_tenant=tenant(x_tenant_id); unit_catalog.require_active(resolved_tenant,payload.base_unit,authorization)
@@ -52,7 +62,7 @@ def create_item(payload:ItemCreate,x_tenant_id:str|None=Header(None,alias="X-Ten
     if not result: raise ErclaveError("item_conflict","Item code or warehouse is invalid.",status_code=409)
     return ItemResponse(data=result)
 @router.get("/items/{item_id}",response_model=ItemResponse)
-def get_item(item_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access(("inventory.item.read","production.product_service.create","production.product_service.update","sales.order.fulfill","maintenance.material_request.create")))):
+def get_item(item_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access(("inventory.item.read","production.product_service.create","production.product_service.update","sales.order.fulfill","maintenance.material_request.create","purchasing.requisition.create","purchasing.requisition.update","purchasing.order.create","purchasing.order.update","purchasing.order.issue")))):
     result=repository.get_item(tenant(x_tenant_id),item_id)
     if not result: raise ErclaveError("item_not_found","Item not found.",status_code=404)
     return ItemResponse(data=result)

@@ -43,6 +43,12 @@ def delivery(status="draft"):
     return schemas.DeliveryRead(id="del_1",code="ENT-001",order_id="sor_1",order_code="PED-001",customer_id="cus_1",customer_name="Cliente Demo",status=status,scheduled_date=date.today(),lines=[line],created_at=NOW,updated_at=NOW)
 
 
+def service_order(status="draft"):
+    return schemas.ServiceOrderRead(id="svo_1",code="OS-000001",order_id="sor_1",order_code="PED-001",order_line_id="sol_1",
+        customer_id="cus_1",customer_name="Cliente Demo",product_service_id="prd_1",product_service_code="SERV-1",
+        product_service_name="Servicio",unit="HUR",ordered_quantity=2,status=status,created_at=NOW,updated_at=NOW)
+
+
 class FakeRepository:
     def list_customers(self, tenant_id, status=None, q=None): return [customer()] if tenant_id == TENANT else []
     def get_customer(self, tenant_id, customer_id): return customer() if tenant_id == TENANT and customer_id == "cus_1" else None
@@ -55,7 +61,7 @@ class FakeRepository:
     def transition_quote(self, tenant_id, quote_id, target, key, fingerprint, actor): return quote(target)
     def list_orders(self, tenant_id, status=None, customer_id=None): return [order(status or "ready")]
     def get_order(self, tenant_id, order_id): return order() if order_id == "sor_1" else None
-    def create_order(self, tenant_id, payload, quote_value, key, fingerprint, actor): return order("confirmed")
+    def create_order(self, tenant_id, payload, quote_value, key, fingerprint, actor, service_order_codes=None): return order("confirmed")
     def configure_order_fulfillment(self, tenant_id, order_id, resolved, key, fingerprint, actor): return order("ready")
     def cancel_order(self, tenant_id, order_id, reason, key, fingerprint, actor): return order("cancelled")
     def list_deliveries(self, tenant_id, status=None, order_id=None): return [delivery(status or "draft")]
@@ -66,6 +72,16 @@ class FakeRepository:
     def mark_delivery_reconciliation(self, tenant_id, delivery_id): pass
     def confirm_delivery(self, tenant_id, delivery_id, consumptions, key, fingerprint, actor): return delivery("confirmed")
     def cancel_delivery(self, tenant_id, delivery_id, reason, key, fingerprint, actor): return delivery("cancelled")
+    def list_service_orders(self, tenant_id, status=None, order_id=None, customer_id=None): return [service_order(status or "draft")] if tenant_id == TENANT else []
+    def get_service_order(self, tenant_id, service_order_id): return service_order() if tenant_id == TENANT and service_order_id == "svo_1" else None
+    def plan_service_order(self, tenant_id, service_order_id, payload, key, fingerprint, actor): return service_order("planned")
+    def assign_service_order(self, tenant_id, service_order_id, worker, key, fingerprint, actor): return service_order("assigned").model_copy(update={"responsible_worker_id":worker.id,"responsible_worker_name":worker.full_name})
+    def add_service_time_entry(self, tenant_id, service_order_id, payload, worker, key, fingerprint, actor): return service_order("in_progress")
+    def add_service_cost_entry(self, tenant_id, service_order_id, payload, key, fingerprint, actor): return service_order("in_progress")
+    def add_service_evidence(self, tenant_id, service_order_id, payload, key, fingerprint, actor): return service_order("in_progress")
+    def transition_service_order(self, tenant_id, service_order_id, action, reason, key, fingerprint, actor):
+        states={"start":"in_progress","wait":"on_hold","resume":"in_progress","submit_acceptance":"pending_acceptance","accept":"accepted","cancel":"cancelled"}
+        return service_order(states[action])
 
 
 class FakeAuthority:
@@ -97,6 +113,7 @@ class FakeAuthority:
     def reserve_stock(self, *args): return {"id":"rsv_1","unit_cost_snapshot":12}
     def release_reservation(self, *args): return {"id":"rsv_1"}
     def consume_reservation(self, *args): return {"id":"mov_1","unit_cost":12}
+    def allocate_document_code(self, tenant_id, document_type, authorization, idempotency_key): return "OS-000001"
 
 
 class FakeAdminSessionClient:
@@ -237,3 +254,28 @@ def test_order_and_delivery_are_authoritative_lifecycle_endpoints(monkeypatch):
     assert draft.status_code==201 and draft.json()["data"]["status"]=="draft"
     confirmed=c.post("/v1/sales/deliveries/del_1/confirm",headers=headers(True),json={"reason":"Entrega completa"})
     assert confirmed.status_code==200 and confirmed.json()["data"]["status"]=="confirmed"
+
+
+def test_service_order_lifecycle_uses_specific_endpoints_and_active_hr_workers():
+    c=client()
+    listed=c.get("/v1/sales/service-orders",headers=headers())
+    assert listed.status_code==200 and listed.json()["data"][0]["code"]=="OS-000001"
+    planned=c.post("/v1/sales/service-orders/svo_1/plan",headers=headers(True),json={"planned_start_date":date.today().isoformat(),"planned_end_date":date.today().isoformat()})
+    assert planned.status_code==200 and planned.json()["data"]["status"]=="planned"
+    assigned=c.post("/v1/sales/service-orders/svo_1/transitions/assign",headers=headers(True),json={"responsible_worker_id":"hrw_1"})
+    assert assigned.status_code==200 and assigned.json()["data"]["responsible_worker_id"]=="hrw_1"
+    started=c.post("/v1/sales/service-orders/svo_1/transitions/start",headers=headers(True),json={"reason":"Inicio programado"})
+    assert started.status_code==200 and started.json()["data"]["status"]=="in_progress"
+    assert c.post("/v1/sales/service-orders/svo_1/time-entries",headers=headers(True),json={"worker_id":"hrw_1","worked_on":date.today().isoformat(),"minutes":60,"hourly_cost":100}).status_code==201
+    assert c.post("/v1/sales/service-orders/svo_1/cost-entries",headers=headers(True),json={"cost_type":"external","description":"Proveedor","quantity":1,"unit_cost":50}).status_code==201
+    assert c.post("/v1/sales/service-orders/svo_1/evidence",headers=headers(True),json={"evidence_reference":"evidence://acceptance/1"}).status_code==201
+
+
+def test_service_order_transition_permission_is_derived_from_action():
+    c=client()
+    app.dependency_overrides[authorization.get_settings]=lambda:Settings(auth_mode="firebase")
+    app.dependency_overrides[authorization.get_admin_session_client]=lambda:FakeAdminSessionClient(["sales"], ["sales.service_order.start"])
+    auth_headers={"X-Tenant-Id":TENANT,"Authorization":"Bearer local-test","Idempotency-Key":"service-transition-001"}
+    assert c.post("/v1/sales/service-orders/svo_1/transitions/start",headers=auth_headers,json={}).status_code==200
+    denied=c.post("/v1/sales/service-orders/svo_1/transitions/accept",headers=auth_headers,json={})
+    assert denied.status_code==403 and denied.json()["error"]["details"]["permission"]=="sales.service_order.accept"

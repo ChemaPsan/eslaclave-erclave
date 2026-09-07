@@ -1,85 +1,95 @@
-<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.1 Chrome/142.0.7444.265 Electron/39.8.0 Safari/537.36" version="29.6.1">
-  <diagram id="estado-actual-backend-mvp" name="Estado actual backend MVP">
-    <mxGraphModel dx="1665" dy="961" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" modified="2026-09-02T12:00:00.000Z" agent="ERClave documentation" version="24.7.17" type="device">
+  <diagram id="estado_actual_backend_mvp.drawio" name="Vista vigente">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1300" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#300C57;" value="ERClave - Estado actual Local y QA" vertex="1">
-          <mxGeometry height="40" width="960" x="320" y="20" as="geometry" />
+        <mxCell id="title" value="ERClave - Estado actual de runtime Local y QA" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#351455;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="2120" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="note" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontColor=#1F1233;align=center;spacing=10;" value="Corte documental: 2026-08-24. Local aislado no consume QA; Compras y Mantenimiento existen solo en Local." vertex="1">
-          <mxGeometry height="55" width="740" x="430" y="75" as="geometry" />
+        <mxCell id="subtitle" value="Corte documental 2026-09-02. QA conserva el release inmutable a119ddf; CHG-255 está aplicado y certificado sólo en Local." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=14;fontColor=#555555;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="72" width="2120" height="46" as="geometry" />
         </mxCell>
-        <mxCell id="localBox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7FF;strokeColor=#9B0FC9;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="Ambiente local de prueba" vertex="1">
-          <mxGeometry height="600" width="610" x="70" y="170" as="geometry" />
+        <mxCell id="local" value="LOCAL AISLADO" style="swimlane;html=1;rounded=1;horizontal=1;startSize=34;fillColor=#EDE2F5;swimlaneFillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#351455;fontStyle=1;fontSize=15;whiteSpace=wrap;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="130" width="650" height="1040" as="geometry" />
         </mxCell>
-        <mxCell id="qaBox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="Cloud SQL QA" vertex="1">
-          <mxGeometry height="600" width="560" x="910" y="170" as="geometry" />
+        <mxCell id="local_front" value="Frontend local&lt;br&gt;Shell + 7 módulos&lt;br&gt;127.0.0.1:4173" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="80" y="200" width="260" height="110" as="geometry" />
         </mxCell>
-        <mxCell id="validationBox" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2563EB;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="Validacion y trazabilidad" vertex="1">
-          <mxGeometry height="130" width="1180" x="210" y="825" as="geometry" />
+        <mxCell id="emulator" value="Firebase Auth Emulator&lt;br&gt;demo-erclave :9099&lt;br&gt;sin identidades QA" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="390" y="200" width="260" height="110" as="geometry" />
         </mxCell>
-        <mxCell id="frontend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B0FC9;fontColor=#1F1233;" value="Frontend local&#xa;Shell + modulos activos&#xa;API real: Admin, Produccion, Inventory, RH, Ventas, Compras y Mantenimiento" vertex="1">
-          <mxGeometry height="90" width="230" x="115" y="250" as="geometry" />
+        <mxCell id="local_services" value="7 servicios FastAPI&lt;br&gt;Admin 8000 · Producción 8002 · Inventory 8004&lt;br&gt;RH 8006 · Sales 8008 · Purchasing 8010 · Maintenance 8012" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#D9EAF7;strokeColor=#8A6AA3;fontColor=#17365D;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="80" y="360" width="570" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="adminSvc" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;" value="admin-service local&#xa;FastAPI :8000&#xa;tenants, entitlements, usuarios, roles, permisos, policy" vertex="1">
-          <mxGeometry height="125" width="230" x="405" y="225" as="geometry" />
+        <mxCell id="local_db" value="PostgreSQL local&lt;br&gt;Local head 20260901_0030&lt;br&gt;aplicada y certificada · 127.0.0.1:5434 / erclave_local" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="80" y="560" width="570" height="125" as="geometry" />
         </mxCell>
-        <mxCell id="prodSvc" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;" value="production-service local&#xa;FastAPI :8002&#xa;productos, recetas, maquinaria, ordenes, etapas y validacion" vertex="1">
-          <mxGeometry height="125" width="230" x="137" y="378" as="geometry" />
+        <mxCell id="local_chg" value="Extensiones sólo Local&lt;br&gt;Ventas: órdenes de servicio&lt;br&gt;Compras: servicios sin Inventory" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFF1CC;strokeColor=#8A6AA3;fontColor=#6A4A00;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="80" y="735" width="570" height="135" as="geometry" />
         </mxCell>
-        <mxCell id="proxy" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="PostgreSQL local aislado&#xa;127.0.0.1 :5434&#xa;base erclave_local" vertex="1">
-          <mxGeometry height="90" width="230" x="405" y="590" as="geometry" />
+        <mxCell id="local_tenant" value="Tenant permitido para pruebas&lt;br&gt;ERClave Demo QA&lt;br&gt;ten_739ee59d765d5e14818674800d" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="80" y="920" width="570" height="120" as="geometry" />
         </mxCell>
-        <mxCell id="db" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="PostgreSQL Local&#xa;schemas por servicio&#xa;Alembic head 20260825_0029" vertex="1">
-          <mxGeometry height="100" width="230" x="955" y="245" as="geometry" />
+        <mxCell id="qa" value="QA CERTIFICADO" style="swimlane;html=1;rounded=1;horizontal=1;startSize=34;fillColor=#D9EAF7;swimlaneFillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#17365D;fontStyle=1;fontSize=15;whiteSpace=wrap;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="735" y="130" width="650" height="1040" as="geometry" />
         </mxCell>
-        <mxCell id="adminSchema" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;" value="schema admin REAL&#xa;tenants, users, memberships, roles, permissions, role_permissions, membership_roles, tenant_modules, audit_events" vertex="1">
-          <mxGeometry height="150" width="220" x="1238" y="217" as="geometry" />
+        <mxCell id="qa_front" value="Firebase Hosting&lt;br&gt;https://erclave.web.app&lt;br&gt;env.js con 7 URL HTTPS" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="775" y="200" width="570" height="110" as="geometry" />
         </mxCell>
-        <mxCell id="prodSchema" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#1F1233;" value="schemas reales Local&#xa;production + inventory + hr + sales + purchasing + maintenance&#xa;referencias por API, sin FK cruzadas" vertex="1">
-          <mxGeometry height="125" width="220" x="1210" y="430" as="geometry" />
+        <mxCell id="qa_auth" value="Firebase Auth real&lt;br&gt;Admin resuelve sesión, tenant,&lt;br&gt;entitlements y permisos" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="775" y="355" width="570" height="125" as="geometry" />
         </mxCell>
-        <mxCell id="qaData" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontColor=#1F1233;" value="Datos sinteticos solo Local&#xa;tenant ten_739ee59d765d5e14818674800d&#xa;QA conserva catalogos funcionales vacios" vertex="1">
-          <mxGeometry height="125" width="230" x="955" y="520" as="geometry" />
+        <mxCell id="qa_services" value="Cloud Run - 7 servicios&lt;br&gt;Admin · Producción · Inventory · RH&lt;br&gt;Sales · Purchasing · Maintenance&lt;br&gt;SHA a119ddf" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#D9EAF7;strokeColor=#8A6AA3;fontColor=#17365D;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="775" y="530" width="570" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="alembic" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Alembic&#xa;Local head 20260825_0029&#xa;QA head 20260821_0023" vertex="1">
-          <mxGeometry height="100" width="230" x="98" y="585" as="geometry" />
+        <mxCell id="qa_db" value="Cloud SQL QA&lt;br&gt;QA head 20260825_0029&lt;br&gt;schemas propietarios por servicio" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="775" y="730" width="570" height="120" as="geometry" />
         </mxCell>
-        <mxCell id="tests" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Pruebas backend&#xa;python -m pytest&#xa;resultado vigente en ESTADO_ACTUAL.md" vertex="1">
-          <mxGeometry height="60" width="230" x="250" y="875" as="geometry" />
+        <mxCell id="qa_uat" value="Pendiente de salida&lt;br&gt;UAT funcional, aislamiento, permisos,&lt;br&gt;concurrencia e idempotencia" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFF1CC;strokeColor=#8A6AA3;fontColor=#6A4A00;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="775" y="900" width="570" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="validators" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Validadores repo&#xa;npm run validate&#xa;OpenAPI, arquitectura, trazabilidad" vertex="1">
-          <mxGeometry height="60" width="260" x="540" y="875" as="geometry" />
+        <mxCell id="governance" value="PROMOCIÓN Y FRONTERAS" style="swimlane;html=1;rounded=1;horizontal=1;startSize=34;fillColor=#F1F3F5;swimlaneFillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontStyle=1;fontSize=15;whiteSpace=wrap;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1430" y="130" width="730" height="1040" as="geometry" />
         </mxCell>
-        <mxCell id="trace" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Trazabilidad&#xa;CHG-234 Mantenimiento&#xa;CHG-235 endurecimiento y conciliacion" vertex="1">
-          <mxGeometry height="60" width="260" x="860" y="875" as="geometry" />
+        <mxCell id="pipeline" value="GitHub Actions protegido&lt;br&gt;validadores -&gt; imagen por digest -&gt; gates&lt;br&gt;DB/config -&gt; servicios -&gt; tráfico -&gt; frontend" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#5B2A86;strokeColor=#8A6AA3;fontColor=#FFFFFF;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="210" width="650" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="contracts" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Contratos OpenAPI&#xa;YAML parseable + rutas comparadas&#xa;operaciones futuras marcadas planned" vertex="1">
-          <mxGeometry height="60" width="170" x="1180" y="875" as="geometry" />
+        <mxCell id="separation" value="Separación obligatoria&lt;br&gt;Local no consume Cloud SQL, Firebase,&lt;br&gt;APIs o secretos QA" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FBE2E2;strokeColor=#8A6AA3;fontColor=#8A1C1C;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="420" width="650" height="135" as="geometry" />
         </mxCell>
-        <mxCell id="eFrontendAdmin" edge="1" parent="1" source="frontend" style="endArrow=block;html=1;rounded=0;strokeColor=#9B0FC9;fontColor=#300C57;" target="adminSvc" value="API admin">
+        <mxCell id="no_copy" value="Datos&lt;br&gt;El release no copió seeds ni datos&lt;br&gt;funcionales desde Local" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="610" width="650" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="prod" value="PRODUCCIÓN NO PROVISIONADA&lt;br&gt;Sin infraestructura ni tráfico&lt;br&gt;hasta autorización expresa" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FBE2E2;strokeColor=#8A6AA3;fontColor=#8A1C1C;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="785" width="650" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="rules" value="Reglas persistentes&lt;br&gt;tenant_id · permisos puntuales · idempotencia&lt;br&gt;auditoría · sin FK entre servicios" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="975" width="650" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="HTTP local" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="local_front" target="local_services">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eAdminProxy" edge="1" parent="1" source="adminSvc" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;" target="proxy" value="SQLAlchemy">
+        <mxCell id="e2" value="token Emulator" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2E7D32;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="emulator" target="local_services">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eProdProxy" edge="1" parent="1" source="prodSvc" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;" target="proxy" value="SQLAlchemy">
+        <mxCell id="e3" value="SQL local" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2E7D32;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="local_services" target="local_db">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eProxyDb" edge="1" parent="1" source="proxy" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;" target="db" value="5432">
+        <mxCell id="e4" value="Bearer + tenant" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="qa_front" target="qa_services">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eDbAdmin" edge="1" parent="1" source="db" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;" target="adminSchema" value="schema admin">
+        <mxCell id="e5" value="policy" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2E7D32;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="qa_auth" target="qa_services">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eDbProd" edge="1" parent="1" source="db" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;fontColor=#065F46;" target="prodSchema" value="schema production">
+        <mxCell id="e6" value="Cloud SQL" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2E7D32;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="qa_services" target="qa_db">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eDbData" edge="1" parent="1" source="db" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;fontColor=#374151;dashed=1;" target="qaData" value="datos persistentes">
+        <mxCell id="e7" value="artefacto inmutable" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="pipeline" target="qa_services">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="eAlembicProxy" edge="1" parent="1" source="alembic" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;fontColor=#1D4ED8;" target="proxy" value="upgrade head">
+        <mxCell id="e8" value="promoción futura" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#B71C1C;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=6 4;" edge="1" parent="1" source="qa_services" target="prod">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
       </root>

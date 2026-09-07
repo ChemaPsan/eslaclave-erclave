@@ -13,6 +13,28 @@ tags:
   - name: Orders
   - name: Machines
 paths:
+  /v1/production/reports/{report_code}/export:
+    get:
+      tags: [Reports]
+      operationId: exportProductionStandardReport
+      summary: Export a fixed Production report as UTF-8 CSV.
+      x-required-module: production
+      x-permissions: [production.product_service.read, production.recipe.read, production.order.read, production.machine.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - { name: report_code, in: path, required: true, schema: { type: string } }
+        - { name: lang, in: query, schema: { type: string, enum: [es, en], default: es } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: priority, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: product_id, in: query, schema: { type: string } }
+        - { name: area_id, in: query, schema: { type: string } }
+      responses:
+        '200': { description: CSV export. }
+        '204': { description: No rows matched the filters. }
   /v1/production/product-services:
     get:
       tags: [ProductServices]

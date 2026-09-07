@@ -3,6 +3,7 @@
 DEFAULT_UNITS = (
     ("H87", "Pieza", "Piece", "pz", "count", 0),
     ("C62", "Unidad", "Unit", "u", "count", 0),
+    ("E48", "Unidad de servicio", "Service unit", "serv", "service", 3),
     ("DZN", "Docena", "Dozen", "doc", "count", 0),
     ("PR", "Par", "Pair", "par", "count", 0),
     ("SET", "Juego", "Set", "jgo", "count", 0),

@@ -263,6 +263,37 @@ const ERROR_MESSAGES = Object.freeze({
     es: "El perfil fiscal está incompleto. Completa juntos los datos de facturación requeridos.",
     en: "The billing profile is incomplete. Complete the required billing fields together."
   },
+  purchase_unit_not_found: {
+    es: "No se cambió el documento: la unidad no está activa en Administración. Revisa el catálogo de unidades y vuelve a intentar.",
+    en: "The document was not changed because the unit is not active in Administration. Review the unit catalog and try again."
+  },
+  purchasing_inventory_required: {
+    es: "La partida inventariable no se guardó: activa Almacenes e Inventarios o cambia la partida a Servicio.",
+    en: "The inventory line was not saved. Enable Inventory or change the line to Service."
+  },
+  service_inventory_item_forbidden: {
+    es: "El servicio no se guardó porque no debe vincularse con un artículo de Inventario. Limpia el vínculo y vuelve a intentar.",
+    en: "The service was not saved because it cannot be linked to an Inventory item. Clear the link and try again."
+  },
+  service_warehouse_not_allowed: {
+    es: "No se registró la recepción: una partida de servicio no debe indicar almacén. Limpia el almacén y vuelve a intentar.",
+    en: "The receipt was not recorded because a service line cannot specify a warehouse. Clear the warehouse and try again."
+  },
+  service_line_requires_service_order: { es: "No se cambió la entrega: los servicios se cumplen desde su Orden de servicio.", en: "The delivery was not changed. Services are fulfilled through their Service order." },
+  service_order_not_plannable: { es: "La orden ya no admite planeación desde su estado actual. Recárgala y revisa su avance.", en: "The service order can no longer be planned from its current status. Reload it and review its progress." },
+  service_order_not_assignable: { es: "La orden debe estar planeada antes de asignar un responsable.", en: "The service order must be planned before assigning an owner." },
+  service_order_entries_not_allowed: { es: "No se registró la entrada: la orden debe estar en ejecución, espera o pendiente de aceptación.", en: "The entry was not recorded. The order must be in progress, on hold, or pending acceptance." },
+  service_order_transition_invalid: { es: "No se cambió el estado: completa primero el paso anterior y recarga la orden.", en: "The status was not changed. Complete the previous step and reload the service order." },
+  service_order_action_invalid: { es: "La acción solicitada no pertenece al flujo de Ordenes de servicio. Recarga y usa una acción disponible.", en: "The requested action is not part of the Service order flow. Reload and use an available action." },
+  service_order_not_acceptable: { es: "El servicio todavía no está pendiente de aceptación. Completa la ejecución y envíalo primero.", en: "The service is not pending acceptance yet. Complete execution and submit it first." },
+  service_order_assign_worker_required: { es: "Selecciona un trabajador activo y elegible para asignar la orden.", en: "Select an active eligible worker to assign the service order." },
+  service_order_evidence_required: { es: "No se envió a aceptación: registra al menos una evidencia del servicio.", en: "The service was not submitted for acceptance. Record at least one service evidence item." },
+  service_order_cost_required: { es: "No se envió a aceptación: registra tiempo trabajado o un costo trazable.", en: "The service was not submitted for acceptance. Record worked time or a traceable cost." },
+  service_order_plan_dates_invalid: { es: "La fecha final debe ser igual o posterior a la fecha inicial.", en: "The end date must be on or after the start date." },
+  report_date_range_invalid: { es: "La fecha final debe ser igual o posterior a la fecha inicial.", en: "The end date must be on or after the start date." },
+  report_filter_invalid: { es: "Uno de los filtros del reporte no es válido. Revisa los filtros e intenta nuevamente.", en: "One of the report filters is invalid. Review the filters and try again." },
+  report_not_found: { es: "El reporte solicitado no está disponible en este módulo.", en: "The requested report is not available in this module." },
+  report_row_limit_exceeded: { es: "El reporte supera 50,000 filas. Reduce el periodo o agrega filtros para descargarlo.", en: "The report exceeds 50,000 rows. Shorten the date range or add filters before downloading it." },
   validation_failed: {
     es: "Hay información inválida o incompleta. Revisa los campos marcados y vuelve a intentar.",
     en: "Some information is invalid or incomplete. Review the marked fields and try again."

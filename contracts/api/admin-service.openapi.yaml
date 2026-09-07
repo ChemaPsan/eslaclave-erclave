@@ -980,7 +980,7 @@ paths:
       operationId: listUnitsOfMeasure
       summary: List the tenant unit-of-measure catalog.
       x-required-module: admin
-      x-permissions: [admin.unit.read, sales.quote.create, sales.quote.update]
+      x-permissions: [admin.unit.read, sales.quote.create, sales.quote.update, purchasing.requisition.create, purchasing.requisition.update, purchasing.order.create, purchasing.order.update, purchasing.order.issue]
       x-permission-mode: any
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
@@ -1075,7 +1075,7 @@ paths:
       operationId: getUnitOfMeasureByCode
       summary: Resolve an active unit by stable code.
       x-required-module: admin
-      x-permissions: [admin.unit.read, sales.quote.create, sales.quote.update]
+      x-permissions: [admin.unit.read, sales.quote.create, sales.quote.update, purchasing.requisition.create, purchasing.requisition.update, purchasing.order.create, purchasing.order.update, purchasing.order.issue]
       x-permission-mode: any
       parameters:
         - $ref: '#/components/parameters/TenantHeader'

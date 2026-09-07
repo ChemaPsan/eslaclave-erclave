@@ -178,27 +178,28 @@ Las compras deberán poder mapear:
 
 ## 11. Pendientes
 
-- Definir reglas de autorización.
-- Definir relación inicial con XML fiscal.
-- Definir catálogo de condiciones de pago.
-- Definir si habrá solicitud de cotizaciones.
-- Definir manejo de compras recurrentes.
+- Dividir y adjudicar el saldo de una requisicion entre varios proveedores.
+- Programar reintentos automaticos de recepciones `needs_reconciliation`.
+- Incorporar paginacion server-side en maestros y documentos crecientes.
+- Definir factura/XML, cuenta por pagar, pago y devolucion a proveedor con sus propietarios.
+- Definir solicitud de cotizaciones, evaluacion de proveedores y compras recurrentes.
 
 ---
 
 ## 12. Primer corte acordado
 
-Estado: implementado en Local y activable desde Backoffice cuando Inventory esta habilitado.
+Estado: el ciclo inventariable esta implementado en Local y desplegado en QA hasta `20260825_0029`. CHG-255 esta aplicado y certificado en Local con `20260901_0030` para operar tambien partidas y recepciones comerciales de servicio sin exigir Inventory al tenant.
 
-El primer corte operativo cubrira exclusivamente:
+El corte operativo vigente cubre:
 
 1. proveedores activos e inactivos con perfil comercial, contacto y datos fiscales editables;
 2. requisiciones multipardida manuales o referenciadas desde un faltante externo;
 3. envio, aprobacion, rechazo y cancelacion de requisiciones;
 4. orden de compra creada desde requisicion aprobada o como compra directa con motivo auditado;
 5. emision y cancelacion de orden;
-6. recepcion parcial o total de lineas inventariables contra una orden emitida;
-7. solicitud idempotente a Inventory para registrar la entrada en el almacen autorizado.
+6. recepcion parcial o total contra una orden emitida;
+7. para `inventory_item`, solicitud idempotente a Inventory para registrar la entrada en el almacen autorizado;
+8. para `service`, recepcion comercial sin articulo, almacen ni movimiento fisico.
 
 Factura, XML/PDF, cuenta por pagar, pago, devolucion a proveedor, solicitud de cotizaciones, evaluacion avanzada y asiento contable permanecen `planned`.
 
@@ -207,7 +208,7 @@ Factura, XML/PDF, cuenta por pagar, pago, devolucion a proveedor, solicitud de c
 | Tipo | Referencia autoritativa | Resultado del primer corte |
 |---|---|---|
 | `inventory_item` | Articulo y unidad base de `inventory-service`; unidad activa de Admin | Puede recibirse fisicamente en un almacen mediante contrato de Inventory. |
-| `service` | Descripcion snapshot y unidad activa de Admin | Puede requisitarse y ordenarse; la confirmacion financiera queda planeada para Gastos/CxP. |
+| `service` | Descripcion snapshot y unidad activa de Admin | En Local CHG-255 puede requisitarse, ordenarse y recibirse comercialmente; factura y CxP permanecen planeadas. |
 | `asset` | Objetivo futuro | No admitido hasta definir Activos Fijos, capitalizacion y ownership. |
 
 Compras es dueno de proveedor, requisicion, orden, precio pactado, moneda, condiciones y recepcion comercial. Inventory sigue siendo dueno del articulo, almacen, movimiento fisico, saldo y valuacion. No hay FK ni escritura directa entre schemas.
@@ -281,11 +282,11 @@ La segregacion no se implementa con nombres fijos de rol. Cada accion usa permis
 ## 16. Dependencias de activacion
 
 - `admin`: siempre obligatorio y autoridad de sesion, permisos, unidades, monedas, condiciones de pago y folios.
-- `inventory`: dependencia obligatoria del primer corte porque toda recepcion implementada es inventariable.
+- `inventory`: dependencia condicional. Es obligatoria para partidas `inventory_item`; no se exige para un tenant que compra exclusivamente servicios.
 - `hr`: no es dependencia inicial; el actor autenticado se conserva como solicitante/aprobador/comprador. La seleccion de trabajadores se agregara solo con regla funcional aprobada.
 - Gastos, Costos y Contabilidad son consumidores futuros y no bloquean la activacion inicial.
 
-Compras solo cambia de `planned` a `implemented` cuando existan simultaneamente servicio, persistencia/migracion, contrato runtime, permisos, autorizacion, frontend API real, pruebas, observabilidad y rollback Local.
+Compras esta `implemented` en Local y QA para el ciclo inventariable certificado. La ampliacion de servicios esta aplicada y probada solo en Local con `20260901_0030`; QA no la recibe hasta una promocion mediante el pipeline gobernado.
 
 ## 17. Continuidad operativa CHG-238
 

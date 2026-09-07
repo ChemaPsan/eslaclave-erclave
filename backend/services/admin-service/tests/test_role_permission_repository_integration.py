@@ -279,6 +279,14 @@ def test_backoffice_entitlement_and_tenant_preference_are_separate_tenant_safe_c
             assert granted.effective_active is True
             assert repository.list_entitlements(other_tenant.id) == []
 
+            purchasing = repository.set_backoffice_entitlement(
+                tenant.id, "purchasing", "active", {}, "manual",
+                f"grant-purchasing-{suffix}", f"test-{suffix}",
+            )
+            assert purchasing is not None
+            assert purchasing.effective_active is True
+            assert not any(item.module_code == "inventory" for item in repository.list_entitlements(tenant.id))
+
             with pytest.raises(ValueError, match="module_dependencies_required:hr"):
                 repository.set_backoffice_entitlement(
                     tenant.id, "sales", "active", {}, "manual",
@@ -343,7 +351,7 @@ def test_backoffice_entitlement_and_tenant_preference_are_separate_tenant_safe_c
             assert connection.execute(
                 text("select count(*) from admin.audit_events where tenant_id=:tenant_id and action like '%entitlement%'") ,
                 {"tenant_id": tenant.id},
-            ).scalar_one() == 6
+            ).scalar_one() == 7
         finally:
             transaction.rollback()
             engine.dispose()

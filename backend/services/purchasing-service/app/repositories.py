@@ -213,6 +213,7 @@ class PurchasingRepository:
             return self._receipt(c,t,id),plan
     def _apply_receipt_movements(self,c,t,receipt,plan,movements):
         for item,movement in zip(plan,movements):
+            if movement is None:continue
             status=c.execute(text("select reconciliation_status from purchasing.purchase_receipt_lines where tenant_id=:t and id=:id for update"),{"t":t,"id":item["receipt_line_id"]}).scalar_one()
             if status=="completed":continue
             c.execute(text("update purchasing.purchase_receipt_lines set reconciliation_status='completed',inventory_movement_ref_id=:m where tenant_id=:t and id=:id"),{"m":movement.get("id"),"t":t,"id":item["receipt_line_id"]})
@@ -226,10 +227,10 @@ class PurchasingRepository:
             self._apply_receipt_movements(c,t,receipt,plan,movements)
             order_status=self._refresh_order_status(c,t,receipt["purchase_order_id"])
             if error:
-                remaining=[item["receipt_line_id"] for item in plan[len(movements):]]
+                remaining=[item["receipt_line_id"] for item,movement in zip(plan,movements) if movement is None]
                 if remaining:c.execute(text("update purchasing.purchase_receipt_lines set reconciliation_status='failed' where tenant_id=:t and id=any(:ids) and reconciliation_status!='completed'"),{"t":t,"ids":remaining})
                 c.execute(text("update purchasing.purchase_receipts set status='needs_reconciliation',reconciliation_error=:e where tenant_id=:t and id=:id"),{"e":error,"t":t,"id":receipt["id"]})
-                value=self._receipt(c,t,receipt["id"]);self._audit(c,t,actor,operation,"purchase_receipt",receipt["id"],{"result":"needs_reconciliation","completed_lines":len(movements),"error":error});self._finish(c,t,operation,key,value);return value
+                value=self._receipt(c,t,receipt["id"]);self._audit(c,t,actor,operation,"purchase_receipt",receipt["id"],{"result":"needs_reconciliation","completed_lines":sum(movement is not None for movement in movements),"error":error});self._finish(c,t,operation,key,value);return value
             c.execute(text("update purchasing.purchase_receipts set status='completed',reconciliation_error=null where tenant_id=:t and id=:id"),{"t":t,"id":receipt["id"]})
             value=self._receipt(c,t,receipt["id"]);self._audit(c,t,actor,operation,"purchase_receipt",receipt["id"],{"result":"completed","order_status":order_status});self._finish(c,t,operation,key,value);return value
 

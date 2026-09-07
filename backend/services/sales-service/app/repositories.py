@@ -1,4 +1,5 @@
 import json
+import hashlib
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import uuid4
@@ -7,7 +8,7 @@ from sqlalchemy import text
 
 from erclave_common.db import create_database_engine
 
-from .schemas import CustomerRead, DeliveryRead, QuoteRead, ResolvedQuoteLine, SalesOrderRead
+from .schemas import CustomerRead, DeliveryRead, QuoteRead, ResolvedQuoteLine, SalesOrderRead, ServiceOrderRead
 
 
 MONEY = Decimal("0.01")
@@ -298,7 +299,7 @@ class SalesRepository:
             connection.execute(text("""update sales.orders set fulfillment_state='needs_reconciliation',updated_at=now()
                 where tenant_id=:tenant and id=:id and fulfillment_state='processing'"""), {"tenant": tenant_id, "id": order_id})
 
-    def create_order(self, tenant_id, payload, quote, key, request_hash, actor_id):
+    def create_order(self, tenant_id, payload, quote, key, request_hash, actor_id, service_order_codes=None):
         operation = "order.create"
         with self.engine.begin() as connection:
             replay = self._claim(connection, tenant_id, operation, key, request_hash)
@@ -321,18 +322,32 @@ class SalesRepository:
                 return None
             for line in quote.lines:
                 mode = "service" if line.product_service_type == "service" else "pending"
-                line_status = "ready" if mode == "service" else "pending"
+                line_status = "pending"
+                order_line_id = f"sol_{uuid4().hex[:26]}"
                 connection.execute(text("""insert into sales.order_lines(id,tenant_id,order_id,quote_line_id,line_number,
                     product_service_ref_id,product_service_code,product_service_name,product_service_type,unit,ordered_quantity,
                     delivered_quantity,unit_price,discount_percentage,total,standard_unit_cost_snapshot,estimated_cost,
                     fulfillment_mode,fulfillment_status)
                     values(:id,:tenant,:order_id,:quote_line_id,:number,:product_id,:code,:name,:type,:unit,:quantity,0,
-                    :unit_price,:discount,:total,:unit_cost,:estimated_cost,:mode,:status)"""), {"id": f"sol_{uuid4().hex[:26]}", "tenant": tenant_id,
+                    :unit_price,:discount,:total,:unit_cost,:estimated_cost,:mode,:status)"""), {"id": order_line_id, "tenant": tenant_id,
                     "order_id": order_id, "quote_line_id": line.id, "number": line.line_number, "product_id": line.product_service_id,
                     "code": line.product_service_code, "name": line.product_service_name, "type": line.product_service_type,
                     "unit": line.unit, "quantity": line.quantity, "unit_price": line.unit_price, "discount": line.discount_percentage,
                     "total": line.total, "unit_cost": line.standard_unit_cost_snapshot, "estimated_cost": line.estimated_cost,
                     "mode": mode, "status": line_status})
+                if mode == "service":
+                    # Runtime callers allocate the tenant sequence through Admin. This bounded,
+                    # deterministic fallback exists only for direct repository imports/tests.
+                    fallback_hash = hashlib.sha256(f"{tenant_id}:{payload.code}:{line.line_number}".encode()).hexdigest()[:6].upper()
+                    code = (service_order_codes or {}).get(line.id) or f"OS-{payload.code[:43]}-{line.line_number}-{fallback_hash}"
+                    connection.execute(text("""insert into sales.service_orders(id,tenant_id,code,order_id,order_line_id,order_code_snapshot,
+                        customer_id,customer_name_snapshot,product_service_ref_id,product_service_code,product_service_name,unit,ordered_quantity,status)
+                        values(:id,:tenant,:code,:order,:line,:order_code,:customer,:customer_name,:product,:product_code,:product_name,:unit,:quantity,'draft')
+                        on conflict(tenant_id,order_line_id) do nothing"""), {"id": f"svo_{uuid4().hex[:26]}", "tenant": tenant_id,
+                        "code": code, "order": order_id, "line": order_line_id, "order_code": payload.code,
+                        "customer": quote.customer_id, "customer_name": quote.customer_name, "product": line.product_service_id,
+                        "product_code": line.product_service_code, "product_name": line.product_service_name, "unit": line.unit,
+                        "quantity": line.quantity})
             value = self._order(connection, tenant_id, order_id)
             self._audit(connection, tenant_id, actor_id, operation, "sales_order", order_id, {"quote_id": quote.id, "code": value.code, "total": value.total})
             self._finish(connection, tenant_id, operation, key, value)
@@ -375,7 +390,7 @@ class SalesRepository:
                         "line": current.id, "reservation": reservation["id"], "warehouse": reservation["warehouse_id"],
                         "quantity": reservation["quantity"], "cost": reservation.get("unit_cost_snapshot", 0)})
             statuses = connection.execute(text("select fulfillment_status from sales.order_lines where tenant_id=:tenant and order_id=:order"), {"tenant": tenant_id, "order": order_id}).scalars().all()
-            target = "ready" if all(item in {"reserved", "ready"} for item in statuses) else "fulfillment_pending"
+            target = "delivered" if all(item == "delivered" for item in statuses) else "partially_delivered" if any(item == "delivered" for item in statuses) else "ready" if all(item in {"reserved", "ready"} for item in statuses) else "fulfillment_pending"
             connection.execute(text("""update sales.orders set status=:status,fulfillment_state='completed',updated_at=now()
                 where tenant_id=:tenant and id=:id"""), {"status": target, "tenant": tenant_id, "id": order_id})
             value = self._order(connection, tenant_id, order_id)
@@ -433,6 +448,7 @@ class SalesRepository:
             connection.execute(text("update sales.order_lines set fulfillment_status='cancelled',updated_at=now() where tenant_id=:tenant and order_id=:id"), {"tenant": tenant_id, "id": order_id})
             connection.execute(text("update sales.order_line_reservations set status='released',updated_at=now() where tenant_id=:tenant and order_line_id in (select id from sales.order_lines where tenant_id=:tenant and order_id=:id) and status='active'"), {"tenant": tenant_id, "id": order_id})
             connection.execute(text("update sales.deliveries set status='cancelled',updated_at=now() where tenant_id=:tenant and order_id=:id and status='draft'"), {"tenant": tenant_id, "id": order_id})
+            connection.execute(text("update sales.service_orders set status='cancelled',cancelled_at=now(),updated_at=now() where tenant_id=:tenant and order_id=:id and status not in ('accepted','cancelled')"), {"tenant": tenant_id, "id": order_id})
             value = self._order(connection, tenant_id, order_id)
             self._audit(connection, tenant_id, actor_id, operation, "sales_order", order_id, {"before": before.status, "after": value.status, "reason": reason})
             self._finish(connection, tenant_id, operation, key, value)
@@ -481,6 +497,8 @@ class SalesRepository:
                 source = by_id.get(line.order_line_id)
                 if not source:
                     self._release(connection, tenant_id, operation, key); raise ValueError("sales_order_line_not_found")
+                if source.product_service_type == "service":
+                    self._release(connection, tenant_id, operation, key); raise ValueError("service_line_requires_service_order")
                 connection.execute(text("select id from sales.order_lines where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": source.id})
                 committed = connection.execute(text("""select coalesce(sum(dl.quantity),0) from sales.delivery_lines dl
                     join sales.deliveries d on d.tenant_id=dl.tenant_id and d.id=dl.delivery_id
@@ -497,8 +515,6 @@ class SalesRepository:
                         self._release(connection, tenant_id, operation, key); raise ValueError("delivery_exceeds_reserved_quantity")
                     if line.actual_unit_cost is not None:
                         self._release(connection, tenant_id, operation, key); raise ValueError("stock_cost_is_authoritative")
-                if source.fulfillment_mode == "service" and line.actual_unit_cost is None:
-                    self._release(connection, tenant_id, operation, key); raise ValueError("service_actual_cost_required")
             delivery_id = f"del_{uuid4().hex[:26]}"
             inserted = connection.execute(text("""insert into sales.deliveries(id,tenant_id,code,order_id,order_code_snapshot,customer_id,
                 customer_name_snapshot,status,scheduled_date,recipient_name,evidence_reference,notes)
@@ -510,8 +526,8 @@ class SalesRepository:
                 self._release(connection, tenant_id, operation, key); return None
             for number, requested in enumerate(payload.lines, start=1):
                 source = by_id[requested.order_line_id]
-                actual_cost = requested.quantity * requested.actual_unit_cost if source.fulfillment_mode == "service" else None
-                cost_source = "service_capture" if source.fulfillment_mode == "service" else None
+                actual_cost = None
+                cost_source = None
                 connection.execute(text("""insert into sales.delivery_lines(id,tenant_id,delivery_id,order_line_id,line_number,
                     product_service_ref_id,product_service_code,product_service_name,unit,quantity,actual_cost,actual_cost_source)
                     values(:id,:tenant,:delivery,:order_line,:number,:product,:code,:name,:unit,:quantity,:actual_cost,:cost_source)"""), {"id": f"dll_{uuid4().hex[:26]}",
@@ -638,6 +654,185 @@ class SalesRepository:
             self._audit(connection, tenant_id, actor_id, operation, "delivery", delivery_id, {"before": before.status, "after": value.status, "reason": reason})
             self._finish(connection, tenant_id, operation, key, value)
             return value
+
+    def _service_order(self, connection, tenant_id, service_order_id):
+        row = connection.execute(text("""select id,code,order_id,order_code_snapshot order_code,order_line_id,customer_id,
+            customer_name_snapshot customer_name,product_service_ref_id product_service_id,product_service_code,
+            product_service_name,unit,ordered_quantity,status,responsible_worker_ref_id responsible_worker_id,
+            responsible_worker_name,planned_start_date,planned_end_date,notes,actual_cost,planned_at,assigned_at,
+            started_at,acceptance_requested_at,accepted_at,cancelled_at,created_at,updated_at
+            from sales.service_orders where tenant_id=:tenant and id=:id"""), {"tenant": tenant_id, "id": service_order_id}).mappings().first()
+        if not row:
+            return None
+        time_entries = connection.execute(text("""select id,worker_ref_id worker_id,worker_name,worked_on,minutes,hourly_cost,total_cost,notes,created_at
+            from sales.service_time_entries where tenant_id=:tenant and service_order_id=:id order by worked_on,created_at,id"""), {"tenant": tenant_id, "id": service_order_id}).mappings().all()
+        cost_entries = connection.execute(text("""select id,cost_type,description,quantity,unit_cost,total_cost,evidence_reference,created_at
+            from sales.service_cost_entries where tenant_id=:tenant and service_order_id=:id order by created_at,id"""), {"tenant": tenant_id, "id": service_order_id}).mappings().all()
+        evidence = connection.execute(text("""select id,evidence_reference,description,created_at from sales.service_evidence
+            where tenant_id=:tenant and service_order_id=:id order by created_at,id"""), {"tenant": tenant_id, "id": service_order_id}).mappings().all()
+        return ServiceOrderRead.model_validate({**dict(row), "time_entries": [dict(item) for item in time_entries],
+            "cost_entries": [dict(item) for item in cost_entries], "evidence": [dict(item) for item in evidence]})
+
+    def list_service_orders(self, tenant_id, status=None, order_id=None, customer_id=None):
+        filters = ["tenant_id=:tenant"]
+        params = {"tenant": tenant_id}
+        for name, value in (("status", status), ("order_id", order_id), ("customer_id", customer_id)):
+            if value:
+                filters.append(f"{name}=:{name}"); params[name] = value
+        with self.engine.connect() as connection:
+            ids = connection.execute(text(f"select id from sales.service_orders where {' and '.join(filters)} order by created_at desc limit 200"), params).scalars().all()
+            return [self._service_order(connection, tenant_id, item) for item in ids]
+
+    def get_service_order(self, tenant_id, service_order_id):
+        with self.engine.connect() as connection:
+            return self._service_order(connection, tenant_id, service_order_id)
+
+    def plan_service_order(self, tenant_id, service_order_id, payload, key, request_hash, actor_id):
+        operation = f"service_order.plan:{service_order_id}"
+        with self.engine.begin() as connection:
+            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            if replay: return ServiceOrderRead.model_validate(replay)
+            connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
+            before = self._service_order(connection, tenant_id, service_order_id)
+            if not before:
+                self._release(connection, tenant_id, operation, key); return None
+            if before.status != "draft":
+                self._release(connection, tenant_id, operation, key); raise ValueError("service_order_not_plannable")
+            connection.execute(text("""update sales.service_orders set status='planned',planned_start_date=:start,
+                planned_end_date=:end,notes=:notes,planned_at=now(),updated_at=now() where tenant_id=:tenant and id=:id"""),
+                {"start": payload.planned_start_date, "end": payload.planned_end_date, "notes": payload.notes, "tenant": tenant_id, "id": service_order_id})
+            value = self._service_order(connection, tenant_id, service_order_id)
+            self._audit(connection, tenant_id, actor_id, operation, "service_order", service_order_id, {"before": before.status, "after": value.status})
+            self._finish(connection, tenant_id, operation, key, value); return value
+
+    def assign_service_order(self, tenant_id, service_order_id, worker, key, request_hash, actor_id):
+        operation = f"service_order.assign:{service_order_id}"
+        with self.engine.begin() as connection:
+            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            if replay: return ServiceOrderRead.model_validate(replay)
+            connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
+            before = self._service_order(connection, tenant_id, service_order_id)
+            if not before:
+                self._release(connection, tenant_id, operation, key); return None
+            if before.status != "planned":
+                self._release(connection, tenant_id, operation, key); raise ValueError("service_order_not_assignable")
+            connection.execute(text("""update sales.service_orders set status='assigned',responsible_worker_ref_id=:worker,
+                responsible_worker_name=:name,assigned_at=now(),updated_at=now() where tenant_id=:tenant and id=:id"""),
+                {"worker": worker.id, "name": worker.full_name, "tenant": tenant_id, "id": service_order_id})
+            value = self._service_order(connection, tenant_id, service_order_id)
+            self._audit(connection, tenant_id, actor_id, operation, "service_order", service_order_id, {"before": before.status, "after": value.status, "responsible_worker_id": worker.id})
+            self._finish(connection, tenant_id, operation, key, value); return value
+
+    def add_service_time_entry(self, tenant_id, service_order_id, payload, worker, key, request_hash, actor_id):
+        operation = f"service_order.time.create:{service_order_id}"
+        with self.engine.begin() as connection:
+            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            if replay: return ServiceOrderRead.model_validate(replay)
+            connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
+            before = self._service_order(connection, tenant_id, service_order_id)
+            if not before:
+                self._release(connection, tenant_id, operation, key); return None
+            if before.status not in {"in_progress", "on_hold", "pending_acceptance"}:
+                self._release(connection, tenant_id, operation, key); raise ValueError("service_order_entries_not_allowed")
+            total = (Decimal(payload.minutes) / Decimal(60) * payload.hourly_cost).quantize(MONEY, rounding=ROUND_HALF_UP)
+            connection.execute(text("""insert into sales.service_time_entries(id,tenant_id,service_order_id,worker_ref_id,worker_name,
+                worked_on,minutes,hourly_cost,total_cost,notes,created_by_actor_id) values(:id,:tenant,:order,:worker,:name,:date,:minutes,:rate,:total,:notes,:actor)"""),
+                {"id": f"ste_{uuid4().hex[:26]}", "tenant": tenant_id, "order": service_order_id, "worker": worker.id,
+                 "name": worker.full_name, "date": payload.worked_on, "minutes": payload.minutes, "rate": payload.hourly_cost,
+                 "total": total, "notes": payload.notes, "actor": actor_id})
+            value = self._service_order(connection, tenant_id, service_order_id)
+            self._audit(connection, tenant_id, actor_id, operation, "service_order", service_order_id, {"worker_id": worker.id, "minutes": payload.minutes, "total_cost": total})
+            self._finish(connection, tenant_id, operation, key, value); return value
+
+    def add_service_cost_entry(self, tenant_id, service_order_id, payload, key, request_hash, actor_id):
+        operation = f"service_order.cost.create:{service_order_id}"
+        with self.engine.begin() as connection:
+            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            if replay: return ServiceOrderRead.model_validate(replay)
+            connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
+            before = self._service_order(connection, tenant_id, service_order_id)
+            if not before:
+                self._release(connection, tenant_id, operation, key); return None
+            if before.status not in {"in_progress", "on_hold", "pending_acceptance"}:
+                self._release(connection, tenant_id, operation, key); raise ValueError("service_order_entries_not_allowed")
+            total = (payload.quantity * payload.unit_cost).quantize(MONEY, rounding=ROUND_HALF_UP)
+            connection.execute(text("""insert into sales.service_cost_entries(id,tenant_id,service_order_id,cost_type,description,
+                quantity,unit_cost,total_cost,evidence_reference,created_by_actor_id) values(:id,:tenant,:order,:type,:description,:quantity,:cost,:total,:evidence,:actor)"""),
+                {"id": f"sce_{uuid4().hex[:26]}", "tenant": tenant_id, "order": service_order_id, "type": payload.cost_type,
+                 "description": payload.description, "quantity": payload.quantity, "cost": payload.unit_cost, "total": total,
+                 "evidence": payload.evidence_reference, "actor": actor_id})
+            value = self._service_order(connection, tenant_id, service_order_id)
+            self._audit(connection, tenant_id, actor_id, operation, "service_order", service_order_id, {"cost_type": payload.cost_type, "total_cost": total})
+            self._finish(connection, tenant_id, operation, key, value); return value
+
+    def add_service_evidence(self, tenant_id, service_order_id, payload, key, request_hash, actor_id):
+        operation = f"service_order.evidence.create:{service_order_id}"
+        with self.engine.begin() as connection:
+            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            if replay: return ServiceOrderRead.model_validate(replay)
+            connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
+            before = self._service_order(connection, tenant_id, service_order_id)
+            if not before:
+                self._release(connection, tenant_id, operation, key); return None
+            if before.status not in {"in_progress", "on_hold", "pending_acceptance"}:
+                self._release(connection, tenant_id, operation, key); raise ValueError("service_order_entries_not_allowed")
+            connection.execute(text("""insert into sales.service_evidence(id,tenant_id,service_order_id,evidence_reference,description,created_by_actor_id)
+                values(:id,:tenant,:order,:reference,:description,:actor)"""), {"id": f"sev_{uuid4().hex[:26]}", "tenant": tenant_id,
+                "order": service_order_id, "reference": payload.evidence_reference, "description": payload.description, "actor": actor_id})
+            value = self._service_order(connection, tenant_id, service_order_id)
+            self._audit(connection, tenant_id, actor_id, operation, "service_order", service_order_id, {"evidence_reference": payload.evidence_reference})
+            self._finish(connection, tenant_id, operation, key, value); return value
+
+    def transition_service_order(self, tenant_id, service_order_id, action, reason, key, request_hash, actor_id):
+        operation = f"service_order.{action}:{service_order_id}"
+        transitions = {"start": ("assigned", "in_progress"), "wait": ("in_progress", "on_hold"),
+            "resume": ("on_hold", "in_progress"), "submit_acceptance": ("in_progress", "pending_acceptance"),
+            "cancel": ({"draft", "planned", "assigned", "in_progress", "on_hold", "pending_acceptance"}, "cancelled")}
+        with self.engine.begin() as connection:
+            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            if replay: return ServiceOrderRead.model_validate(replay)
+            if action in {"wait", "cancel"} and not reason:
+                self._release(connection, tenant_id, operation, key); raise ValueError("service_order_reason_required")
+            connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
+            before = self._service_order(connection, tenant_id, service_order_id)
+            if not before:
+                self._release(connection, tenant_id, operation, key); return None
+            if action == "accept":
+                if before.status != "pending_acceptance":
+                    self._release(connection, tenant_id, operation, key); raise ValueError("service_order_not_acceptable")
+                if not before.evidence:
+                    self._release(connection, tenant_id, operation, key); raise ValueError("service_order_evidence_required")
+                if not before.time_entries and not before.cost_entries:
+                    self._release(connection, tenant_id, operation, key); raise ValueError("service_order_cost_required")
+                actual_cost = sum((item.total_cost for item in before.time_entries), Decimal("0")) + sum((item.total_cost for item in before.cost_entries), Decimal("0"))
+                connection.execute(text("update sales.service_orders set status='accepted',actual_cost=:cost,accepted_at=now(),updated_at=now() where tenant_id=:tenant and id=:id"), {"cost": actual_cost, "tenant": tenant_id, "id": service_order_id})
+                connection.execute(text("""update sales.order_lines set delivered_quantity=ordered_quantity,fulfillment_status='delivered',updated_at=now()
+                    where tenant_id=:tenant and id=:line"""), {"tenant": tenant_id, "line": before.order_line_id})
+                statuses = connection.execute(text("select fulfillment_status from sales.order_lines where tenant_id=:tenant and order_id=:order"), {"tenant": tenant_id, "order": before.order_id}).scalars().all()
+                order_status = "delivered" if all(item == "delivered" for item in statuses) else "partially_delivered"
+                delivery_cost = connection.execute(text("""select coalesce(sum(dl.actual_cost),0) from sales.delivery_lines dl join sales.deliveries d
+                    on d.tenant_id=dl.tenant_id and d.id=dl.delivery_id where d.tenant_id=:tenant and d.order_id=:order and d.status='confirmed'"""), {"tenant": tenant_id, "order": before.order_id}).scalar_one() or Decimal("0")
+                service_cost = connection.execute(text("select coalesce(sum(actual_cost),0) from sales.service_orders where tenant_id=:tenant and order_id=:order and status='accepted'"), {"tenant": tenant_id, "order": before.order_id}).scalar_one() or Decimal("0")
+                cost = Decimal(str(delivery_cost)) + Decimal(str(service_cost))
+                total = connection.execute(text("select total from sales.orders where tenant_id=:tenant and id=:order"), {"tenant": tenant_id, "order": before.order_id}).scalar_one()
+                margin = None if not total else ((Decimal(str(total)) - cost) / Decimal(str(total)) * Decimal("100")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                connection.execute(text("""update sales.orders set status=:status,actual_cost=:cost,actual_margin=:margin,
+                    completed_at=case when :completed then now() else completed_at end,updated_at=now() where tenant_id=:tenant and id=:order"""),
+                    {"status": order_status, "cost": cost, "margin": margin, "completed": order_status == "delivered", "tenant": tenant_id, "order": before.order_id})
+            else:
+                if action not in transitions:
+                    self._release(connection, tenant_id, operation, key); raise ValueError("service_order_action_invalid")
+                allowed, target = transitions[action]
+                allowed = {allowed} if isinstance(allowed, str) else allowed
+                if before.status not in allowed:
+                    self._release(connection, tenant_id, operation, key); raise ValueError("service_order_transition_invalid")
+                timestamps = {"start": "started_at=coalesce(started_at,now()),", "submit_acceptance": "acceptance_requested_at=now(),", "cancel": "cancelled_at=now(),"}
+                connection.execute(text(f"update sales.service_orders set status=:target,{timestamps.get(action, '')}updated_at=now() where tenant_id=:tenant and id=:id"), {"target": target, "tenant": tenant_id, "id": service_order_id})
+                if action == "cancel":
+                    connection.execute(text("update sales.order_lines set fulfillment_status='cancelled',updated_at=now() where tenant_id=:tenant and id=:line"), {"tenant": tenant_id, "line": before.order_line_id})
+            value = self._service_order(connection, tenant_id, service_order_id)
+            self._audit(connection, tenant_id, actor_id, operation, "service_order", service_order_id, {"before": before.status, "after": value.status, "reason": reason})
+            self._finish(connection, tenant_id, operation, key, value); return value
 
 
 _repository = None

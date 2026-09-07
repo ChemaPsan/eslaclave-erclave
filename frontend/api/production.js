@@ -1,4 +1,4 @@
-import { apiRequestAt } from "./client.js";
+import { apiDownloadAt, apiRequestAt } from "./client.js";
 import { getDemoTenantId, getProductionApiBaseUrl } from "./config.js";
 
 function commandHeaders() {
@@ -12,6 +12,7 @@ function productionRequest(path, options = {}) {
     headers: { "X-Tenant-Id": getDemoTenantId(), ...(options.headers || {}) }
   }, "Production API");
 }
+export function downloadProductionReport(code,filters={}){const query=new URLSearchParams();Object.entries(filters).forEach(([key,value])=>{if(value!==undefined&&value!==null&&value!==""&&value!=="all")query.set(key,String(value));});return apiDownloadAt(getProductionApiBaseUrl(),`/v1/production/reports/${encodeURIComponent(code)}/export?${query}`,{headers:{"X-Tenant-Id":getDemoTenantId()}},"Production API");}
 
 export async function getProductionCatalog() {
   const [products, recipes, machines, orders] = await Promise.all([

@@ -4,6 +4,8 @@
 
 Este documento define el plan recomendado para pasar ERClave de maqueta navegable a backend real en QA, manteniendo la arquitectura SaaS multi-tenant, modular, segura y auditable.
 
+> Estado de uso: conserva la secuencia arquitectonica original. El avance operativo vigente se consulta exclusivamente en `docs/contexto/ESTADO_ACTUAL.md`; varias fases del core ya fueron ejecutadas y este plan no debe usarse como inventario de despliegues.
+
 El plan se basa en:
 
 - `docs/arquitectura/qa_prod.md`;
@@ -541,8 +543,8 @@ Criterio de salida:
 | Area | Motivo |
 |---|---|
 | Contabilidad | No es parte del primer backend MVP operativo. |
-| Compras | Aun no es modulo activo prioritario. |
-| Reservas automaticas | Requieren reglas completas de inventario y ventas. |
+| Compras avanzadas | El ciclo base esta en Local/QA; adjudicacion multi-proveedor, factura, CxP, pago y devolucion permanecen pendientes. |
+| Canales de reserva adicionales | Produccion y Ventas ya usan reservas; lotes y otros canales permanecen fuera del alcance actual. |
 | Facturacion fiscal | Depende de proveedor y requisitos fiscales. |
 | Reportes avanzados | Requieren datos reales acumulados. |
 | Costeo contable | Requiere integracion con inventario, produccion y contabilidad. |

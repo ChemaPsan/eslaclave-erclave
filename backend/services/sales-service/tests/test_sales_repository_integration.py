@@ -25,7 +25,7 @@ def context():
     try:yield repo,tenant
     finally:
         with engine.begin() as connection:
-            for table in ("delivery_lines","deliveries","order_line_reservations","order_lines","orders","audit_events","idempotency_records","quote_lines","quotes","customer_contacts","customers"):
+            for table in ("service_evidence","service_cost_entries","service_time_entries","service_orders","delivery_lines","deliveries","order_line_reservations","order_lines","orders","audit_events","idempotency_records","quote_lines","quotes","customer_contacts","customers"):
                 connection.execute(text(f"delete from sales.{table} where tenant_id=:tenant"),{"tenant":tenant})
         engine.dispose()
 
@@ -49,30 +49,33 @@ def test_sales_repository_persists_calculates_isolates_and_replays(context):
     assert submitted.status=="quoted" and approved.status=="approved"
     order=repo.create_order(tenant,schemas.SalesOrderCreateRequest(code="PED-TEST",quote_id=approved.id),approved,"order-key","order-hash","usr_test")
     configured=order
-    assert configured.lines[0].fulfillment_status=="ready"
-    with pytest.raises(ValueError,match="service_actual_cost_required"):
-        repo.create_delivery(tenant,schemas.DeliveryCreateRequest(code="ENT-NO-COST",order_id=order.id,scheduled_date=date.today(),lines=[{"order_line_id":order.lines[0].id,"quantity":Decimal("1")}]),"delivery-no-cost-key","delivery-no-cost-hash","usr_test")
-    delivery=repo.create_delivery(tenant,schemas.DeliveryCreateRequest(code="ENT-TEST",order_id=order.id,scheduled_date=date.today(),lines=[{"order_line_id":order.lines[0].id,"quantity":Decimal("1"),"actual_unit_cost":Decimal("45")}]),"delivery-key","delivery-hash","usr_test")
-    repo.prepare_delivery_confirmation(tenant,delivery.id,"confirm-delivery-key","confirm-delivery-hash")
-    confirmed=repo.confirm_delivery(tenant,delivery.id,[],"confirm-delivery-key","confirm-delivery-hash","usr_test")
-    confirmation_replay=repo.prepare_delivery_confirmation(tenant,delivery.id,"confirm-delivery-key","confirm-delivery-hash")
+    assert configured.lines[0].fulfillment_status=="pending"
+    service=repo.list_service_orders(tenant,order_id=order.id)[0]
+    assert service.code.startswith("OS-PED-TEST-1-") and repo.list_service_orders("ten_other")==[]
+    with pytest.raises(ValueError,match="service_line_requires_service_order"):
+        repo.create_delivery(tenant,schemas.DeliveryCreateRequest(code="ENT-SERVICE",order_id=order.id,scheduled_date=date.today(),lines=[{"order_line_id":order.lines[0].id,"quantity":Decimal("1")}]),"delivery-service-key","delivery-service-hash","usr_test")
+    planned=repo.plan_service_order(tenant,service.id,schemas.ServiceOrderPlanRequest(planned_start_date=date.today(),planned_end_date=date.today()),"service-plan-key","service-plan-hash","usr_test")
+    replay=repo.plan_service_order(tenant,service.id,schemas.ServiceOrderPlanRequest(planned_start_date=date.today(),planned_end_date=date.today()),"service-plan-key","service-plan-hash","usr_test")
+    assert replay.id==planned.id and replay.status=="planned"
+    assigned=repo.assign_service_order(tenant,service.id,worker(),"service-assign-key","service-assign-hash","usr_test")
+    started=repo.transition_service_order(tenant,service.id,"start",None,"service-start-key","service-start-hash","usr_test")
+    assert assigned.status=="assigned" and started.status=="in_progress"
+    with pytest.raises(ValueError,match="service_order_reason_required"):
+        repo.transition_service_order(tenant,service.id,"wait",None,"service-wait-no-reason-key","service-wait-no-reason-hash","usr_test")
+    waiting=repo.transition_service_order(tenant,service.id,"wait","Esperando autorizacion del cliente","service-wait-key","service-wait-hash","usr_test")
+    resumed=repo.transition_service_order(tenant,service.id,"resume",None,"service-resume-key","service-resume-hash","usr_test")
+    assert waiting.status=="on_hold" and resumed.status=="in_progress"
+    evidenced=repo.add_service_evidence(tenant,service.id,schemas.ServiceEvidenceCreateRequest(evidence_reference="evidence://service/test"),"service-evidence-key","service-evidence-hash","usr_test")
+    assert len(evidenced.evidence)==1
+    repo.transition_service_order(tenant,service.id,"submit_acceptance",None,"service-submit-key","service-submit-hash","usr_test")
+    with pytest.raises(ValueError,match="service_order_cost_required"):
+        repo.transition_service_order(tenant,service.id,"accept",None,"service-accept-without-cost-key","service-accept-without-cost-hash","usr_test")
+    timed=repo.add_service_time_entry(tenant,service.id,schemas.ServiceTimeEntryCreateRequest(worker_id="hrw_test",worked_on=date.today(),minutes=60,hourly_cost=Decimal("45")),worker(),"service-time-key","service-time-hash","usr_test")
+    assert timed.time_entries[0].total_cost==Decimal("45.00")
+    accepted=repo.transition_service_order(tenant,service.id,"accept",None,"service-accept-key","service-accept-hash","usr_test")
     refreshed=repo.get_order(tenant,order.id)
-    assert confirmed.status=="confirmed" and confirmed.lines[0].actual_cost==Decimal("45.00")
-    assert confirmation_replay[0].status=="confirmed"
-    with pytest.raises(ValueError,match="delivery_not_confirmable"):
-        repo.prepare_delivery_confirmation(tenant,delivery.id,"confirm-other-key","confirm-other-hash")
-    assert confirmed.lines[0].actual_cost_source=="service_capture"
-    assert refreshed.status=="partially_delivered" and refreshed.actual_cost==Decimal("45.00")
-    def commit_remaining(index):
-        try:
-            value=repo.create_delivery(tenant,schemas.DeliveryCreateRequest(code=f"ENT-RACE-{index}",order_id=order.id,scheduled_date=date.today(),lines=[{"order_line_id":order.lines[0].id,"quantity":Decimal("1"),"actual_unit_cost":Decimal("45")}]),f"delivery-race-key-{index}",f"delivery-race-hash-{index}","usr_test")
-            return value.id
-        except ValueError as exc:
-            return str(exc)
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        race_results=list(executor.map(commit_remaining,range(2)))
-    assert sum(result.startswith("del_") for result in race_results)==1
-    assert "delivery_quantity_exceeds_uncommitted" in race_results
+    assert accepted.status=="accepted" and accepted.actual_cost==Decimal("45.00")
+    assert refreshed.status=="delivered" and refreshed.lines[0].delivered_quantity==Decimal("2") and refreshed.actual_cost==Decimal("45.00")
     with pytest.raises(ValueError,match="quote_not_editable"):
         repo.update_quote(tenant,quote.id,schemas.QuoteUpdateRequest(notes="late"),None,None,None,"update-key","update-hash","usr_test")
 
@@ -117,17 +120,53 @@ def test_fulfillment_claim_is_exclusive_and_uses_postgres_line_locks(context):
     assert configured.fulfillment_state=="completed" and replay[0].fulfillment_state=="completed"
 
 
+def test_mixed_order_creates_only_service_orders_and_acceptance_keeps_product_pending(context):
+    repo,tenant=context
+    created=repo.create_customer(tenant,customer_payload(),worker(),"customer-mixed-key","customer-mixed-hash","usr_test")
+    service=schemas.ProductReference(id="srv_mixed",code="SERV-MIX",name="Servicio Mixto",type="service",base_unit="HUR",status="active",target_price=100,standard_cost=50)
+    product=schemas.ProductReference(id="prd_mixed",code="PROD-MIX",name="Producto Mixto",type="product",base_unit="H87",status="active",target_price=200,standard_cost=80,inventory_item_id="itm_mixed")
+    payload=schemas.QuoteCreateRequest(code="COT-MIX",customer_id=created.id,valid_until=date.today()+timedelta(days=15),lines=[
+        {"product_service_id":"srv_mixed","quantity":Decimal("1"),"unit":"HUR","unit_price":Decimal("100")},
+        {"product_service_id":"prd_mixed","quantity":Decimal("1"),"unit":"H87","unit_price":Decimal("200")},
+    ])
+    lines=[schemas.ResolvedQuoteLine(product=service,quantity=Decimal("1"),unit="HUR",unit_price=Decimal("100"),discount_percentage=Decimal("0")),
+        schemas.ResolvedQuoteLine(product=product,quantity=Decimal("1"),unit="H87",unit_price=Decimal("200"),discount_percentage=Decimal("0"))]
+    quote=repo.create_quote(tenant,payload,created,worker(),lines,"quote-mixed-key","quote-mixed-hash","usr_test")
+    repo.transition_quote(tenant,quote.id,"quoted","submit-mixed-key","submit-mixed-hash","usr_test")
+    approved=repo.transition_quote(tenant,quote.id,"approved","approve-mixed-key","approve-mixed-hash","usr_test")
+    order=repo.create_order(tenant,schemas.SalesOrderCreateRequest(code="PED-MIX",quote_id=approved.id),approved,"order-mixed-key","order-mixed-hash","usr_test",{approved.lines[0].id:"OS-000777"})
+    service_orders=repo.list_service_orders(tenant,order_id=order.id)
+    assert len(service_orders)==1 and service_orders[0].order_line_id==order.lines[0].id and service_orders[0].code=="OS-000777"
+    value=service_orders[0]
+    repo.plan_service_order(tenant,value.id,schemas.ServiceOrderPlanRequest(planned_start_date=date.today(),planned_end_date=date.today()),"plan-mixed-key","plan-mixed-hash","usr_test")
+    repo.assign_service_order(tenant,value.id,worker(),"assign-mixed-key","assign-mixed-hash","usr_test")
+    repo.transition_service_order(tenant,value.id,"start",None,"start-mixed-key","start-mixed-hash","usr_test")
+    repo.add_service_cost_entry(tenant,value.id,schemas.ServiceCostEntryCreateRequest(cost_type="external",description="Servicio externo",quantity=1,unit_cost=40),"cost-mixed-key","cost-mixed-hash","usr_test")
+    repo.add_service_evidence(tenant,value.id,schemas.ServiceEvidenceCreateRequest(evidence_reference="evidence://mixed/1"),"evidence-mixed-key","evidence-mixed-hash","usr_test")
+    repo.transition_service_order(tenant,value.id,"submit_acceptance",None,"submit-acceptance-mixed-key","submit-acceptance-mixed-hash","usr_test")
+    repo.transition_service_order(tenant,value.id,"accept",None,"accept-mixed-key","accept-mixed-hash","usr_test")
+    refreshed=repo.get_order(tenant,order.id)
+    assert refreshed.status=="partially_delivered"
+    assert refreshed.lines[0].fulfillment_status=="delivered" and refreshed.lines[1].fulfillment_status=="pending"
+    assert refreshed.actual_cost==Decimal("40.00") and refreshed.actual_margin==Decimal("86.6667")
+
+
 def test_cancel_and_delivery_confirmation_cannot_claim_same_order(context):
     repo,tenant=context
     created=repo.create_customer(tenant,customer_payload(),worker(),"customer-race-key","customer-race-hash","usr_test")
-    product=schemas.ProductReference(id="srv_race",code="SERV-RACE",name="Servicio Carrera",type="service",base_unit="HUR",status="active",target_price=100,standard_cost=50)
-    quote_input=schemas.QuoteCreateRequest(code="COT-RACE",customer_id=created.id,valid_until=date.today()+timedelta(days=15),lines=[{"product_service_id":"srv_race","quantity":Decimal("1"),"unit":"HUR","unit_price":Decimal("100")}])
-    lines=[schemas.ResolvedQuoteLine(product=product,quantity=Decimal("1"),unit="HUR",unit_price=Decimal("100"),discount_percentage=Decimal("0"))]
+    product=schemas.ProductReference(id="prd_race",code="PROD-RACE",name="Producto Carrera",type="product",base_unit="H87",status="active",target_price=100,standard_cost=50,inventory_item_id="itm_race")
+    quote_input=schemas.QuoteCreateRequest(code="COT-RACE",customer_id=created.id,valid_until=date.today()+timedelta(days=15),lines=[{"product_service_id":"prd_race","quantity":Decimal("1"),"unit":"H87","unit_price":Decimal("100")}])
+    lines=[schemas.ResolvedQuoteLine(product=product,quantity=Decimal("1"),unit="H87",unit_price=Decimal("100"),discount_percentage=Decimal("0"))]
     quote=repo.create_quote(tenant,quote_input,created,worker(),lines,"quote-race-key","quote-race-hash","usr_test")
     repo.transition_quote(tenant,quote.id,"quoted","submit-race-key","submit-race-hash","usr_test")
     approved=repo.transition_quote(tenant,quote.id,"approved","approve-race-key","approve-race-hash","usr_test")
     order=repo.create_order(tenant,schemas.SalesOrderCreateRequest(code="PED-RACE",quote_id=approved.id),approved,"order-race-key","order-race-hash","usr_test")
-    delivery=repo.create_delivery(tenant,schemas.DeliveryCreateRequest(code="ENT-RACE",order_id=order.id,scheduled_date=date.today(),lines=[{"order_line_id":order.lines[0].id,"quantity":Decimal("1"),"actual_unit_cost":Decimal("40")}]),"delivery-race-key","delivery-race-hash","usr_test")
+    fulfillment=schemas.SalesOrderFulfillmentRequest(lines=[{"order_line_id":order.lines[0].id,"mode":"stock","allocations":[{"inventory_item_id":"itm_race","warehouse_id":"wh_race","quantity":Decimal("1")}]}])
+    repo.prepare_order_fulfillment(tenant,order.id,fulfillment,"fulfill-race-key","fulfill-race-hash")
+    order=repo.configure_order_fulfillment(tenant,order.id,[{"order_line_id":order.lines[0].id,"mode":"stock","inventory_item_id":"itm_race","inventory_item_code":"ART-RACE","inventory_item_name":"Articulo Carrera","reservations":[{"id":"rsv_race","warehouse_id":"wh_race","quantity":Decimal("1"),"unit_cost_snapshot":Decimal("40") }]}],"fulfill-race-key","fulfill-race-hash","usr_test")
+    delivery=repo.create_delivery(tenant,schemas.DeliveryCreateRequest(code="ENT-RACE",order_id=order.id,scheduled_date=date.today(),lines=[{"order_line_id":order.lines[0].id,"quantity":Decimal("1")}]),"delivery-race-key","delivery-race-hash","usr_test")
+    with pytest.raises(ValueError,match="delivery_quantity_exceeds_uncommitted"):
+        repo.create_delivery(tenant,schemas.DeliveryCreateRequest(code="ENT-RACE-2",order_id=order.id,scheduled_date=date.today(),lines=[{"order_line_id":order.lines[0].id,"quantity":Decimal("1")}]),"delivery-over-key","delivery-over-hash","usr_test")
 
     def claim_cancel():
         try:

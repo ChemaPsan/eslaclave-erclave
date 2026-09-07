@@ -1,72 +1,117 @@
 # Manual funcional de Almacenes e Inventarios
 
-- Audiencia: almacenistas, supervisores y planeadores
+- Audiencia: almacenistas, supervisores, planeadores y responsables de recepción
 - Alcance por ambiente: Local y QA
-- Ultima revision: 2026-08-24
-- Capacidades cubiertas: articulos, costo unitario, conversiones y vinculo con Produccion
+- Última revisión: 2026-09-06
+- Capacidades cubiertas: almacenes, artículos, movimientos, existencias, Kardex, reservas, valuación, recepciones de compra y producto terminado
 
-## Proposito
+## Propósito
 
-Almacenes conserva identidad logistica, unidad, costo y movimientos. Kardex y existencias son resultados, no campos editables.
+Almacenes e Inventarios es la autoridad de la existencia física. Los saldos y el Kardex se calculan a partir de movimientos inmutables; no son campos que se editen directamente.
 
-## Campos principales
+## Disponibilidad por ambiente
 
-| Campo | Significado |
+| Capacidad | Local | QA |
+|---|---|---|
+| Almacenes, artículos y movimientos | Disponible | Disponible |
+| Existencias, Kardex y valuación promedio | Disponible | Disponible |
+| Reservas/consumos de Producción, Ventas y Mantenimiento | Disponible | Disponible |
+| Recepción de compras inventariables | Disponible | Disponible |
+| Recepción de producto terminado | Disponible | Disponible |
+| Lotes, series, cuarentena y ubicaciones operativas | No disponible | No disponible |
+
+## Mapa del módulo
+
+- **Almacenes:** maestros de ubicación y tipo operativo.
+- **Artículos:** identidad logística, unidad, costo y elegibilidad.
+- **Movimientos:** entradas, salidas, ajustes, reversas y recepciones especializadas.
+- **Inventario:** existencias calculadas por artículo y almacén.
+- **Kardex:** historia cronológica y valuada.
+- **Portada:** reportes estándar de sólo lectura.
+
+## Conceptos y campos principales
+
+| Campo o concepto | Significado |
 |---|---|
-| Codigo | Identidad logistica; puede venir de Administracion. |
-| Unidad base | Unidad en que se controla el articulo. |
-| Costo unitario base | Costo manual de un kg, L, pieza u otra unidad base. |
-| Usar en receta | Hace elegible el articulo como material. |
-| Producto terminado | Puede vincularse por ID a un producto comercial. |
+| Código | Identidad logística estable; puede asignarse mediante Administración. |
+| Unidad base | Unidad en la que se interpreta toda la historia del artículo. |
+| Costo unitario base | Referencia manual; la valuación promedio usa movimientos con costo cuando existen. |
+| Usar en receta | Permite seleccionar el artículo como material productivo. |
+| Producto terminado | Vínculo por ID con un producto comercial de Producción. |
+| Existencia | Cantidad física calculada. |
+| Reservado | Cantidad apartada por documentos operativos. |
+| Disponible | Existencia menos reservas vigentes. |
 
-## Crear o editar
+## Acceso y permisos
 
-1. Seleccione tipo, unidad y almacen sugerido.
-2. Capture el costo por una unidad base, no por otra presentacion.
-3. Marque **Usar en receta** solo si se consumira como material.
-4. Para producto terminado, seleccione opcionalmente el producto de Produccion. El nombre logistico puede diferir del comercial.
-5. Si el articulo se crea pero el vinculo falla, reintente sin duplicarlo.
+Los permisos distinguen lectura, alta, modificación, reversa, reserva y recepciones especializadas. `inventory.movement.create` no concede `inventory.finished_goods_receipt.receive`. Compras y Mantenimiento utilizan permisos propios para solicitar operaciones limitadas; no reciben escritura general sobre Inventario.
 
-La unidad base debe pertenecer al catalogo activo de Administracion. Cuando un articulo ya tiene movimientos o reservas, la unidad no puede cambiarse porque alteraria la interpretacion de su historia. Los alias heredados reconocidos por Administracion (`LTS` como `LTR` y `MT` como `MTR`) se normalizan sin cambiar cantidades, costo ni identidad. Para cualquier cambio real de unidad, cree un articulo sustituto y regularice las existencias mediante movimientos autorizados.
+## Crear un almacén o artículo
 
-## Consultar inventario
+1. Cree el almacén con código, nombre, tipo y estado.
+2. Para refacciones, use el tipo estable **Refacciones**; Mantenimiento sólo ofrece almacenes de ese tipo.
+3. Cree el artículo con tipo, unidad base, costo y almacén sugerido.
+4. Active **Usar en receta** sólo cuando sea material productivo.
+5. Para producto terminado, vincúle el producto de Producción por su identidad estable.
 
-Los filtros de articulo, almacen y otras entidades son buscables. Al abrir un selector se muestra el catalogo disponible; escriba codigo, nombre u otro dato visible para reducir resultados. Elegir **Todos los almacenes** quita el filtro. La tabla sigue siendo la fuente de existencias calculadas por articulo y almacen.
+La unidad debe existir y estar activa en Administración. Si el artículo ya tiene movimientos o reservas, no puede cambiarse a una unidad diferente. Los alias heredados administrados `LTS -> LTR` y `MT -> MTR` se normalizan sin alterar cantidades. Para un cambio real cree un artículo sustituto y regularice mediante movimientos autorizados.
 
-## Conversiones
+## Registrar y consultar movimientos
 
-Solo se convierten unidades activas, de la misma categoria y con factor estandar. Si un kg cuesta 80, un gramo cuesta 0.08. Si un litro cuesta 50, un mililitro cuesta 0.05.
+1. Abra **Movimientos** y elija el tipo permitido.
+2. Seleccione artículo y almacén mediante los buscadores.
+3. Capture cantidad, fecha, costo cuando aplique y referencia del documento.
+4. Confirme. La operación actualiza existencia y Kardex de forma atómica.
+5. Si un movimiento fue incorrecto, use la reversa autorizada; no edite ni borre la historia.
 
-Cajas, paquetes y unidades personalizadas no se convierten automaticamente porque requieren una equivalencia empresarial futura.
+Use **Inventario** para consultar saldos y **Kardex** para explicar cómo se formaron. Los filtros muestran resultados acotados y conservan los IDs aunque el nombre visible cambie.
 
-## Reglas e integraciones
+## Reservas y consumos
 
-Produccion usa el costo unitario base para estimar materiales. Los movimientos con costo construyen valuacion promedio; el costo manual es fallback sin saldo valuado. Compras actualizara el dato desde adquisiciones en un corte futuro. Produccion es propietaria del vinculo producto-articulo.
+Una reserva reduce disponible, no existencia. El consumo convierte la reserva en salida inmutable. Producción consume al iniciar, Ventas al confirmar una entrega, Mantenimiento al resolver con refacciones y Compras crea entradas al recibir partidas inventariables. Las claves idempotentes evitan duplicar movimientos en un reintento.
 
-Una orden liberada crea reservas y reduce la cantidad disponible, no la existencia fisica. La primera entrada de la orden a **En produccion** consume esas reservas y registra una salida inmutable en el almacen que suministro cada material. Reanudar o terminar la orden no vuelve a descontar. Cancelar antes de iniciar libera las reservas; cancelar despues conserva las salidas ya registradas. No registre una salida manual duplicada para el mismo consumo.
+## Recibir una compra inventariable
+
+Compras conserva proveedor, orden y recepción comercial. Inventario valida artículo, unidad, almacén y cantidad antes de crear la entrada. Si una recepción multipardida falla parcialmente, los movimientos ya confirmados permanecen y Compras reintenta sólo las líneas pendientes. Las compras de servicios no generan movimientos de Inventario.
 
 ## Recibir producto terminado
 
-En Local, consultar pendientes exige `inventory.finished_goods_receipt.read` y confirmar la recepcion fisica exige `inventory.finished_goods_receipt.receive`. El permiso general para crear movimientos no habilita esta accion. Produccion entrega exclusivamente folio, producto vinculado, cantidad, unidad, estado terminado y costo unitario para valuacion; el rol receptor no obtiene la receta, recursos, responsable ni costos totales. Esto permite reservar la confirmacion al rol de almacen definido por cada tenant.
+1. Confirme que la orden de Producción esté **Terminada** y el producto tenga artículo terminado vinculado.
+2. Abra **Movimientos > Entradas de producción terminada**.
+3. Revise folio, producto, unidad y cantidad pendiente.
+4. Seleccione almacén, capture la cantidad físicamente recibida, fecha y observaciones.
+5. Confirme la entrada.
 
-1. Confirme en Produccion que la orden ya esta **Terminada** y que su producto esta vinculado con un articulo activo de tipo producto terminado.
-2. Abra **Almacenes > Movimientos**. En **Entradas de produccion terminada** se muestran las ordenes con cantidad pendiente de recibir.
-3. Pulse **Recibir producto terminado**.
-4. Valide el almacen de destino, capture la cantidad fisicamente recibida, fecha y observaciones.
-5. Confirme la entrada. El sistema crea un movimiento ligado a la orden y actualiza existencia, Kardex y cantidad pendiente.
+Se permiten recepciones parciales y nunca puede superarse lo producido. Una reversa vuelve a incrementar el pendiente. El rol receptor sólo ve la proyección necesaria; no recibe receta, recursos ni costos completos de Producción.
 
-Se permiten recepciones parciales. La suma nunca puede exceder la cantidad terminada; una orden totalmente recibida deja de aparecer como pendiente. El articulo, la unidad y el costo se derivan de maestros y de la orden, no se capturan manualmente. El costo unitario usa el costo real disponible de la orden dividido entre la cantidad producida y, si aun no existe, su costo planeado. Una recepcion reversada vuelve a dejar cantidad pendiente.
+## Conversiones y costos
+
+Sólo se convierten unidades activas de la misma categoría con factor estándar. Cajas, paquetes y presentaciones empresariales requieren equivalencias futuras. El costo manual funciona como referencia cuando no existe saldo valuado; los movimientos con costo construyen el promedio. La política para actualizar costo base desde Compras sigue pendiente.
 
 ## Mensajes frecuentes
 
-- **Unidad incompatible:** seleccione una unidad de la misma categoria.
-- **La unidad base no puede cambiar:** el articulo tiene movimientos o reservas. Si no es un alias administrado, use un articulo sustituto y regularice existencias.
-- **Conversion no soportada:** use la unidad base o configure una equivalencia futura.
-- **Articulo creado; vinculo pendiente:** reintente el vinculo, no cree otro articulo.
-- **La orden no esta terminada:** complete y valide primero el flujo de Produccion.
-- **Falta vinculo de producto terminado:** vincule el producto comercial con un articulo logistico activo.
-- **La cantidad excede lo pendiente:** capture solo el saldo fisicamente pendiente de recibir.
+- **Unidad incompatible:** seleccione una unidad activa de la misma categoría.
+- **La unidad base no puede cambiar:** proteja la historia y use un artículo sustituto.
+- **Existencia insuficiente:** revise saldo, reservas concurrentes y almacén.
+- **Movimiento duplicado:** reintente con la misma operación; no capture otra salida o entrada.
+- **Falta vínculo de producto terminado:** relacione el producto con un artículo activo.
+- **La cantidad excede lo pendiente:** capture sólo el saldo físicamente recibido.
+- **Crea primero un almacén de refacciones:** registre o active uno de tipo `spare_parts`.
 
-## Cobertura
+## Integraciones y propiedad del dato
 
-Revisado con especialistas de Inventarios, Produccion y Ventas. Lotes, series y equivalencias de empaque quedan fuera del corte.
+Producción solicita reservas, consumos y candidatos de producto terminado; Ventas solicita reservas y consumos para entregas; Compras solicita entradas de recepción; Mantenimiento reserva y consume refacciones. Inventario decide la validez física y conserva el movimiento, costo y Kardex. Ningún consumidor escribe sus tablas.
+
+## Reportes estándar de portada (Local)
+
+La portada genera reportes descargables de almacenes, artículos, saldos de inventario, movimientos/Kardex y críticos con reservas superiores a la existencia. Abra una tarjeta, seleccione los filtros mínimos disponibles y pulse **Generar**. Puede escribir para encontrar tipo, categoría, estatus, condición o movimiento; la búsqueda general acepta texto libre y el periodo usa fechas. Un resultado vacío se informa sin crear archivo.
+
+La descarga usa los permisos existentes `inventory.warehouse.read`, `inventory.item.read`, `inventory.balance.read` o `inventory.kardex.read`. Los reportes operan sólo en Local en este corte y consultan exclusivamente datos propiedad de Inventario.
+
+## Limitaciones vigentes
+
+No incluye lotes, series, cuarentena, inventario bloqueado o en tránsito, ubicaciones operativas detalladas, equivalencias de empaque ni recepción de merma. El catálogo de artículos requiere evolución server-side antes de volúmenes muy altos.
+
+## Soporte
+
+Conserve código de artículo, almacén, referencia documental, fecha y correlación. No modifique la base ni cree movimientos compensatorios improvisados para ocultar una conciliación pendiente.

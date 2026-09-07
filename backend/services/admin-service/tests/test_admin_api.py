@@ -606,6 +606,10 @@ class FakeAdminRepositoryWithPolicyPermission(FakeAdminRepository):
     session_permissions = ["admin.tenant.read", "internal.policy.evaluate", "production.product_service.read"]
 
 
+class FakeAdminRepositoryWithPurchasingUnitConsumer(FakeAdminRepository):
+    session_permissions = ["purchasing.requisition.create"]
+
+
 class FakeAdminRepositoryWithModuleDependencyError(FakeAdminRepository):
     def set_backoffice_entitlement(self, *args, **kwargs):
         raise ValueError("module_dependencies_required:hr,production")
@@ -652,6 +656,22 @@ def test_unit_catalog_rejects_unknown_active_code():
     response = client_with_fake_repo().get("/v1/catalogs/units-of-measure/by-code/NOPE", headers={"X-Tenant-Id": TENANT_ID})
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "unit_of_measure_not_found"
+
+
+def test_unit_catalog_allows_purchasing_command_permission_as_consumer():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepositoryWithPurchasingUnitConsumer()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-purchasing", email="admin.qa@erclave.local", name="Purchasing user"
+    )
+
+    response = TestClient(app).get(
+        "/v1/catalogs/units-of-measure/by-code/H87",
+        headers={"X-Tenant-Id": TENANT_ID, "Authorization": "Bearer local-test"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["code"] == "H87"
 
 
 def test_unit_catalog_create_requires_idempotency_key():
@@ -1006,7 +1026,7 @@ def test_backoffice_lists_module_catalog_with_runtime_status():
     assert modules["sales"]["dependencies"] == ["hr", "production"]
     assert modules["purchasing"]["implementation_status"] == "implemented"
     assert modules["purchasing"]["owner_service"] == "purchasing-service"
-    assert modules["purchasing"]["dependencies"] == ["inventory"]
+    assert modules["purchasing"]["dependencies"] == []
     assert modules["maintenance"]["implementation_status"] == "implemented"
     assert modules["maintenance"]["owner_service"] == "maintenance-service"
     assert modules["maintenance"]["dependencies"] == ["hr", "inventory"]
@@ -1082,7 +1102,7 @@ def test_backoffice_enables_implemented_maintenance_module():
     assert response.json()["data"]["module_code"] == "maintenance"
 
 
-def test_backoffice_enables_purchasing_when_inventory_dependency_is_active():
+def test_backoffice_enables_service_only_purchasing_without_inventory_dependency():
     response = client_with_fake_repo().put(
         f"/v1/backoffice/tenants/{TENANT_ID}/entitlements/purchasing",
         headers={"Idempotency-Key": "test-purchasing-entitlement-implemented"},

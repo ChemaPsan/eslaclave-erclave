@@ -1,7 +1,8 @@
-import { apiRequestAt } from "./client.js";
+import { apiDownloadAt, apiRequestAt } from "./client.js";
 import { getDemoTenantId,getHrApiBaseUrl } from "./config.js";
 function headers(command=false){const id=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;return {"X-Tenant-Id":getDemoTenantId(),"X-Correlation-Id":`web-${id}`,...(command?{"Idempotency-Key":`web-${id}`}:{})};}
 function request(path,options={}){return apiRequestAt(getHrApiBaseUrl(),path,{...options,headers:{...headers(Boolean(options.method&&options.method!=="GET")),...(options.headers||{})}},"HR API");}
+export function downloadHrReport(code,filters={}){const query=new URLSearchParams();Object.entries(filters).forEach(([key,value])=>{if(value!==undefined&&value!==null&&value!==""&&value!=="all")query.set(key,String(value));});return apiDownloadAt(getHrApiBaseUrl(),`/v1/hr/reports/${encodeURIComponent(code)}/export?${query}`,{headers:headers()},"HR API");}
 export async function getHrCatalog(filters={}){const query=new URLSearchParams();Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=="")query.set(k,String(v));});const [areas,positions]=await Promise.all([request("/v1/hr/areas"),request(`/v1/hr/positions?${query}`)]);return {areas:areas.data,positions:positions.data};}
 export async function getHrAreas(){return (await request("/v1/hr/areas")).data;}
 export async function createHrArea(payload){return (await request("/v1/hr/areas",{method:"POST",body:JSON.stringify(payload)})).data;}

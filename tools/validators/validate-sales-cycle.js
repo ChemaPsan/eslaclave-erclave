@@ -5,18 +5,18 @@ const checks = {
   "backend/alembic/versions/20260818_0019_sales_orders_deliveries_catalogs.py": ["admin.catalog_items", "sales.orders", "sales.order_lines", "sales.deliveries", "sales_order_requests", "schema=\"production\"", "document.template"],
   "backend/alembic/versions/20260818_0020_sales_chg203_hardening.py": ["inventory_item_ref_id", "for column in (\"fulfillment\", \"cancellation\")", "f\"{column}_state\"", "confirmation_state", "actual_cost_source", "needs_reconciliation"],
   "backend/services/sales-service/app/api.py": ["active_customer_required", "quote_unit_mismatch", "sales.quote.submit", "sales.quote.approve", "sales.order.fulfill", "sales.delivery.confirm", "product_inventory_mapping_mismatch", "mark_fulfillment_reconciliation"],
-  "backend/services/sales-service/app/repositories.py": ["class SalesRepository", "prepare_order_fulfillment", "prepare_cancel_order", "prepare_delivery_confirmation", "delivery_quantity_exceeds_uncommitted", "service_actual_cost_required", "inventory_consumption", "on conflict(tenant_id,operation,idempotency_key) do nothing"],
-  "backend/services/sales-service/tests/test_sales_repository_integration.py": ["ERCLAVE_TEST_DATABASE_URL", "service_actual_cost_required", "test_fulfillment_claim_is_exclusive", "test_cancel_and_delivery_confirmation_cannot_claim_same_order", "delivery_quantity_exceeds_uncommitted"],
+  "backend/services/sales-service/app/repositories.py": ["class SalesRepository", "prepare_order_fulfillment", "prepare_cancel_order", "prepare_delivery_confirmation", "delivery_quantity_exceeds_uncommitted", "service_order_cost_required", "service_line_requires_service_order", "inventory_consumption", "on conflict(tenant_id,operation,idempotency_key) do nothing"],
+  "backend/services/sales-service/tests/test_sales_repository_integration.py": ["ERCLAVE_TEST_DATABASE_URL", "service_order_cost_required", "service_order_reason_required", "service_line_requires_service_order", "test_fulfillment_claim_is_exclusive", "test_cancel_and_delivery_confirmation_cannot_claim_same_order", "delivery_quantity_exceeds_uncommitted"],
   "backend/services/sales-service/app/authorities.py": ["/v1/hr/workers/sales-eligible", "/v1/production/product-services/", "/v1/catalogs/units-of-measure/by-code/", "/v1/inventory/reservations", "/v1/production/order-requests"],
   "frontend/api/sales.js": ["createSalesCustomer", "createSalesQuote", "submitSalesQuote", "approveSalesQuote", "createSalesOrder", "configureSalesOrderFulfillment", "createSalesDelivery", "confirmSalesDelivery"],
-  "frontend/app.js": ["loadSalesApiData", "Promise.allSettled", "renderSalesReferenceWarnings", "register-sales-delivery", "committedByLine", "deliveryActualCost-", "escapeAttribute(record.id)", "inventoryItemId", "isSalesProductServiceEligible", "getDocumentBranding", "getSalesDocumentMatches", "orderLookupPlaceholder", "quoteLookupPlaceholder", "name=\"deliveryDate\""],
+  "frontend/app.js": ["loadSalesApiData", "Promise.allSettled", "renderSalesReferenceWarnings", "register-sales-delivery", "committedByLine", "productServiceType!==\"service\"", "serviceOrderCostForm", "serviceOrderActual", "escapeAttribute(record.id)", "inventoryItemId", "isSalesProductServiceEligible", "getDocumentBranding", "getSalesDocumentMatches", "orderLookupPlaceholder", "quoteLookupPlaceholder", "name=\"deliveryDate\""],
   "backend/services/admin-service/app/seeds/catalog.py": ["dependencies=(\"hr\", \"production\")"],
   "backend/services/admin-service/app/repositories.py": ["_validate_module_transition", "module_dependencies_required", "module_dependency_in_use", "insert into admin.role_permissions", "list_catalog_items", "upsert_setting"],
   "frontend/backoffice/app.js": ["dependencies: [\"hr\", \"production\"]", "selectedModuleCodes", "dependencyBlocked"],
-  "contracts/api/sales-service.openapi.yaml": ["version: 0.5.0", "/v1/sales/customers", "/v1/sales/quotes", "/v1/sales/orders", "/v1/sales/deliveries", "confirmation_state", "actual_cost_source"],
+  "contracts/api/sales-service.openapi.yaml": ["version: 0.6.0", "/v1/sales/customers", "/v1/sales/quotes", "/v1/sales/orders", "/v1/sales/deliveries", "/v1/sales/service-orders", "confirmation_state", "actual_cost_source", "sales.service_order.accept"],
   "contracts/api/admin-service.openapi.yaml": ["/v1/catalogs/commercial/{catalog_code}", "/v1/document-template"],
   "contracts/api/production-service.openapi.yaml": ["/v1/production/order-requests", "x-implementation-status: implemented"],
-  "modulos/04_ventas_clientes.md": ["### Pedidos, surtido y entregas", "## Resultado de auditoria CHG-203", "Devoluciones permanecen `planned`", "20260818_0020"],
+  "modulos/04_ventas_clientes.md": ["### Pedidos, surtido y entregas", "### Ordenes de servicio CHG-255", "## Resultado de auditoria CHG-203", "Devoluciones permanecen `planned`", "20260901_0030", "20260825_0029"],
   "docs/auditorias/ventas_segundo_corte_2026-08-18.md": ["## Cierre del plan CHG-203", "## Bloqueadores encontrados por CHG-203", "Orquestacion distribuida", "Producto de Ventas -> Articulo de Inventory", "Contenido comercial sin escape consistente"]
 };
 const errors=[];
@@ -44,7 +44,7 @@ for (const forbidden of ["mockDb.addModuleRecord", "saveGenericRecordForm", 'dat
   if (marginPanel.includes(forbidden)) errors.push(`Sales Margin must remain read-only and cannot contain ${forbidden}.`);
 }
 const salesModuleDoc = readText("modulos/04_ventas_clientes.md");
-if (!/\| QA \|[^\n]*sales-service[^\n]*20260821_0023/i.test(salesModuleDoc)) errors.push("Sales module environment table must reflect the deployed QA service and revision 20260821_0023.");
+if (!/\| QA \|[^\n]*sales-service[^\n]*20260825_0029/i.test(salesModuleDoc)) errors.push("Sales module environment table must reflect the deployed QA service and revision 20260825_0029.");
 const salesManifest = readText("frontend/microfrontends/ventas/manifest.js");
 if (!salesManifest.includes('"/ventas/margen"')) errors.push("Sales manifest must expose the implemented read-only Margin route.");
 if(errors.length)fail("sales cycle validation failed",errors);else ok("Sales baseline and CHG-203 correction guardrails are documented and wired.");

@@ -1,10 +1,19 @@
 import hashlib,json
+from typing import Literal
 from fastapi import APIRouter,Depends,Header
 from erclave_common.errors import ErclaveError
+from erclave_common.csv_reports import csv_report_response
 from .authorization import AuthorizedContext,require_hr_access
 from .repositories import HrRepository,get_hr_repository
+from .reports import REPORT_PERMISSIONS,build_report
 from .schemas import *
 router=APIRouter(prefix="/v1/hr",tags=["hr"])
+@router.get("/reports/{report_code}/export")
+def export_report(report_code:str,lang:Literal["es","en"]="es",status:str|None=None,area_id:str|None=None,position_id:str|None=None,eligibility:str|None=None,purpose:str|None=None,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:HrRepository=Depends(get_hr_repository),access:AuthorizedContext=Depends(require_hr_access(tuple(REPORT_PERMISSIONS.values())))):
+    permission=REPORT_PERMISSIONS.get(report_code)
+    if not permission:raise ErclaveError("report_not_found","HR report does not exist.",status_code=404)
+    access.require(permission)
+    return csv_report_response(build_report(repository,tenant(x_tenant_id),report_code,{"status":status,"area_id":area_id,"position_id":position_id,"eligibility":eligibility,"purpose":purpose}),lang)
 def tenant(v):
     if not v:raise ErclaveError("tenant_required","X-Tenant-Id header is required.",status_code=400)
     return v

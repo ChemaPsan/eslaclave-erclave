@@ -8,8 +8,8 @@ Ventas conecta la relacion comercial con los maestros autoritativos de ERClave. 
 
 | Ambiente | Alcance comprobado |
 |---|---|
-| Local | API, schema `sales`, migraciones hasta `20260818_0020`, permisos, UI, idempotencia, auditoria y pruebas negativas/concurrentes para Clientes, Cotizaciones, Pedidos y Entregas. |
-| QA | `sales-service` desplegado dentro del candidato de cinco servicios; cadena comun aplicada hasta `20260821_0023`. La disponibilidad efectiva depende del entitlement del tenant y de RH/Produccion. |
+| Local | API, schema `sales` y migracion `20260901_0030` aplicados y certificados para Clientes, Cotizaciones, Pedidos, Ordenes de servicio y Entregas, con permisos, idempotencia, auditoria y pruebas de integracion. |
+| QA | `sales-service` desplegado dentro del release de siete servicios; cadena comun aplicada hasta `20260825_0029`. CHG-255 permanece solo en codigo Local hasta un candidato posterior. La disponibilidad efectiva depende del entitlement del tenant y de RH/Produccion. |
 | Produccion | No aprovisionado. |
 
 Devoluciones permanecen `planned`. Pedidos y Entregas ya no escriben mock cuando la interfaz opera en modo API.
@@ -32,6 +32,14 @@ El detalle, evidencia y criterios de cierre viven en [`docs/auditorias/ventas_se
 - La captura de Entrega solicita siempre fecha programada, destinatario, referencia, notas y cantidades, tanto en modo API como en la experiencia local.
 - La seleccion de Cotizacion para crear Pedido busca por folio, cliente, producto/servicio o importe y muestra solo aprobadas no utilizadas.
 - La seleccion de Pedido para crear Entrega busca por folio, cliente, producto/servicio o estado y muestra solo documentos con partidas entregables.
+
+### Ordenes de servicio CHG-255
+
+- Confirmar un Pedido crea una orden de servicio por cada partida `service`, con folio administrado y snapshots del pedido, cliente y servicio. Un reintento no duplica la orden porque la partida es unica por tenant.
+- El ciclo es `draft -> planned -> assigned -> in_progress -> on_hold -> in_progress -> pending_acceptance -> accepted`; cancelar es una transicion terminal autorizada por separado.
+- Planear conserva fechas y notas; asignar y registrar tiempo validan trabajadores activos mediante la proyeccion minima de RH. Sales guarda IDs externos y snapshots, sin FK ni escritura en `hr`.
+- Tiempo, costos y evidencia son registros auditables propios de Sales. La aceptacion exige ejecucion iniciada, al menos un registro de tiempo y nombre de quien acepta; el costo real se recalcula desde tiempos y costos trazables.
+- Las partidas de servicio no se surten, no aparecen en Entregas y no generan reservas, consumos ni movimientos de Inventory. Aceptar todas las ordenes de servicio puede completar esa parte del Pedido sin afirmar entrega fisica.
 
 ### Seleccion escalable de documentos
 
@@ -83,6 +91,8 @@ Clientes, cotizaciones, pedidos y entregas obtienen su codigo desde el catalogo 
 | `sales.orders`, `sales.order_lines` | Sales | Pedido, snapshots del articulo y estados durables de surtido/cancelacion originados en una cotizacion aprobada. |
 | `sales.order_line_reservations` | Sales | Referencias a reservas propiedad de Inventory y cantidades consumidas. |
 | `sales.deliveries`, `sales.delivery_lines` | Sales | Entregas parciales/totales, confirmacion durable, evidencia, costo real y procedencia. |
+| `sales.service_orders` | Sales | Ejecucion y aceptacion de cada partida de servicio confirmada. |
+| `sales.service_time_entries`, `sales.service_cost_entries`, `sales.service_evidence` | Sales | Tiempo, costos y evidencia trazables de la orden de servicio. |
 | `sales.idempotency_records` | Sales | Replay seguro por operacion y tenant. |
 | `sales.audit_events` | Sales | Evidencia de comandos y transiciones. |
 
@@ -95,6 +105,8 @@ RH, Produccion y Administracion conservan ownership de trabajadores, productos/s
 - `sales.quote.submit`, `sales.quote.approve`, `sales.quote.expire`, `sales.quote.cancel`.
 - `sales.order.read`, `sales.order.create`, `sales.order.fulfill`, `sales.order.cancel`.
 - `sales.delivery.read`, `sales.delivery.create`, `sales.delivery.confirm`, `sales.delivery.cancel`.
+- `sales.service_order.read`, `plan`, `assign`, `start`, `wait`, `resume`, `submit_acceptance`, `accept`, `cancel`.
+- `sales.service_order.time.create`, `sales.service_order.cost.create`, `sales.service_order.evidence.create`.
 
 Los endpoints de lectura reducida aceptan permisos de Ventas sin conceder acceso al expediente completo de RH ni escritura en otros dominios.
 

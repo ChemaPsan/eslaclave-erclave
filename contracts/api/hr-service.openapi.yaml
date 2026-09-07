@@ -12,6 +12,25 @@ tags:
   - name: Positions
   - name: Workers
 paths:
+  /v1/hr/reports/{report_code}/export:
+    get:
+      tags: [Reports]
+      operationId: exportHrStandardReport
+      summary: Export a fixed HR report as UTF-8 CSV without sensitive worker identifiers.
+      x-required-module: hr
+      x-permissions: [hr.position.read, hr.worker.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - { name: report_code, in: path, required: true, schema: { type: string } }
+        - { name: lang, in: query, schema: { type: string, enum: [es, en], default: es } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: purpose, in: query, schema: { type: string, enum: [production, maintenance, sales] } }
+        - { name: area_id, in: query, schema: { type: string } }
+        - { name: position_id, in: query, schema: { type: string } }
+        - { name: eligibility, in: query, schema: { type: string, enum: [production, maintenance] } }
+      responses:
+        '200': { description: CSV export. }
+        '204': { description: No rows matched the filters. }
   /v1/hr/areas:
     get:
       tags: [Areas]

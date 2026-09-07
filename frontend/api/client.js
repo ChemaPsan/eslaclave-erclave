@@ -87,7 +87,8 @@ export async function apiRequestAt(baseUrl, path, options = {}, apiLabel = "API"
     }
   }
 
-  const payload = await response.json().catch(() => null);
+  const expectsBlob = options.responseType === "blob";
+  const payload = expectsBlob && response.ok ? null : await response.json().catch(() => null);
   if (!response.ok) {
     const responseCorrelationId = response.headers.get("X-Correlation-Id") || "";
     const fallbackCode = ({
@@ -118,8 +119,18 @@ export async function apiRequestAt(baseUrl, path, options = {}, apiLabel = "API"
     throw new ErclaveApiError(normalizedPayload.error.message, response.status, normalizedPayload);
   }
 
+  if (expectsBlob) {
+    if (response.status === 204) return { empty: true, blob: null, filename: "" };
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || "report.csv";
+    return { empty: false, blob: await response.blob(), filename };
+  }
   return payload;
   } finally {
     if (isMutation) window.dispatchEvent(new CustomEvent(MUTATION_FINISHED_EVENT));
   }
+}
+
+export async function apiDownloadAt(baseUrl, path, options = {}, apiLabel = "API") {
+  return apiRequestAt(baseUrl, path, { ...options, method: "GET", responseType: "blob" }, apiLabel);
 }

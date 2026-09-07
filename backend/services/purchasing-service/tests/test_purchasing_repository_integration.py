@@ -26,6 +26,7 @@ def repository():
             connection.execute(text(f"delete from purchasing.{table} where tenant_id=:tenant"),{"tenant":tenant})
 
 def line(quantity="10",price=None):return schemas.PurchaseLineInput(line_type="inventory_item",inventory_item_id="itm_test",description="Material de prueba",quantity=quantity,unit_code="H87",unit_price=price)
+def service_line(quantity="1",price=None,description="Servicio especializado",unit="E48"):return schemas.PurchaseLineInput(line_type="service",description=description,quantity=quantity,unit_code=unit,unit_price=price)
 
 def supplier_payload(code,commercial_name,tax_id):
     return schemas.SupplierWrite(code=code,commercial_name=commercial_name,legal_name=f"{commercial_name} SA DE CV",tax_id=tax_id,tax_regime="601",billing_email=f"{code.lower()}@example.com",fiscal_postal_code="01234",currency="MXN",payment_terms="cash")
@@ -72,6 +73,14 @@ def test_requisition_rejects_duplicate_inventory_item():
     duplicate=line();duplicate.inventory_item_id="itm_same"
     with pytest.raises(ValidationError,match="duplicate_requisition_item"):
         schemas.RequisitionWrite(code="REQ-DUP",required_date=date.today(),lines=[duplicate,duplicate.model_copy()])
+
+def test_service_line_forbids_inventory_reference_and_normalizes_snapshot_fields():
+    with pytest.raises(ValidationError,match="service_inventory_item_forbidden"):
+        schemas.PurchaseLineInput(line_type="service",inventory_item_id="itm_forbidden",description="Servicio",quantity="1",unit_code="E48")
+    value=schemas.PurchaseLineInput(line_type="service",description="  Servicio de campo  ",quantity="1",unit_code=" e48 ")
+    assert value.inventory_item_id is None
+    assert value.description=="Servicio de campo"
+    assert value.unit_code=="E48"
 
 def test_supplier_fiscal_profile_is_editable_unique_per_tenant_and_normalized(repository):
     repo,tenant=repository
@@ -161,3 +170,70 @@ def test_requisition_can_be_cancelled_with_auditable_reason(repository):
     cancelled=repo.cancel_requisition(tenant,req["id"],"Solicitud duplicada","req-cancel-key","req-cancel","usr_test")
     assert cancelled["status"]=="cancelled"
     assert cancelled["cancellation_reason"]=="Solicitud duplicada"
+
+def test_service_requisition_order_and_partial_total_commercial_receipts(repository):
+    repo,tenant=repository;actor="usr_test"
+    supplier=repo.create_supplier(tenant,supplier_payload("PRV-SRV","Proveedor Servicios","PSR010101AA1"),"supplier-service-key","supplier-service",actor)
+    requested=service_line("3",description="Servicio de calibracion")
+    requisition=repo.create_requisition(tenant,schemas.RequisitionWrite(code="REQ-SRV",required_date=date.today(),lines=[requested]),"req-service-key","req-service",actor)
+    repo.transition_requisition(tenant,requisition["id"],"submitted",None,"submit-service-key","submit-service",actor)
+    requisition=repo.transition_requisition(tenant,requisition["id"],"approved",None,"approve-service-key","approve-service",actor)
+    ordered=service_line("3",price="850",description="Servicio de calibracion")
+    order=repo.create_order(tenant,schemas.PurchaseOrderWrite(code="OC-SRV",requisition_id=requisition["id"],supplier_id=supplier["id"],currency="MXN",payment_terms="cash",lines=[ordered]),"order-service-key","order-service",actor)
+    assert order["lines"][0]["line_type"]=="service"
+    assert order["lines"][0]["inventory_item_ref_id"] is None
+    assert order["lines"][0]["item_code_snapshot"] is None
+    assert order["lines"][0]["description"]=="Servicio de calibracion"
+    order=repo.issue_order(tenant,order["id"],"issue-service-key","issue-service",actor)
+
+    first_payload=schemas.ReceiptWrite(code="REC-SRV-1",purchase_order_id=order["id"],received_at=datetime.now(timezone.utc),lines=[schemas.ReceiptLineInput(order_line_id=order["lines"][0]["id"],quantity="1")])
+    first_receipt,first_plan=repo.prepare_receipt(tenant,first_payload,"receipt-service-1","receipt-service-1",actor)
+    assert first_plan[0]["warehouse_id"] is None
+    first=repo.complete_receipt(tenant,first_receipt,first_plan,[{"id":None}],"receipt-service-1",actor)
+    assert first["status"]=="completed"
+    assert first["lines"][0]["inventory_movement_ref_id"] is None
+    assert repo.get_order(tenant,order["id"])["status"]=="partially_received"
+    replay,replay_plan=repo.prepare_receipt(tenant,first_payload,"receipt-service-1","receipt-service-1",actor)
+    assert replay["id"]==first["id"] and replay_plan is None
+
+    second_payload=schemas.ReceiptWrite(code="REC-SRV-2",purchase_order_id=order["id"],received_at=datetime.now(timezone.utc),lines=[schemas.ReceiptLineInput(order_line_id=order["lines"][0]["id"],quantity="2")])
+    second_receipt,second_plan=repo.prepare_receipt(tenant,second_payload,"receipt-service-2","receipt-service-2",actor)
+    second=repo.complete_receipt(tenant,second_receipt,second_plan,[{"id":None}],"receipt-service-2",actor)
+    assert second["status"]=="completed"
+    final=repo.get_order(tenant,order["id"])
+    assert final["status"]=="received"
+    assert final["lines"][0]["received_quantity"]==3
+    assert repo.get_order(f"{tenant}_other",order["id"]) is None
+
+def test_service_receipt_rejects_warehouse_and_exact_order_drift(repository):
+    repo,tenant=repository;actor="usr_test"
+    supplier=repo.create_supplier(tenant,supplier_payload("PRV-SRV2","Proveedor Servicios Dos","PSD010101AA1"),"supplier-service2-key","supplier-service2",actor)
+    requested=service_line("2",description="Inspeccion")
+    requisition=repo.create_requisition(tenant,schemas.RequisitionWrite(code="REQ-SRV2",required_date=date.today(),lines=[requested]),"req-service2-key","req-service2",actor)
+    repo.transition_requisition(tenant,requisition["id"],"submitted",None,"submit-service2-key","submit-service2",actor)
+    requisition=repo.transition_requisition(tenant,requisition["id"],"approved",None,"approve-service2-key","approve-service2",actor)
+    drift=service_line("2",price="100",description="Inspeccion alterada")
+    with pytest.raises(ValueError,match="order_requisition_lines_mismatch"):
+        repo.create_order(tenant,schemas.PurchaseOrderWrite(code="OC-SRV2-BAD",requisition_id=requisition["id"],supplier_id=supplier["id"],currency="MXN",payment_terms="cash",lines=[drift]),"order-service2-bad","order-service2-bad",actor)
+    order=repo.create_order(tenant,schemas.PurchaseOrderWrite(code="OC-SRV2",requisition_id=requisition["id"],supplier_id=supplier["id"],currency="MXN",payment_terms="cash",lines=[service_line("2",price="100",description="Inspeccion")]),"order-service2","order-service2",actor)
+    order=repo.issue_order(tenant,order["id"],"issue-service2","issue-service2",actor)
+    invalid=schemas.ReceiptWrite(code="REC-SRV2",purchase_order_id=order["id"],received_at=datetime.now(timezone.utc),lines=[schemas.ReceiptLineInput(order_line_id=order["lines"][0]["id"],quantity="1",warehouse_id="wh_forbidden")])
+    with pytest.raises(ValueError,match="service_warehouse_not_allowed"):
+        repo.prepare_receipt(tenant,invalid,"receipt-service2","receipt-service2",actor)
+
+def test_mixed_receipt_completes_service_even_when_inventory_fails_first(repository):
+    repo,tenant=repository
+    lines=[line("1",price="10"),service_line("1",price="200")]
+    _,order=ready_order(repo,tenant,"MIXED",lines)
+    payload=schemas.ReceiptWrite(code="REC-MIXED",purchase_order_id=order["id"],received_at=datetime.now(timezone.utc),lines=[schemas.ReceiptLineInput(order_line_id=order["lines"][0]["id"],quantity="1",warehouse_id="wh_test"),schemas.ReceiptLineInput(order_line_id=order["lines"][1]["id"],quantity="1")])
+    receipt,plan=repo.prepare_receipt(tenant,payload,"receipt-mixed","receipt-mixed","usr_test")
+    failed=repo.complete_receipt(tenant,receipt,plan,[None,{"id":None}],"receipt-mixed","usr_test","inventory_unavailable")
+    assert failed["status"]=="needs_reconciliation"
+    assert [item["reconciliation_status"] for item in failed["lines"]]==["failed","completed"]
+    current=repo.get_order(tenant,order["id"])
+    assert [item["received_quantity"] for item in current["lines"]]==[0,1]
+    pending,retry_plan=repo.prepare_reconciliation(tenant,receipt["id"],"reconcile-mixed","reconcile-mixed","usr_test")
+    assert [item["line_type"] for item in retry_plan]==["inventory_item"]
+    completed=repo.complete_receipt(tenant,pending,retry_plan,[{"id":"mov_mixed"}],"reconcile-mixed","usr_test",operation="receipt.reconcile")
+    assert completed["status"]=="completed"
+    assert repo.get_order(tenant,order["id"])["status"]=="received"

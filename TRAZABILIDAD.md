@@ -4035,6 +4035,101 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Rollback | Revertir CHG-253 antes de construir. Si el release ya se ejecutara: restaurar revisiones y Hosting anteriores, desactivar entitlements nuevos y usar PITR/forward-fix para datos; no improvisar downgrade. |
 | Observaciones | Operacion `local-write`. No se publico rama ni PR, no se fusiono, no se accedio a QA, no se creo IAM, no se leyeron secretos, no hubo migracion, configuracion, seed, datos, revisiones, trafico ni frontend externo. |
 
+### CHG-254
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-02 |
+| Cambio | Cierre documental del release QA de siete servicios |
+| Autor | Codex |
+| Archivos | Estado y pendientes; frontera y diagrama de ambientes; indice y acta operativa; validadores de tooling, ambientes y agentes; trazabilidad |
+| Secciones | QA / Release / Compras / Mantenimiento / IAM / Cloud SQL / Cloud Run / Firebase Hosting / UAT |
+| Agentes consultados | Arquitectura SaaS, Seguridad/IAM/supply chain, QA/Release, Datos/Custodio DB, Arquitectura API y especialistas funcional/tecnico de Compras y Mantenimiento definidos en `AGENTES.md`. No hubo delegacion. |
+| Diagnostico | Las fuentes vivas aun describian la preparacion CHG-253 y un QA de cinco servicios, aunque el release gobernado ya habia promovido siete servicios y la revision `20260825_0029`. |
+| Descripcion | Se registra el SHA promovido, las ejecuciones, aprobaciones, IAM minimo, migracion, incidente `actAs`, reintento controlado y verificacion publica de los siete servicios y Firebase Hosting. La preparacion fechada permanece intacta como evidencia historica. Los guardrails aceptan CRLF en skills sin relajar el frontmatter y exigen la cabeza QA vigente. |
+| Motivo | Evitar drift entre el estado desplegado y la memoria persistente del proyecto antes de comenzar el siguiente corte Local. |
+| Impacto | Documentacion local del repositorio. Refleja escrituras QA ya autorizadas y ejecutadas durante el release; este cambio documental no realiza nuevas escrituras externas. |
+| APIs afectadas | Contratos modificados: ninguno. Endpoints verificados sin cambio: `GET /health`, `GET /ready` y `GET /version` de Admin, Produccion, Inventory, RH, Ventas, Compras y Mantenimiento. APIs no tocadas: todos los contratos y payloads funcionales. |
+| Validacion | Coherencia manual contra GitHub Actions `33470879111` y `33473077996`; frontend publico `HTTP 200`; 21 comprobaciones externas exitosas; `validate:documentation` y suite del repositorio ejecutadas para el cierre local. |
+| Rollback | Revertir exclusivamente CHG-254 para restaurar la documentacion anterior; no revierte el release ni modifica QA. Un rollback operativo de QA sigue el acta `docs/operaciones/resultado_release_qa_20260901.md`. |
+| Observaciones | Operacion actual `local-write` solo documental. El release previo si ejecuto IAM, migracion, configuracion estructural, revisiones, trafico y frontend con aprobaciones independientes; no ejecuto seeds ni copio datos funcionales Local. Produccion no fue modificada. |
+
+### CHG-255
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-02 |
+| Cambio | Ordenes de servicio en Ventas y compras de servicios sin dependencia obligatoria de Inventory |
+| Autor | Codex |
+| Archivos | Migracion `20260901_0030`; Admin, Sales, Purchasing e Inventory; contratos OpenAPI; frontend Ventas/Backoffice; permisos, catalogos, i18n, estilos, pruebas, fichas funcionales, estado, pendientes, decisiones y handoff `docs/contexto/REANUDACION_CHG255.md` |
+| Secciones | Ventas / Pedidos / Ordenes de servicio / Compras / Recepciones / Admin / RH / Inventory / Local |
+| Agentes consultados | Especialistas funcional y tecnico de Ventas; especialistas funcional y tecnico de Compras; Arquitectura SaaS, Datos/Persistencia, Seguridad/IAM, Arquitectura API, frontend/i18n y QA/documentacion definidos en `AGENTES.md`. No hubo delegacion. |
+| Diagnostico | Las partidas de servicio se marcaban listas dentro del Pedido, pero no tenian documento de ejecucion, responsable, tiempo, costo, evidencia ni aceptacion. Compras declaraba Inventory como dependencia total aunque una recepcion de servicio no produce movimiento fisico. |
+| Descripcion | Confirmar un Pedido crea una Orden de servicio unica por partida. Sales implementa planeacion, asignacion RH, tiempos, costos, evidencia y transiciones hasta aceptacion con permisos derivados, locks, idempotencia y auditoria; Entregas excluye servicios. Compras valida unidades con Admin, admite partidas/recepciones de servicio sin articulo ni almacen y conserva Inventory como autoridad condicional de partidas inventariables. Se agrega la unidad estructural `E48` y el folio `sales.service_order`. |
+| Motivo | Separar cumplimiento de servicios de la logistica fisica y permitir el source-to-receipt comercial de servicios sin conceder ni exigir capacidades de Inventory que no aplican. |
+| Impacto | Codigo y documentacion Local. La migracion agrega tablas tenant-safe de ordenes, tiempos, costos y evidencia en `sales`; endurece discriminadores de partidas y nulabilidad de almacen en `purchasing`; agrega permisos, folio y unidad estructural idempotentes en Admin. QA permanece en `20260825_0029`; Produccion no fue modificada. |
+| APIs afectadas | Contratos modificados: Sales `GET /v1/sales/service-orders`, `GET /v1/sales/service-orders/{id}`, `POST /v1/sales/service-orders/{id}/plan`, `POST /v1/sales/service-orders/{id}/time-entries`, `POST /v1/sales/service-orders/{id}/cost-entries`, `POST /v1/sales/service-orders/{id}/evidence` y `POST /v1/sales/service-orders/{id}/transitions/{action}` con permisos `sales.service_order.*`; `POST /v1/sales/orders/{id}/fulfillment` retira el modo `service`. Purchasing conserva rutas y amplia payload/reglas de partidas y recepciones para `service`; Admin cambia dependencia declarada de `purchasing` y publica `E48`/permisos/folio; Inventory permite las proyecciones de articulo/almacen a permisos de Compras cuando Inventory este activo. Endpoints consumidos sin cambio: Admin unidades/folios, RH trabajadores activos e Inventory articulos/almacenes/recepcion de compra solo para `inventory_item`. APIs no tocadas: Production, Maintenance, Billing, Integration y Reporting. |
+| Validacion | `npm run verify` equivalente aprobado con runtime Node de VS Code y Python del entorno virtual: todos los validadores, compilacion backend y `239 passed` con PostgreSQL Local, sin skips. OpenAPI parseado y en paridad con FastAPI. Migracion certificada mediante `20260825_0029 -> 20260901_0030 -> 20260825_0029 -> 20260901_0030`; 10 recorridos focalizados de Ordenes de servicio y Compras de servicios aprobados. |
+| Rollback | Revertir codigo/contratos/UI y ejecutar el `downgrade()` solo en una base Local donde se haya aplicado y despues de comprobar que no existan recepciones de servicio incompatibles; en QA/Produccion no hay dato ni artefacto CHG-255 que revertir. |
+| Observaciones | Operacion `local-write` sobre archivos y `127.0.0.1:5434/erclave_local`, tenant autorizado `ten_739ee59d765d5e14818674800d`. PostgreSQL Local queda en `20260901_0030`; los datos transitorios de pruebas se limpiaron. No se uso Firebase, QA ni Produccion; no hubo deploy, trafico, PR ni publicacion. |
+
+### CHG-256
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-03 |
+| Cambio | Reportes operativos CSV con filtros basicos en portadas de modulo |
+| Autor | Codex |
+| Archivos | Infraestructura CSV compartida; `reports.py` y rutas de Produccion, Inventory, RH, Sales, Purchasing y Maintenance; clientes API, portada, modal y estilos frontend; seis contratos OpenAPI; pruebas, guardrail y documentacion viva |
+| Secciones | Reportes estandar / CSV / Produccion / Almacenes / RH / Ventas / Compras / Mantenimiento / Seguridad / ES-EN / Local |
+| Agentes consultados | Agentes y skills transversales de feature y fronteras de ambiente definidos en el repositorio; no hubo delegacion. |
+| Diagnostico | Las portadas ya enumeraban reportes estandar, pero las tarjetas no ejecutaban consultas ni descargas. El modulo Reportes permanece planeado para analitica avanzada, por lo que el corte operativo necesitaba una salida simple, segura y propiedad de cada servicio. |
+| Descripcion | Se habilitan 28 reportes de codigo fijo: 5 Produccion, 5 Inventory, 4 RH, 6 Sales, 4 Purchasing y 4 Maintenance. Cada tarjeta autorizada abre un modal bilingue con filtros minimos y descarga CSV UTF-8 con BOM; un conjunto vacio devuelve `204`. El backend entrega encabezados ES/EN, fechas ISO, numeros sin formato, limite de 50 000 filas y neutralizacion de formulas. |
+| Motivo | Dar utilidad inmediata a las portadas sin anticipar el constructor, cruces, graficas, PDF o XLSX del futuro modulo Reportes. |
+| Impacto | Codigo, contratos y documentacion solo en Local. Cada consulta permanece en el schema propietario, reutiliza permisos de lectura y minimiza PII. No hay migracion, seed, permiso nuevo, dato funcional, Firebase, despliegue ni escritura en QA/Produccion. |
+| APIs afectadas | Nuevos contratos `GET /v1/production/reports/{report_code}/export`, `/v1/inventory/reports/{report_code}/export`, `/v1/hr/reports/{report_code}/export`, `/v1/sales/reports/{report_code}/export`, `/v1/purchasing/reports/{report_code}/export` y `/v1/maintenance/reports/{report_code}/export`. Cada ruta selecciona el permiso exacto desde un catalogo fijo; respuestas `200 text/csv` o `204`. APIs no tocadas: Admin, Provisioning, Billing, Integration y el futuro Reporting. |
+| Validacion | `tools/verify.js` completo: todos los validadores, compilacion y `243 passed`; ademas, 28 consultas ejecutadas contra `127.0.0.1:5434/erclave_local` y seis recorridos HTTP in-process. Los seis Word abrieron y guardaron en Microsoft Word, actualizaron indice y pasaron integridad ZIP/XML/contenido; el render PNG no estuvo disponible por ausencia de `pdf2image` y LibreOffice. Las suites adicionales de Purchasing/Maintenance aprobaron 33 de 34 y conservaron un fallo previo de CHG-255 en conciliacion parcial (`pending` frente a `failed`), fuera del codigo de reportes. |
+| Rollback | Retirar rutas y `reports.py`, helper CSV, clientes/modal/tarjetas ejecutables, contratos y documentacion CHG-256. No existe schema ni dato que revertir. |
+| Observaciones | Operacion `local-write` sobre archivos y consultas de lectura a PostgreSQL Local para el tenant autorizado `ten_739ee59d765d5e14818674800d`. No se llamaron los servicios ya iniciados porque su URL generica podia apuntar a QA; las verificaciones HTTP se ejecutaron in-process forzando exclusivamente la URL Local. |
+
+### CHG-257
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-06 |
+| Cambio | Accion neutral y filtros buscables en reportes estandar |
+| Autor | Codex |
+| Archivos | Portada y modal frontend; validador de reportes; arquitectura, manuales funcionales, estado, pendientes y trazabilidad |
+| Secciones | Reportes estandar / UX / Filtros / ES-EN / Produccion / Almacenes / RH / Ventas / Compras / Mantenimiento / Local |
+| Agentes consultados | Skills transversales de feature y fronteras de ambiente definidas en el repositorio; no hubo delegacion. |
+| Diagnostico | La interfaz exponia repetidamente `CSV`, una decision tecnica que no ayuda a quien solo necesita generar el reporte. Los filtros opcionales de estatus, tipo y otros catalogos se presentaban como texto libre, permitiendo valores inexistentes y sin autocompletado. |
+| Descripcion | Las tarjetas, el modal y la confirmacion muestran **Generar** y **Reporte generado**. Estatus, prioridad, tipo, moneda, condicion, movimiento, elegibilidad, proposito y objetivo reutilizan el selector buscable; fechas usan control nativo, la busqueda general acepta texto y categoria ofrece sugerencias del tenant. Los catalogos se especializan por reporte y corrigen prioridad de Compras/Mantenimiento y objetivo de Mantenimiento conforme a sus schemas vigentes. |
+| Motivo | Reducir ruido tecnico y permitir que una palabra encuentre filtros validos sin sofisticar el flujo de reportes basicos. |
+| Impacto | Frontend, validadores y documentacion solo en Local. No cambia backend, contratos HTTP, persistencia, migraciones, seeds, permisos, datos ni ambientes remotos. El archivo descargado conserva el formato implementado en CHG-256. |
+| APIs afectadas | Contratos modificados: ninguno. Se conservan sin cambio los seis `GET /v1/{modulo}/reports/{report_code}/export`, sus parametros, permisos y respuestas `200 text/csv` o `204`. |
+| Validacion | Sintaxis frontend; guardrail `validate:module-reports`; validadores de i18n, responsive, documentacion y trazabilidad; suite integral del repositorio; inspeccion Local de tarjetas y modal en navegador. |
+| Rollback | Revertir el catalogo y renderer de filtros, el copy de acciones y confirmacion, el guardrail y la documentacion CHG-257. No existe schema ni dato que revertir. |
+| Observaciones | Operacion `local-write` solo sobre archivos del repositorio y verificaciones locales de lectura. No hubo migracion, seed, carga de datos, llamada mutante, despliegue ni acceso a QA/Produccion. |
+
+### CHG-258
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-06 |
+| Cambio | Retirar etiqueta de propuesta del titulo de la aplicacion |
+| Autor | Codex |
+| Archivos | `frontend/index.html` |
+| Secciones | Shell principal / Titulo de pestana / Local |
+| Agentes consultados | Skills transversales de feature y fronteras de ambiente definidas en el repositorio; no hubo delegacion. |
+| Diagnostico | La pestana principal aun mostraba `ERClave | Propuesta Frontend`, una etiqueta de prototipo que ya no corresponde al estado actual del producto. |
+| Descripcion | El titulo HTML de la aplicacion principal ahora muestra solamente `ERClave`. El titulo independiente de Backoffice se conserva sin cambios. |
+| Motivo | Eliminar texto obsoleto y presentar la identidad actual del producto de forma limpia. |
+| Impacto | Cambio visual limitado a metadata HTML en Local. No modifica comportamiento, estilos, datos, permisos, servicios ni ambientes remotos. |
+| APIs afectadas | Ninguna. |
+| Validacion | Busqueda de copy obsoleto, respuesta HTTP del frontend Local, validadores del repositorio y suite integral. |
+| Rollback | Restaurar el texto anterior en el elemento `title` de `frontend/index.html`. |
+| Observaciones | Operacion `local-write` reversible. No hubo migracion, seed, carga de datos, despliegue ni acceso a QA/Produccion. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

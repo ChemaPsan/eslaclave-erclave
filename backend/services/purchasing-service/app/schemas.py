@@ -13,9 +13,26 @@ class PurchaseLineInput(BaseModel):
     quantity: Decimal = Field(gt=0, max_digits=18, decimal_places=6)
     unit_code: str = Field(min_length=1, max_length=20)
     unit_price: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=2)
+    @field_validator("inventory_item_id", mode="before")
+    @classmethod
+    def trim_inventory_reference(cls, value):
+        return normalize_optional(value)
+    @field_validator("description")
+    @classmethod
+    def trim_description(cls, value):
+        value = value.strip()
+        if not value: raise ValueError("purchase_line_description_required")
+        return value
+    @field_validator("unit_code")
+    @classmethod
+    def normalize_unit_code(cls, value):
+        value = value.strip().upper()
+        if not value: raise ValueError("purchase_unit_required")
+        return value
     @model_validator(mode="after")
     def reference(self):
         if self.line_type == "inventory_item" and not self.inventory_item_id: raise ValueError("inventory_item_required")
+        if self.line_type == "service" and self.inventory_item_id: raise ValueError("service_inventory_item_forbidden")
         return self
 
 def normalize_optional(value):

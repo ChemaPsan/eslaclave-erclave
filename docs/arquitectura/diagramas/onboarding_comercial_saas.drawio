@@ -1,102 +1,100 @@
-<mxfile host="app.diagrams.net" modified="2026-06-15T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
-  <diagram id="onboarding-comercial-saas" name="Onboarding comercial SaaS">
-    <mxGraphModel dx="1434" dy="858" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="980" math="0" shadow="0">
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" modified="2026-09-02T12:00:00.000Z" agent="ERClave documentation" version="24.7.17" type="device">
+  <diagram id="onboarding_comercial_saas.drawio" name="Vista vigente">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2300" pageHeight="1350" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="title" value="ERClave - Onboarding comercial SaaS" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#300C57;" vertex="1" parent="1">
-          <mxGeometry x="360" y="20" width="780" height="40" as="geometry" />
+        <mxCell id="title" value="ERClave - Onboarding comercial SaaS" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#351455;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="2220" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="webBox" value="Compra desde web" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7FF;strokeColor=#9B0FC9;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" vertex="1" parent="1">
-          <mxGeometry x="60" y="100" width="360" height="230" as="geometry" />
+        <mxCell id="subtitle" value="Camino manual vigente y automatización futura, con identidad, tenant y permisos separados." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=14;fontColor=#555555;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="72" width="2220" height="46" as="geometry" />
         </mxCell>
-        <mxCell id="platformBox" value="Provisioning SaaS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0F9FF;strokeColor=#2563EB;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" vertex="1" parent="1">
-          <mxGeometry x="500" y="100" width="460" height="360" as="geometry" />
+        <mxCell id="implemented" value="CAMINO IMPLEMENTADO - BACKOFFICE" style="swimlane;html=1;rounded=1;horizontal=1;startSize=34;fillColor=#DDF2E1;swimlaneFillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#20552A;fontStyle=1;fontSize=15;whiteSpace=wrap;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="130" width="2220" height="580" as="geometry" />
         </mxCell>
-        <mxCell id="tenantBox" value="Tenant activado" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" vertex="1" parent="1">
-          <mxGeometry x="1040" y="100" width="380" height="360" as="geometry" />
+        <mxCell id="operator" value="Operador interno allowlisted&lt;br&gt;inicia alta" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="90" y="220" width="320" height="100" as="geometry" />
         </mxCell>
-        <mxCell id="apiBox" value="Integraciones/API comercial" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#D97706;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" vertex="1" parent="1">
-          <mxGeometry x="180" y="570" width="1140" height="300" as="geometry" />
+        <mxCell id="form" value="Nombre, slug, plan, owner,&lt;br&gt;entidad fiscal, sucursal y módulos" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#D9EAF7;strokeColor=#8A6AA3;fontColor=#17365D;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="500" y="210" width="390" height="120" as="geometry" />
         </mxCell>
-        <mxCell id="visitor" value="Visitante" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B0FC9;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="100" y="155" width="120" height="50" as="geometry" />
+        <mxCell id="onboard" value="Admin Service&lt;br&gt;onboarding idempotente" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#5B2A86;strokeColor=#8A6AA3;fontColor=#FFFFFF;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="980" y="220" width="360" height="100" as="geometry" />
         </mxCell>
-        <mxCell id="pricing" value="Selecciona plan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B0FC9;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="260" y="155" width="120" height="50" as="geometry" />
+        <mxCell id="persist" value="Cloud SQL admin&lt;br&gt;tenant + user + membership + role&lt;br&gt;entitlements + organization.profile" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1430" y="195" width="430" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="lead" value="Datos empresa + admin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B0FC9;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="100" y="245" width="130" height="55" as="geometry" />
+        <mxCell id="firebase" value="Firebase Auth&lt;br&gt;asegura identidad y envía&lt;br&gt;recuperación/activación" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1950" y="195" width="260" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="checkout" value="Checkout pago" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B0FC9;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="260" y="245" width="120" height="55" as="geometry" />
+        <mxCell id="owner" value="Owner define contraseña&lt;br&gt;y accede a ERClave" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="430" width="360" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="provider" value="Proveedor de pagos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="540" y="155" width="150" height="55" as="geometry" />
+        <mxCell id="context" value="Session context&lt;br&gt;tenant + entitlements + permisos" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#5B2A86;strokeColor=#8A6AA3;fontColor=#FFFFFF;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1610" y="430" width="390" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="webhook" value="Webhook pago confirmado" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="760" y="155" width="160" height="55" as="geometry" />
+        <mxCell id="modules" value="Módulos activos&lt;br&gt;sin permisos automáticos" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFF1CC;strokeColor=#8A6AA3;fontColor=#6A4A00;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="710" y="430" width="360" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="billing" value="billing-service&#xa;estado suscripcion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="540" y="255" width="150" height="65" as="geometry" />
+        <mxCell id="delete" value="Suspender / reactivar / eliminar&lt;br&gt;limpieza Firebase sólo si identidad no es compartida" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FBE2E2;strokeColor=#8A6AA3;fontColor=#8A1C1C;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="90" y="550" width="520" height="100" as="geometry" />
         </mxCell>
-        <mxCell id="provisioning" value="provisioning-service&#xa;idempotente" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="760" y="255" width="160" height="65" as="geometry" />
+        <mxCell id="future" value="CAMINO OBJETIVO - NO IMPLEMENTADO" style="swimlane;html=1;rounded=1;horizontal=1;startSize=34;fillColor=#F1F3F5;swimlaneFillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontStyle=1;fontSize=15;whiteSpace=wrap;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="760" width="2220" height="470" as="geometry" />
         </mxCell>
-        <mxCell id="admin" value="admin-service&#xa;tenant + plan + modulos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="540" y="365" width="170" height="65" as="geometry" />
+        <mxCell id="checkout" value="Sitio comercial&lt;br&gt;plan + checkout" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="110" y="860" width="320" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="identity" value="Identity Platform&#xa;admin invitado" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="760" y="365" width="160" height="65" as="geometry" />
+        <mxCell id="payment" value="Proveedor de pago&lt;br&gt;webhook firmado" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="520" y="860" width="320" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="invite" value="Correo de activacion&#xa;link temporal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="1080" y="155" width="150" height="65" as="geometry" />
+        <mxCell id="billing" value="billing-service&lt;br&gt;suscripción y estado" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="930" y="860" width="320" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="activate" value="Admin crea contrasena&#xa;y acepta terminos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="1245" y="155" width="145" height="65" as="geometry" />
+        <mxCell id="provisioning" value="provisioning-service&lt;br&gt;orquestación durable" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="860" width="360" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="app" value="Acceso ERClave&#xa;tenant resuelto" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="1080" y="285" width="150" height="65" as="geometry" />
+        <mxCell id="admin_future" value="admin-service&lt;br&gt;mismo contrato idempotente" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="1790" y="860" width="360" height="105" as="geometry" />
         </mxCell>
-        <mxCell id="wizard" value="Wizard inicial&#xa;usuarios, roles, catalogos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="1245" y="285" width="145" height="65" as="geometry" />
+        <mxCell id="portal" value="Portal de integraciones&lt;br&gt;API client, scopes, cuotas y medición: futuro" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1055" width="1000" height="95" as="geometry" />
         </mxCell>
-        <mxCell id="portal" value="Developer portal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="230" y="650" width="150" height="60" as="geometry" />
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="operator" target="form">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="apiClient" value="Crear API client&#xa;client_id + scopes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="430" y="650" width="170" height="60" as="geometry" />
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="form" target="onboard">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="gateway" value="API Gateway / Apigee&#xa;cuotas + rate limit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="660" y="650" width="180" height="60" as="geometry" />
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="onboard" target="persist">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="tenantResolve" value="Resolver tenant_id&#xa;desde credencial" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="900" y="650" width="170" height="60" as="geometry" />
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="onboard" target="firebase">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="meter" value="usage-meter&#xa;consumo facturable" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;fontColor=#1F1233;" vertex="1" parent="1">
-          <mxGeometry x="1120" y="650" width="160" height="60" as="geometry" />
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="firebase" target="owner">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="note" value="Regla clave: no enviar contrasenas por correo. Provisionar solo con webhook verificado e idempotente." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8E8FF;strokeColor=#9B0FC9;fontColor=#1F1233;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="410" y="900" width="680" height="50" as="geometry" />
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="owner" target="context">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e1" style="endArrow=block;html=1;rounded=0;strokeColor=#9B0FC9;" edge="1" parent="1" source="visitor" target="pricing"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e2" style="endArrow=block;html=1;rounded=0;strokeColor=#9B0FC9;" edge="1" parent="1" source="pricing" target="lead"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e3" style="endArrow=block;html=1;rounded=0;strokeColor=#9B0FC9;" edge="1" parent="1" source="lead" target="checkout"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e4" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" edge="1" parent="1" source="checkout" target="provider"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e5" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" edge="1" parent="1" source="provider" target="webhook"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e6" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" edge="1" parent="1" source="webhook" target="billing"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e7" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" edge="1" parent="1" source="billing" target="provisioning"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e8" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" edge="1" parent="1" source="provisioning" target="admin"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e9" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" edge="1" parent="1" source="admin" target="identity"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e10" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;" edge="1" parent="1" source="identity" target="invite"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e11" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;" edge="1" parent="1" source="invite" target="activate"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e12" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;" edge="1" parent="1" source="activate" target="app"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e13" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;" edge="1" parent="1" source="app" target="wizard"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e14" style="endArrow=block;html=1;rounded=0;strokeColor=#D97706;" edge="1" parent="1" source="portal" target="apiClient"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e15" style="endArrow=block;html=1;rounded=0;strokeColor=#D97706;" edge="1" parent="1" source="apiClient" target="gateway"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e16" style="endArrow=block;html=1;rounded=0;strokeColor=#D97706;" edge="1" parent="1" source="gateway" target="tenantResolve"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e17" style="endArrow=block;html=1;rounded=0;strokeColor=#D97706;" edge="1" parent="1" source="tenantResolve" target="meter"><mxGeometry relative="1" as="geometry" /></mxCell>
-        <mxCell id="e18" style="endArrow=block;html=1;rounded=0;strokeColor=#D97706;dashed=1;" edge="1" parent="1" source="wizard" target="portal"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="context" target="modules">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="pago" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="checkout" target="payment">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="webhook" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="payment" target="billing">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="billing" target="provisioning">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="provisioning" target="admin_future">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>

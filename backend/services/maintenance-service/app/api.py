@@ -1,12 +1,23 @@
 import hashlib,json
+from datetime import date
+from typing import Literal
 from fastapi import APIRouter,Depends,Header,Query
 from erclave_common.errors import ErclaveError
+from erclave_common.csv_reports import csv_report_response,validate_date_range
 from .authorization import AuthorizedContext,require_maintenance_access
 from .authorities import MaintenanceAuthorityClient,get_maintenance_authority_client
 from .repositories import MaintenanceRepository,get_maintenance_repository
+from .reports import REPORT_PERMISSIONS,build_report
 from .schemas import *
 
 router=APIRouter(prefix="/v1/maintenance",tags=["maintenance"])
+@router.get("/reports/{report_code}/export")
+def export_report(report_code:str,lang:Literal["es","en"]="es",date_from:date|None=None,date_to:date|None=None,status:str|None=None,priority:str|None=None,q:str|None=None,target_type:str|None=None,responsible_worker_id:str|None=None,worker_id:str|None=None,warehouse_id:str|None=None,x_tenant_id:str=Header(alias="X-Tenant-Id"),r:MaintenanceRepository=Depends(get_maintenance_repository),access:AuthorizedContext=Depends(require_maintenance_access(tuple(REPORT_PERMISSIONS.values())))):
+    validate_date_range(date_from,date_to);permission=REPORT_PERMISSIONS.get(report_code)
+    if not permission:raise ErclaveError("report_not_found","Maintenance report does not exist.",status_code=404)
+    access.require(permission)
+    filters={"date_from":date_from,"date_to":date_to,"status":status,"priority":priority,"q":q,"target_type":target_type,"responsible_worker_id":responsible_worker_id,"worker_id":worker_id,"warehouse_id":warehouse_id}
+    return csv_report_response(build_report(r,x_tenant_id,report_code,filters),lang)
 MAINTENANCE_ORDER_ACTION_PERMISSIONS=tuple(f"maintenance.order.{action}" for action in ("request","assign","start","wait_for_parts","resume","resolve","close","reopen","cancel"))
 def tenant(v):
     if not v:raise ErclaveError("tenant_required","X-Tenant-Id header is required.",status_code=400)

@@ -383,7 +383,7 @@ class StockAllocationInput(BaseModel):
 
 class OrderLineFulfillmentInput(BaseModel):
     order_line_id: str = Field(min_length=1, max_length=40)
-    mode: Literal["stock", "production", "service"]
+    mode: Literal["stock", "production"]
     allocations: list[StockAllocationInput] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
@@ -553,6 +553,144 @@ class DeliveryResponse(BaseModel):
 
 class DeliveryListResponse(BaseModel):
     data: list[DeliveryRead]
+
+
+ServiceOrderStatus = Literal["draft", "planned", "assigned", "in_progress", "on_hold", "pending_acceptance", "accepted", "cancelled"]
+ServiceCostType = Literal["labor", "material", "external", "other"]
+
+
+class ServiceOrderPlanRequest(BaseModel):
+    planned_start_date: date
+    planned_end_date: date
+    notes: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.planned_end_date < self.planned_start_date:
+            raise ValueError("service_order_plan_dates_invalid")
+        return self
+
+
+class ServiceOrderAssignRequest(BaseModel):
+    responsible_worker_id: str = Field(min_length=1, max_length=40)
+
+
+class ServiceOrderTransitionRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def normalize_reason(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+
+class ServiceTimeEntryCreateRequest(BaseModel):
+    worker_id: str = Field(min_length=1, max_length=40)
+    worked_on: date
+    minutes: int = Field(gt=0, le=1440)
+    hourly_cost: Decimal = Field(ge=0, max_digits=18, decimal_places=6)
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class ServiceCostEntryCreateRequest(BaseModel):
+    cost_type: ServiceCostType
+    description: str = Field(min_length=1, max_length=300)
+    quantity: Decimal = Field(gt=0, max_digits=18, decimal_places=6)
+    unit_cost: Decimal = Field(ge=0, max_digits=18, decimal_places=6)
+    evidence_reference: str | None = Field(default=None, max_length=500)
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def require_description(cls, value):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("required_text_blank")
+        return value.strip()
+
+
+class ServiceEvidenceCreateRequest(BaseModel):
+    evidence_reference: str = Field(min_length=1, max_length=500)
+    description: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("evidence_reference", mode="before")
+    @classmethod
+    def require_reference(cls, value):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("required_text_blank")
+        return value.strip()
+
+
+class ServiceTimeEntryRead(BaseModel):
+    id: str
+    worker_id: str
+    worker_name: str
+    worked_on: date
+    minutes: int
+    hourly_cost: Decimal
+    total_cost: Decimal
+    notes: str | None = None
+    created_at: datetime
+
+
+class ServiceCostEntryRead(BaseModel):
+    id: str
+    cost_type: ServiceCostType
+    description: str
+    quantity: Decimal
+    unit_cost: Decimal
+    total_cost: Decimal
+    evidence_reference: str | None = None
+    created_at: datetime
+
+
+class ServiceEvidenceRead(BaseModel):
+    id: str
+    evidence_reference: str
+    description: str | None = None
+    created_at: datetime
+
+
+class ServiceOrderRead(BaseModel):
+    id: str
+    code: str
+    order_id: str
+    order_code: str
+    order_line_id: str
+    customer_id: str
+    customer_name: str
+    product_service_id: str
+    product_service_code: str
+    product_service_name: str
+    unit: str
+    ordered_quantity: Decimal
+    status: ServiceOrderStatus
+    responsible_worker_id: str | None = None
+    responsible_worker_name: str | None = None
+    planned_start_date: date | None = None
+    planned_end_date: date | None = None
+    notes: str | None = None
+    actual_cost: Decimal | None = None
+    planned_at: datetime | None = None
+    assigned_at: datetime | None = None
+    started_at: datetime | None = None
+    acceptance_requested_at: datetime | None = None
+    accepted_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    time_entries: list[ServiceTimeEntryRead] = Field(default_factory=list)
+    cost_entries: list[ServiceCostEntryRead] = Field(default_factory=list)
+    evidence: list[ServiceEvidenceRead] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class ServiceOrderResponse(BaseModel):
+    data: ServiceOrderRead
+
+
+class ServiceOrderListResponse(BaseModel):
+    data: list[ServiceOrderRead]
 
 
 class ActionReasonRequest(BaseModel):

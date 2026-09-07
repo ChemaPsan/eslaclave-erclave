@@ -1,12 +1,12 @@
 # Modulo 11 - Mantenimiento
 
-## Autorizacion operativa Local
+## Autorizacion operativa Local y QA
 
 Solicitar, asignar, iniciar, esperar refacciones, reanudar, resolver, cerrar, reabrir y cancelar son capacidades independientes `maintenance.order.*`. El backend selecciona la requerida desde la transicion recibida; un tecnico con permiso de iniciar no obtiene por ello permiso de resolver o cerrar.
 
 ## Estado y objetivo
 
-Estado: `implemented` en Local desde CHG-234 y endurecido en CHG-235 con la revision `20260824_0028`. El modulo puede activarse desde Backoffice y el tenant demo Local ya lo tiene habilitado; QA y Produccion no cambian.
+Estado: `implemented` en Local desde CHG-234 y endurecido en CHG-235 con la revision `20260824_0028`; el corte acumulado esta desplegado en QA dentro de la cabeza `20260825_0029`. Produccion no esta provisionada. La disponibilidad efectiva depende del entitlement y de datos funcionales autorizados del tenant.
 
 El modulo controlara mantenimiento correctivo desde el reporte de una falla hasta su cierre verificado, incluyendo responsable, tiempo real, diagnostico, trabajo realizado y refacciones. El primer corte implementable sera correctivo; planes preventivos, recurrencia, garantias y proveedores quedan para cortes posteriores.
 

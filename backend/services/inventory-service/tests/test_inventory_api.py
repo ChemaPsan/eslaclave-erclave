@@ -105,6 +105,14 @@ def test_production_availability_reservation_and_consumption_contracts():
 def test_firebase_mode_requires_bearer_token():
     c=client(); app.dependency_overrides[auth.get_settings]=lambda:Settings(auth_mode="firebase"); response=c.get("/v1/inventory/warehouses",headers=headers()); assert response.status_code==401; assert response.json()["error"]["code"]=="auth_required"
 
+def test_purchasing_permission_can_resolve_inventory_item_when_module_is_active():
+    class SessionClient:
+        def get_context(self,tenant_id,bearer):return {"tenant":{"id":TENANT,"status":"active"},"user":{"id":"usr_purchasing"},"active_modules":["purchasing","inventory"],"permissions":["purchasing.requisition.create"]}
+    c=client();app.dependency_overrides[auth.get_settings]=lambda:Settings(auth_mode="firebase");app.dependency_overrides[auth.get_admin_session_client]=lambda:SessionClient()
+    response=c.get("/v1/inventory/items/itm_1",headers={**headers(),"Authorization":"Bearer test-token"})
+    assert response.status_code==200
+    assert response.json()["data"]["id"]=="itm_1"
+
 def test_finished_goods_receipt_is_not_authorized_by_generic_movement_permission():
     class SessionClient:
         def get_context(self,tenant_id,bearer):return {"tenant":{"id":TENANT,"status":"active"},"user":{"id":"usr_warehouse"},"active_modules":["inventory"],"permissions":["inventory.movement.create"]}

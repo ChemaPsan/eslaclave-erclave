@@ -2,13 +2,35 @@ openapi: 3.1.0
 x-implementation-status: implemented
 info:
   title: ERClave Purchasing Service API
-  version: 1.3.0
-  summary: Source-to-receipt con edicion, cancelacion, concurrencia y reconciliacion segura en Local.
+  version: 1.4.0
+  summary: Source-to-receipt de articulos y servicios con edicion, cancelacion, concurrencia y reconciliacion segura en Local.
 servers:
   - url: http://127.0.0.1:8010
 security:
   - bearerAuth: []
 paths:
+  /v1/purchasing/reports/{report_code}/export:
+    get:
+      tags: [Reports]
+      operationId: exportPurchasingStandardReport
+      summary: Export a fixed Purchasing report as UTF-8 CSV.
+      x-required-module: purchasing
+      x-permissions: [purchasing.supplier.read, purchasing.requisition.read, purchasing.order.read, purchasing.receipt.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - { name: report_code, in: path, required: true, schema: { type: string } }
+        - { name: lang, in: query, schema: { type: string, enum: [es, en], default: es } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: priority, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: currency, in: query, schema: { type: string } }
+        - { name: supplier_id, in: query, schema: { type: string } }
+        - { name: line_type, in: query, schema: { type: string } }
+      responses:
+        '200': { description: CSV export. }
+        '204': { description: No rows matched the filters. }
   /v1/purchasing/suppliers:
     get:
       operationId: listPurchasingSuppliers
@@ -201,13 +223,26 @@ components:
         status: { type: string, enum: [active, inactive] }
     PurchaseLine:
       type: object
+      description: Una partida inventariable exige inventory_item_id; una partida de servicio lo prohibe. unit_code siempre se valida contra el catalogo activo de Administracion.
+      allOf:
+        - if:
+            properties: { line_type: { const: inventory_item } }
+            required: [line_type]
+          then:
+            required: [inventory_item_id]
+            properties: { inventory_item_id: { type: string, minLength: 1 } }
+        - if:
+            properties: { line_type: { const: service } }
+            required: [line_type]
+          then:
+            properties: { inventory_item_id: { type: 'null' } }
       required: [line_type, description, quantity, unit_code]
       properties:
         line_type: { type: string, enum: [inventory_item, service] }
-        inventory_item_id: { type: [string, 'null'] }
-        description: { type: string, maxLength: 300 }
+        inventory_item_id: { type: [string, 'null'], description: Obligatorio solo para inventory_item y prohibido para service. }
+        description: { type: string, minLength: 1, maxLength: 300 }
         quantity: { type: number, exclusiveMinimum: 0 }
-        unit_code: { type: string, maxLength: 20 }
+        unit_code: { type: string, minLength: 1, maxLength: 20, description: Codigo estable y activo del catalogo tenant-safe de Administracion. }
         unit_price: { type: [number, 'null'], minimum: 0 }
     RequisitionWrite:
       type: object
@@ -240,7 +275,7 @@ components:
       properties:
         order_line_id: { type: string }
         quantity: { type: number, exclusiveMinimum: 0 }
-        warehouse_id: { type: [string, 'null'], description: Obligatorio para articulos inventariables y omitido para servicios. }
+        warehouse_id: { type: [string, 'null'], description: Obligatorio para articulos inventariables y prohibido para servicios; una recepcion de servicio es comercial y no genera movimiento de Inventory. }
     ReceiptWrite:
       type: object
       required: [code, purchase_order_id, received_at, lines]

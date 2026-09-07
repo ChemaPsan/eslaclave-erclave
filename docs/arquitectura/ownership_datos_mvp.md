@@ -44,9 +44,9 @@ Complemento recomendado:
 | `admin-service` | Administracion | Tenants, usuarios, roles, permisos, unidades de negocio, modulos activos y configuracion por tenant. |
 | `production-service` | Produccion | Productos/servicios, recetas, versiones de receta, recursos productivos, maquinaria, ordenes y avance por etapas. |
 | `inventory-service` | Almacenes | Almacenes, articulos inventariables, ubicaciones, movimientos, existencias, kardex, reservas y valuacion de materiales. |
-| `sales-service` | Ventas | Local real: clientes, contactos, cotizaciones, pedidos, surtido y entregas. Devoluciones permanecen planeadas. |
-| `purchasing-service` | Compras | Local: proveedores, requisiciones, ordenes, recepciones comerciales y reconciliacion con entradas de Inventory. |
-| `maintenance-service` | Mantenimiento (Local) | Ordenes correctivas, asignaciones, tiempos, solicitudes internas de refacciones y estado de sus efectos. |
+| `sales-service` | Ventas | Local y QA: clientes, contactos, cotizaciones, pedidos, surtido y entregas. Local CHG-255 agrega Ordenes de servicio; devoluciones permanecen planeadas. |
+| `purchasing-service` | Compras | Local y QA: proveedores, requisiciones, ordenes, recepciones comerciales y reconciliacion con Inventory; Local CHG-255 agrega servicios sin movimiento fisico. |
+| `maintenance-service` | Mantenimiento | Local y QA: ordenes correctivas, asignaciones, tiempos, solicitudes internas de refacciones y estado de sus efectos. |
 | `billing-service` | Billing / SaaS | Planes comerciales, suscripciones, eventos de pago, activaciones manuales y estado de cobro. |
 | `provisioning-service` | Provisioning | Orquestacion de alta de tenant, activacion de modulos e invitacion del administrador inicial. |
 | `integration-service` | Integraciones | Clientes API, scopes, cuotas, llaves, uso de API y politicas de integracion. |

@@ -848,6 +848,18 @@ h3 {
   color: var(--muted);
 }
 
+.standard-report-card.actionable {
+  grid-template-rows: auto auto 1fr auto;
+}
+
+.standard-report-card.actionable .secondary-action {
+  justify-self: start;
+}
+
+.standard-report-form .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .report-source-list {
   display: grid;
   gap: 8px;
@@ -4416,6 +4428,71 @@ h3 {
 .toast[data-tone="success"] {
   border: 1px solid rgba(255, 255, 255, 0.3);
   background: #166534;
+}
+
+.service-orders-screen,
+.service-order-modal {
+  container-name: service-orders;
+  container-type: inline-size;
+}
+
+.service-order-summary,
+.service-order-history {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.service-order-history {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.service-order-summary article,
+.service-order-history > div,
+.service-order-operation {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--field);
+}
+
+.service-order-summary article {
+  display: grid;
+  gap: 5px;
+}
+
+.service-order-summary span {
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.service-order-operation,
+.service-order-history {
+  margin-top: 14px;
+}
+
+.service-order-card .catalog-card-main,
+.service-order-card .catalog-card-actions {
+  min-width: 0;
+}
+
+@container service-orders (max-width: 700px) {
+  .service-order-summary,
+  .service-order-history {
+    grid-template-columns: 1fr;
+  }
+
+  .service-order-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .service-order-card .catalog-card-actions,
+  .service-order-card button {
+    width: 100%;
+  }
 }
 
 .toast[data-tone="warning"] {

@@ -1,24 +1,21 @@
 # Pendientes priorizados de ERClave
 
-Ultima actualizacion: 2026-08-31.
+Ultima actualizacion: 2026-09-06.
 
 ## Validacion del release QA
 
-0. Aprovisionar y verificar, con autorizacion `qa-write` independiente, las identidades `erclave-purchasing-qa` y `erclave-maintenance-qa` y las cuatro variables QA asociadas. Despues certificar el SHA final y ejecutar secuencialmente los gates documentados en `docs/operaciones/preparacion_release_qa_20260831.md`.
-
-0. Repetir en QA el onboarding con un tenant ficticio y confirmar recepcion del correo Firebase, incluido folder de spam. Admin revision `admin-service-qa-00021-669` ya tiene `roles/firebaseauth.admin` y `ERCLAVE_FIREBASE_WEB_API_KEY`. Despues validar eliminacion y que el tenant deje de aparecer.
-1. Promover mediante un nuevo candidato gobernado el endurecimiento CHG-226 de respuestas Firebase. La correccion IAM ya esta activa en QA, pero `invitation.delivery=pending`, `firebase_identity_cleanup` y los errores 502 seguros existen solo en la rama hasta fusionar, construir y aprobar sus gates.
+0. Completar la matriz UAT del SHA QA `a119ddf5e8d42376b8557b234e15e3681b19c2a7`: permisos, aislamiento entre tenants, dependencias modulares, Compras, Mantenimiento, referencias, reservas/consumos, recepciones, capacidad, valuacion, concurrencia, proteccion de datos e idempotencia.
+1. Repetir en QA el onboarding con un tenant ficticio y confirmar recepcion del correo Firebase, incluido folder de spam. Despues validar eliminacion, `firebase_identity_cleanup` y que el tenant deje de aparecer.
 2. Diseñar una reconciliacion durable/outbox para invitaciones o limpiezas Firebase pendientes; la respuesta explicita evita el falso fracaso, pero no sustituye un reintento persistente si el cliente pierde la respuesta.
-3. Completar la matriz UAT del SHA QA `a6524e44e5df9eaf6232adbe2a70bbfd65516f3c`: permisos, aislamiento entre tenants, dependencias modulares, referencias, reservas/consumos, recepcion de producto terminado, capacidad, valuacion, concurrencia, proteccion de datos e idempotencia.
-4. Comprobar que el administrador allowlisted accede a Backoffice mientras un owner ordinario conserva `403`, sin persistir tokens ni contraseñas.
-5. Comprobar con usuarios de tenants distintos que Admin, Produccion, Inventory, RH y Ventas seleccionan el tenant desde membresias, recargan datos de Cloud SQL y no muestran KPIs/transacciones simuladas; Integraciones permanece inactivo.
+3. Comprobar que el administrador allowlisted accede a Backoffice mientras un owner ordinario conserva `403`, sin persistir tokens ni contraseñas.
+4. Comprobar con usuarios de tenants distintos que los siete modulos seleccionan el tenant desde membresias, recargan datos de Cloud SQL y no muestran KPIs/transacciones simuladas; los modulos planeados permanecen inactivos.
 
 ## Prioridad siguiente
 
-0. Siguiente evolucion de Mantenimiento tras CHG-235: reintento automatico programado, devolucion de sobrantes, participantes secundarios, adjuntos y reportes operativos; despues abordar preventivos y activos generales. El reintento manual durable ya quedo cerrado.
-0.1. Siguiente evolucion de Compras: division/adjudicacion de partidas de una requisicion entre varios proveedores, reintento automatico programado de recepciones `needs_reconciliation` y paginacion server-side antes de promover a QA. CHG-232 ya cubre conciliacion manual durable, claves estables, recepcion multipardida y pruebas de contencion; no simula adjudicacion parcial.
-1. Definir el siguiente corte de Ventas tras CHG-204: devoluciones, facturacion/cobranza y callback de Production que convierta solicitudes en partidas entregables y reporte costo real. La recepcion manual, parcial e idempotente de producto terminado quedo cubierta por CHG-222.
-2. Agregar paginacion con cursor a Clientes, Cotizaciones, Pedidos y Entregas antes de volumen productivo; el limite preventivo actual permanece en 200.
+0. Siguiente evolucion de Mantenimiento tras CHG-257: reintento automatico programado, devolucion de sobrantes, participantes secundarios y adjuntos; despues abordar preventivos y activos generales. Los reportes operativos basicos de ordenes, indisponibilidad, refacciones y tiempos ya quedaron cerrados.
+0.1. Siguiente evolucion de Compras: division/adjudicacion de partidas de una requisicion entre varios proveedores, reintento automatico programado de recepciones `needs_reconciliation` y paginacion server-side antes de promover a QA. CHG-255 ya permite el ciclo comercial de servicios sin Inventory; no implementa adjudicacion parcial, factura ni cuenta por pagar.
+1. Siguiente corte de Ventas despues de CHG-255: devoluciones, facturacion/cobranza y callback de Production que convierta solicitudes en partidas entregables y reporte costo real. La ejecucion/aceptacion de servicios ya tiene orden propia; la recepcion de producto terminado permanece cubierta por CHG-222.
+2. Agregar paginacion con cursor a Clientes, Cotizaciones, Pedidos, Ordenes de servicio y Entregas antes de volumen productivo; el limite preventivo actual permanece en 200.
 3. Repetir en Local aislado las dos entradas funcionales que antes quedaron solo en `localStorage` y confirmar en navegador que Movimientos, Inventario y Kardex reflejan el mismo saldo; no copiar esos datos a QA.
 4. Completar el catalogo de Articulos para escala server-side; actualmente el corte escalable se concentro en balances de Inventario.
 5. Decidir funcionalmente si Categoria se convierte en catalogo jerarquico antes de modelar IDs, padres o migraciones.
@@ -33,6 +30,7 @@ Ultima actualizacion: 2026-08-31.
 13. Cuando Compras sea operativo, definir la politica de valuacion que actualizara el costo unitario base del articulo desde recepciones u ordenes de compra; por ahora permanece como captura manual de Inventory.
 14. Integrar consumidores externos con la reserva central de folios o exigir una credencial interna de confianza; la UI Local ya usa el catalogo, pero los contratos propietarios conservan compatibilidad con clientes API que proporcionan un codigo valido.
 15. Estandarizar en backend todas las excepciones de validación y errores inesperados con la envoltura `ErclaveError`; propagar `X-Correlation-Id` entre servicios, exponerlo en CORS y declarar respuestas de error comunes en OpenAPI. CHG-251 ya evita exponer mensajes técnicos en la UI y conserva la referencia disponible, pero no cambia los contratos HTTP de los servicios.
+16. Diseñar el modulo Reportes para analitica transversal: XLSX con formato, PDF, constructor, cruces entre propietarios, graficas, vistas guardadas, programacion y distribucion. CHG-257 conserva reportes operativos simples en el servicio propietario y oculta su formato tecnico en la interfaz.
 
 ## Fuera del alcance actual
 

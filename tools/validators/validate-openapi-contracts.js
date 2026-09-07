@@ -60,7 +60,10 @@ for (const fileName of requiredContracts) {
 if (errors.length) {
   fail("OpenAPI contracts are incomplete", errors);
 } else {
-  const python = process.env.PYTHON || (process.platform === "win32" ? "python" : "python3");
+  const projectPython = process.platform === "win32"
+    ? fromRoot("backend", ".venv", "Scripts", "python.exe")
+    : fromRoot("backend", ".venv", "bin", "python");
+  const python = process.env.PYTHON || (fs.existsSync(projectPython) ? projectPython : (process.platform === "win32" ? "python" : "python3"));
   const semantic = spawnSync(python, [fromRoot("tools", "validators", "validate_openapi_runtime.py")], {
     cwd: fromRoot(),
     encoding: "utf8",

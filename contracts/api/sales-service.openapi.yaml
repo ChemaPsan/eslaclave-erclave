@@ -2,11 +2,32 @@ openapi: 3.1.0
 x-implementation-status: implemented
 info:
   title: ERClave Sales Service API
-  version: 0.5.0
-  summary: Corte Local autoritativo de Clientes, Cotizaciones, Pedidos, surtido y Entregas.
+  version: 0.6.0
+  summary: Corte Local autoritativo de Clientes, Cotizaciones, Pedidos, Ordenes de servicio, surtido y Entregas.
 servers: [{ url: 'http://127.0.0.1:8008' }]
 security: [{ bearerAuth: [] }]
 paths:
+  /v1/sales/reports/{report_code}/export:
+    get:
+      tags: [Reports]
+      operationId: exportSalesStandardReport
+      summary: Export a fixed Sales report as UTF-8 CSV.
+      x-required-module: sales
+      x-permissions: [sales.customer.read, sales.quote.read, sales.order.read, sales.delivery.read, sales.service_order.read]
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - { name: report_code, in: path, required: true, schema: { type: string } }
+        - { name: lang, in: query, schema: { type: string, enum: [es, en], default: es } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: customer_id, in: query, schema: { type: string } }
+        - { name: responsible_worker_id, in: query, schema: { type: string } }
+        - { name: product_service_id, in: query, schema: { type: string } }
+      responses:
+        '200': { description: CSV export. }
+        '204': { description: No rows matched the filters. }
   /v1/sales/reference-data:
     get:
       operationId: getSalesReferenceData
@@ -116,6 +137,61 @@ paths:
       parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ActionReasonRequest' } } } }
       responses: { '200': { description: Sales order cancelled and active reservations released., content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrderResponse' } } } } }
+  /v1/sales/service-orders:
+    get:
+      operationId: listSalesServiceOrders
+      x-required-module: sales
+      x-permissions: [sales.service_order.read]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, {name: status, in: query, schema: {type: string, enum: [draft, planned, assigned, in_progress, on_hold, pending_acceptance, accepted, cancelled]}}, {name: order_id, in: query, schema: {type: string}}, {name: customer_id, in: query, schema: {type: string}}]
+      responses: {'200': {description: Ordenes de servicio del tenant., content: {application/json: {schema: {$ref: '#/components/schemas/ServiceOrderListResponse'}}}}}
+  /v1/sales/service-orders/{id}:
+    get:
+      operationId: getSalesServiceOrder
+      x-required-module: sales
+      x-permissions: [sales.service_order.read]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdPath' }]
+      responses: {'200': {description: Orden de servicio., content: {application/json: {schema: {$ref: '#/components/schemas/ServiceOrderResponse'}}}}}
+  /v1/sales/service-orders/{id}/plan:
+    post:
+      operationId: planSalesServiceOrder
+      x-required-module: sales
+      x-permissions: [sales.service_order.plan]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ServiceOrderPlanRequest'}}}}
+      responses: {'200': {description: Orden de servicio planeada., content: {application/json: {schema: {$ref: '#/components/schemas/ServiceOrderResponse'}}}}}
+  /v1/sales/service-orders/{id}/time-entries:
+    post:
+      operationId: createSalesServiceTimeEntry
+      x-required-module: sales
+      x-permissions: [sales.service_order.time.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ServiceTimeEntryCreateRequest'}}}}
+      responses: {'201': {description: Tiempo trazable agregado., content: {application/json: {schema: {$ref: '#/components/schemas/ServiceOrderResponse'}}}}}
+  /v1/sales/service-orders/{id}/cost-entries:
+    post:
+      operationId: createSalesServiceCostEntry
+      x-required-module: sales
+      x-permissions: [sales.service_order.cost.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ServiceCostEntryCreateRequest'}}}}
+      responses: {'201': {description: Costo trazable agregado., content: {application/json: {schema: {$ref: '#/components/schemas/ServiceOrderResponse'}}}}}
+  /v1/sales/service-orders/{id}/evidence:
+    post:
+      operationId: createSalesServiceEvidence
+      x-required-module: sales
+      x-permissions: [sales.service_order.evidence.create]
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ServiceEvidenceCreateRequest'}}}}
+      responses: {'201': {description: Evidencia trazable agregada., content: {application/json: {schema: {$ref: '#/components/schemas/ServiceOrderResponse'}}}}}
+  /v1/sales/service-orders/{id}/transitions/{action}:
+    post:
+      operationId: transitionSalesServiceOrder
+      x-required-module: sales
+      x-permissions: [sales.service_order.assign, sales.service_order.start, sales.service_order.wait, sales.service_order.resume, sales.service_order.submit_acceptance, sales.service_order.accept, sales.service_order.cancel]
+      x-permission-mode: action-derived
+      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }, {name: action, in: path, required: true, schema: {type: string, enum: [assign, start, wait, resume, submit_acceptance, accept, cancel]}}]
+      requestBody: {required: true, content: {application/json: {schema: {oneOf: [{$ref: '#/components/schemas/ServiceOrderAssignRequest'}, {$ref: '#/components/schemas/ServiceOrderTransitionRequest'}]}}}}
+      responses: {'200': {description: Transicion auditada de la orden de servicio., content: {application/json: {schema: {$ref: '#/components/schemas/ServiceOrderResponse'}}}}}
   /v1/sales/deliveries:
     get:
       operationId: listSalesDeliveries
@@ -324,7 +400,7 @@ components:
     OrderLineFulfillmentInput:
       type: object
       required: [order_line_id, mode]
-      properties: {order_line_id: {type: string}, mode: {type: string, enum: [stock, production, service]}, allocations: {type: array, items: {$ref: '#/components/schemas/StockAllocationInput'}}}
+      properties: {order_line_id: {type: string}, mode: {type: string, enum: [stock, production]}, allocations: {type: array, items: {$ref: '#/components/schemas/StockAllocationInput'}}}
     SalesOrderFulfillmentRequest:
       type: object
       required: [lines]
@@ -370,4 +446,40 @@ components:
       properties: {id: {type: string}, code: {type: string}, order_id: {type: string}, order_code: {type: string}, customer_id: {type: string}, customer_name: {type: string}, status: {type: string, enum: [draft, confirmed, cancelled]}, confirmation_state: {type: string, enum: [idle, processing, completed, needs_reconciliation]}, scheduled_date: {type: string, format: date}, delivered_at: {type: [string, 'null'], format: date-time}, recipient_name: {type: [string, 'null']}, evidence_reference: {type: [string, 'null']}, notes: {type: [string, 'null']}, lines: {type: array, items: {type: object, additionalProperties: true, description: Delivery line includes actual_cost and actual_cost_source provenance.}}, created_at: {type: string, format: date-time}, updated_at: {type: string, format: date-time}}
     DeliveryResponse: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/DeliveryRead'}}}
     DeliveryListResponse: {type: object, required: [data], properties: {data: {type: array, items: {$ref: '#/components/schemas/DeliveryRead'}}}}
+    ServiceOrderPlanRequest: {type: object, required: [planned_start_date, planned_end_date], properties: {planned_start_date: {type: string, format: date}, planned_end_date: {type: string, format: date}, notes: {type: [string, 'null'], maxLength: 2000}}}
+    ServiceOrderAssignRequest: {type: object, required: [responsible_worker_id], properties: {responsible_worker_id: {type: string, minLength: 1, maxLength: 40}}}
+    ServiceOrderTransitionRequest: {type: object, properties: {reason: {type: [string, 'null'], maxLength: 500}}}
+    ServiceTimeEntryCreateRequest: {type: object, required: [worker_id, worked_on, minutes, hourly_cost], properties: {worker_id: {type: string}, worked_on: {type: string, format: date}, minutes: {type: integer, minimum: 1, maximum: 1440}, hourly_cost: {type: number, minimum: 0}, notes: {type: [string, 'null']}}}
+    ServiceCostEntryCreateRequest: {type: object, required: [cost_type, description, quantity, unit_cost], properties: {cost_type: {type: string, enum: [labor, material, external, other]}, description: {type: string}, quantity: {type: number, exclusiveMinimum: 0}, unit_cost: {type: number, minimum: 0}, evidence_reference: {type: [string, 'null']}}}
+    ServiceEvidenceCreateRequest: {type: object, required: [evidence_reference], properties: {evidence_reference: {type: string}, description: {type: [string, 'null']}}}
+    ServiceOrderRead:
+      type: object
+      required: [id, code, order_id, order_code, order_line_id, customer_id, customer_name, product_service_id, product_service_code, product_service_name, unit, ordered_quantity, status, time_entries, cost_entries, evidence, created_at, updated_at]
+      properties:
+        id: {type: string}
+        code: {type: string}
+        order_id: {type: string}
+        order_code: {type: string}
+        order_line_id: {type: string}
+        customer_id: {type: string}
+        customer_name: {type: string}
+        product_service_id: {type: string}
+        product_service_code: {type: string}
+        product_service_name: {type: string}
+        unit: {type: string}
+        ordered_quantity: {type: number, exclusiveMinimum: 0}
+        status: {type: string, enum: [draft, planned, assigned, in_progress, on_hold, pending_acceptance, accepted, cancelled]}
+        responsible_worker_id: {type: [string, 'null']}
+        responsible_worker_name: {type: [string, 'null']}
+        planned_start_date: {type: [string, 'null'], format: date}
+        planned_end_date: {type: [string, 'null'], format: date}
+        notes: {type: [string, 'null']}
+        actual_cost: {type: [number, 'null'], minimum: 0}
+        time_entries: {type: array, items: {type: object, additionalProperties: true}}
+        cost_entries: {type: array, items: {type: object, additionalProperties: true}}
+        evidence: {type: array, items: {type: object, additionalProperties: true}}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    ServiceOrderResponse: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/ServiceOrderRead'}}}
+    ServiceOrderListResponse: {type: object, required: [data], properties: {data: {type: array, items: {$ref: '#/components/schemas/ServiceOrderRead'}}}}
     ActionReasonRequest: {type: object, required: [reason], properties: {reason: {type: string, minLength: 3, maxLength: 500}}}

@@ -1,5 +1,7 @@
 # ERClave - Siguiente paso tecnico para backend MVP
 
+> Este documento conserva la secuencia de decisiones que inicio el backend MVP. No representa el siguiente paso operativo actual; para estado y prioridades vigentes consultar `docs/contexto/ESTADO_ACTUAL.md` y `docs/contexto/PENDIENTES.md`.
+
 ## 1. Decision del arquitecto SaaS
 
 Para llevar los modulos actuales fuera de la maqueta, el siguiente paso recomendado no es iniciar directamente por tablas ni por endpoints.

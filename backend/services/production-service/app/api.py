@@ -1,14 +1,18 @@
 import hashlib
 import json
+from datetime import date
+from typing import Literal
 from urllib import error,request
 
 from fastapi import APIRouter, Depends, Header, Query, status
 
+from erclave_common.csv_reports import csv_report_response, validate_date_range
 from erclave_common.errors import ErclaveError
 from erclave_common.config import Settings,get_settings
 
 from .authorization import AuthorizedContext, require_production_access
 from .repositories import ProductionRepository, get_production_repository
+from .reports import REPORT_PERMISSIONS, build_report
 from .schemas import (
     ProductServiceCreateRequest,
     ProductServiceListResponse,
@@ -35,6 +39,15 @@ from .schemas import (
 
 
 router = APIRouter(prefix="/v1/production")
+
+@router.get("/reports/{report_code}/export")
+def export_report(report_code:str,lang:Literal["es","en"]="es",date_from:date|None=None,date_to:date|None=None,status_filter:str|None=Query(None,alias="status"),priority:str|None=None,type_filter:str|None=Query(None,alias="type"),q:str|None=Query(None,max_length=120),product_id:str|None=None,area_id:str|None=None,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access(tuple(REPORT_PERMISSIONS.values())))):
+    validate_date_range(date_from,date_to)
+    permission=REPORT_PERMISSIONS.get(report_code)
+    if not permission:raise ErclaveError("report_not_found","Production report does not exist.",status_code=404)
+    access.require(permission)
+    filters={"date_from":date_from,"date_to":date_to,"status":status_filter,"priority":priority,"type":type_filter,"q":q,"product_id":product_id,"area_id":area_id}
+    return csv_report_response(build_report(repository,require_tenant_id(x_tenant_id),report_code,filters),lang)
 
 ORDER_ACTION_PERMISSIONS = (
     "production.order.release", "production.order.wait_resources", "production.order.start",

@@ -2,11 +2,13 @@
 
 Este documento define el orden obligatorio para recuperar contexto antes de analizar o modificar el proyecto.
 
+> Handoff activo: antes de continuar el working tree sin commit de CHG-254/CHG-255, leer `docs/contexto/REANUDACION_CHG255.md`. Preservar todos los cambios existentes y distinguir el release QA ya ejecutado del corte Local aun no migrado.
+
 ## Secuencia
 
 1. Ejecutar `npm.cmd run session:context` desde la raiz.
 2. Leer completamente `AGENTS.md` y las secciones aplicables de `AGENTES.md`.
-3. Leer `docs/contexto/ESTADO_ACTUAL.md`, `DECISIONES.md`, `TENANTS.md` y `PENDIENTES.md`.
+3. Leer `docs/contexto/ESTADO_ACTUAL.md`, `DECISIONES.md`, `TENANTS.md`, `PENDIENTES.md` y cualquier handoff activo enlazado arriba.
 4. Leer `docs/arquitectura/gobierno_documentacion_viva.md`, el documento de `modulos/` correspondiente y las fuentes de arquitectura que este referencie.
 5. Revisar `git status --short`. Todo cambio previo se considera propiedad del usuario hasta demostrar lo contrario.
 6. Identificar microfrontend, servicio, schema, contrato, permisos y agentes especialistas afectados.
