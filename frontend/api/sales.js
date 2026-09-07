@@ -24,7 +24,7 @@ export async function getSalesWorkspace({ customers = true, quotes = true, order
   results.forEach((result, index) => {
     const name = names[index];
     if (result.status === "fulfilled") workspace[name] = result.value.data;
-    else workspace.errors[name] = result.reason?.message || `${name} unavailable`;
+    else workspace.errors[name] = result.reason;
   });
   return workspace;
 }

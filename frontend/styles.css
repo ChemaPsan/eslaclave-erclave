@@ -4863,3 +4863,34 @@ h3 {
     grid-template-columns: 1fr;
   }
 }
+
+.list-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.list-pagination span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  min-width: 150px;
+  text-align: center;
+}
+
+@container main-panel (max-width: 560px) {
+  .list-pagination {
+    justify-content: stretch;
+  }
+
+  .list-pagination button {
+    flex: 1;
+  }
+
+  .list-pagination span {
+    flex-basis: 100%;
+    order: -1;
+  }
+}

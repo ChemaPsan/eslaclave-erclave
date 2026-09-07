@@ -116,6 +116,13 @@ Una decision nueva o reemplazada debe registrarse tambien en `TRAZABILIDAD.md` y
 - Un error de mutación nunca confirma ni conserva visualmente un estado no aceptado. La UI restaura o recarga la proyección autoritativa y explica el siguiente paso.
 - La severidad visible distingue éxito, bloqueo funcional, conciliación y fallo técnico; sólo los casos inesperados o inciertos muestran `correlation_id` como referencia de soporte.
 - El contrato y la taxonomía completos viven en `docs/arquitectura/feedback_operativo_y_errores.md`.
+- Desde CHG-259, toda presentacion de errores del shell usa `frontend/features/error-feedback.js`; `frontend/app.js` no puede leer `error.message` ni `reason.message` para mostrarlo. El validador transversal bloquea regresiones.
+
+## Verificacion y paginacion Local
+
+- La verificacion PostgreSQL completa es un comando explicito y reproducible: `npm run verify:postgres`. Solo admite `erclave_local` en loopback `5434` y convierte cualquier prueba omitida en fallo.
+- `npm run verify:local` compone la integracion PostgreSQL estricta con Playwright. El E2E usa Chrome instalado, Firebase Emulator y URLs loopback; una dependencia Local ausente o una base remota detiene el recorrido.
+- La primera paginacion transversal es de presentacion: pagina en bloques de 25 los registros que la pantalla ya cargo, sin perder acciones ni filtros. No sustituye la busqueda/paginacion server-side obligatoria para maestros y documentos de alto volumen.
 
 ## Continuidad del flujo de Compras
 

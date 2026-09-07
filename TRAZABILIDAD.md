@@ -4130,6 +4130,25 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Rollback | Restaurar el texto anterior en el elemento `title` de `frontend/index.html`. |
 | Observaciones | Operacion `local-write` reversible. No hubo migracion, seed, carga de datos, despliegue ni acceso a QA/Produccion. |
 
+### CHG-259
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-06 |
+| Cambio | Consolidacion Local, regresion E2E, PostgreSQL estricto, concurrencia, errores, modularizacion y paginacion |
+| Autor | Codex |
+| Archivos | Playwright y pruebas E2E; verificadores Local/PostgreSQL; integraciones Admin, Inventory, Sales, Purchasing y Maintenance; repositorio Purchasing; modulos frontend de estado, errores y paginacion; i18n, estilos, validadores y documentacion viva |
+| Secciones | Local / QA automatizada / PostgreSQL / Inventory / Sales / Purchasing / Maintenance / Frontend / Accesibilidad / Paginacion |
+| Agentes consultados | Especialistas tecnicos de Inventory, Ventas, Compras y Mantenimiento; Arquitectura SaaS, Datos/Persistencia, Seguridad/IAM, frontend/i18n y QA/Release definidos en `AGENTES.md`; skills transversales `erclave-feature` y `erclave-environment-boundaries`. No hubo delegacion. |
+| Diagnostico | El working tree acumulaba cinco cambios sin consolidar; la suite ordinaria permitia omitir integraciones PostgreSQL, no existia regresion de navegador, los pools de pruebas podian agotar conexiones, Compras dejaba una partida `pending` cuando Inventory devolvia menos resultados que el plan, `app.js` aun mostraba mensajes crudos y concentraba estado/feedback/listados, y las colecciones extensas no tenian paginacion visual. |
+| Descripcion | Se consolido la linea base en el commit local `8dcff6b`. Playwright valida autenticacion, tenant, seis modulos, todos los submodulos, 28 reportes, paginacion y aislamiento de red. `verify:postgres` exige la base Local y cero skips; `verify:local` agrega E2E. Las pruebas usan pools sin retencion y agregan carreras de reserva/consumo Inventory. Purchasing marca fallidas todas las lineas sin respuesta. Estado, feedback y paginacion se extraen de `app.js`; el validador prohibe `error.message` visible y las listas mayores a 25 elementos obtienen controles accesibles ES/EN. |
+| Motivo | Convertir la funcionalidad existente en una base reproducible y resistente antes de agregar mas alcance funcional. |
+| Impacto | Cambios de codigo, pruebas, tooling y documentacion exclusivamente Local. No hay migracion, seed, permiso nuevo, contrato HTTP, dato QA/Produccion, despliegue, trafico, PR ni publicacion. La paginacion es de presentacion sobre el conjunto ya cargado; el cursor server-side sigue pendiente para alto volumen. |
+| APIs afectadas | Contratos modificados: ninguno. Endpoints consumidos sin cambio por E2E: `GET /health` de los siete servicios, Admin `GET /v1/session/tenants`, `GET /v1/session/context` y lecturas de dashboard; lecturas vigentes de Production, Inventory, HR, Sales, Purchasing y Maintenance usadas por portadas/submodulos. Las rutas de reportes solo se abren en UI y conservan sus contratos. APIs no tocadas: todos los contratos OpenAPI y endpoints mutantes. |
+| Validacion | Linea base: `243 passed` sin skips contra PostgreSQL Local. Cierre CHG-259: `npm run validate` aprobado; `npm run verify:postgres` y el tramo PostgreSQL de `npm run verify:local` aprobaron `245 passed` con cero skips; Playwright aprobo `5 passed`. La correccion Purchasing aprobo sus 14 pruebas focalizadas. |
+| Rollback | Revertir CHG-259 restaura tooling/pruebas y modulos frontend anteriores; revertir el ajuste de `complete_receipt` devuelve la clasificacion incompleta `pending`. El commit base `8dcff6b` permite separar con claridad la estabilizacion nueva. No existe schema ni dato persistente que revertir. |
+| Observaciones | Operacion `local-write` y pruebas contra `127.0.0.1:5434/erclave_local`; no se uso Cloud SQL Proxy, Firebase QA, APIs remotas ni Produccion. Las credenciales del emulador son exclusivamente dummy Local. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

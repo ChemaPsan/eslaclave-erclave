@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import NullPool
 
 from app.repositories import (
     AdminRepository,
@@ -29,7 +30,7 @@ class TransactionEngine:
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_role_permission_replace_is_tenant_safe_idempotent_and_revision_guarded():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"])
+    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:
@@ -209,7 +210,7 @@ def test_role_permission_replace_is_tenant_safe_idempotent_and_revision_guarded(
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_unit_commands_are_tenant_safe_idempotent_and_audited():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"])
+    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:
@@ -242,7 +243,7 @@ def test_unit_commands_are_tenant_safe_idempotent_and_audited():
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_backoffice_entitlement_and_tenant_preference_are_separate_tenant_safe_commands():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"])
+    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:
@@ -359,7 +360,7 @@ def test_backoffice_entitlement_and_tenant_preference_are_separate_tenant_safe_c
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_onboarding_assigns_owner_permissions_after_modules_are_created():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"])
+    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:

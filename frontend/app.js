@@ -2,7 +2,8 @@ import { modules, erpSubmoduleCatalog } from "./data/modules.js";
 import { defaultRecipes } from "./data/resources.js";
 import { mockDb } from "./data/mockDb.js";
 import { translations } from "./i18n/translations.js";
-import { getApiErrorTone, getLocalizedErrorMessage } from "./i18n/api-errors.js";
+import { createErrorFeedback } from "./features/error-feedback.js";
+import { installListPagination } from "./features/list-pagination.js";
 import {
   createTenantBranch,
   createTenantLegalEntity,
@@ -61,59 +62,9 @@ import {
 } from "./utils/production.js";
 import { diffDays, formatCurrency, formatNumber, startOfDay } from "./utils/format.js";
 import { installMutationFeedback } from "./utils/mutation-feedback.js";
+import { createInitialState } from "./state/app-state.js";
 
-const state = {
-  active: modules[0].id,
-  activeSubmodule: null,
-  history: [],
-  theme: localStorage.getItem("erclave-theme") || "light",
-  lang: localStorage.getItem("erclave-lang") || "es",
-  adminApi: {
-    status: "idle",
-    data: null,
-    error: ""
-  },
-  sessionApi: {
-    status: "idle",
-    data: null,
-    error: ""
-  },
-  productionApi: { status: "idle", error: "" },
-  inventoryApi: { status: "idle", error: "" },
-  permissionEditor: null,
-  inventoryMovements: { status: "idle", error: "" },
-  finishedGoodsReceipts: { status: "idle", orders: [], summaries: [], products: [], error: "" },
-  inventoryItems: { status: "idle", error: "" },
-  inventoryBalances: { status: "idle", data: [], page: {}, error: "", queryKey: "", cursor: "", previousCursors: [] },
-  hrApi: { status: "idle", error: "", workers: [] },
-  salesApi: { status: "idle", error: "", referenceWarnings: [], workers: [], references: { currencies: [], payment_terms: [] } },
-  salesServiceOrderDetail: { status: "idle", id: "", data: null, error: "" },
-  purchasingApi: { status: "idle", error: "", suppliers: [], requisitions: [], orders: [], receipts: [], items: [], warehouses: [] },
-  purchasingSupplierEditId: "",
-  purchasingRequisitionEditId: "",
-  purchasingOrderEditId: "",
-  purchasingOrderSourceRequisitionId: "",
-  purchasingReceiptSourceOrderId: "",
-  maintenanceApi: { status: "idle", error: "", orders: [], workers: [], machines: [], productionOrders: [], items: [], warehouses: [] },
-  maintenanceSourceOrderId: "",
-  maintenanceMaterialSourceOrderId: "",
-  unitCatalog: { status: "idle", data: [], error: "" },
-  tenantResolution: {
-    status: "idle",
-    tenants: [],
-    error: ""
-  },
-  adminPanel: "organization",
-  adminBaseCatalog: null,
-  adminDocumentLogo: null,
-  auth: {
-    status: isFirebaseAuthConfigured() ? "loading" : "disabled",
-    user: null,
-    email: "",
-    error: "",
-    notice: ""
-  }
-};
+const state = createInitialState({ authConfigured: isFirebaseAuthConfigured() });
 
 const orderStatusCatalog = ["Liberada", "En espera de recursos", "En produccion", "Pausada", "En validacion", "Terminada", "Cancelada"];
 const fallbackUnitCatalog = Object.freeze([
@@ -170,6 +121,10 @@ const modalBackdrop = document.getElementById("modalBackdrop");
 const modalContent = document.getElementById("modalContent");
 const toast = document.getElementById("toast");
 const authGate = document.getElementById("authGate");
+const errorFeedback = createErrorFeedback({
+  getLanguage: () => state.lang,
+  notify: (message, tone) => showToast(message, tone)
+});
 
 function t(key, values = {}) {
   const template = translations[state.lang]?.[key] || translations.es[key] || key;
@@ -652,11 +607,11 @@ function openStandardReportModal(module,report){
 }
 
 function userFacingError(error, fallback = "") {
-  return getLocalizedErrorMessage(error, { lang: state.lang, fallback });
+  return errorFeedback.message(error, fallback);
 }
 
 function showApiError(error, fallback = "") {
-  showToast(userFacingError(error, fallback), getApiErrorTone(error));
+  errorFeedback.show(error, fallback);
 }
 
 function renderModuleLoadError(module, error, retryAction) {
@@ -1025,7 +980,7 @@ function loadAdminApiDashboard() {
     })
     .catch((error) => {
       if (state.permissionEditor) state.permissionEditor.status = "editing";
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
       render();
     });
 }
@@ -1033,7 +988,7 @@ function loadAdminApiDashboard() {
 function loadUnitCatalog() {
   if (getApiMode() !== "api" || state.unitCatalog.status !== "idle" || !hasReadyApiSession() || !hasPermission("admin.unit.read")) return;
   state.unitCatalog = {status:"loading",data:state.unitCatalog.data,error:""};
-  getUnitsOfMeasure().then((data)=>{state.unitCatalog={status:"ready",data,error:""};}).catch((error)=>{state.unitCatalog={status:"error",data:[],error:error.message||"Unit catalog unavailable"};});
+  getUnitsOfMeasure().then((data)=>{state.unitCatalog={status:"ready",data,error:""};}).catch((error)=>{state.unitCatalog={status:"error",data:[],error:userFacingError(error,"Unit catalog unavailable")};});
 }
 
 function renderAdminEntitlementCard(item, apiMode, apiStatus, entitlements = []) {
@@ -1078,7 +1033,7 @@ function updateAdminEntitlement(moduleCode, enabled) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
       render();
     });
 }
@@ -1168,7 +1123,7 @@ function inviteAdminUser(form) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
       render();
     });
 }
@@ -1193,7 +1148,7 @@ function reinviteAdminUser(userId) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
       render();
     });
 }
@@ -1209,7 +1164,7 @@ function disableAdminUser(userId) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
       render();
     });
 }
@@ -1229,7 +1184,7 @@ function deleteAdminUser(userId) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
       render();
     });
 }
@@ -1493,7 +1448,7 @@ function createAdminRole(form) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
       render();
     });
 }
@@ -1509,7 +1464,7 @@ function toggleAdminRole(roleId, status) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
       render();
     });
 }
@@ -1554,7 +1509,7 @@ function savePermissionEditor() {
     .catch((error) => {
       editor.status = "editing";
       editor.conflict = error.status === 409;
-      editor.error = editor.conflict ? t("permissionConflict") : (error.message || t("permissionSaveError"));
+      editor.error = editor.conflict ? t("permissionConflict") : userFacingError(error, t("permissionSaveError"));
       render();
     });
 }
@@ -1715,7 +1670,7 @@ function saveAdminOrganization(organization, message) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
       render();
     });
 }
@@ -1755,7 +1710,7 @@ function createAdminLegalEntity(form) {
         loadAdminApiDashboard();
       })
       .catch((error) => {
-        state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+        state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
         render();
       });
     return;
@@ -1787,7 +1742,7 @@ function createAdminBranch(form) {
         loadAdminApiDashboard();
       })
       .catch((error) => {
-        state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+        state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
         render();
       });
     return;
@@ -1817,7 +1772,7 @@ function setAdminLegalEntityStatus(legalEntityId, status) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
       render();
     });
 }
@@ -1844,7 +1799,7 @@ function setAdminBranchStatus(branchId, status) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: error.message || "API unavailable" };
+      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
       render();
     });
 }
@@ -2453,16 +2408,16 @@ function renderAdminApiPanel(module) {
       await createUnitOfMeasure({...values, decimal_places:Number(values.decimal_places)});
       showToast(t("unitAdded"));
       await loadAdminApiDashboard();
-    } catch (error) { showToast(error.message || t("unitAddError")); }
+    } catch (error) { showApiError(error, t("unitAddError")); }
   });
   modulePanel.querySelectorAll("[data-action='admin-toggle-unit']").forEach((button)=>button.addEventListener("click", async()=>{
     try { await updateUnitOfMeasure(button.dataset.unitId,{status:button.dataset.nextStatus}); showToast(t("unitUpdated")); await loadAdminApiDashboard(); }
-    catch(error){ showToast(error.message || t("unitUpdateError")); }
+    catch(error){ showApiError(error, t("unitUpdateError")); }
   }));
   modulePanel.querySelectorAll("[data-action='admin-edit-unit']").forEach((button)=>button.addEventListener("click",()=>openAdminUnitModal(button.dataset.unitId)));
 
-  modulePanel.querySelector("[data-form='admin-create-commercial-item']")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget;try{await createCommercialCatalogItem(form.dataset.catalogCode,Object.fromEntries(new FormData(form)));showToast("Valor de catálogo agregado.");await loadAdminApiDashboard();}catch(error){showToast(error.message||"No se pudo agregar el valor.");}});
-  modulePanel.querySelectorAll("[data-action='admin-toggle-commercial-item']").forEach(button=>button.addEventListener("click",async()=>{try{await updateCommercialCatalogItem(button.dataset.catalogCode,button.dataset.itemId,{status:button.dataset.nextStatus});showToast("Catálogo actualizado.");await loadAdminApiDashboard();}catch(error){showToast(error.message||"No se pudo actualizar el catálogo.");}}));
+  modulePanel.querySelector("[data-form='admin-create-commercial-item']")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget;try{await createCommercialCatalogItem(form.dataset.catalogCode,Object.fromEntries(new FormData(form)));showToast("Valor de catálogo agregado.");await loadAdminApiDashboard();}catch(error){showApiError(error,"No se pudo agregar el valor.");}});
+  modulePanel.querySelectorAll("[data-action='admin-toggle-commercial-item']").forEach(button=>button.addEventListener("click",async()=>{try{await updateCommercialCatalogItem(button.dataset.catalogCode,button.dataset.itemId,{status:button.dataset.nextStatus});showToast("Catálogo actualizado.");await loadAdminApiDashboard();}catch(error){showApiError(error,"No se pudo actualizar el catálogo.");}}));
   modulePanel.querySelectorAll("[data-form='admin-code-sequence']").forEach(form => {
     const managed = form.querySelector("[name='managed']");
     const sync = () => form.querySelectorAll("[name='prefix'],[name='next_number'],[name='padding']").forEach((input) => { input.disabled = !managed.checked; });
@@ -2474,12 +2429,12 @@ function renderAdminApiPanel(module) {
         await updateCodeSequence(form.dataset.sequenceId, { mode: managed.checked ? "managed" : "manual", ...(managed.checked ? { prefix: String(values.get("prefix") || "").trim(), next_number: Number(values.get("next_number")), padding: Number(values.get("padding")) } : {}) });
         showToast(t("sequenceUpdated"));
         await loadAdminApiDashboard();
-      } catch (error) { showToast(error.message || t("sequenceUpdateError")); }
+      } catch (error) { showApiError(error, t("sequenceUpdateError")); }
     });
   });
   modulePanel.querySelector("[data-form='admin-document-template'] [name='logo']")?.addEventListener("change",event=>{const file=event.target.files?.[0];if(!file)return;if(!["image/png","image/jpeg","image/webp"].includes(file.type)){showToast(t("documentLogoTypeError"));event.target.value="";return;}if(file.size>1_000_000){showToast(t("documentLogoSizeError"));event.target.value="";return;}const reader=new FileReader();reader.onerror=()=>showToast(t("documentLogoReadError"));reader.onload=()=>{state.adminDocumentLogo=String(reader.result);render();};reader.readAsDataURL(file);});
   modulePanel.querySelector("[data-action='remove-document-logo']")?.addEventListener("click",()=>{state.adminDocumentLogo="";render();});
-  modulePanel.querySelector("[data-form='admin-document-template']")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget;const values=new FormData(form);try{await updateDocumentTemplate({logo_data_url:state.adminDocumentLogo===null?(safeData.documentTemplate?.logo_data_url||null):state.adminDocumentLogo||null,primary_color:values.get("primary_color"),accent_color:values.get("accent_color"),text_color:values.get("text_color"),footer_text:String(values.get("footer_text")||"").trim()||null,show_page_number:values.get("show_page_number")==="on"});state.adminDocumentLogo=null;showToast(t("documentTemplateUpdated"));await loadAdminApiDashboard();}catch(error){showToast(error.message||t("documentTemplateUpdateError"));}});
+  modulePanel.querySelector("[data-form='admin-document-template']")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget;const values=new FormData(form);try{await updateDocumentTemplate({logo_data_url:state.adminDocumentLogo===null?(safeData.documentTemplate?.logo_data_url||null):state.adminDocumentLogo||null,primary_color:values.get("primary_color"),accent_color:values.get("accent_color"),text_color:values.get("text_color"),footer_text:String(values.get("footer_text")||"").trim()||null,show_page_number:values.get("show_page_number")==="on"});state.adminDocumentLogo=null;showToast(t("documentTemplateUpdated"));await loadAdminApiDashboard();}catch(error){showApiError(error,t("documentTemplateUpdateError"));}});
 
   modulePanel.querySelector("[data-form='admin-invite-user']")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -2580,7 +2535,7 @@ function loadSessionContext() {
       render();
     })
     .catch((error) => {
-      state.sessionApi = { status: "error", data: null, error: error.message || "Session context unavailable" };
+      state.sessionApi = { status: "error", data: null, error: userFacingError(error, "Session context unavailable") };
       render();
     });
 }
@@ -2735,7 +2690,7 @@ function loadProductionApiData() {
       render();
     })
     .catch((error) => {
-      state.productionApi = { status: "error", error: error.message || "Production API unavailable" };
+      state.productionApi = { status: "error", error: userFacingError(error, "Production API unavailable") };
       render();
     });
 }
@@ -2749,7 +2704,7 @@ function loadInventoryApiData() {
       ...warehouses.map((item) => ({id:item.id,code:item.code,moduleId:"almacenes",submoduleId:"almacenes",recordType:"warehouse",title:item.name,detail:item.type,status:mapInventoryStatus(item.status),owner:item.owner||"",fields:{type:item.type,businessCenter:item.business_center,location:item.location,capacity:item.capacity||"",policy:item.inventory_policy,zone:item.zone||"",aisle:item.aisle||"",rack:item.rack||"",level:item.level||"",position:item.position||"",description:item.description||""}}))
     ];
     mockDb.saveModuleRecords("almacenes", records); state.inventoryApi={status:"ready",error:""}; state.inventoryItems={status:"idle",error:""}; state.inventoryMovements={status:"idle",error:""}; state.finishedGoodsReceipts={status:"idle",orders:[],summaries:[],products:[],error:""}; state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]}; render();
-  }).catch((error)=>{state.inventoryApi={status:"error",error:error.message||"Inventory API unavailable"};render();});
+  }).catch((error)=>{state.inventoryApi={status:"error",error:userFacingError(error,"Inventory API unavailable")};render();});
 }
 
 function loadInventoryItemData() {
@@ -2762,7 +2717,7 @@ function loadInventoryItemData() {
     const items=(response.data||[]).map((item)=>({id:item.id,code:item.code,moduleId:"almacenes",submoduleId:"articulos",recordType:"inventoryItem",title:item.name,detail:`${item.type} - ${item.base_unit}`,status:mapInventoryStatus(item.status),owner:warehouseById[item.suggested_warehouse_id]?.title||"",fields:{type:item.type,category:item.category||"",unit:item.base_unit,defaultUnitCost:Number(item.default_unit_cost_per_base_unit??item.default_unit_cost??0),minStock:item.minimum_stock,maxStock:item.maximum_stock||"",policy:item.inventory_policy,useInRecipe:Boolean(item.use_in_recipe),defaultWarehouseId:item.suggested_warehouse_id||"",defaultWarehouseName:warehouseById[item.suggested_warehouse_id]?.title||"",description:item.description||""}}));
     mockDb.saveModuleRecords("almacenes",[...records.filter((record)=>record.recordType!=="inventoryItem"),...items]);
     state.inventoryItems={status:"ready",error:""};render();
-  }).catch((error)=>{state.inventoryItems={status:"error",error:error.message||"Inventory items unavailable"};render();});
+  }).catch((error)=>{state.inventoryItems={status:"error",error:userFacingError(error,"Inventory items unavailable")};render();});
 }
 
 function loadInventoryMovementData() {
@@ -2777,7 +2732,7 @@ function loadInventoryMovementData() {
     const movements = (response.data || []).map((item) => ({id:item.id,code:item.movement_code,moduleId:"almacenes",submoduleId:"movimientos",recordType:"inventoryMovement",title:itemById[item.inventory_item_id]?.title||item.inventory_item_id,detail:`${item.movement_type} - ${item.quantity} ${item.unit}`,status:item.status==="recorded"?"Registrado":"Reversado",owner:warehouseById[item.warehouse_id]?.title||item.warehouse_id,fields:{movementType:item.movement_type,sourceDocument:item.source_id,itemId:item.inventory_item_id,item:itemById[item.inventory_item_id]?.title||item.inventory_item_id,quantity:item.quantity,unit:item.unit,warehouseId:item.warehouse_id,warehouseName:warehouseById[item.warehouse_id]?.title||item.warehouse_id,movementDate:item.occurred_at?.slice(0,10),reason:item.reason||""}}));
     mockDb.saveModuleRecords("almacenes", [...records.filter((record) => record.recordType !== "inventoryMovement"),...movements]);
     state.inventoryMovements={status:"ready",error:""}; render();
-  }).catch((error) => { state.inventoryMovements={status:"error",error:error.message||"Inventory movements unavailable"}; render(); });
+  }).catch((error) => { state.inventoryMovements={status:"error",error:userFacingError(error,"Inventory movements unavailable")}; render(); });
 }
 
 function loadFinishedGoodsReceiptData() {
@@ -2785,7 +2740,7 @@ function loadFinishedGoodsReceiptData() {
   state.finishedGoodsReceipts = { ...state.finishedGoodsReceipts, status: "loading", error: "" };
   return Promise.all([getFinishedGoodsCandidates(),getFinishedGoodsReceipts()]).then(([candidates,response])=>{
     state.finishedGoodsReceipts={status:"ready",orders:candidates.orders||[],products:candidates.products||[],summaries:response.data||[],error:""};render();
-  }).catch((error)=>{state.finishedGoodsReceipts={status:"error",orders:[],products:[],summaries:[],error:error.message||t("finishedGoodsReceiptLoadError")};render();});
+  }).catch((error)=>{state.finishedGoodsReceipts={status:"error",orders:[],products:[],summaries:[],error:userFacingError(error,t("finishedGoodsReceiptLoadError"))};render();});
 }
 
 function loadHrApiData() {
@@ -2795,7 +2750,7 @@ function loadHrApiData() {
     mockDb.saveLaborAreas((areas||[]).map((area)=>({id:area.id,code:area.code,name:area.name,description:area.description||"",status:area.status==="active"?"Activo":"Inactivo"})));
     mockDb.saveLaborRoles((positions||[]).map((position)=>({id:position.id,areaId:position.labor_area_id,area:(areas||[]).find((area)=>area.id===position.labor_area_id)?.name||"",position:position.position,name:position.recipe_name,quantity:position.resource_quantity,minutesPerResource:position.minutes_per_resource,available:position.resource_quantity*position.minutes_per_resource,hourlyCost:Number(position.hourly_cost),cost:Number(position.hourly_cost)/60,unit:"min",type:"Mano de obra",source:"Recursos Humanos",intervenesInProduction:Boolean(position.intervenes_in_production),intervenesInMaintenance:Boolean(position.intervenes_in_maintenance),status:position.status==="active"?"Activo":"Inactivo"})));
     state.hrApi={status:"ready",error:"",workers:workers||[]};render();
-  }).catch((error)=>{state.hrApi={status:"error",error:error.message||"HR API unavailable"};render();});
+  }).catch((error)=>{state.hrApi={status:"error",error:userFacingError(error,"HR API unavailable")};render();});
 }
 
 const salesCustomerStatusFromApi={prospect:"Prospecto",active:"Activo",inactive:"Inactivo",blocked:"Bloqueado"};
@@ -2834,7 +2789,7 @@ async function loadSalesApiData() {
     if (workersResult.status === "rejected") warnings.push(t("salesWorkersUnavailable"));
     if (productsResult.status === "rejected") warnings.push(t("salesProductsUnavailable"));
     if (unitsResult.status === "rejected") warnings.push(t("salesUnitsUnavailable"));
-    Object.entries(workspace.errors || {}).forEach(([name, message]) => warnings.push(`${name}: ${message}`));
+    Object.entries(workspace.errors || {}).forEach(([name, error]) => warnings.push(`${name}: ${userFacingError(error, `${name} unavailable`)}`));
     const previous = mockDb.loadModuleRecords("ventas");
     const keepOrReplace = (name, recordType, values, mapper) => workspace.errors?.[name]
       ? previous.filter((record) => record.recordType === recordType)
@@ -2850,11 +2805,11 @@ async function loadSalesApiData() {
     if (needsQuoteCatalogs) mockDb.saveProductsServices((products || []).map(mapApiProduct));
     state.unitCatalog = unitsResult.status === "fulfilled"
       ? { status: "ready", data: units || [], error: "" }
-      : { status: "error", data: [], error: unitsResult.reason?.message || "Unit catalog unavailable" };
+      : { status: "error", data: [], error: userFacingError(unitsResult.reason, "Unit catalog unavailable") };
     const references = workspace.errors?.references ? state.salesApi.references : workspace.references;
     state.salesApi = { status: "ready", error: "", referenceWarnings: warnings, workers: workers || [], references: references || { currencies: [], payment_terms: [] } };
   } catch (error) {
-    state.salesApi = { ...state.salesApi, status: "error", error: error.message || "Sales API unavailable" };
+    state.salesApi = { ...state.salesApi, status: "error", error: userFacingError(error, "Sales API unavailable") };
   }
   render();
 }
@@ -2905,7 +2860,7 @@ function resolveSessionTenant() {
       state.tenantResolution = {
         status: "error",
         tenants: [],
-        error: error.message || "No se pudieron resolver los tenants del usuario."
+        error: userFacingError(error, "No se pudieron resolver los tenants del usuario.")
       };
       state.sessionApi = { status: "error", data: null, error: state.tenantResolution.error };
       applyScreenSnapshot({ active: "administracion", activeSubmodule: null, laborArea: "" });
@@ -2925,10 +2880,10 @@ async function loadPurchasingApiData() {
   try {
     const [workspace,itemResult,catalogResult,unitsResult]=await Promise.all([getPurchasingWorkspace(),getInventoryItems({status:"active"}).catch(()=>({data:[]})),getInventoryCatalog().catch(()=>({warehouses:[]})),getUnitsOfMeasure().catch(()=>[])]);
     const critical=Object.entries(workspace.errors||{});
-    if(critical.length) throw new Error(critical.map(([name,message])=>`${name}: ${message}`).join(" · "));
+    if(critical.length) throw critical[0][1];
     state.unitCatalog={status:"ready",data:unitsResult||[],error:""};
     state.purchasingApi={status:"ready",error:"",...workspace,items:itemResult.data||[],warehouses:catalogResult.warehouses||[]};
-  } catch(error) { state.purchasingApi={...state.purchasingApi,status:"error",error:error.message||"Purchasing API unavailable"}; }
+  } catch(error) { state.purchasingApi={...state.purchasingApi,status:"error",error:userFacingError(error,"Purchasing API unavailable")}; }
   render();
 }
 
@@ -2940,9 +2895,9 @@ async function loadMaintenanceApiData(){
     const [ordersResult,workersResult,productionResult,itemsResult,catalogResult]=await Promise.allSettled([getMaintenanceOrders(),canMutateOrders||canUseTime?getMaintenanceEligibleWorkers():Promise.resolve([]),canMutateOrders?getProductionCatalog():Promise.resolve({machines:[],orders:[]}),canUseMaterials?getInventoryItems({status:"active"}):Promise.resolve({data:[]}),canUseMaterials?getInventoryCatalog():Promise.resolve({warehouses:[]})]);
     if(ordersResult.status==="rejected")throw ordersResult.reason;
     const workers=workersResult.status==="fulfilled"?workersResult.value:[],production=productionResult.status==="fulfilled"?productionResult.value:{machines:[],orders:[]},items=itemsResult.status==="fulfilled"?itemsResult.value:{data:[]},catalog=catalogResult.status==="fulfilled"?catalogResult.value:{warehouses:[]};
-    const warnings=[workersResult,productionResult,itemsResult,catalogResult].filter(result=>result.status==="rejected").map(result=>result.reason?.message||"Catalog unavailable");
+    const warnings=[workersResult,productionResult,itemsResult,catalogResult].filter(result=>result.status==="rejected").map(result=>userFacingError(result.reason,"Catalog unavailable"));
     state.maintenanceApi={status:"ready",error:"",warnings,orders:ordersResult.value,workers,machines:production.machines||[],productionOrders:(production.orders||[]).filter(item=>["waiting_resources","in_progress"].includes(item.status)),items:items.data||[],warehouses:(catalog.warehouses||[]).filter(item=>item.status==="active"&&["spare_parts","spareParts"].includes(item.type))};
-  }catch(error){state.maintenanceApi={...state.maintenanceApi,status:"error",error:error.message||"Maintenance API unavailable"};}
+  }catch(error){state.maintenanceApi={...state.maintenanceApi,status:"error",error:userFacingError(error,"Maintenance API unavailable")};}
   render();
 }
 function maintenanceStatus(value){const map={draft:["Borrador","Draft"],requested:["Solicitada","Requested"],assigned:["Asignada","Assigned"],in_progress:["En proceso","In progress"],waiting_resources:["Esperando recursos","Waiting for resources"],waiting_parts:["Esperando refacciones","Waiting for parts"],resolved:["Resuelta","Resolved"],closed:["Cerrada","Closed"],cancelled:["Cancelada","Cancelled"],processing:["Procesando","Processing"],completed:["Conciliada","Reconciled"],reserved:["Reservada","Reserved"],issued:["Entregada","Issued"],released:["Liberada","Released"],failed:["Fallida","Failed"],cancelling:["Cancelando","Cancelling"],needs_reconciliation:["Requiere conciliacion","Needs reconciliation"]};return (map[value]||[value,value])[state.lang==="en"?1:0];}
@@ -2962,7 +2917,7 @@ function maintenanceTimeFields(order,en){
 
 function openMaintenanceTimeModal(order,en){
   modalContent.innerHTML=`<form class="recipe-form" id="maintenanceTimeModalForm"><div class="modal-head"><div><p class="eyebrow">${en?"Maintenance order":"Orden de mantenimiento"}</p><h2 id="modalTitle">${en?"Log time":"Registrar tiempo"}</h2><p class="helper-copy">${escapeHtml(order.code)} &middot; ${escapeHtml(order.title)}</p></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div>${maintenanceTimeFields(order,en)}<div class="form-errors" id="formErrors" hidden></div><div class="modal-actions"><button class="secondary-action" type="button" data-action="close-maintenance-time">${t("cancel")}</button><button class="primary-action" type="submit">${en?"Save time":"Guardar tiempo"}</button></div></form>`;
-  modalBackdrop.hidden=false;modalContent.querySelector(".modal-close").addEventListener("click",closeModal);modalContent.querySelector("[data-action='close-maintenance-time']").addEventListener("click",closeModal);modalContent.querySelector("#maintenanceTimeModalForm").addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget)),start=new Date(data.time_started_at),end=new Date(data.time_ended_at),errors=[];if(!order.assigned_worker_id)errors.push(en?"Assign a technician before logging time.":"Asigna un tecnico antes de registrar tiempo.");if(!data.time_started_at||!data.time_ended_at||end<=start)errors.push(en?"End must be after start.":"El fin debe ser posterior al inicio.");if(end>new Date())errors.push(en?"End cannot be in the future.":"El fin no puede estar en el futuro.");renderFormErrors(errors);if(errors.length)return;try{await createMaintenanceTime(order.id,{worker_id:order.assigned_worker_id,started_at:start.toISOString(),ended_at:end.toISOString(),notes:data.time_notes.trim()||null});closeModal();await loadMaintenanceApiData();render();showToast(en?"Maintenance time saved.":"Tiempo de mantenimiento guardado.");}catch(error){renderFormErrors([error.message||"Error"]);}});
+  modalBackdrop.hidden=false;modalContent.querySelector(".modal-close").addEventListener("click",closeModal);modalContent.querySelector("[data-action='close-maintenance-time']").addEventListener("click",closeModal);modalContent.querySelector("#maintenanceTimeModalForm").addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget)),start=new Date(data.time_started_at),end=new Date(data.time_ended_at),errors=[];if(!order.assigned_worker_id)errors.push(en?"Assign a technician before logging time.":"Asigna un tecnico antes de registrar tiempo.");if(!data.time_started_at||!data.time_ended_at||end<=start)errors.push(en?"End must be after start.":"El fin debe ser posterior al inicio.");if(end>new Date())errors.push(en?"End cannot be in the future.":"El fin no puede estar en el futuro.");renderFormErrors(errors);if(errors.length)return;try{await createMaintenanceTime(order.id,{worker_id:order.assigned_worker_id,started_at:start.toISOString(),ended_at:end.toISOString(),notes:data.time_notes.trim()||null});closeModal();await loadMaintenanceApiData();render();showToast(en?"Maintenance time saved.":"Tiempo de mantenimiento guardado.");}catch(error){renderFormErrors([userFacingError(error,en?"The time could not be saved.":"No se pudo guardar el tiempo.")]);}});
 }
 
 function openMaintenanceActionModal(order,action,en){
@@ -2993,7 +2948,7 @@ function openMaintenanceActionModal(order,action,en){
       if(resolving){await updateMaintenanceOrder(order.id,{diagnosis:data.diagnosis.trim(),root_cause:data.root_cause.trim()||null,work_performed:data.work_performed.trim(),verification_notes:data.verification_notes.trim()});if(needsTime&&canCreateTime&&!timeCreated){await createMaintenanceTime(order.id,{worker_id:order.assigned_worker_id,started_at:new Date(data.time_started_at).toISOString(),ended_at:new Date(data.time_ended_at).toISOString(),notes:data.time_notes.trim()||null});timeCreated=true;}result=await transitionMaintenanceOrder(order.id,"resolve",{});}
       else result=await transitionMaintenanceOrder(order.id,"cancel",{reason:data.reason.trim()});
       closeModal();await loadMaintenanceApiData();render();showToast(result.integration_status==="needs_reconciliation"?(en?"The operation still requires reconciliation.":"La operacion aun requiere conciliacion."):(resolving?(en?"Maintenance order resolved.":"Orden de mantenimiento resuelta."):(en?"Maintenance order cancelled.":"Orden de mantenimiento cancelada.")));
-    }catch(error){renderFormErrors([...(timeCreated?[en?"Time was saved. Complete the remaining correction and try resolving again.":"El tiempo ya fue guardado. Corrige lo pendiente e intenta resolver nuevamente."]:[]),error.message||"Error"]);}
+    }catch(error){renderFormErrors([...(timeCreated?[en?"Time was saved. Complete the remaining correction and try resolving again.":"El tiempo ya fue guardado. Corrige lo pendiente e intenta resolver nuevamente."]:[]),userFacingError(error,en?"The order could not be resolved.":"No se pudo resolver la orden.")]);}
   });
 }
 function maintenanceLineMarkup(items,en){return `<div class="purchasing-requisition-line" data-maintenance-material-line><label class="preview-field purchasing-line-item"><span>${en?"Spare part":"Refaccion"}</span><select name="item_id" data-entity-selector required><option value="">${en?"Choose an item":"Selecciona un articulo"}</option>${items.map(item=>`<option value="${escapeAttribute(item.id)}" data-unit="${escapeAttribute(item.base_unit)}">${escapeHtml(item.code)} · ${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="preview-field"><span>${en?"Quantity":"Cantidad"}</span><input name="quantity" type="number" min="0.000001" step="any" required></label><label class="preview-field"><span>${en?"Unit":"Unidad"}</span><input name="unit_code" readonly required></label><button class="secondary-action small-action" type="button" data-remove-maintenance-line>${en?"Remove":"Quitar"}</button></div>`;}
@@ -3008,15 +2963,15 @@ function renderMaintenanceSubmodulePanel(module){
     const sourceOrder=api.productionOrders.find(item=>item.id===state.maintenanceSourceOrderId),sourceMachineId=sourceOrder?.resources?.find(item=>item.resource_type==="machine")?.resource_ref_id||"";const machines=api.machines.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===sourceMachineId?"selected":""}>${escapeHtml(item.code)} · ${escapeHtml(item.name)}</option>`).join(""),productionOrders=api.productionOrders.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===state.maintenanceSourceOrderId?"selected":""}>${escapeHtml(item.code)} · ${maintenanceStatus(item.status)}</option>`).join("");
     modulePanel.innerHTML=`<div class="panel-head"><div><p class="eyebrow">${en?"Maintenance / Operations":"Mantenimiento / Operacion"}</p><h2>${en?"Corrective orders":"Ordenes correctivas"}</h2></div><button class="secondary-action" data-action="back-module">${t("overview")}</button></div><div class="flow-guided-layout">${renderFlowGuide(getMaintenanceFlowTitle(id),getMaintenanceFlowSteps(id))}<section class="section-card"><form class="form-grid" id="maintenanceOrderForm"><label class="preview-field"><span>${en?"Code":"Folio"}</span><input name="code" required></label><label class="preview-field"><span>${en?"Target":"Objetivo"}</span><select name="target_type"><option value="facility">${en?"Facility":"Instalacion"}</option><option value="other">${en?"Other":"Otro"}</option><option value="production_machine">${en?"Production machine":"Maquina de Produccion"}</option></select></label><label class="preview-field"><span>${en?"Machine":"Maquina"}</span><select name="production_machine_id"><option value="">${en?"Not applicable":"No aplica"}</option>${machines}</select></label><label class="preview-field"><span>${en?"Production order (optional)":"Orden de Produccion (opcional)"}</span><select name="source_production_order_id"><option value="">${en?"Manual report":"Reporte manual"}</option>${productionOrders}</select></label><label class="preview-field"><span>${en?"Priority":"Prioridad"}</span><select name="priority"><option value="low">${en?"Low":"Baja"}</option><option value="medium" selected>${en?"Medium":"Media"}</option><option value="high">${en?"High":"Alta"}</option><option value="critical">${en?"Critical":"Critica"}</option></select></label><label class="preview-field"><span>${en?"Title":"Titulo"}</span><input name="title" maxlength="180" required></label><label class="preview-field wide-field"><span>${en?"Fault description":"Descripcion de la falla"}</span><textarea name="description" maxlength="4000" required></textarea></label><label class="preview-field"><span>${en?"Location":"Ubicacion"}</span><input name="location" maxlength="300" required></label><label class="preview-field"><span>${en?"Safety notes":"Notas de seguridad"}</span><input name="safety_notes" maxlength="2000"></label><div class="wide-field"><button class="primary-action" type="submit">${en?"Create order":"Crear orden"}</button></div></form></section><section class="section-card"><div class="catalog-grid">${cards||`<p>${en?"No maintenance orders yet.":"Aun no hay ordenes de mantenimiento."}</p>`}</div></section></div>`;
     if(!hasPermission("maintenance.order.create"))modulePanel.querySelector("#maintenanceOrderForm")?.closest(".section-card")?.remove();
-    modulePanel.querySelector("#maintenanceOrderForm")?.addEventListener("submit",async event=>{event.preventDefault();const d=Object.fromEntries(new FormData(event.currentTarget));const machineId=d.production_machine_id||null,sourceId=d.source_production_order_id||null;try{await createMaintenanceOrder({...d,target_type:machineId?"production_machine":d.target_type,production_machine_id:machineId,source_type:sourceId?"production_order":"manual",source_production_order_id:sourceId,safety_notes:d.safety_notes||null});state.maintenanceSourceOrderId="";await loadMaintenanceApiData();render();showToast(en?"Maintenance order created.":"Orden de mantenimiento creada.");}catch(error){showToast(error.message||"Error");}});
+    modulePanel.querySelector("#maintenanceOrderForm")?.addEventListener("submit",async event=>{event.preventDefault();const d=Object.fromEntries(new FormData(event.currentTarget));const machineId=d.production_machine_id||null,sourceId=d.source_production_order_id||null;try{await createMaintenanceOrder({...d,target_type:machineId?"production_machine":d.target_type,production_machine_id:machineId,source_type:sourceId?"production_order":"manual",source_production_order_id:sourceId,safety_notes:d.safety_notes||null});state.maintenanceSourceOrderId="";await loadMaintenanceApiData();render();showToast(en?"Maintenance order created.":"Orden de mantenimiento creada.");}catch(error){showApiError(error,en?"The maintenance order could not be created.":"No se pudo crear la orden de mantenimiento.");}});
   }else{
     const materialOrders=api.orders.filter(item=>["assigned","in_progress","waiting_parts"].includes(item.status)),orders=materialOrders.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===state.maintenanceMaterialSourceOrderId?"selected":""}>${escapeHtml(item.code)} · ${escapeHtml(item.title)}</option>`).join(""),warehouses=api.warehouses.map(item=>`<option value="${escapeAttribute(item.id)}">${escapeHtml(item.code)} · ${escapeHtml(item.name)}</option>`).join("");
     const materialSetup=!materialOrders.length?`<p class="helper-copy">${en?"Assign a technician to an order before requesting parts.":"Asigna un tecnico a una orden antes de solicitar refacciones."}</p>`:!api.warehouses.length?`<div><p class="helper-copy">${en?"An active spare-parts warehouse is required. None exists in Inventory yet.":"Se necesita un almacen activo de tipo Refacciones. Aun no existe ninguno en Inventario."}</p><div class="row-actions">${hasPermission("inventory.warehouse.create")?`<button class="primary-action small-action" type="button" data-open-spare-parts-warehouse>${en?"Create spare-parts warehouse":"Crear almacen de refacciones"}</button>`:`<span class="chip warning">${en?"Ask the Inventory manager to create it.":"Solicita su alta al encargado de Inventario."}</span>`}</div></div>`:!api.items.length?`<div><p class="helper-copy">${en?"Create an active inventory item before requesting it.":"Crea primero un articulo activo en Inventario para poder solicitarlo."}</p>${hasPermission("inventory.item.create")?`<button class="primary-action small-action" type="button" data-open-spare-parts-items>${en?"Create inventory item":"Crear articulo"}</button>`:`<span class="chip warning">${en?"Ask the Inventory manager to create it.":"Solicita su alta al encargado de Inventario."}</span>`}</div>`:`<form class="form-grid" id="maintenanceMaterialForm"><label class="preview-field"><span>${en?"Order":"Orden"}</span><select name="order_id" required><option value="" ${state.maintenanceMaterialSourceOrderId?"":"selected"}>${en?"Choose":"Selecciona"}</option>${orders}</select></label><label class="preview-field"><span>${en?"Spare-parts warehouse":"Almacen de refacciones"}</span><select name="warehouse_id" required><option value="">${en?"Choose":"Selecciona"}</option>${warehouses}</select></label><div class="wide-field"><button class="secondary-action small-action" type="button" data-add-maintenance-line>${en?"Add part":"Agregar refaccion"}</button></div><div class="wide-field purchasing-requisition-lines" id="maintenanceMaterialLines">${maintenanceLineMarkup(api.items,en)}</div><div class="wide-field"><button class="primary-action" type="submit">${en?"Reserve parts":"Solicitar y reservar refacciones"}</button></div></form>`;
     modulePanel.innerHTML=`<div class="panel-head"><div><p class="eyebrow">${en?"Maintenance / Spare parts":"Mantenimiento / Refacciones"}</p><h2>${en?"Labor and spare parts":"Tiempos y refacciones"}</h2></div><button class="secondary-action" data-action="back-module">${t("overview")}</button></div><div class="flow-guided-layout">${renderFlowGuide(getMaintenanceFlowTitle(id),getMaintenanceFlowSteps(id))}<section class="section-card"><h3>${en?"Log labor time":"Registrar tiempo"}</h3><form class="form-grid" id="maintenanceTimeForm"><label class="preview-field"><span>${en?"Order":"Orden"}</span><select name="order_id" required><option value="">${en?"Choose":"Selecciona"}</option>${orders}</select></label><label class="preview-field"><span>${en?"Technician":"Tecnico"}</span><select name="worker_id" required><option value="">${en?"Choose":"Selecciona"}</option>${workerOptions}</select></label><label class="preview-field"><span>${en?"Start":"Inicio"}</span><input name="started_at" type="datetime-local" required></label><label class="preview-field"><span>${en?"End":"Fin"}</span><input name="ended_at" type="datetime-local" required></label><label class="preview-field wide-field"><span>${en?"Notes":"Notas"}</span><input name="notes" maxlength="1000"></label><div class="wide-field"><button class="primary-action" type="submit">${en?"Save time":"Guardar tiempo"}</button></div></form></section><section class="section-card"><h3>${en?"Request spare parts":"Solicitar refacciones"}</h3>${materialSetup}</section><section class="section-card"><div class="catalog-grid">${cards}</div></section></div>`;
     if(!hasPermission("maintenance.time.create"))modulePanel.querySelector("#maintenanceTimeForm")?.closest(".section-card")?.remove();
     if(!hasPermission("maintenance.material_request.create"))modulePanel.querySelector("#maintenanceMaterialForm")?.closest(".section-card")?.remove();
-    modulePanel.querySelector("#maintenanceTimeForm")?.addEventListener("submit",async event=>{event.preventDefault();const d=Object.fromEntries(new FormData(event.currentTarget));try{await createMaintenanceTime(d.order_id,{worker_id:d.worker_id,started_at:new Date(d.started_at).toISOString(),ended_at:new Date(d.ended_at).toISOString(),notes:d.notes||null});await loadMaintenanceApiData();render();showToast(en?"Time saved.":"Tiempo guardado.");}catch(error){showToast(error.message||"Error");}});
-    const lineContainer=modulePanel.querySelector("#maintenanceMaterialLines");modulePanel.querySelector("[data-add-maintenance-line]")?.addEventListener("click",()=>lineContainer?.insertAdjacentHTML("beforeend",maintenanceLineMarkup(api.items,en)));modulePanel.addEventListener("change",event=>{if(event.target.name==="item_id"){const row=event.target.closest("[data-maintenance-material-line]");row.querySelector('[name="unit_code"]').value=event.target.selectedOptions[0]?.dataset.unit||"";}});modulePanel.addEventListener("click",event=>{const button=event.target.closest("[data-remove-maintenance-line]");if(button&&lineContainer?.querySelectorAll("[data-maintenance-material-line]").length>1)button.closest("[data-maintenance-material-line]").remove();});modulePanel.querySelector("[data-open-spare-parts-warehouse]")?.addEventListener("click",()=>{const inventoryModule=modules.find(item=>item.id==="almacenes"),submodule=getGenericSubmodule(inventoryModule,"almacenes");navigateTo({active:"almacenes",activeSubmodule:"almacenes",laborArea:""});openWarehouseModal(inventoryModule,submodule,null,{type:"spare_parts"});});modulePanel.querySelector("[data-open-spare-parts-items]")?.addEventListener("click",()=>{const inventoryModule=modules.find(item=>item.id==="almacenes"),submodule=getGenericSubmodule(inventoryModule,"articulos");navigateTo({active:"almacenes",activeSubmodule:"articulos",laborArea:""});openInventoryItemModal(inventoryModule,submodule,null,{type:"sparePart"});});modulePanel.querySelector("#maintenanceMaterialForm")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget,d=Object.fromEntries(new FormData(form)),lines=[...form.querySelectorAll("[data-maintenance-material-line]")].map(row=>({item_id:row.querySelector('[name="item_id"]').value,quantity:Number(row.querySelector('[name="quantity"]').value),unit_code:row.querySelector('[name="unit_code"]').value}));try{const request=await createMaintenanceMaterialRequest(d.order_id,{warehouse_id:d.warehouse_id,lines});state.maintenanceMaterialSourceOrderId="";await loadMaintenanceApiData();render();showToast(request.status==="needs_reconciliation"?(en?"Some parts require reconciliation.":"Algunas refacciones requieren conciliacion."):(en?"Spare parts requested and reserved.":"Refacciones solicitadas y reservadas."));}catch(error){showToast(error.message||"Error");}});
+    modulePanel.querySelector("#maintenanceTimeForm")?.addEventListener("submit",async event=>{event.preventDefault();const d=Object.fromEntries(new FormData(event.currentTarget));try{await createMaintenanceTime(d.order_id,{worker_id:d.worker_id,started_at:new Date(d.started_at).toISOString(),ended_at:new Date(d.ended_at).toISOString(),notes:d.notes||null});await loadMaintenanceApiData();render();showToast(en?"Time saved.":"Tiempo guardado.");}catch(error){showApiError(error,en?"The time could not be saved.":"No se pudo guardar el tiempo.");}});
+    const lineContainer=modulePanel.querySelector("#maintenanceMaterialLines");modulePanel.querySelector("[data-add-maintenance-line]")?.addEventListener("click",()=>lineContainer?.insertAdjacentHTML("beforeend",maintenanceLineMarkup(api.items,en)));modulePanel.addEventListener("change",event=>{if(event.target.name==="item_id"){const row=event.target.closest("[data-maintenance-material-line]");row.querySelector('[name="unit_code"]').value=event.target.selectedOptions[0]?.dataset.unit||"";}});modulePanel.addEventListener("click",event=>{const button=event.target.closest("[data-remove-maintenance-line]");if(button&&lineContainer?.querySelectorAll("[data-maintenance-material-line]").length>1)button.closest("[data-maintenance-material-line]").remove();});modulePanel.querySelector("[data-open-spare-parts-warehouse]")?.addEventListener("click",()=>{const inventoryModule=modules.find(item=>item.id==="almacenes"),submodule=getGenericSubmodule(inventoryModule,"almacenes");navigateTo({active:"almacenes",activeSubmodule:"almacenes",laborArea:""});openWarehouseModal(inventoryModule,submodule,null,{type:"spare_parts"});});modulePanel.querySelector("[data-open-spare-parts-items]")?.addEventListener("click",()=>{const inventoryModule=modules.find(item=>item.id==="almacenes"),submodule=getGenericSubmodule(inventoryModule,"articulos");navigateTo({active:"almacenes",activeSubmodule:"articulos",laborArea:""});openInventoryItemModal(inventoryModule,submodule,null,{type:"sparePart"});});modulePanel.querySelector("#maintenanceMaterialForm")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget,d=Object.fromEntries(new FormData(form)),lines=[...form.querySelectorAll("[data-maintenance-material-line]")].map(row=>({item_id:row.querySelector('[name="item_id"]').value,quantity:Number(row.querySelector('[name="quantity"]').value),unit_code:row.querySelector('[name="unit_code"]').value}));try{const request=await createMaintenanceMaterialRequest(d.order_id,{warehouse_id:d.warehouse_id,lines});state.maintenanceMaterialSourceOrderId="";await loadMaintenanceApiData();render();showToast(request.status==="needs_reconciliation"?(en?"Some parts require reconciliation.":"Algunas refacciones requieren conciliacion."):(en?"Spare parts requested and reserved.":"Refacciones solicitadas y reservadas."));}catch(error){showApiError(error,en?"The spare-parts request could not be created.":"No se pudo crear la solicitud de refacciones.");}});
   }
   modulePanel.querySelector("[data-action='back-module']")?.addEventListener("click",()=>navigateTo({active:"mantenimiento",activeSubmodule:null,laborArea:""}));
   modulePanel.querySelectorAll("[data-request-maintenance-material]").forEach(button=>button.addEventListener("click",()=>{state.maintenanceMaterialSourceOrderId=button.dataset.requestMaintenanceMaterial;navigateTo({active:"mantenimiento",activeSubmodule:"refacciones",laborArea:""});}));
@@ -3139,7 +3094,7 @@ function renderPurchasingSuppliersPanel(module){
   if(!hasPermission(editing?"purchasing.supplier.update":"purchasing.supplier.create"))modulePanel.querySelector("#purchasingSupplierForm")?.closest(".section-card")?.remove();
   modulePanel.querySelectorAll("[data-edit-supplier]").forEach(button=>button.addEventListener("click",()=>{state.purchasingSupplierEditId=button.dataset.editSupplier;render();modulePanel.querySelector("#purchasingSupplierForm")?.scrollIntoView({behavior:"smooth",block:"start"});}));
   modulePanel.querySelector("[data-cancel-supplier-edit]")?.addEventListener("click",()=>{state.purchasingSupplierEditId="";render();});
-  modulePanel.querySelector("#purchasingSupplierForm")?.addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget));const payload={...data,tax_id:data.tax_id.toUpperCase().replaceAll("-","").replaceAll(" ",""),lead_time_days:Number(data.lead_time_days)};try{if(editing){delete payload.code;await updatePurchasingSupplier(editing.id,payload);}else await createPurchasingSupplier(payload);state.purchasingSupplierEditId="";await loadPurchasingApiData();showToast(editing?(en?"Supplier updated.":"Proveedor actualizado."):(en?"Supplier saved.":"Proveedor guardado."));}catch(error){showToast(error.message||"Error");}});
+  modulePanel.querySelector("#purchasingSupplierForm")?.addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget));const payload={...data,tax_id:data.tax_id.toUpperCase().replaceAll("-","").replaceAll(" ",""),lead_time_days:Number(data.lead_time_days)};try{if(editing){delete payload.code;await updatePurchasingSupplier(editing.id,payload);}else await createPurchasingSupplier(payload);state.purchasingSupplierEditId="";await loadPurchasingApiData();showToast(editing?(en?"Supplier updated.":"Proveedor actualizado."):(en?"Supplier saved.":"Proveedor guardado."));}catch(error){showApiError(error,en?"The supplier could not be saved.":"No se pudo guardar el proveedor.");}});
 }
 
 function purchasingRequisitionLineMarkup(items,en,line={}){
@@ -3208,7 +3163,7 @@ function renderPurchasingSubmodulePanel(module){
     receiptForm?.elements.purchase_order_id.addEventListener("change",event=>renderReceiptLines(event.target.value));
     if(sourceOrderId&&receiptForm)renderReceiptLines(sourceOrderId);
     receiptForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f)),lines=[...f.querySelectorAll("[data-receipt-line]")].map(row=>({order_line_id:row.dataset.lineId,quantity:Number(row.querySelector('[name="quantity"]').value),warehouse_id:row.querySelector('[name="warehouse_id"]').value||null,remaining:Number(row.dataset.remaining)})).filter(line=>line.quantity>0);if(!lines.length){showToast(en?"Capture at least one received quantity.":"Captura al menos una cantidad recibida.");return;}if(lines.some(line=>line.quantity>line.remaining)){showToast(en?"A quantity exceeds its remaining balance.":"Una cantidad excede su saldo pendiente.");return;}const order=openOrders.find(value=>value.id===d.purchase_order_id);if(lines.some(line=>order?.lines.find(value=>value.id===line.order_line_id)?.line_type==="inventory_item"&&!line.warehouse_id)){showToast(en?"Select a warehouse for every inventory line.":"Selecciona un almacen para cada partida inventariable.");return;}try{await createPurchasingReceipt({code:d.code,purchase_order_id:d.purchase_order_id,received_at:new Date().toISOString(),supplier_document_reference:d.supplier_document_reference||null,lines:lines.map(({remaining,...line})=>line)});state.purchasingReceiptSourceOrderId="";await loadPurchasingApiData();showToast(en?`${lines.length} receipt lines registered.`:`Recepcion registrada con ${lines.length} partidas.`);}catch(error){showApiError(error,en?"The receipt could not be saved.":"No se pudo guardar la recepcion.");}});
-    modulePanel.querySelectorAll("[data-reconcile-receipt]").forEach(button=>button.addEventListener("click",async()=>{try{await reconcilePurchasingReceipt(button.dataset.reconcileReceipt);await loadPurchasingApiData();showToast(en?"Receipt reconciled.":"Recepcion conciliada.");}catch(error){showToast(error.message||"Error");}}));return;
+    modulePanel.querySelectorAll("[data-reconcile-receipt]").forEach(button=>button.addEventListener("click",async()=>{try{await reconcilePurchasingReceipt(button.dataset.reconcileReceipt);await loadPurchasingApiData();showToast(en?"Receipt reconciled.":"Recepcion conciliada.");}catch(error){showApiError(error,en?"The receipt could not be reconciled.":"No se pudo conciliar la recepcion.");}}));return;
   }
   if(id==="reabastecimiento"){
     const planned=`<article class="catalog-card"><span class="chip warning">${en?"Planned":"Planeado"}</span><strong>${en?"Automatic purchasing suggestions":"Sugerencias automaticas de compra"}</strong><p>${en?"This future flow will analyze minimum stock, reorder points, demand, open purchase orders, and supplier lead time. It does not list or create purchase orders.":"Este flujo futuro analizara minimos, puntos de reorden, demanda, ordenes abiertas y tiempo de entrega del proveedor. No lista ni crea ordenes de compra."}</p></article>`;
@@ -3737,7 +3692,7 @@ function loadInventoryBalances(filters = getInventoryViewFilters()) {
     })
     .catch((error) => {
       if (state.inventoryBalances.queryKey !== queryKey) return;
-      state.inventoryBalances = { ...state.inventoryBalances, status: "error", data: [], page: {}, error: error.message || t("inventoryLoadError") };
+      state.inventoryBalances = { ...state.inventoryBalances, status: "error", data: [], page: {}, error: userFacingError(error, t("inventoryLoadError")) };
       render();
     });
 }
@@ -4668,13 +4623,13 @@ function renderSalesServiceOrderModal(record){
   modalContent.querySelectorAll("[data-service-transition]").forEach(button=>button.addEventListener("click",()=>openSalesServiceTransitionModal(record,button.dataset.serviceTransition)));
 }
 
-async function runServiceOrderMutation(event,record,operation,success){event.preventDefault();const confirmed=record.status;try{await operation(Object.fromEntries(new FormData(event.currentTarget)));closeModal();await loadSalesApiData();showToast(success,"success");}catch(error){record.status=confirmed;renderFormErrors([getLocalizedErrorMessage(error,{lang:state.lang,fallback:t("serviceOrderMutationFailed")})]);}}
+async function runServiceOrderMutation(event,record,operation,success){event.preventDefault();const confirmed=record.status;try{await operation(Object.fromEntries(new FormData(event.currentTarget)));closeModal();await loadSalesApiData();showToast(success,"success");}catch(error){record.status=confirmed;renderFormErrors([userFacingError(error,t("serviceOrderMutationFailed"))]);}}
 
 function openSalesServiceTransitionModal(record,action){
   const needsReason=["wait","cancel","accept"].includes(action), needsAcceptance=false, needsEvidence=false, needsWorker=action==="assign", workers=(state.salesApi.workers||[]).filter(worker=>worker.status==="active"||worker.status==="Activo");
   modalContent.innerHTML=`<form class="recipe-form" id="serviceTransitionForm"><div class="modal-head"><div><p class="eyebrow">${t("serviceOrder")}</p><h2>${escapeHtml(salesServiceOrderStatus(record.status))} &rarr; ${escapeHtml(t(`serviceOrderAction_${action}`))}</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div><div class="form-grid">${needsWorker?`<label class="preview-field wide-field"><span>${t("serviceOrderAssignee")}</span><select name="responsible_worker_id" data-entity-selector required><option value="">${t("choose")}</option>${workers.map(worker=>`<option value="${escapeAttribute(worker.id)}">${escapeHtml(worker.employee_number||worker.code||"")} &middot; ${escapeHtml(worker.full_name||worker.name||"")} &middot; ${escapeHtml(worker.position_name||"")}</option>`).join("")}</select></label>`:""}${needsReason?`<label class="preview-field wide-field"><span>${t("reason")}</span><textarea name="reason" minlength="3" maxlength="500" required></textarea></label>`:""}${needsEvidence?`<label class="preview-field wide-field"><span>${t("serviceOrderEvidence")}</span><input name="evidence_reference" maxlength="300" required></label>`:""}${needsAcceptance?`<label class="preview-field wide-field"><span>${t("serviceOrderAcceptedBy")}</span><input name="accepted_by_name" maxlength="200" required></label>`:""}</div><div class="form-errors" id="formErrors" hidden></div><div class="modal-actions"><button class="secondary-action" type="button" data-close-transition>${t("cancel")}</button><button class="primary-action" type="submit">${t("confirm")}</button></div></form>`;
   modalContent.querySelector(".modal-close")?.addEventListener("click",()=>renderSalesServiceOrderModal(record));modalContent.querySelector("[data-close-transition]")?.addEventListener("click",()=>renderSalesServiceOrderModal(record));
-  modalContent.querySelector("#serviceTransitionForm")?.addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget)),confirmed=record.status,payload=action==="assign"?{responsible_worker_id:data.responsible_worker_id}:{...(needsReason?{reason:data.reason.trim()}:{})};try{await transitionSalesServiceOrder(record.id,action,payload);closeModal();await loadSalesApiData();showToast(t("serviceOrderTransitionSaved"),"success");}catch(error){record.status=confirmed;renderFormErrors([getLocalizedErrorMessage(error,{lang:state.lang,fallback:t("serviceOrderMutationFailed")})]);}});
+  modalContent.querySelector("#serviceTransitionForm")?.addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget)),confirmed=record.status,payload=action==="assign"?{responsible_worker_id:data.responsible_worker_id}:{...(needsReason?{reason:data.reason.trim()}:{})};try{await transitionSalesServiceOrder(record.id,action,payload);closeModal();await loadSalesApiData();showToast(t("serviceOrderTransitionSaved"),"success");}catch(error){record.status=confirmed;renderFormErrors([userFacingError(error,t("serviceOrderMutationFailed"))]);}});
 }
 
 function renderSalesDeliveriesPanel(module, submodule) {
@@ -6903,7 +6858,7 @@ async function saveWarehouseForm(event, module, submodule) {
       if (existingRecord) await updateInventoryWarehouse(existingRecord.id,payload);
       else {code=await resolveBusinessCode("inventory.warehouse",code,data.codeRequestKey);await createInventoryWarehouse({code,...payload});}
       closeModal(); await loadInventoryApiData(); showToast(t(existingRecord ? "warehouseUpdated" : "warehouseSaved", { code }));
-    } catch (error) { renderFormErrors([error.message]); }
+    } catch (error) { renderFormErrors([userFacingError(error)]); }
     return;
   }
   const record = {
@@ -7116,7 +7071,7 @@ async function saveInventoryItemForm(event, module, submodule) {
       showToast(t(existingRecord ? "inventoryItemUpdated" : "inventoryItemSaved", { code }));
     } catch (error) {
       const errorCode = error?.payload?.error?.code;
-      renderFormErrors([errorCode === "item_base_unit_locked_by_movements" ? t("itemBaseUnitLockedByHistory") : error.message]);
+      renderFormErrors([errorCode === "item_base_unit_locked_by_movements" ? t("itemBaseUnitLockedByHistory") : userFacingError(error)]);
     }
     return;
   }
@@ -7381,7 +7336,7 @@ async function saveInventoryMovementForm(event, module, submodule) {
       await loadInventoryMovementData();
       showToast(t("movementSaved", { code: savedMovement.movement_code }));
     } catch (error) {
-      renderFormErrors([error.message || t("inventoryLoadError")]);
+      renderFormErrors([userFacingError(error, t("inventoryLoadError"))]);
     }
     return;
   }
@@ -7613,7 +7568,7 @@ async function saveSalesCustomerForm(event, module, submodule) {
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
   if(getApiMode()==="api"){
     const payload={commercial_name:data.commercialName.trim(),customer_type:data.customerType,status:salesCustomerStatusToApi[data.status]||"prospect",responsible_worker_id:data.responsibleWorkerId,primary_contact:{name:data.contactName.trim(),email:data.contactEmail.trim(),phone:data.contactPhone.trim()},payment_terms:data.paymentTerms,currency:data.currency,credit_limit:Number(data.creditLimit||0),legal_name:data.billingLegalName?.trim()||null,tax_id:data.taxId?.trim().toUpperCase()||null,tax_regime:data.taxRegime?.trim()||null,cfdi_use:data.cfdiUse?.trim()||null,billing_email:data.billingEmail?.trim()||null,billing_phone:data.billingPhone?.trim()||null,billing_address:fiscalStarted?{street:data.billingStreet?.trim()||null,exterior_number:data.billingExterior?.trim()||null,interior_number:data.billingInterior?.trim()||null,neighborhood:data.billingNeighborhood?.trim()||null,city:data.billingCity?.trim()||null,state:data.billingState?.trim()||null,postal_code:data.billingZipCode?.trim()||null,country:data.billingCountry?.trim()||null}:null,notes:data.commercialNotes?.trim()||null};
-    try{if(existingRecord)await updateSalesCustomer(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.customer",code,data.codeRequestKey);await createSalesCustomer({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"customerUpdated":"customerSaved",{code}));}catch(error){renderFormErrors([error.message||"No se pudo guardar el cliente."]);}return;
+    try{if(existingRecord)await updateSalesCustomer(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.customer",code,data.codeRequestKey);await createSalesCustomer({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"customerUpdated":"customerSaved",{code}));}catch(error){renderFormErrors([userFacingError(error,"No se pudo guardar el cliente.")]);}return;
   }
   const fields = {
     customerType: data.customerType,
@@ -7886,7 +7841,7 @@ function openFinishedGoodsReceiptModal(orderId){
 async function saveFinishedGoodsReceiptForm(event){
   event.preventDefault();const form=event.currentTarget;const data=Object.fromEntries(new FormData(form).entries());const quantity=Number(data.quantity||0);
   if(!data.warehouseId||quantity<=0||!data.receivedAt){renderFormErrors([t("finishedGoodsReceiptRequired")]);return;}
-  try{const receipt=await createFinishedGoodsReceipt({production_order_id:data.productionOrderId,warehouse_id:data.warehouseId,quantity,received_at:`${data.receivedAt}T12:00:00Z`,notes:data.notes?.trim()||null});state.finishedGoodsReceipts={status:"idle",orders:[],products:[],summaries:[],error:""};state.inventoryMovements={status:"idle",error:""};state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]};closeModal();await Promise.all([loadInventoryMovementData(),loadFinishedGoodsReceiptData()]);showToast(t("finishedGoodsReceiptSaved",{code:receipt.movement.movement_code}));}catch(error){renderFormErrors([error.message||t("finishedGoodsReceiptSaveError")]);}
+  try{const receipt=await createFinishedGoodsReceipt({production_order_id:data.productionOrderId,warehouse_id:data.warehouseId,quantity,received_at:`${data.receivedAt}T12:00:00Z`,notes:data.notes?.trim()||null});state.finishedGoodsReceipts={status:"idle",orders:[],products:[],summaries:[],error:""};state.inventoryMovements={status:"idle",error:""};state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]};closeModal();await Promise.all([loadInventoryMovementData(),loadFinishedGoodsReceiptData()]);showToast(t("finishedGoodsReceiptSaved",{code:receipt.movement.movement_code}));}catch(error){renderFormErrors([userFacingError(error,t("finishedGoodsReceiptSaveError"))]);}
 }
 
 function isSalesProductServiceEligible(item) {
@@ -8019,7 +7974,7 @@ async function saveSalesQuoteForm(event, module, submodule) {
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
   if(getApiMode()==="api"){
     const payload={customer_id:customer.id,currency:data.currency,payment_terms:data.paymentTerms,valid_until:data.validUntil,promised_delivery_date:data.deliveryPromise||null,notes:data.notes?.trim()||null,lines:lines.map(line=>({product_service_id:line.productServiceId,quantity:line.quantity,unit:line.unit,unit_price:line.unitPrice,discount_percentage:line.discount}))};
-    try{if(existingRecord)await updateSalesQuote(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.quote",code,data.codeRequestKey);await createSalesQuote({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"quoteUpdated":"quoteSaved",{code}));}catch(error){renderFormErrors([error.message||"No se pudo guardar la cotización."]);}return;
+    try{if(existingRecord)await updateSalesQuote(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.quote",code,data.codeRequestKey);await createSalesQuote({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"quoteUpdated":"quoteSaved",{code}));}catch(error){renderFormErrors([userFacingError(error,"No se pudo guardar la cotización.")]);}return;
   }
   const fields = {
     customerId: customer.id,
@@ -8216,7 +8171,7 @@ async function saveSalesOrderForm(event, module, submodule) {
       const businessCode=await resolveBusinessCode("sales.order",data.code,data.codeRequestKey);
       await createSalesOrder({code:businessCode,quote_id:data.quoteId,promised_delivery_date:data.deliveryPromise||null,notes:data.notes?.trim()||null});
       closeModal(); await loadSalesApiData(); navigateTo({active:"ventas",activeSubmodule:"pedidos",laborArea:""}); showToast(t("salesOrderSaved",{code:businessCode}));
-    } catch (error) { renderFormErrors([error.message||"No se pudo crear el pedido."]); }
+    } catch (error) { renderFormErrors([userFacingError(error,"No se pudo crear el pedido.")]); }
     return;
   }
 
@@ -8630,7 +8585,7 @@ async function saveSalesDeliveryForm(event, module, submodule) {
     if(!lines.length){renderFormErrors(["El pedido no tiene partidas listas o reservadas para entregar."]);return;}
     const invalidLine=lines.find(line=>{const source=(order.fields?.lines||[]).find(item=>item.id===line.order_line_id);return !Number.isFinite(line.quantity)||line.quantity<=0||line.quantity>(Number(source?.quantity||0)-Number(source?.deliveredQuantity||0))||(source?.productServiceType==="service"&&(!Number.isFinite(line.actual_unit_cost)||line.actual_unit_cost<0));});
     if(invalidLine){renderFormErrors(["La cantidad a entregar debe ser mayor a cero y no exceder el pendiente de la partida."]);return;}
-    try{const businessCode=await resolveBusinessCode("sales.delivery",data.code,data.codeRequestKey);await createSalesDelivery({code:businessCode,order_id:order.id,scheduled_date:data.deliveryDate,recipient_name:data.recipient?.trim()||null,evidence_reference:data.deliveryReference?.trim()||null,notes:data.notes?.trim()||null,lines});closeModal();await loadSalesApiData();navigateTo({active:"ventas",activeSubmodule:"entregas",laborArea:""});showToast("Entrega registrada como borrador. Confírmala para consumir las reservas.");}catch(error){renderFormErrors([error.message||"No se pudo registrar la entrega."]);}return;
+    try{const businessCode=await resolveBusinessCode("sales.delivery",data.code,data.codeRequestKey);await createSalesDelivery({code:businessCode,order_id:order.id,scheduled_date:data.deliveryDate,recipient_name:data.recipient?.trim()||null,evidence_reference:data.deliveryReference?.trim()||null,notes:data.notes?.trim()||null,lines});closeModal();await loadSalesApiData();navigateTo({active:"ventas",activeSubmodule:"entregas",laborArea:""});showToast("Entrega registrada como borrador. Confírmala para consumir las reservas.");}catch(error){renderFormErrors([userFacingError(error,"No se pudo registrar la entrega.")]);}return;
   }
 
   const code = `ENT-${String(Date.now()).slice(-5)}`;
@@ -8891,7 +8846,7 @@ async function saveProductServiceForm(event) {
       navigateTo({ active: "produccion", activeSubmodule: "productos-servicios", laborArea: "" });
       showToast(t(exists?"productServiceUpdated":"productServiceSaved",{type:item.kind==="Servicio"?t("productServiceService"):t("productServiceProduct"),code:saved.code}));
     } catch (error) {
-      renderFormErrors([getLocalizedErrorMessage(error,{lang:state.lang,fallback:t("productServiceSaveFailed")})]);
+      renderFormErrors([userFacingError(error,t("productServiceSaveFailed"))]);
     }
     return;
   }
@@ -8969,8 +8924,8 @@ function openSalesOrderFulfillmentModal(module, orderId) {
   modalContent.innerHTML=`<form class="recipe-form" id="salesOrderFulfillmentForm"><input type="hidden" name="orderId" value="${escapeAttribute(order.id)}"><div class="modal-head"><div><p class="eyebrow">${t("salesOrder")}</p><h2>${escapeHtml(order.code)} · Surtido</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div><p class="helper-copy">Cada producto usa exclusivamente el artículo de Inventario vinculado en su ficha. Una partida configurada ya no puede reasignarse.</p><div class="records">${lines.map(line=>{const product=mockDb.findProductService(line.productServiceId);const mappedId=product?.inventoryItemId||"";const mappedItem=inventoryItems.find(item=>item.id===mappedId);return `<article class="record-row fulfillment-line" data-line-id="${escapeAttribute(line.id)}"><div class="record-main"><strong>${escapeHtml(line.productServiceName)}</strong><span>${formatNumber(line.quantity-line.deliveredQuantity)} ${escapeHtml(line.unit)} pendientes</span></div><label class="preview-field"><span>Modo</span><select name="mode-${escapeAttribute(line.id)}">${line.productServiceType==="service"?`<option value="service">Servicio</option>`:`<option value="stock">Existencia</option><option value="production">Producción</option>`}</select></label>${line.productServiceType==="product"?`<label class="preview-field"><span>Artículo vinculado</span><select name="item-${escapeAttribute(line.id)}" required><option value="${escapeAttribute(mappedId)}">${mappedItem?`${escapeHtml(mappedItem.code)} - ${escapeHtml(mappedItem.title)}`:"Producto sin mapeo vigente"}</option></select></label><label class="preview-field"><span>Almacén</span><select name="warehouse-${escapeAttribute(line.id)}"><option value="">Seleccionar</option>${warehouses.map(item=>`<option value="${escapeAttribute(item.id)}">${escapeHtml(item.code)} - ${escapeHtml(item.title)}</option>`).join("")}</select></label>`:""}</article>`;}).join("")}</div><label class="preview-field wide-field"><span>Motivo de cancelación</span><textarea name="cancelReason" rows="2" placeholder="Solo se usa al cancelar"></textarea></label><div class="form-errors" id="formErrors" hidden></div><div class="modal-actions">${hasPermission("sales.order.cancel")?`<button class="secondary-action" type="button" data-action="cancel-api-order">Cancelar pedido</button>`:""}<button class="secondary-action" type="button" data-action="close-api-order">${t("cancel")}</button>${hasPermission("sales.order.fulfill")?`<button class="primary-action" type="submit">Configurar surtido</button>`:""}</div></form>`;
   modalContent.querySelectorAll('select[name^="warehouse-"]').forEach(select=>{select.dataset.entitySelector="";select.dataset.searchPlaceholder="Buscar almacén por código o nombre";enhanceEntitySelect(select);});
   modalBackdrop.hidden=false; modalContent.querySelector(".modal-close").addEventListener("click",closeModal); modalContent.querySelector("[data-action='close-api-order']").addEventListener("click",closeModal);
-  modalContent.querySelector("#salesOrderFulfillmentForm").addEventListener("submit",async event=>{event.preventDefault();const form=new FormData(event.currentTarget);const payload={lines:lines.map(line=>{const mode=form.get(`mode-${line.id}`);const remaining=line.quantity-line.deliveredQuantity;return {order_line_id:line.id,mode,allocations:mode==="stock"?[{inventory_item_id:form.get(`item-${line.id}`),warehouse_id:form.get(`warehouse-${line.id}`),quantity:remaining}]:[]};})};if(payload.lines.some(line=>line.mode==="stock"&&(!line.allocations[0].inventory_item_id||!line.allocations[0].warehouse_id))){renderFormErrors(["Selecciona artículo y almacén para cada partida surtida desde existencia."]);return;}try{await configureSalesOrderFulfillment(order.id,payload);closeModal();await loadSalesApiData();showToast("Surtido configurado.");}catch(error){renderFormErrors([error.message||"No se pudo configurar el surtido."]);}});
-  modalContent.querySelector("[data-action='cancel-api-order']")?.addEventListener("click",async()=>{const reason=modalContent.querySelector("[name='cancelReason']").value.trim();if(reason.length<3){renderFormErrors(["Captura el motivo de cancelación."]);return;}try{await cancelSalesOrder(order.id,reason);closeModal();await loadSalesApiData();showToast("Pedido cancelado.");}catch(error){renderFormErrors([error.message||"No se pudo cancelar el pedido."]);}});
+  modalContent.querySelector("#salesOrderFulfillmentForm").addEventListener("submit",async event=>{event.preventDefault();const form=new FormData(event.currentTarget);const payload={lines:lines.map(line=>{const mode=form.get(`mode-${line.id}`);const remaining=line.quantity-line.deliveredQuantity;return {order_line_id:line.id,mode,allocations:mode==="stock"?[{inventory_item_id:form.get(`item-${line.id}`),warehouse_id:form.get(`warehouse-${line.id}`),quantity:remaining}]:[]};})};if(payload.lines.some(line=>line.mode==="stock"&&(!line.allocations[0].inventory_item_id||!line.allocations[0].warehouse_id))){renderFormErrors(["Selecciona artículo y almacén para cada partida surtida desde existencia."]);return;}try{await configureSalesOrderFulfillment(order.id,payload);closeModal();await loadSalesApiData();showToast("Surtido configurado.");}catch(error){renderFormErrors([userFacingError(error,"No se pudo configurar el surtido.")]);}});
+  modalContent.querySelector("[data-action='cancel-api-order']")?.addEventListener("click",async()=>{const reason=modalContent.querySelector("[name='cancelReason']").value.trim();if(reason.length<3){renderFormErrors(["Captura el motivo de cancelación."]);return;}try{await cancelSalesOrder(order.id,reason);closeModal();await loadSalesApiData();showToast("Pedido cancelado.");}catch(error){renderFormErrors([userFacingError(error,"No se pudo cancelar el pedido.")]);}});
 }
 
 function openAdminUnitModal(unitId) {
@@ -8996,7 +8951,7 @@ function openAdminUnitModal(unitId) {
     event.preventDefault();
     const values=Object.fromEntries(new FormData(event.currentTarget));
     try { await updateUnitOfMeasure(unit.id,{...values,decimal_places:Number(values.decimal_places)}); closeModal(); showToast(t("unitUpdated")); await loadAdminApiDashboard(); }
-    catch(error){ showToast(error.message || t("unitUpdateError")); }
+    catch(error){ showApiError(error, t("unitUpdateError")); }
   });
 }
 
@@ -9036,7 +8991,7 @@ async function saveLaborAreaForm(event) {
       if (areaId) await updateHrArea(areaId,payload);
       else {code=await resolveBusinessCode("hr.area",code,String(data.get("codeRequestKey")||""));item.code=code;await createHrArea({code:item.code,name:item.name,description:item.description||null});}
       closeModal();await loadHrApiData();navigateTo({active:"recursos-humanos",activeSubmodule:"areas-puestos",laborArea:areaId||""});showToast(`Area ${item.name} ${areaId?"actualizada":"guardada"}.`);
-    } catch(error) { renderFormErrors([error.message]); }
+    } catch(error) { renderFormErrors([userFacingError(error)]); }
     return;
   }
   if (areaId) mockDb.updateLaborArea(item);
@@ -9149,7 +9104,7 @@ async function saveLaborRoleForm(event) {
       if (roleId) await updateHrPosition(roleId,payload);
       else { const {status,...createPayload}=payload;await createHrPosition(createPayload); }
       closeModal();await loadHrApiData();navigateTo({active:"recursos-humanos",activeSubmodule:"areas-puestos",laborArea:item.areaId});showToast(`Puesto ${item.name} ${roleId?"actualizado":"guardado"}.`);
-    } catch(error) { renderFormErrors([error.message]); }
+    } catch(error) { renderFormErrors([userFacingError(error)]); }
     return;
   }
   if (roleId) {
@@ -9185,7 +9140,7 @@ function openWorkerModal(workerId=null){
 }
 async function saveWorkerForm(event){event.preventDefault();const data=new FormData(event.currentTarget);const workerId=String(data.get("workerId")||"");const value=name=>String(data.get(name)||"").trim();
   const common={first_names:value("first_names"),first_last_name:value("first_last_name"),second_last_name:value("second_last_name")||null,labor_position_id:value("labor_position_id"),personal_email:value("personal_email")||null,phone:value("phone")||null,nationality:value("nationality")||null,marital_status:value("marital_status")||null,address:value("address")||null,emergency_contact_name:value("emergency_contact_name")||null,emergency_contact_phone:value("emergency_contact_phone")||null};
-  try{if(workerId)await updateHrWorker(workerId,{...common,status:value("status")});else {const employeeNumber=await resolveBusinessCode("hr.worker",value("employee_number"),event.currentTarget.dataset.codeRequestKey);await createHrWorker({...common,employee_number:employeeNumber,curp:value("curp"),rfc:value("rfc"),nss:value("nss"),hire_date:value("hire_date"),birth_date:value("birth_date")||null});}closeModal();await loadHrApiData();showToast(t(workerId?"workerUpdated":"workerSaved"));}catch(error){renderFormErrors([error.message]);}}
+  try{if(workerId)await updateHrWorker(workerId,{...common,status:value("status")});else {const employeeNumber=await resolveBusinessCode("hr.worker",value("employee_number"),event.currentTarget.dataset.codeRequestKey);await createHrWorker({...common,employee_number:employeeNumber,curp:value("curp"),rfc:value("rfc"),nss:value("nss"),hire_date:value("hire_date"),birth_date:value("birth_date")||null});}closeModal();await loadHrApiData();showToast(t(workerId?"workerUpdated":"workerSaved"));}catch(error){renderFormErrors([userFacingError(error)]);}}
 
 async function openMachineModal(machineId = null) {
   const existingMachine = machineId ? mockDb.findMachine(machineId) : null;
@@ -9196,7 +9151,7 @@ async function openMachineModal(machineId = null) {
       ? (await getHrAreas()).filter((area) => area.status === "active")
       : mockDb.loadLaborAreas().filter((area) => area.status === "Activo");
   } catch (error) {
-    showToast(error.message || t("machineAreasLoadError"));
+    showApiError(error, t("machineAreasLoadError"));
     return;
   }
   const selectedArea = activeAreas.find((area) => area.id === existingMachine?.areaId) || activeAreas.find((area) => area.name === existingMachine?.area);
@@ -9279,7 +9234,7 @@ async function saveMachineForm(event) {
       if (machineId) await updateProductionMachine(machineId,payload);
       else { const {status:ignored,...createPayload}=payload;const code=await resolveBusinessCode("production.machine",String(data.get("code")||""),String(data.get("codeRequestKey")||""));await createProductionMachine({...createPayload,code}); }
       closeModal();await loadProductionApiData();navigateTo({active:"produccion",activeSubmodule:"maquinaria",laborArea:""});showToast(`Maquina ${item.name} ${machineId?"actualizada":"guardada"} en Production API.`);
-    } catch(error) { renderFormErrors([error.message||"No se pudo guardar la maquina."]); }
+    } catch(error) { renderFormErrors([userFacingError(error,"No se pudo guardar la maquina.")]); }
     return;
   }
   if (machineId) {
@@ -9365,7 +9320,7 @@ async function openRecipeModal(recipeId = null) {
   try {
     recipeCatalog = await prepareRecipeResourceCatalog();
   } catch (error) {
-    showToast(error.message || t("recipeResourcesLoadError"));
+    showApiError(error, t("recipeResourcesLoadError"));
     return;
   }
   const existingRecipe = recipeId ? mockDb.findRecipe(recipeId) : null;
@@ -9872,7 +9827,7 @@ async function saveRecipeForm(event) {
       navigateTo({ active: "produccion", activeSubmodule: "recetas", laborArea: "" });
       showToast(`${formatRecipeDisplayLabel(recipe)}: receta ${exists ? "actualizada" : "guardada"} en Production API.`);
     } catch (error) {
-      renderFormErrors([error?.payload?.error?.code === "machine_resource_invalid" ? t("recipeMachineAreaMissingError") : (error.message || "No se pudo guardar la receta en Production API.")]);
+      renderFormErrors([error?.payload?.error?.code === "machine_resource_invalid" ? t("recipeMachineAreaMissingError") : userFacingError(error,"No se pudo guardar la receta en Production API.")]);
     }
     return;
   }
@@ -9910,7 +9865,7 @@ async function approveRecipe(recipeId) {
       await loadProductionApiData();
       showToast(`${formatRecipeDisplayLabel(recipe)}: receta aprobada para produccion.`);
     } catch (error) {
-      showToast(error.message || "No se pudo aprobar la receta en Production API.");
+      showApiError(error, "No se pudo aprobar la receta en Production API.");
     }
     return;
   }
@@ -9972,7 +9927,7 @@ async function openOrderModal() {
   }
   const defaultQuantity = Number(localStorage.getItem("erclave-validation-qty") || 100);
   let eligibleWorkers=[];
-  try{eligibleWorkers=getApiMode()==="api"?await getProductionEligibleWorkers():(state.hrApi.workers||[]).filter(item=>item.status==="active"&&item.intervenes_in_production);}catch(error){showToast(error.message||"No se pudo cargar el personal elegible.");return;}
+  try{eligibleWorkers=getApiMode()==="api"?await getProductionEligibleWorkers():(state.hrApi.workers||[]).filter(item=>item.status==="active"&&item.intervenes_in_production);}catch(error){showApiError(error,"No se pudo cargar el personal elegible.");return;}
   if(!eligibleWorkers.length){showToast("Da de alta trabajadores activos en puestos habilitados para produccion antes de generar una orden.");return;}
   state.hrApi.workers=eligibleWorkers;
   const workerOptions=eligibleWorkers.map(worker=>`<option value="${worker.id}">${escapeHtml(worker.full_name)} · ${escapeHtml(worker.position_name)}</option>`).join("");
@@ -10189,7 +10144,7 @@ async function previewOrderForm() {
       const remote=await validateProductionResources({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_start_date:order.plannedStartDate,planned_duration_days:order.plannedDurationDays});
       renderRemoteOrderValidation(order,remote);
       renderFormErrors(productionValidationErrors(remote));
-    } catch(error) { renderFormErrors([error.message||"No se pudo validar recursos."]); }
+    } catch(error) { renderFormErrors([userFacingError(error,"No se pudo validar recursos.")]); }
     return;
   }
   const release = getReleaseReview(recipe, order.quantity);
@@ -10244,7 +10199,7 @@ async function saveOrderForm(event) {
       const businessCode=await resolveBusinessCode("production.order",order.code,order.codeRequestKey);
       const saved=await createProductionOrder({code:businessCode,recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_start_date:order.plannedStartDate,planned_duration_days:order.plannedDurationDays,planned_start_at:new Date(`${order.plannedStartDate}T08:00:00`).toISOString(),required_at:order.dueDate?new Date(`${order.dueDate}T23:59:59`).toISOString():null,priority:({Alta:"high",Media:"medium",Baja:"low"})[order.priority]||"medium",responsible_worker_id:order.responsibleWorkerId,stage_assignments:currentStages.map((stage,index)=>({recipe_stage_id:stage.id,responsible_worker_id:order.areas[index]?.responsibleWorkerId})),source_type:"manual"});
       localStorage.setItem("erclave-selected-recipe",order.recipeId);localStorage.setItem("erclave-validation-qty",order.quantity);closeModal();await loadProductionApiData();showToast(`Orden ${saved.code} generada en Production API.`);openOrderPrintModal(saved.id);
-    } catch(error) { renderFormErrors([error?.payload?.error?.code==="resources_unavailable"?t("orderResourcesChanged"):(error.message||"No se pudo generar la orden.")]); }
+    } catch(error) { renderFormErrors([error?.payload?.error?.code==="resources_unavailable"?t("orderResourcesChanged"):userFacingError(error,"No se pudo generar la orden.")]); }
     return;
   }
   mockDb.addOrder(order);
@@ -10310,7 +10265,7 @@ async function saveOrderStageProgressForm(event){
       }
       await updateProductionOrderStage(stage.id,{status,progress_percent:progress,notes:"Porcentaje de avance registrado desde Produccion"});
       closeModal();await loadProductionApiData();showToast(t("orderStageProgressUpdated",{stage:stage.area,progress:formatNumber(progress)}));
-    }catch(error){showToast(error?.payload?.error?.code==="material_consumption_required"?t("orderMaterialIssueFailed"):(error.message||t("orderStageProgressSaveError")));}
+    }catch(error){if(error?.payload?.error?.code==="material_consumption_required")showToast(t("orderMaterialIssueFailed"),"danger");else showApiError(error,t("orderStageProgressSaveError"));}
     return;
   }
   const stages=order.areas.map((item,index)=>index===stageIndex?{...item,status:progress===100?"Terminada":progress===0?"Pendiente":"En proceso",progress}:item);
@@ -10706,6 +10661,12 @@ function render() {
   renderAuthControls();
   renderAuthGate();
   applyI18n();
+  installListPagination(modulePanel, {
+    navigation: t("paginationNavigation"),
+    previous: t("paginationPrevious"),
+    next: t("paginationNext"),
+    summary: t("paginationSummary")
+  });
   ensureSessionContext();
   loadUnitCatalog();
 }

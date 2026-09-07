@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import NullPool
 
 
 DATABASE_URL=os.getenv("ERCLAVE_TEST_DATABASE_URL","")
@@ -21,7 +22,7 @@ repositories=importlib.import_module("app.repositories");schemas=importlib.impor
 
 @pytest.fixture
 def context():
-    engine=create_engine(DATABASE_URL,pool_pre_ping=True);tenant=f"ten_sales_test_{uuid4().hex[:12]}";repo=repositories.SalesRepository(engine)
+    engine=create_engine(DATABASE_URL,pool_pre_ping=True,poolclass=NullPool);tenant=f"ten_sales_test_{uuid4().hex[:12]}";repo=repositories.SalesRepository(engine)
     try:yield repo,tenant
     finally:
         with engine.begin() as connection:

@@ -5,7 +5,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
+from sqlalchemy.pool import NullPool
 
 DATABASE_URL = os.getenv("ERCLAVE_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="ERCLAVE_TEST_DATABASE_URL is required")
@@ -21,6 +22,8 @@ schemas = importlib.import_module("app.schemas")
 @pytest.fixture
 def repository():
     repo = repositories.MaintenanceRepository(DATABASE_URL)
+    repo.engine.dispose()
+    repo.engine = create_engine(DATABASE_URL, pool_pre_ping=True, poolclass=NullPool)
     tenant = os.getenv("ERCLAVE_TEST_TENANT_ID", "ten_739ee59d765d5e14818674800d")
     with repo.engine.connect() as connection:
         baseline_orders = set(connection.execute(text("select id from maintenance.orders where tenant_id=:tenant"), {"tenant": tenant}).scalars())
@@ -41,6 +44,7 @@ def repository():
             if idempotency_ids:connection.execute(text("delete from maintenance.idempotency_records where tenant_id=:tenant and id=any(:ids)"), {"tenant": tenant, "ids": idempotency_ids})
     yield repo, tenant
     cleanup_created_records()
+    repo.engine.dispose()
 
 
 def facility(code="MT-TEST"):

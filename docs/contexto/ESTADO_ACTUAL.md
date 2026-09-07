@@ -31,6 +31,16 @@ Ultima actualizacion: 2026-09-06.
 - Firebase Auth Emulator escucha en `127.0.0.1:9099` y su UI en `127.0.0.1:4000`; el usuario local `admin.qa@erclave.local` resuelve el tenant demo sin consumir Firebase QA.
 - Firebase autentica; `admin-service /v1/session/context` resuelve tenant, membresia, modulos, permisos y alcance.
 
+### Estabilizacion Local CHG-259
+
+- El working tree previo quedo consolidado en el commit local `8dcff6b`; no se publico ni promovio a otro ambiente.
+- `npm run verify:postgres` exige `127.0.0.1:5434/erclave_local`, ejecuta toda la suite backend y falla si pytest omite una prueba. `npm run verify:local` agrega la regresion E2E de navegador contra el stack Local completo.
+- Playwright cubre autenticacion con Firebase Emulator, resolucion del tenant demo, navegacion de los seis modulos operativos y todos sus submodulos, las 28 tarjetas de reportes y el bloqueo de solicitudes remotas.
+- Inventory demuestra bajo PostgreSQL que dos reservas concurrentes no sobrevenden y que dos confirmaciones de consumo producen un solo movimiento. Sales, Purchasing y Maintenance conservan sus pruebas de claims, locks y reconciliacion.
+- Compras marca como `failed` toda partida sin respuesta de Inventory, incluso cuando la dependencia devuelve menos resultados que el plan; la conciliacion posterior conserva las partidas ya completadas.
+- El frontend inicio la extraccion incremental de `app.js`: estado inicial, feedback de errores y paginacion viven en modulos propios. Los mensajes visibles ya no leen `error.message` directamente.
+- Los listados renderizados con mas de 25 elementos muestran paginacion accesible Anterior/Siguiente. La paginacion contractual server-side para catalogos que puedan superar el limite preventivo sigue pendiente antes de volumen productivo.
+
 ## Cortes funcionales relevantes
 
 ### Reportes estandar por modulo

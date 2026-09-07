@@ -1,6 +1,7 @@
 const { fail, ok, readText } = require("./shared");
 
 const app = readText("frontend/app.js");
+const state = readText("frontend/state/app-state.js");
 const api = readText("frontend/api/admin.js");
 const css = readText("frontend/styles.css");
 const translations = readText("frontend/i18n/translations.js");
@@ -28,7 +29,7 @@ const requiredAppMarkers = [
 ];
 
 for (const marker of requiredAppMarkers) {
-  if (!app.includes(marker)) errors.push(`Permission editor is missing: ${marker}`);
+  if (!`${app}\n${state}`.includes(marker)) errors.push(`Permission editor is missing: ${marker}`);
 }
 
 if (!api.includes("assignments") || !api.includes("expected_revision")) {

@@ -227,7 +227,7 @@ class PurchasingRepository:
             self._apply_receipt_movements(c,t,receipt,plan,movements)
             order_status=self._refresh_order_status(c,t,receipt["purchase_order_id"])
             if error:
-                remaining=[item["receipt_line_id"] for item,movement in zip(plan,movements) if movement is None]
+                remaining=[item["receipt_line_id"] for index,item in enumerate(plan) if index>=len(movements) or movements[index] is None]
                 if remaining:c.execute(text("update purchasing.purchase_receipt_lines set reconciliation_status='failed' where tenant_id=:t and id=any(:ids) and reconciliation_status!='completed'"),{"t":t,"ids":remaining})
                 c.execute(text("update purchasing.purchase_receipts set status='needs_reconciliation',reconciliation_error=:e where tenant_id=:t and id=:id"),{"e":error,"t":t,"id":receipt["id"]})
                 value=self._receipt(c,t,receipt["id"]);self._audit(c,t,actor,operation,"purchase_receipt",receipt["id"],{"result":"needs_reconciliation","completed_lines":sum(movement is not None for movement in movements),"error":error});self._finish(c,t,operation,key,value);return value

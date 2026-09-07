@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import text
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 
 DATABASE_URL=os.getenv("ERCLAVE_TEST_DATABASE_URL")
 pytestmark=pytest.mark.skipif(not DATABASE_URL,reason="ERCLAVE_TEST_DATABASE_URL is required")
@@ -17,6 +19,7 @@ repo_module=importlib.import_module("app.repositories"); schemas=importlib.impor
 @pytest.fixture
 def repository():
     value=repo_module.PurchasingRepository(DATABASE_URL);tenant="ten_purchasing_test"
+    value.engine.dispose();value.engine=create_engine(DATABASE_URL,pool_pre_ping=True,poolclass=NullPool)
     with value.engine.begin() as connection:
         for table in ["audit_events","idempotency_records","purchase_receipt_lines","purchase_receipts","purchase_order_lines","purchase_orders","requisition_lines","requisitions","suppliers"]:
             connection.execute(text(f"delete from purchasing.{table} where tenant_id=:tenant"),{"tenant":tenant})
@@ -24,6 +27,7 @@ def repository():
     with value.engine.begin() as connection:
         for table in ["audit_events","idempotency_records","purchase_receipt_lines","purchase_receipts","purchase_order_lines","purchase_orders","requisition_lines","requisitions","suppliers"]:
             connection.execute(text(f"delete from purchasing.{table} where tenant_id=:tenant"),{"tenant":tenant})
+    value.engine.dispose()
 
 def line(quantity="10",price=None):return schemas.PurchaseLineInput(line_type="inventory_item",inventory_item_id="itm_test",description="Material de prueba",quantity=quantity,unit_code="H87",unit_price=price)
 def service_line(quantity="1",price=None,description="Servicio especializado",unit="E48"):return schemas.PurchaseLineInput(line_type="service",description=description,quantity=quantity,unit_code=unit,unit_price=price)
@@ -156,10 +160,12 @@ def test_pending_receipt_claim_prevents_concurrent_over_receipt(repository):
     barrier=Barrier(2)
     def claim(suffix):
         competing=repo_module.PurchasingRepository(DATABASE_URL)
+        competing.engine.dispose();competing.engine=create_engine(DATABASE_URL,pool_pre_ping=True,poolclass=NullPool)
         payload=schemas.ReceiptWrite(code=f"REC-{suffix}",purchase_order_id=order["id"],received_at=datetime.now(timezone.utc),lines=[schemas.ReceiptLineInput(order_line_id=order["lines"][0]["id"],quantity="5",warehouse_id="wh_test")])
         barrier.wait()
         try:return competing.prepare_receipt(tenant,payload,f"race-{suffix}-key",f"race-{suffix}","usr_test")[0]["id"]
         except ValueError as exc:return str(exc)
+        finally:competing.engine.dispose()
     with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(claim,["A","B"]))
     assert sum(str(value).startswith("rcp_") for value in results)==1
     assert results.count("over_receipt")==1

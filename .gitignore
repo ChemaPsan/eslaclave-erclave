@@ -19,3 +19,5 @@ build/
 .pytest-tmp/
 **/.pytest-tmp/
 .pytest-tmp-*/
+playwright-report/
+test-results/
