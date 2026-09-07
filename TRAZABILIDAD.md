@@ -4168,6 +4168,25 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Rollback | Revertir CHG-260 restaura el manejo anterior del selector y su CSS. No existe schema, migracion, seed ni dato operativo que revertir. |
 | Observaciones | Operacion `local-write`. Las respuestas mutantes de la prueba de navegador fueron interceptadas localmente, por lo que no se creo ningun servicio ni se consumio consecutivo real. No hubo acceso, despliegue ni escritura en QA/Produccion. |
 
+### CHG-261
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-07 |
+| Cambio | Preparar handoff persistente posterior a CHG-260 |
+| Autor | Codex |
+| Archivos | `docs/contexto/REANUDACION_CHG261.md`, `docs/contexto/REANUDACION_CHG255.md`, `docs/contexto/INICIO_SESION.md`, `docs/contexto/ESTADO_ACTUAL.md`, `TRAZABILIDAD.md` |
+| Secciones | Reanudacion / Git / Local / QA historico / CHG-255 a CHG-260 / Validacion / Pendientes / Seguridad |
+| Agentes consultados | Gobierno de documentacion viva, Arquitectura SaaS, fronteras de ambiente y QA/Release definidos en `AGENTS.md` y `AGENTES.md`. No hubo delegacion. |
+| Diagnostico | El handoff activo aun describia el working tree sin commit de CHG-254/CHG-255, aunque los cambios ya estaban consolidados y el estado habia avanzado hasta CHG-260. Reiniciar con esa referencia podia provocar una lectura incorrecta de Git, Local y QA. |
+| Descripcion | Se creo un handoff autocontenido con rama, commits, revision Alembic, servicios/puertos, tenant autorizado, diferencias Local/QA, resumen funcional CHG-255 a CHG-260, evidencia de pruebas, comandos de arranque/verificacion, pendientes y rollback. `INICIO_SESION.md` y `ESTADO_ACTUAL.md` apuntan al nuevo documento; el handoff CHG-255 queda marcado como historico. |
+| Motivo | Conservar el contexto operativo exacto y evitar que un reinicio mezcle cambios Local con el release QA ya publicado. |
+| Impacto | Solo documentacion viva Local. No cambia codigo ejecutable, contratos, base, datos, permisos, dependencias, agentes ni ambientes remotos. |
+| APIs afectadas | Ninguna. El handoff documenta como referencia el ultimo consumo de CHG-260, pero CHG-261 no llama ni modifica APIs. |
+| Validacion | `npm.cmd run validate:documentation`, `npm.cmd run validate:traceability`, enlaces locales y `npm.cmd run session:context`. |
+| Rollback | Restaurar las referencias a `REANUDACION_CHG255.md` y retirar el handoff CHG-261; no existe estado operativo o persistente que revertir. |
+| Observaciones | Operacion `local-write` limitada a Markdown. No hubo llamadas API, migraciones, seeds, datos de prueba, despliegues, trafico, PR ni acceso a QA/Produccion. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.

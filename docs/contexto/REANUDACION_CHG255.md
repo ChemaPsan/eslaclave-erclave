@@ -2,6 +2,8 @@
 
 Fecha del handoff: 2026-09-01.
 
+> Handoff historico, sustituido el 2026-09-07 por `docs/contexto/REANUDACION_CHG261.md`. No usar sus referencias a archivos sin commit como estado vigente.
+
 Este archivo conserva el punto exacto de trabajo antes de reiniciar la computadora. No sustituye `AGENTS.md`, `AGENTES.md`, `ESTADO_ACTUAL.md`, `DECISIONES.md`, `TENANTS.md`, `PENDIENTES.md` ni `TRAZABILIDAD.md`; los complementa con el estado transitorio del working tree.
 
 ## Punto de partida Git

@@ -2,7 +2,7 @@
 
 Este documento define el orden obligatorio para recuperar contexto antes de analizar o modificar el proyecto.
 
-> Handoff activo: antes de continuar el working tree sin commit de CHG-254/CHG-255, leer `docs/contexto/REANUDACION_CHG255.md`. Preservar todos los cambios existentes y distinguir el release QA ya ejecutado del corte Local aun no migrado.
+> Handoff activo: leer `docs/contexto/REANUDACION_CHG261.md`. El arbol quedo consolidado en commits locales hasta CHG-260; distinguir siempre ese estado Local del release QA inmutable y no promover, migrar ni desplegar por inferencia.
 
 ## Secuencia
 

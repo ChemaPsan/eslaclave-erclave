@@ -1,6 +1,6 @@
 # Estado actual de ERClave
 
-> Reanudacion del working tree CHG-254/CHG-255: consultar `docs/contexto/REANUDACION_CHG255.md` antes de modificar o limpiar archivos.
+> Reanudacion vigente: consultar `docs/contexto/REANUDACION_CHG261.md`. El handoff CHG-255 se conserva solo como evidencia historica del corte previo.
 
 ## Release QA CHG-254
 
@@ -11,7 +11,9 @@
 - El candidato fue construido en la ejecucion `33470879111` y promovido en `33473077996`, con aprobaciones independientes para base/configuracion, servicios, trafico y frontend. La evidencia completa esta en `docs/operaciones/resultado_release_qa_20260901.md`.
 - UAT funcional queda en curso con el equipo de pruebas; sus observaciones no se consideran defectos confirmados hasta reproducirlas y clasificarlas.
 
-Ultima actualizacion: 2026-09-06.
+Ultima actualizacion: 2026-09-07.
+
+- CHG-261 deja `docs/contexto/REANUDACION_CHG261.md` como handoff vigente posterior al reinicio, con Git consolidado hasta CHG-260, limites Local/QA, evidencia de validacion y pasos exactos para levantar y verificar el entorno.
 
 ## Ambiente local
 
