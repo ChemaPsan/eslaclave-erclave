@@ -1,5 +1,12 @@
 # Estado actual de ERClave
 
+## Estado vigente tras release QA CHG-270
+
+CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
+
+Las notas de preparación y cortes anteriores que siguen son evidencia histórica; no deben disparar un release duplicado.
+
+
 ## Promoción QA en preparación CHG-269
 
 CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
@@ -137,7 +144,7 @@ Ultima actualizacion: 2026-09-07.
 - Los grants historicos internos pueden conservarse como relacion para no perder trazabilidad, pero ya no ingresan a `session/context` ni producen autorizacion efectiva. El owner conserva un piso administrativo y no puede inactivarse.
 - El payload anterior `permission_ids + scope` permanece compatible y esta deprecado; la interfaz nueva usa `assignments + expected_revision`.
 - Mientras un ambiente no tenga `admin.role.permissions.manage`, Roles permite abrir `Ver permisos` en modo de solo lectura y explica por que la edicion permanece bloqueada; no aplica fallback de escritura inseguro.
-- La revision vigente de Cloud SQL QA es `20260825_0029`. Los siete servicios publicos reportan el SHA inmutable `a119ddf5e8d42376b8557b234e15e3681b19c2a7`; la promocion gobernada no copio datos funcionales Local.
+- La revision vigente de Cloud SQL QA es `20260908_0034`. Los siete servicios publicos reportan el SHA inmutable `b63cdad2fbac423c24460e55582ccfc0003e9924`; la promocion gobernada no copio datos funcionales Local.
 
 ### Produccion
 

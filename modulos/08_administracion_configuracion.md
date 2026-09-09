@@ -281,3 +281,8 @@ Administración conserva en su primera vista el centro de configuración de orga
 Se repusieron en el catálogo Local los cuatro permisos existentes sales.quote.submit/approve/expire/cancel y se asignaron al Owner del tenant permitido mediante API auditada, preservando sus asignaciones y alcances. No se ejecutó el seed completo ni se concedieron a otros roles/tenants; no existe bypass por nombre Owner.
 
 Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Disponibilidad QA CHG-270
+
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.

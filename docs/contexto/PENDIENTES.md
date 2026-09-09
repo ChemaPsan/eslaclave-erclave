@@ -1,5 +1,12 @@
 # Pendientes priorizados de ERClave
 
+## Estado vigente tras release QA CHG-270
+
+CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
+
+Las notas de preparación y cortes anteriores que siguen son evidencia histórica; no deben disparar un release duplicado.
+
+
 ## Promoción QA en preparación CHG-269
 
 CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
@@ -7,7 +14,7 @@ CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–26
 
 ## Cierre Local CHG-268
 
-Reserva MTO-000001 recuperada y fallo Decimal corregido. Pendientes: confirmación física por Almacén cuando entregue, aceptación manual y promoción gobernada a QA. Reintentos automáticos siguen fuera de alcance; las fallas de existencia/dependencia conservan recuperaci?n manual. Informe: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+Reserva MTO-000001 recuperada y fallo Decimal corregido. Pendientes: confirmación física por Almacén cuando entregue, aceptación manual y promoción gobernada a QA. Reintentos automáticos siguen fuera de alcance; las fallas de existencia/dependencia conservan recuperación manual. Informe: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
 
 
 ## Alcance posterior a CHG-264

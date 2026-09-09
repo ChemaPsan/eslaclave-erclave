@@ -181,7 +181,7 @@ const documentationChecks = [
   },
   {
     path: "docs/arquitectura/diagramas/estado_actual_backend_mvp.drawio",
-    required: ["Local head", "QA head", "20260908_0034", "20260825_0029"],
+    required: ["Local head 20260908_0034", "QA head 20260908_0034"],
     forbidden: ["Local head 20260817_0015", "Alembic head 20260817_0015", "Ventas planned/mock"]
   },
   {

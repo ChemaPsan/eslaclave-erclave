@@ -65,3 +65,8 @@ El schema base de RH nacio en `20260730_0010`; expedientes de trabajadores se ag
 Consultas de elegibilidad admiten los permisos puntuales de inicio/reanudación de Producción, Mantenimiento y servicios comerciales. Se revalida el trabajador al ejecutar/reanudar; un snapshot histórico no sustituye elegibilidad actual. RH conserva propiedad de personas/puestos/áreas y no escribe órdenes de otros schemas.
 
 CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+
+## Disponibilidad QA CHG-270
+
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.

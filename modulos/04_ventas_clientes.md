@@ -156,3 +156,8 @@ CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confi
 Las tarjetas indican Borrador → Emitir cotización → Cotizada → Aprobar cotización → Aprobada. Emitir requiere sales.quote.submit y aprobar sales.quote.approve. Cuando falte autoridad se orienta a solicitar intervención del usuario autorizado o administrador de roles. La reparación del catálogo/Owner de pruebas fue exclusiva de Local; contratos y ciclo backend no cambian.
 
 Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Disponibilidad QA CHG-270
+
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.

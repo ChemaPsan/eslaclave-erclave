@@ -544,3 +544,8 @@ CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confi
 Órdenes mantiene Control de orden y las bandejas operativas en la columna principal al colapsar la guía. La clase production-orders-layout apila guía y contenido bajo 720 px reales del panel; no cambia el componente compartido ni las reglas de salida/inicio.
 
 Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Disponibilidad QA CHG-270
+
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.

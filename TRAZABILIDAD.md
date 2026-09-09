@@ -4337,3 +4337,21 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | Ningún contrato funcional adicional; promueve contratos CHG-255–268. GET health/ready/version/openapi.json en siete APIs; workflows GitHub. Matriz y fronteras en docs/operaciones/release_qa_20260908.md. |
 | Validacion | 54 navegador, 262 backend (55 omitidas sin DB), validadores y dos pruebas sin cloud de promoción/rollback. CI y evidencia del despliegue pendientes de ejecución sobre candidato publicado. |
 | Observaciones | Preparación Local y preflight QA de lectura. No afirmar release completado hasta registrar SHA/runs/digests/revisiones/Hosting. Base requiere forward-fix/PITR; servicios tienen compensación y Hosting conserva release anterior. |
+
+
+### CHG-270
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-09 |
+| Cambio | Publicación completa, release QA verificado y handoff para otra computadora |
+| Autor | Codex |
+| Archivos | Documentos de estado/inicio/pendientes/decisiones y REANUDACION_CHG269; expediente release_qa_20260908, arquitectura/diagrama, infra/qa, siete módulos, AGENTES, validador de agentes con head QA vigente y trazabilidad. |
+| Secciones | Git main, SHA, gates, imágenes, revisiones, base, Hosting, UAT y continuidad |
+| Agentes consultados | Arquitectura, Seguridad, QA/Release, API, Datos/Custodio DB, Sinergia y siete módulos; consulta documental sin delegación. Skills qa-release/environment-boundaries/db-migration. |
+| Descripcion | Publica todos los cambios actualizados, fusiona PR #14 y promueve b63cdad mediante candidato 34389669031 y release 34390476667. Siete servicios 100%, migraciones 0030–0034/configuración exitosas y frontend servido validado. |
+| Motivo | Autorización explícita para subir el repo, abrirlo desde otra computadora y completar promoción QA para el tester. |
+| Impacto | QA head 20260908_0034, mismos digests aprobados; datos existentes preservados. Main recibe después este cierre documental, sin reconstrucción funcional. |
+| APIs afectadas | Sin cambios de contratos adicionales. GET /health, /ready, /version, /openapi.json de siete APIs; GET session/context, warehouse-material-requests de Production/Maintenance, material-returns de Inventory, workers de HR, service-orders de Sales y service-acceptances de Purchasing para rechazo sin token/token inválido. Rutas y alcance completos en expediente. |
+| Validacion | 262 backend (55 omitidas sin DB), 54 navegador y dos pruebas de tráfico Local; CI PR/candidato y release exitosos. Siete smokes candidatos/estables, rechazo 401/403 y cuatro hashes Hosting idénticos al artefacto. Documentación y diff verificados. |
+| Observaciones | Sin copia de base Local, datos funcionales nuevos, IAM ni Producción. UAT autenticada y aislamiento con identidades reales pendientes del tester. Rollback exacto registrado; no se ejecutó compensación. |
