@@ -11,3 +11,9 @@ export async function createMaintenanceTime(id,payload){return (await request(`/
 export async function createMaintenanceMaterialRequest(id,payload){return (await request(`/v1/maintenance/orders/${id}/material-requests`,{method:"POST",body:JSON.stringify(payload)})).data;}
 export async function cancelMaintenanceMaterialRequest(id){return (await request(`/v1/maintenance/material-requests/${id}/cancel`,{method:"POST"})).data;}
 export async function reconcileMaintenanceMaterialRequest(id){return (await request(`/v1/maintenance/material-requests/${id}/reconcile`,{method:"POST"})).data;}
+export async function getWarehouseMaterialRequests(offset=0){return request(`/v1/maintenance/warehouse-material-requests?limit=25&offset=${offset}`);}
+export async function issueMaintenanceMaterialRequest(id){return (await request(`/v1/maintenance/material-requests/${encodeURIComponent(id)}/issue`,{method:"POST"})).data;}
+
+export async function rejectMaintenanceMaterialRequest(id,reason){return (await request(`/v1/maintenance/material-requests/${encodeURIComponent(id)}/reject`,{method:"POST",body:JSON.stringify({reason})})).data;}
+
+export function getMaintenanceReturnableMaterials(offset=0){return request(`/v1/maintenance/returnable-materials?limit=26&offset=${offset}`);}

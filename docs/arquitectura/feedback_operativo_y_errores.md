@@ -39,3 +39,15 @@ El patrón recomendado es: **resultado + causa operativa + siguiente paso**.
 ## Alcance vigente
 
 CHG-251 aplica este patrón en el cliente compartido, Backoffice, errores de carga y transiciones sensibles de Producción, Ventas, Compras y Mantenimiento. No modifica contratos HTTP. La estandarización backend de validaciones no canónicas, `500` inesperados y propagación de correlación entre servicios permanece pendiente.
+
+
+## Flujo operativo Local CHG-265
+
+CHG-265 añade guía por error.code y details.workflow/requested_status para transiciones: requisito faltante, responsable y pantalla. La respuesta conserva estado confirmado. Mensajes cubren salidas productivas y refacciones de CHG-263/264, recepción/aceptación/entrega, transferencias, devoluciones, máquinas, RH y recuperación. Conciliación pendiente distingue movimiento físico ya registrado del paso pendiente en el documento; reintentar no pide repetir entrega.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+
+## Recuperación de refacciones Local CHG-268
+
+CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.

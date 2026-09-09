@@ -15,6 +15,11 @@ class PurchasingAuthorityClient:
         try:
             with request.urlopen(request.Request(url,headers=headers,data=body,method=method),timeout=self.timeout) as response:return json.loads(response.read())["data"]
         except error.HTTPError as exc:
+            if exc.code in {401,403}:
+                try:code=json.loads(exc.read()).get("error",{}).get("code")
+                except (ValueError,AttributeError):code=None
+                code=code if code in {"auth_required","permission_denied","module_not_enabled","tenant_access_denied"} else "permission_denied"
+                raise ErclaveError(code,"The authoritative service rejected access.",status_code=exc.code) from exc
             if 400 <= exc.code < 500:
                 raise ErclaveError("purchasing_dependency_rejected","An authoritative service rejected Purchasing data.",status_code=422,details={"status":exc.code}) from exc
             raise ErclaveError("purchasing_dependency_unavailable","An authoritative service is unavailable.",status_code=503,details={"status":exc.code}) from exc

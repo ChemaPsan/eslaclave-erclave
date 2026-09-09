@@ -3,6 +3,7 @@ from datetime import date
 from typing import Literal
 from fastapi import APIRouter, Depends, Header, Query
 from erclave_common.errors import ErclaveError
+from erclave_common.material_return_client import MaterialReturnClient,get_material_return_client
 from erclave_common.csv_reports import csv_report_response,validate_date_range
 from .authorization import AuthorizedContext, ProductionOrderClient, UnitCatalogClient, get_production_order_client, get_unit_catalog_client, require_inventory_access
 from .repositories import InventoryRepository, get_inventory_repository
@@ -36,7 +37,7 @@ def digest(payload, path=None):
     return hashlib.sha256(json.dumps({"body":payload.model_dump(mode="json") if payload else {},"path":path or {}},sort_keys=True,separators=(",",":")).encode()).hexdigest()
 
 @router.get("/warehouses",response_model=WarehouseListResponse)
-def warehouses(x_tenant_id: str|None=Header(None,alias="X-Tenant-Id"), q: str|None=None, repository: InventoryRepository=Depends(get_inventory_repository), _=Depends(require_inventory_access(("inventory.warehouse.read","maintenance.material_request.read","maintenance.material_request.create")))): return WarehouseListResponse(data=repository.list_warehouses(tenant(x_tenant_id),q))
+def warehouses(x_tenant_id: str|None=Header(None,alias="X-Tenant-Id"), q: str|None=None, repository: InventoryRepository=Depends(get_inventory_repository), _=Depends(require_inventory_access(("inventory.warehouse.read","inventory.movement.read","inventory.movement.create","maintenance.material_request.read","maintenance.material_request.create")))): return WarehouseListResponse(data=repository.list_warehouses(tenant(x_tenant_id),q))
 @router.post("/warehouses",response_model=WarehouseResponse,status_code=201)
 def create_warehouse(payload: WarehouseCreate,x_tenant_id: str|None=Header(None,alias="X-Tenant-Id"),idempotency_key: str|None=Header(None,alias="Idempotency-Key"),repository: InventoryRepository=Depends(get_inventory_repository),access: AuthorizedContext=Depends(require_inventory_access("inventory.warehouse.create"))):
     result=repository.create_warehouse(tenant(x_tenant_id),payload,key(idempotency_key),digest(payload),access.actor_id)
@@ -95,6 +96,69 @@ def update_item(item_id:str,payload:ItemUpdate,x_tenant_id:str|None=Header(None,
 
 @router.get("/movements",response_model=MovementListResponse)
 def movements(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access("inventory.movement.read"))): return MovementListResponse(data=repository.list_movements(tenant(x_tenant_id)))
+
+@router.get("/transfers",response_model=TransferListResponse)
+def transfers(limit:int=Query(25,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access("inventory.movement.read"))):
+    return TransferListResponse(data=repository.list_transfers(tenant(x_tenant_id),limit,offset))
+
+@router.get("/material-returns",response_model=MaterialReturnListResponse)
+def material_returns(limit:int=Query(25,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access("inventory.movement.read"))):
+    return MaterialReturnListResponse(data=repository.list_material_returns(tenant(x_tenant_id),limit,offset))
+
+@router.get("/material-returns/{return_id}",response_model=MaterialReturnResponse)
+def material_return(return_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:InventoryRepository=Depends(get_inventory_repository),_=Depends(require_inventory_access(("inventory.movement.read","inventory.movement.create")))):
+    value=repository.get_material_return(tenant(x_tenant_id),return_id)
+    if value is None:raise ErclaveError("material_return_not_found","Material return not found.",status_code=404)
+    return MaterialReturnResponse(data=value)
+
+@router.post("/material-returns",response_model=MaterialReturnResponse,status_code=201)
+def request_material_return(payload:MaterialReturnRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),authority:MaterialReturnClient=Depends(get_material_return_client),access:AuthorizedContext=Depends(require_inventory_access(("production.order.update","maintenance.material_request.create","inventory.movement.create")))):
+    t=tenant(x_tenant_id);k=key(idempotency_key)
+    try:source=repository.return_source(t,payload.original_movement_id)
+    except ValueError as exc:raise ErclaveError(str(exc),"Only issued order materials can be returned.",status_code=409) from exc
+    permission={"production_order":"production.order.update","maintenance_order":"maintenance.material_request.create"}[source['source_type']]
+    if not (access.permissions or frozenset({access.permission})).intersection({permission,"inventory.movement.create"}):raise ErclaveError("permission_denied","This order's return permission is required.",status_code=403)
+    source['quantity']=payload.quantity
+    try:replay=repository.replay_material_return_request(t,k,digest(payload))
+    except ValueError as exc:raise ErclaveError(str(exc),"The request key was reused with different data.",status_code=409) from exc
+    if replay:return MaterialReturnResponse(data=replay)
+    validated=authority.validate(t,source,authorization)
+    try:value=repository.request_material_return(t,payload,source,validated['source_code'],k,digest(payload),access.actor_id)
+    except ValueError as exc:raise ErclaveError(str(exc),"Return exceeds the remaining issued quantity.",status_code=409) from exc
+    return MaterialReturnResponse(data=value)
+
+@router.post("/material-returns/{return_id}/receive",response_model=MaterialReturnResponse)
+def receive_material_return(return_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),authority:MaterialReturnClient=Depends(get_material_return_client),access:AuthorizedContext=Depends(require_inventory_access("inventory.movement.create"))):
+    t=tenant(x_tenant_id);key(idempotency_key)
+    with repository.return_command_lock(t,return_id):
+        value=repository.get_material_return(t,return_id)
+        if value is None:raise ErclaveError("material_return_not_found","Material return not found.",status_code=404)
+        if value.status=='completed':return MaterialReturnResponse(data=value)
+        if value.status=='cancelled':raise ErclaveError('material_return_not_receivable','A cancelled return cannot be received.',status_code=409)
+        if value.status=='pending':
+            authority.validate(t,value.model_dump(mode='json'),authorization)
+            try:value=repository.receive_material_return(t,return_id,access.actor_id)
+            except ValueError as exc:raise ErclaveError(str(exc),"Material return cannot be received.",status_code=409) from exc
+        error_code=None
+        try:authority.reconcile(t,value.model_dump(mode='json'),authorization)
+        except ErclaveError as exc:error_code=exc.code
+        return MaterialReturnResponse(data=repository.finish_material_return(t,return_id,access.actor_id,error_code))
+
+@router.post("/material-returns/{return_id}/cancel",response_model=MaterialReturnResponse)
+def cancel_material_return(return_id:str,payload:ReverseRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access("inventory.movement.create"))):
+    t=tenant(x_tenant_id);key(idempotency_key)
+    with repository.return_command_lock(t,return_id):
+        try:value=repository.cancel_material_return(t,return_id,payload.reason,access.actor_id)
+        except ValueError as exc:raise ErclaveError(str(exc),"Only a pending physical return can be cancelled.",status_code=409) from exc
+        if value is None:raise ErclaveError('material_return_not_found','Material return not found.',status_code=404)
+        return MaterialReturnResponse(data=value)
+
+@router.post("/transfers/{transfer_id}/{action}",response_model=TransferResponse)
+def transfer_action(transfer_id:str,action:Literal["receive","request-return","receive-return"],payload:TransferActionRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access("inventory.movement.create"))):
+    try:value=repository.transition_transfer(tenant(x_tenant_id),transfer_id,action,payload,key(idempotency_key),digest(payload,{"id":transfer_id,"action":action}),access.actor_id)
+    except ValueError as exc:raise ErclaveError(str(exc),"Transfer requires physical receipt at the specified warehouse.",status_code=409) from exc
+    if value is None:raise ErclaveError("transfer_not_found","Transfer not found.",status_code=404)
+    return TransferResponse(data=value)
 @router.post("/movements",response_model=MovementResponse,status_code=201)
 def create_movement(payload:MovementCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),unit_catalog:UnitCatalogClient=Depends(get_unit_catalog_client),access:AuthorizedContext=Depends(require_inventory_access("inventory.movement.create"))):
     unit_catalog.require_active(tenant(x_tenant_id),payload.unit,authorization)
@@ -103,7 +167,7 @@ def create_movement(payload:MovementCreate,x_tenant_id:str|None=Header(None,alia
     if not result: raise ErclaveError("movement_reference_invalid","Item or warehouse was not found.",status_code=404)
     return MovementResponse(data=result)
 @router.post("/purchase-receipts",response_model=MovementResponse,status_code=201)
-def create_purchase_receipt_movement(payload:MovementCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),unit_catalog:UnitCatalogClient=Depends(get_unit_catalog_client),access:AuthorizedContext=Depends(require_inventory_access("purchasing.receipt.create"))):
+def create_purchase_receipt_movement(payload:MovementCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),unit_catalog:UnitCatalogClient=Depends(get_unit_catalog_client),access:AuthorizedContext=Depends(require_inventory_access("inventory.movement.create"))):
     if payload.movement_type!="entry" or payload.source.type!="purchase_order" or not payload.source.line_id or payload.destination_warehouse_id:
         raise ErclaveError("purchase_receipt_payload_invalid","Purchasing receipts only accept purchase-order entries with an order line.",status_code=422)
     unit_catalog.require_active(tenant(x_tenant_id),payload.unit,authorization)
@@ -164,14 +228,30 @@ def create_reservation(payload:ReservationCreateRequest,x_tenant_id:str|None=Hea
     return ReservationResponse(data=result)
 
 @router.post("/reservations/{reservation_id}/release",response_model=ReservationResponse)
-def release_reservation(reservation_id:str,payload:ReservationActionRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access(("production.order.cancel","sales.order.cancel","maintenance.material_request.cancel")))):
-    result=repository.release_reservation(tenant(x_tenant_id),reservation_id,payload.reason,key(idempotency_key),digest(payload,{"id":reservation_id}),access.actor_id)
+def release_reservation(reservation_id:str,payload:ReservationActionRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access(("production.order.cancel","sales.order.cancel","maintenance.material_request.cancel","maintenance.order.cancel","inventory.movement.create")))):
+    permissions=access.permissions or frozenset({access.permission})
+    source_permissions={"production_order":{"production.order.cancel"},"sales_order":{"sales.order.cancel"},"maintenance_order":{"maintenance.material_request.cancel","maintenance.order.cancel","inventory.movement.create"}}
+    allowed_sources={source for source,required in source_permissions.items() if permissions.intersection(required)}
+    try:result=repository.release_reservation(tenant(x_tenant_id),reservation_id,payload.reason,key(idempotency_key),digest(payload,{"id":reservation_id}),access.actor_id,allowed_sources=allowed_sources)
+    except ValueError as exc:raise ErclaveError(str(exc),"Reservation cannot be released.",status_code=403 if str(exc)=="permission_denied" else 409) from exc
     if not result:raise ErclaveError("reservation_not_found","Reservation not found.",status_code=404)
     return ReservationResponse(data=result)
 
 @router.post("/reservations/{reservation_id}/consume",response_model=MovementResponse,status_code=201)
-def consume_reservation(reservation_id:str,payload:ReservationActionRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access(("production.order.start","production.order.resume","sales.delivery.confirm","maintenance.order.resolve")))):
-    try:result=repository.consume_reservation(tenant(x_tenant_id),reservation_id,payload.reason,key(idempotency_key),digest(payload,{"id":reservation_id}),access.actor_id,payload.quantity)
-    except ValueError as exc:raise ErclaveError(str(exc),"Reservation cannot be consumed.",status_code=409) from exc
+def consume_reservation(reservation_id:str,payload:ReservationActionRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access("inventory.movement.create"))):
+    permissions=access.permissions or frozenset({access.permission})
+    source_permissions={"production_order":{"inventory.movement.create"},"sales_order":{"inventory.movement.create"},"maintenance_order":{"inventory.movement.create"}}
+    allowed_sources={source for source,required in source_permissions.items() if permissions.intersection(required)}
+    try:result=repository.consume_reservation(tenant(x_tenant_id),reservation_id,payload.reason,key(idempotency_key),digest(payload,{"id":reservation_id}),access.actor_id,payload.quantity,allowed_sources=allowed_sources)
+    except ValueError as exc:raise ErclaveError(str(exc),"Reservation cannot be consumed.",status_code=403 if str(exc)=="permission_denied" else 409) from exc
     if not result:raise ErclaveError("reservation_not_found","Reservation not found.",status_code=404)
     return MovementResponse(data=result)
+
+
+@router.post("/production-reservation-rollbacks")
+def rollback_production_reservations(payload:ProductionReservationRollbackRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),production:ProductionOrderClient=Depends(get_production_order_client),access:AuthorizedContext=Depends(require_inventory_access("production.order.release"))):
+    t=tenant(x_tenant_id);key(idempotency_key)
+    proof=production.get_failed_creation(t,payload.source_id,authorization)
+    if proof.get('id')!=payload.source_id or proof.get('actor_id')!=access.actor_id:raise ErclaveError("production_creation_recovery_not_allowed","Only the failed creation owner can recover reservations.",status_code=403)
+    try:return {"data":repository.rollback_production_reservations(t,payload.source_id,access.actor_id)}
+    except ValueError as exc:raise ErclaveError(str(exc),"Reservations cannot be released by creation recovery.",status_code=409) from exc

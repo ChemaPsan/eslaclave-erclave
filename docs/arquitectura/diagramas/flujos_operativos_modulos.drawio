@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
-<mxfile host="app.diagrams.net" modified="2026-09-02T12:00:00.000Z" agent="ERClave documentation" version="24.7.17" type="device">
+<mxfile host="app.diagrams.net" modified="2026-09-08T22:45:00.000Z" agent="ERClave documentation" version="24.7.17" type="device">
   <diagram id="flujos_operativos_modulos.drawio" name="Vista vigente">
-    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2500" pageHeight="1650" math="0" shadow="0">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2500" pageHeight="1750" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -29,7 +29,7 @@
         <mxCell id="pr1" value="Liberar orden&lt;br&gt;validar + reservar" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="475" y="215" width="320" height="115" as="geometry" />
         </mxCell>
-        <mxCell id="pr2" value="Iniciar y ejecutar&lt;br&gt;consumir una vez" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+        <mxCell id="pr2" value="Almacén entrega materiales&lt;br&gt;después iniciar y ejecutar" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="865" y="215" width="320" height="115" as="geometry" />
         </mxCell>
         <mxCell id="pr3" value="Fases 100%&lt;br&gt;validar y terminar" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
@@ -86,7 +86,7 @@
         <mxCell id="ma2" value="Asignar e iniciar&lt;br&gt;técnico RH" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="865" y="1280" width="320" height="115" as="geometry" />
         </mxCell>
-        <mxCell id="ma3" value="Tiempo y&lt;br&gt;refacciones Inventory" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+        <mxCell id="ma3" value="Local: tiempo y solicitud&lt;br&gt;Almacen confirma entrega" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="1255" y="1280" width="320" height="115" as="geometry" />
         </mxCell>
         <mxCell id="ma4" value="Resolver y liberar&lt;br&gt;sin reanudar Producción" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
@@ -157,6 +157,12 @@
         </mxCell>
         <mxCell id="e20" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="ma4" target="ma5">
           <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="chg265_handoffs" value="CHG-265 Local: Compras prepara; Almacén recibe / Ventas prepara; Almacén despacha&lt;br&gt;Servicios: acepta solicitante / Transferencias: destino recibe&lt;br&gt;Sobrantes: Inventory recibe; Production o Maintenance concilia por HTTP&lt;br&gt;Sin escrituras entre schemas; QA sin cambios" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="20" y="2100" width="950" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="chg268-recovery" value="Local CHG-268: reserva/cancelación interrumpida → Reintentar en Mantenimiento → Inventory idempotente → reserva confirmada → Almacén autoriza entrega. Locks por tenant/orden/solicitud; recuperar no genera salida." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF1CC;strokeColor=#8A6AA3;fontSize=15;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1630" width="2420" height="70" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

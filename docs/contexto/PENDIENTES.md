@@ -1,6 +1,31 @@
 # Pendientes priorizados de ERClave
 
-Ultima actualizacion: 2026-09-06.
+## Promoción QA en preparación CHG-269
+
+CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
+
+
+## Cierre Local CHG-268
+
+Reserva MTO-000001 recuperada y fallo Decimal corregido. Pendientes: confirmación física por Almacén cuando entregue, aceptación manual y promoción gobernada a QA. Reintentos automáticos siguen fuera de alcance; las fallas de existencia/dependencia conservan recuperaci?n manual. Informe: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+
+
+## Alcance posterior a CHG-264
+
+Entregas parciales elegidas, rechazo de la solicitud productiva, selector de receptor diferente al responsable quedan pendientes. Antes de promocion revisar reservas historicas vencidas e intentos anteriores con respuesta incierta; no se reactivan ni compensan por inferencia. El callback de servicios comerciales Sales a materiales sigue fuera de alcance. Evidencia: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+
+## Alcance posterior a la entrega de refacciones CHG-263
+
+- Entregas parciales elegidas por el almacenista y aprobacion separada de la entrega quedan fuera de este corte; la confirmacion actual entrega la solicitud completa.
+- Antes de promover, revisar reservas historicas con vencimiento: no reactivar stock expirado. Las solicitudes reservadas sin entrega pueden cancelarse y solicitarse nuevamente; movimientos ya emitidos conservan su historia.
+- Operaciones heredadas de entrega con error/resultado incierto requieren revision por Almacen; no se compensan ni se libera la maquina por inferencia. Los reintentos actuales preservan partidas ya confirmadas y claves Inventory.
+- La bandeja usa limit/offset; carga sostenida, cursor estable bajo cambios concurrentes y aprobacion QA siguen pendientes.
+
+Ultima actualizacion: 2026-09-07.
+
+## Cobertura posterior a auditoria CHG-262
+
+La auditoria Local de coherencia frontend/backend y sus correcciones estan documentadas en `docs/auditorias/frontend_backend_2026-09-07.md`. No quedan abiertos los 17 grupos de defectos reproducidos en ese corte. Mantener las regresiones de campos/roles al agregar flujos; la cobertura combinatoria completa de perfiles, el volumen y las fallas distribuidas no se sustituyen por esos tests. Los cambios Local no se han promovido a QA.
 
 ## Validacion del release QA
 
@@ -12,14 +37,14 @@ Ultima actualizacion: 2026-09-06.
 
 ## Prioridad siguiente
 
-0. Siguiente evolucion de Mantenimiento tras CHG-257: reintento automatico programado, devolucion de sobrantes, participantes secundarios y adjuntos; despues abordar preventivos y activos generales. Los reportes operativos basicos de ordenes, indisponibilidad, refacciones y tiempos ya quedaron cerrados.
+0. Siguiente evolucion de Mantenimiento tras CHG-257: reintento automatico programado, participantes secundarios y adjuntos; despues abordar preventivos y activos generales. Los reportes operativos basicos de ordenes, indisponibilidad, refacciones y tiempos ya quedaron cerrados.
 0.1. Siguiente evolucion de Compras: division/adjudicacion de partidas de una requisicion entre varios proveedores, reintento automatico programado de recepciones `needs_reconciliation` y paginacion server-side antes de promover a QA. CHG-259 ya prueba la recuperacion parcial y corrige partidas sin respuesta; CHG-255 permite servicios sin Inventory. No existe aun adjudicacion parcial, factura ni cuenta por pagar.
 1. Siguiente corte de Ventas despues de CHG-255: devoluciones, facturacion/cobranza y callback de Production que convierta solicitudes en partidas entregables y reporte costo real. La ejecucion/aceptacion de servicios ya tiene orden propia; la recepcion de producto terminado permanece cubierta por CHG-222.
 2. Evolucionar la paginacion visual transversal de CHG-259 a paginacion contractual con cursor en Clientes, Cotizaciones, Pedidos, Ordenes de servicio y Entregas antes de volumen productivo; el limite preventivo de API permanece en 200.
 3. Repetir en Local aislado las dos entradas funcionales que antes quedaron solo en `localStorage` y confirmar en navegador que Movimientos, Inventario y Kardex reflejan el mismo saldo; no copiar esos datos a QA.
 4. Completar el catalogo de Articulos para escala server-side; actualmente el corte escalable se concentro en balances de Inventario.
 5. Decidir funcionalmente si Categoria se convierte en catalogo jerarquico antes de modelar IDs, padres o migraciones.
-6. Completar la matriz de fallas de Produccion con una interrupcion entre el consumo de Inventory y la confirmacion `in_progress`, seguida de reintento/reconciliacion con clave estable. CHG-259 ya certifica contencion de reservas/consumos en Inventory y claims concurrentes en Sales, Purchasing y Maintenance; la interrupcion Production-Inventory y la evidencia de carga sostenida siguen pendientes antes de QA.
+6. CHG-264 separa consumo e inicio: pruebas PostgreSQL cubren entrega parcial, bloqueo de inicio/cancelacion, recuperacion y lock; completar carga sostenida y cortes de red reales antes de QA.
 7. Capturar y validar areas/puestos QA solamente con datos ficticios y autorizacion explicita; `hr-service` y el entitlement ya estan desplegados, pero sus catalogos permanecen vacios.
 8. Paginar el catalogo de articulos elegibles para recetas y exponer disponibilidad agregada server-side para volumen mayor a 200 combinaciones articulo/almacen.
 9. Ejecutar la prueba funcional del editor de permisos en QA tras renovar la sesion y confirmar persistencia, concurrencia y rechazo de grants prohibidos.
@@ -44,3 +69,22 @@ Ultima actualizacion: 2026-09-06.
 ## Regla de mantenimiento
 
 Mover un pendiente a `ESTADO_ACTUAL.md` solo cuando este implementado, probado y registrado en `TRAZABILIDAD.md`. Eliminar pendientes obsoletos explicando la decision en trazabilidad.
+
+
+## Pendientes posteriores a CHG-265
+
+Conectar automáticamente Ventas → Producción → recepción/entrega y materiales de servicios comerciales se mantienen planned. También devoluciones comerciales a proveedor/cliente, entregas productivas/refacciones parcialmente elegidas, aprobación separada, reintentos programados y asignación de usuarios por almacén. Las devoluciones de sobrantes de Producción/Mantenimiento ya tienen solicitud y confirmación por Almacén en Local. No confundirlas con devoluciones comerciales ni merma. Validar volumen y fallos prolongados antes de promoción; QA no recibe este cambio.
+
+
+## Ajustes UAT Local CHG-266
+
+Los cuatro hallazgos UAT de proveedores, requisiciones, riel de Órdenes y acceso al ciclo de cotizaciones están corregidos en Local. Resta aceptación manual del usuario; no hay autorización de promoción QA. La configuración de permisos del ambiente remoto debe evaluarse dentro de un release autorizado, sin copiar datos Local ni conceder permisos a roles por inferencia.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Solicitudes compactas Local CHG-267
+
+La presentación compacta de solicitudes en Movimientos está implementada en Local. Pendiente aceptación manual del usuario. QA no recibe código ni datos por inferencia; no se amplía este corte a permisos o flujos de almacén.
+
+Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.

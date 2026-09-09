@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -66,6 +67,71 @@ class MovementRead(BaseModel):
 class MovementResponse(BaseModel): data: MovementRead
 class MovementListResponse(BaseModel): data: list[MovementRead]
 class ReverseRequest(BaseModel): reason: str = Field(min_length=3)
+
+class ProductionReservationRollbackRequest(BaseModel):
+    model_config={"extra":"forbid"}
+    source_id:str=Field(min_length=1,max_length=40)
+
+class TransferActionRequest(BaseModel):
+    model_config = {"extra":"forbid"}
+    warehouse_id: str = Field(min_length=1,max_length=40)
+    quantity: Decimal | None = Field(default=None,gt=0)
+    reason: str = Field(min_length=3,max_length=500)
+
+class TransferRead(BaseModel):
+    id: str
+    status: Literal["in_transit","partially_received","received","return_requested","returned"]
+    outgoing_movement_id: str
+    code: str
+    inventory_item_id: str
+    item_code: str
+    item_name: str
+    origin_warehouse_id: str
+    destination_warehouse_id: str
+    origin_name: str
+    destination_name: str
+    quantity: Decimal
+    received_quantity: Decimal
+    returned_quantity: Decimal
+    unit: str
+    unit_cost: Decimal | None = None
+    created_at: datetime
+
+class TransferResponse(BaseModel): data: TransferRead
+class TransferListResponse(BaseModel): data: list[TransferRead]
+
+class MaterialReturnRequest(BaseModel):
+    model_config={"extra":"forbid"}
+    original_movement_id:str=Field(min_length=1,max_length=40)
+    quantity:Decimal=Field(gt=0)
+    reason:str=Field(min_length=3,max_length=500)
+
+class MaterialReturnRead(BaseModel):
+    id:str
+    original_movement_id:str
+    movement_id:str|None=None
+    source_type:Literal["production_order","maintenance_order"]
+    source_id:str
+    source_code:str
+    reservation_id:str
+    quantity:Decimal
+    reason:str
+    status:Literal["pending","received_pending_reconciliation","completed","cancelled"]
+    error_code:str|None=None
+    requested_by:str
+    received_by:str|None=None
+    created_at:datetime
+    received_at:datetime|None=None
+    inventory_item_id:str
+    item_code:str
+    item_name:str
+    warehouse_id:str
+    warehouse_name:str
+    unit:str
+    unit_cost:Decimal|None=None
+
+class MaterialReturnResponse(BaseModel): data:MaterialReturnRead
+class MaterialReturnListResponse(BaseModel): data:list[MaterialReturnRead]
 
 class FinishedGoodsReceiptCreate(BaseModel):
     production_order_id: str = Field(min_length=1, max_length=80)

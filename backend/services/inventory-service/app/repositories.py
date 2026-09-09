@@ -3,6 +3,8 @@ from uuid import uuid4
 from sqlalchemy import text
 from sqlalchemy import create_engine
 from erclave_common.config import get_settings
+from .handoffs import InventoryHandoffs
+from .material_returns import InventoryMaterialReturns
 from .schemas import (
     AvailabilityAllocation, AvailabilityCheckRead, AvailabilityItemRead,
     BalanceRead, ItemRead, MovementRead, Page, ReservationRead, WarehouseRead,
@@ -15,7 +17,7 @@ def reservation_consumption_state(reserved_quantity, consume_quantity):
     if remaining<=0:return reserved,"consumed",0.0
     return remaining,"active",remaining
 
-class InventoryRepository:
+class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
     def __init__(self,engine): self.engine=engine
     def _claim(self,c,t,o,k,h):
         claimed=c.execute(text("""insert into inventory.idempotency_records(id,tenant_id,operation,idempotency_key,request_hash)
@@ -93,7 +95,7 @@ class InventoryRepository:
                 sets=", ".join(f"{name}=:{name}" for name in data); c.execute(text(f"update inventory.items set {sets},updated_at=now() where tenant_id=:t and id=:i"),{"t":t,"i":i,**data})
             value=self._item(c,t,i); self._audit(c,t,a,"item.update","item",i,data); self._done(c,t,"item.update",k,value); return value
     def _balance(self,c,t,item,warehouse,unit):
-        return float(c.execute(text("select coalesce(sum(case when direction='in' then quantity else -quantity end),0) from inventory.movements where tenant_id=:t and inventory_item_id=:item and warehouse_id=:wh and unit=:unit and status='recorded'"),{"t":t,"item":item,"wh":warehouse,"unit":unit}).scalar_one())
+        return float(c.execute(text("select coalesce(sum(case when direction='in' then quantity else -quantity end),0) from inventory.movements where tenant_id=:t and inventory_item_id=:item and warehouse_id=:wh and unit=:unit and status in ('recorded','reversed')"),{"t":t,"item":item,"wh":warehouse,"unit":unit}).scalar_one())
     def _resource_lock(self,c,t,item,warehouse):
         c.execute(text("select pg_advisory_xact_lock(hashtextextended(:lock_key,0))"),{"lock_key":f"inventory:{t}:{item}:{warehouse}"})
     def _reserved(self,c,t,item,warehouse,unit):
@@ -101,7 +103,7 @@ class InventoryRepository:
     def _average_cost(self,c,t,item,warehouse,unit,default_cost=0):
         row=c.execute(text("""select coalesce(sum(case when direction='in' then quantity else -quantity end),0) quantity,
             coalesce(sum(case when direction='in' then quantity*coalesce(unit_cost,0) else -quantity*coalesce(unit_cost,0) end),0) value
-            from inventory.movements where tenant_id=:t and inventory_item_id=:item and warehouse_id=:wh and unit=:unit and status='recorded'"""),{"t":t,"item":item,"wh":warehouse,"unit":unit}).mappings().one()
+            from inventory.movements where tenant_id=:t and inventory_item_id=:item and warehouse_id=:wh and unit=:unit and status in ('recorded','reversed')"""),{"t":t,"item":item,"wh":warehouse,"unit":unit}).mappings().one()
         quantity=float(row["quantity"]);value=float(row["value"])
         return max(0,value/quantity) if quantity>0 else float(default_cost or 0)
     def _movement(self,c,t,i):
@@ -127,7 +129,7 @@ class InventoryRepository:
             group=f"trf_{uuid4().hex[:26]}" if p.movement_type=="transfer" else None; i=f"mov_{uuid4().hex[:26]}"; code=f"MOV-{uuid4().hex[:10].upper()}"
             self._insert_movement(c,t,i,code,p,"out" if outgoing else "in",p.warehouse_id,a,group,unit_cost=unit_cost)
             if group:
-                self._insert_movement(c,t,f"mov_{uuid4().hex[:26]}",f"{code}-IN",p,"in",p.destination_warehouse_id,a,group,unit_cost=unit_cost)
+                c.execute(text("insert into inventory.transfers(id,tenant_id,outgoing_movement_id,destination_warehouse_id) values(:id,:t,:movement,:destination)"),{"id":group,"t":t,"movement":i,"destination":p.destination_warehouse_id})
             value=self._movement(c,t,i); self._audit(c,t,a,"movement.create","movement",i,p.model_dump(mode="json")); self._done(c,t,"movement.create",k,value); return value
     def _insert_movement(self,c,t,i,code,p,direction,warehouse,a,group=None,reversal=None,unit_cost=None):
         c.execute(text("insert into inventory.movements(id,tenant_id,movement_code,movement_type,inventory_item_id,warehouse_id,direction,quantity,unit,unit_cost,reason,source_type,source_id,transfer_group_id,reversal_of_id,actor_id,occurred_at) values(:i,:t,:code,:mt,:item,:wh,:direction,:qty,:unit,:cost,:reason,:st,:sid,:group,:reversal,:actor,:at)"),{"i":i,"t":t,"code":code,"mt":p.movement_type,"item":p.inventory_item_id,"wh":warehouse,"direction":direction,"qty":p.quantity,"unit":p.unit,"cost":unit_cost if unit_cost is not None else p.unit_cost,"reason":p.reason,"st":p.source.type,"sid":p.source.id,"group":group,"reversal":reversal,"actor":a,"at":p.occurred_at})
@@ -172,7 +174,7 @@ class InventoryRepository:
                 coalesce(sum(case when direction='in' then quantity else -quantity end),0) on_hand,
                 coalesce(sum(case when direction='in' then quantity*coalesce(unit_cost,0) else -quantity*coalesce(unit_cost,0) end),0) inventory_value
             from inventory.movements
-            where tenant_id=:t and inventory_item_id=:item and unit=:unit and status='recorded'
+            where tenant_id=:t and inventory_item_id=:item and unit=:unit and status in ('recorded','reversed')
             group by warehouse_id
         ), reservation_totals as (
             select warehouse_id,coalesce(sum(quantity),0) reserved
@@ -217,6 +219,9 @@ class InventoryRepository:
         return ReservationRead.model_validate(dict(row)) if row else None
     def create_reservation(self,t,p,k,h,a):
         with self.engine.begin() as c:
+            if p.source.type=='production_order':
+                c.execute(text('select pg_advisory_xact_lock(hashtextextended(:k,0))'),{'k':f'production-reservations:{t}:{p.source.id}'})
+                if c.execute(text('select 1 from inventory.reservation_source_rollbacks where tenant_id=:t and source_id=:id'),{'t':t,'id':p.source.id}).first():raise ValueError('production_creation_attempt_failed')
             replay=self._claim(c,t,"reservation.create",k,h)
             if replay:
                 replay_value=ReservationRead.model_validate(replay);current=self._reservation(c,t,replay_value.id)
@@ -235,7 +240,7 @@ class InventoryRepository:
                     expires_at=coalesce(:expires_at,now()+interval '24 hours'),updated_at=now() where tenant_id=:t and id=:i"""),{"quantity":p.quantity,"cost":unit_cost,"expires_at":p.expires_at,"t":t,"i":replay_value.id})
                 value=self._reservation(c,t,replay_value.id);self._audit(c,t,a,"reservation.reactivate","reservation",value.id,p.model_dump(mode="json"));self._done(c,t,"reservation.create",k,value);return value
             row=c.execute(text("""insert into inventory.reservations(id,tenant_id,inventory_item_id,warehouse_id,quantity,unit,unit_cost_snapshot,source_type,source_id,source_line_id,status,expires_at,created_by)
-                values(:i,:t,:item,:wh,:quantity,:unit,:cost,:source_type,:source_id,:line_id,'active',coalesce(:expires_at,now()+interval '24 hours'),:actor)
+                values(:i,:t,:item,:wh,:quantity,:unit,:cost,:source_type,:source_id,:line_id,'active',case when cast(:source_type as varchar) in ('maintenance_order','production_order') then cast(:expires_at as timestamptz) else coalesce(cast(:expires_at as timestamptz),now()+interval '24 hours') end,:actor)
                 on conflict(tenant_id,source_type,source_id,source_line_id,inventory_item_id,warehouse_id,unit) do nothing returning id"""),{"i":i,"t":t,"item":item.id,"wh":warehouse.id,"quantity":p.quantity,"unit":p.unit,"cost":unit_cost,"source_type":p.source.type,"source_id":p.source.id,"line_id":p.source.line_id or item.id,"expires_at":p.expires_at,"actor":a}).first()
             if not row:
                 existing=c.execute(text("""select id,quantity,status from inventory.reservations where tenant_id=:t and source_type=:source_type and source_id=:source_id
@@ -245,28 +250,43 @@ class InventoryRepository:
                 value=self._reservation(c,t,existing["id"])
             else:value=self._reservation(c,t,i)
             self._audit(c,t,a,"reservation.create","reservation",value.id,p.model_dump(mode="json"));self._done(c,t,"reservation.create",k,value);return value
-    def release_reservation(self,t,i,reason,k,h,a):
+    def release_reservation(self,t,i,reason,k,h,a,allowed_sources=None):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"reservation.release",k,h)
-            if replay:return ReservationRead.model_validate(replay)
             c.execute(text("select id from inventory.reservations where tenant_id=:t and id=:i for update"),{"t":t,"i":i}).first()
             before=self._reservation(c,t,i)
-            if not before:self._release(c,t,"reservation.release",k);return None
+            if not before:return None
+            if allowed_sources is not None and before.source_type not in allowed_sources:raise ValueError("permission_denied")
+            if before.source_type=="maintenance_order" and before.status=="consumed":raise ValueError("reservation_not_active")
+            replay=self._claim(c,t,"reservation.release",k,h)
+            if replay:return ReservationRead.model_validate(replay)
             if before.status=="active":c.execute(text("update inventory.reservations set status='released',updated_at=now() where tenant_id=:t and id=:i"),{"t":t,"i":i})
             value=self._reservation(c,t,i);self._audit(c,t,a,"reservation.release","reservation",i,{"reason":reason,"before":before.status,"after":value.status});self._done(c,t,"reservation.release",k,value);return value
-    def consume_reservation(self,t,i,reason,k,h,a,quantity=None):
+
+    def rollback_production_reservations(self,t,source_id,actor):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"reservation.consume",k,h)
-            if replay:return MovementRead.model_validate(replay)
+            c.execute(text('select pg_advisory_xact_lock(hashtextextended(:k,0))'),{'k':f'production-reservations:{t}:{source_id}'})
+            rows=c.execute(text("select id,status,created_by from inventory.reservations where tenant_id=:t and source_type='production_order' and source_id=:id order by id for update"),{'t':t,'id':source_id}).mappings().all()
+            if any(row['created_by']!=actor for row in rows):raise ValueError('permission_denied')
+            if any(row['status']=='consumed' for row in rows):raise ValueError('production_creation_materials_already_issued')
+            c.execute(text('insert into inventory.reservation_source_rollbacks(tenant_id,source_id,actor_id) values(:t,:id,:actor) on conflict(tenant_id,source_id) do nothing'),{'t':t,'id':source_id,'actor':actor})
+            c.execute(text("update inventory.reservations set status='released',updated_at=now() where tenant_id=:t and source_type='production_order' and source_id=:id and status='active' and created_by=:actor"),{'t':t,'id':source_id,'actor':actor})
+            self._audit(c,t,actor,'reservation.creation_rollback','production_order',source_id,{'reservation_ids':[row['id'] for row in rows]})
+            return {'source_id':source_id,'status':'released'}
+    def consume_reservation(self,t,i,reason,k,h,a,quantity=None,allowed_sources=None):
+        with self.engine.begin() as c:
             c.execute(text("select id from inventory.reservations where tenant_id=:t and id=:i for update"),{"t":t,"i":i}).first()
             reservation=self._reservation(c,t,i)
-            if not reservation:self._release(c,t,"reservation.consume",k);return None
+            if not reservation:return None
+            if allowed_sources is not None and reservation.source_type not in allowed_sources:raise ValueError("permission_denied")
+            replay=self._claim(c,t,"reservation.consume",k,h)
+            if replay:return MovementRead.model_validate(replay)
             if reservation.status=="consumed":
                 movement=c.execute(text("select id from inventory.movements where tenant_id=:t and source_type='reservation' and source_id=:i order by created_at limit 1"),{"t":t,"i":i}).scalar_one_or_none()
                 if movement:
                     value=self._movement(c,t,movement);self._done(c,t,"reservation.consume",k,value);return value
             if reservation.status!="active":self._release(c,t,"reservation.consume",k);raise ValueError("reservation_not_active")
             consume_quantity=float(quantity) if quantity is not None else float(reservation.quantity)
+            if reservation.source_type in {"maintenance_order","production_order"} and consume_quantity!=float(reservation.quantity):raise ValueError("reservation_quantity_exceeded")
             if consume_quantity>float(reservation.quantity):self._release(c,t,"reservation.consume",k);raise ValueError("reservation_quantity_exceeded")
             self._resource_lock(c,t,reservation.inventory_item_id,reservation.warehouse_id)
             if self._balance(c,t,reservation.inventory_item_id,reservation.warehouse_id,reservation.unit)<consume_quantity:self._release(c,t,"reservation.consume",k);raise ValueError("reserved_stock_missing")
@@ -300,7 +320,7 @@ class InventoryRepository:
         where=(" where "+" and ".join(filters)) if filters else ""
         sql=f"""with item_locations as (
           select tenant_id,inventory_item_id,warehouse_id,unit
-          from inventory.movements where tenant_id=:t and status='recorded'
+          from inventory.movements where tenant_id=:t and status in ('recorded','reversed')
           union
           select tenant_id,inventory_item_id,warehouse_id,unit
           from inventory.reservations where tenant_id=:t and status='active' and (expires_at is null or expires_at>now())
@@ -321,7 +341,7 @@ class InventoryRepository:
           from item_locations c
           join inventory.items i on i.tenant_id=c.tenant_id and i.id=c.inventory_item_id
           join inventory.warehouses w on w.tenant_id=c.tenant_id and w.id=c.warehouse_id
-          left join inventory.movements m on m.tenant_id=c.tenant_id and m.inventory_item_id=c.inventory_item_id and m.warehouse_id=c.warehouse_id and m.unit=c.unit and m.status='recorded'
+          left join inventory.movements m on m.tenant_id=c.tenant_id and m.inventory_item_id=c.inventory_item_id and m.warehouse_id=c.warehouse_id and m.unit=c.unit and m.status in ('recorded','reversed')
           left join reservation_rows r on r.tenant_id=c.tenant_id and r.inventory_item_id=c.inventory_item_id and r.warehouse_id=c.warehouse_id and r.unit=c.unit
           where {" and ".join(base_filters)}
           group by c.inventory_item_id,i.code,i.name,i.type,i.category,i.status,i.inventory_policy,c.warehouse_id,w.code,w.name,c.unit,r.reserved_quantity,i.default_unit_cost,i.minimum_stock,i.maximum_stock
@@ -348,6 +368,11 @@ class InventoryRepository:
             original=self._movement(c,t,i)
             if not original:self._release(c,t,"movement.reverse",k);return None
             if original.status!="recorded":raise ValueError("movement_already_reversed")
+            if original.reversal_of_id or original.movement_type=="reversal":raise ValueError("reversal_cannot_be_reversed")
+            if original.transfer_group_id and c.execute(text("select 1 from inventory.transfers where tenant_id=:t and id=:id"),{"t":t,"id":original.transfer_group_id}).first():
+                raise ValueError("transfer_requires_receipt_or_return")
+            if original.source_type in {"production_order","maintenance_order","purchase_order","sales_order","reservation","material_return"}:
+                raise ValueError("linked_movement_requires_return")
             originals=[original]
             if original.transfer_group_id:
                 rows=c.execute(text("select id from inventory.movements where tenant_id=:t and transfer_group_id=:g and status='recorded' order by id for update"),{"t":t,"g":original.transfer_group_id}).scalars().all()

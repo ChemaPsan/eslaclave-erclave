@@ -34,7 +34,7 @@ def _clauses(filters, mapping, params, alias="x"):
 
 def _balance_sql(extra_where=""):
     return f"""with locations as (
-      select tenant_id,inventory_item_id,warehouse_id,unit from inventory.movements where tenant_id=:tenant_id and status='recorded'
+      select tenant_id,inventory_item_id,warehouse_id,unit from inventory.movements where tenant_id=:tenant_id and status in ('recorded','reversed')
       union select tenant_id,inventory_item_id,warehouse_id,unit from inventory.reservations where tenant_id=:tenant_id and status='active' and (expires_at is null or expires_at>now())
       union select tenant_id,id,suggested_warehouse_id,base_unit from inventory.items where tenant_id=:tenant_id and suggested_warehouse_id is not null
     ), reserved as (
@@ -49,7 +49,7 @@ def _balance_sql(extra_where=""):
         coalesce(r.reserved_quantity,0) reserved_quantity,i.minimum_stock,i.maximum_stock,max(m.occurred_at) last_movement_at
       from locations l join inventory.items i on i.tenant_id=l.tenant_id and i.id=l.inventory_item_id
       join inventory.warehouses w on w.tenant_id=l.tenant_id and w.id=l.warehouse_id
-      left join inventory.movements m on m.tenant_id=l.tenant_id and m.inventory_item_id=l.inventory_item_id and m.warehouse_id=l.warehouse_id and m.unit=l.unit and m.status='recorded'
+      left join inventory.movements m on m.tenant_id=l.tenant_id and m.inventory_item_id=l.inventory_item_id and m.warehouse_id=l.warehouse_id and m.unit=l.unit and m.status in ('recorded','reversed')
       left join reserved r on r.tenant_id=l.tenant_id and r.inventory_item_id=l.inventory_item_id and r.warehouse_id=l.warehouse_id and r.unit=l.unit
       where l.tenant_id=:tenant_id
       group by l.tenant_id,l.inventory_item_id,i.code,i.name,i.type,i.category,i.status,l.warehouse_id,w.code,w.name,l.unit,r.reserved_quantity,i.minimum_stock,i.maximum_stock

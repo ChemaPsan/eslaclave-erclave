@@ -95,9 +95,14 @@ Rollback:
 
 ## Deuda de pipeline que no debe olvidarse
 
-- hacer atomica o compensatoria la promocion multi-servicio;
+- ampliar la promoción compensatoria CHG-269 con simulaciones de fallos del proveedor;
 - construir el frontend una sola vez en el candidato y verificar su hash al publicar;
 - fortalecer provenance/attestation de artifacts e imagenes;
 - separar migracion y configuracion de tenant como jobs condicionales;
 - agregar reintentos/rollback automatizado a la correccion Backoffice;
 - ampliar smoke autenticado, CORS/IAM y post-deploy de Hosting.
+
+
+## Candidato de continuidad CHG-269
+
+CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.

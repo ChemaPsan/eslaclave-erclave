@@ -1,3 +1,4 @@
+from erclave_common.material_return_client import MaterialReturnValidation,MaterialReturnReconcile,MaterialReturnClient,get_material_return_client
 import hashlib
 import json
 from datetime import date
@@ -14,6 +15,7 @@ from .authorization import AuthorizedContext, require_production_access
 from .repositories import ProductionRepository, get_production_repository
 from .reports import REPORT_PERMISSIONS, build_report
 from .schemas import (
+    WarehouseMaterialListResponse, WarehouseMaterialResponse, WarehouseIssueRequest,
     ProductServiceCreateRequest,
     ProductServiceListResponse,
     ProductServiceResponse,
@@ -244,6 +246,9 @@ class ResourceAuthorityClient:
             value=self._call(self.inventory_url,"/v1/inventory/reservation-requests",tenant_id,authorization,"POST",{"inventory_item_id":row.resource_ref_id,"warehouse_id":allocation["warehouse_id"],"quantity":allocation["quantity"],"unit":row.unit,"source":{"type":"production_order","id":order_id,"line_id":f"{row.resource_ref_id}:{index}"}},f"{idempotency_key}-reserve-{row.resource_ref_id}-{index}")
             refs.append(value["id"])
         return refs
+
+    def rollback_creation(self,tenant_id,order_id,authorization):
+        return self._call(self.inventory_url,"/v1/inventory/production-reservation-rollbacks",tenant_id,authorization,"POST",{"source_id":order_id},f"creation-rollback-{order_id}")
 
     def reservation_action(self,tenant_id,reservation_id,action,authorization,idempotency_key,reason):
         return self._call(self.inventory_url,f"/v1/inventory/reservations/{reservation_id}/{action}",tenant_id,authorization,"POST",{"reason":reason},f"{idempotency_key}-{action}-{reservation_id}")
@@ -532,7 +537,7 @@ def _transition_version(version_id: str, action: str, tenant_id: str, repository
             raise ErclaveError("recipe_version_incomplete", "Approval requires at least one resource and one active stage.", status_code=422) from error
         raise
     if version is None:
-        raise ErclaveError("invalid_status_transition", "Recipe version does not exist or cannot perform this transition.", status_code=409)
+        raise ErclaveError("invalid_status_transition", "Recipe version does not exist or cannot perform this transition.", status_code=409,details={"workflow":"recipe","requested_status":action})
     return RecipeVersionResponse(data=version)
 
 
@@ -597,7 +602,9 @@ def create_machine(payload:MachineCreateRequest,x_tenant_id:str|None=Header(None
 @router.patch("/machines/{machine_id}",response_model=MachineResponse)
 def update_machine(machine_id:str,payload:MachineUpdateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),authorities:ResourceAuthorityClient=Depends(get_resource_authority_client),access:AuthorizedContext=Depends(require_production_access("production.machine.update"))):
     fingerprint=request_fingerprint(payload,{"machine_id":machine_id});tenant_id=require_tenant_id(x_tenant_id);payload=authorities.normalize_machine(tenant_id,payload,authorization)
-    key=require_idempotency_key(idempotency_key); value=repository.update_machine(tenant_id,machine_id,payload,key,fingerprint,access.actor_id)
+    key=require_idempotency_key(idempotency_key)
+    try:value=repository.update_machine(tenant_id,machine_id,payload,key,fingerprint,access.actor_id)
+    except ValueError as exc:raise ErclaveError(str(exc),"Machine status requires the maintenance workflow.",status_code=409) from exc
     if value is None: raise ErclaveError("machine_not_found","Machine not found.",status_code=404)
     return MachineResponse(data=value)
 
@@ -615,6 +622,34 @@ def validate_resources(payload:ResourceValidationRequest,x_tenant_id:str|None=He
 @router.get("/orders",response_model=ProductionOrderListResponse)
 def list_orders(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),limit:int=Query(50,ge=1,le=200),status_filter:str|None=Query(None,alias="status"),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access("production.order.read"))):
     return ProductionOrderListResponse(data=repository.list_orders(require_tenant_id(x_tenant_id),limit,status_filter))
+
+
+@router.get("/warehouse-material-requests",response_model=WarehouseMaterialListResponse)
+def warehouse_material_requests(limit:int=Query(25,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access("inventory.movement.read"))):
+    return repository.list_warehouse_material_requests(require_tenant_id(x_tenant_id),limit,offset)
+
+
+@router.post("/orders/{order_id}/issue-materials",response_model=WarehouseMaterialResponse)
+def issue_order_materials(order_id:str,payload:WarehouseIssueRequest|None=None,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),authorities:ResourceAuthorityClient=Depends(get_resource_authority_client),access:AuthorizedContext=Depends(require_production_access("inventory.movement.create"))):
+    tenant_id=require_tenant_id(x_tenant_id);key=require_idempotency_key(idempotency_key)
+    try:
+        with repository.material_command_lock(tenant_id,order_id):
+            order,movements=repository.prepare_warehouse_issue(tenant_id,order_id,access.actor_id,key)
+            error_code=None
+            for resource in order.resources:
+                if resource.resource_type!="material" or (resource.actual_quantity is not None and resource.actual_cost is not None):continue
+                for reservation_id in resource.reservation_ref_ids:
+                    if reservation_id in movements:continue
+                    try:
+                        movement=authorities.reservation_action(tenant_id,reservation_id,"consume",authorization,f"production-order-{order_id}-material-start","Entrega de materiales autorizada por Almacen")
+                        if not movement.get("id"):raise ErclaveError("inventory_response_incomplete","Inventory movement missing.",status_code=502)
+                        movements[reservation_id]={k:movement.get(k) for k in ("id","quantity","unit_cost")}
+                    except ErclaveError as exc:
+                        error_code=exc.code
+                        break
+                if error_code:break
+            return {"data":repository.complete_warehouse_issue(tenant_id,order_id,movements,error_code,access.actor_id,key)}
+    except ValueError as exc:raise ErclaveError(str(exc),"Materials cannot be issued.",status_code=409) from exc
 
 
 @router.get("/finished-goods-candidates",response_model=FinishedGoodsCandidateListResponse)
@@ -652,34 +687,42 @@ def create_sales_order_request(payload:ProductionSalesRequestCreate,x_tenant_id:
 @router.post("/orders",response_model=ProductionOrderResponse,status_code=201)
 def create_order(payload:ProductionOrderCreateRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),hr_client:HrWorkerClient=Depends(get_hr_worker_client),authorities:ResourceAuthorityClient=Depends(get_resource_authority_client),access:AuthorizedContext=Depends(require_production_access("production.order.release"))):
     key=require_idempotency_key(idempotency_key)
-    tenant_id=require_tenant_id(x_tenant_id);eligible={item["id"]:item for item in hr_client.eligible(tenant_id,authorization)}
-    worker=eligible.get(payload.responsible_worker_id)
-    if not worker:raise ErclaveError("responsible_worker_not_eligible","General responsible must be an active production-eligible worker.",status_code=422)
-    assignments=[]
-    for item in payload.stage_assignments:
-        assignee=eligible.get(item.responsible_worker_id)
-        if not assignee:raise ErclaveError("stage_worker_not_eligible","Every stage responsible must be an active production-eligible worker.",status_code=422)
-        assignments.append(item.model_copy(update={"responsible_name":assignee["full_name"]}))
-    payload=payload.model_copy(update={"responsible_name":worker["full_name"],"stage_assignments":assignments})
-    version=repository.get_recipe_version(tenant_id,payload.recipe_version_id)
-    if version is None:raise ErclaveError("approved_recipe_required","An approved recipe version with the requested unit is required.",status_code=422)
-    observations=authorities.observations(tenant_id,version,payload,authorization,key)
-    preview=repository.preview_resources(tenant_id,payload,observations)
-    if preview is None or not preview.can_release:raise ErclaveError("resources_unavailable","Order cannot be released because authoritative resources are unavailable.",status_code=422,details={"blockers":preview.blockers if preview else []})
-    if payload.required_at and payload.required_at.date()<preview.planned_end_date:raise ErclaveError("required_date_precedes_planned_end","Required date cannot precede the planned production end date.",status_code=422,details={"planned_end_date":str(preview.planned_end_date)})
-    order_id=f"ord_{hashlib.sha256(f'{tenant_id}:{key}'.encode()).hexdigest()[:26]}";reservation_refs={};reserved=[]
-    try:
-        for row in preview.rows:
-            if row.resource_type=="material":
-                refs=authorities.reserve(tenant_id,order_id,row,authorization,key);reservation_refs[(row.resource_ref_id or "",row.unit)]=refs;reserved.extend(refs)
-        value=repository.create_order(tenant_id,payload,observations,order_id,reservation_refs,key,request_fingerprint(payload),access.actor_id)
-    except Exception as exc:
-        for reservation_id in reserved:
-            try:authorities.reservation_action(tenant_id,reservation_id,"release",authorization,key,"Order creation was rolled back.")
-            except ErclaveError:pass
-        if isinstance(exc,ValueError):raise ErclaveError(str(exc),"Order cannot be released with authoritative resources.",status_code=422) from exc
-        raise
-    return ProductionOrderResponse(data=value)
+    tenant_id=require_tenant_id(x_tenant_id);attempt_id=f"ord_{hashlib.sha256(f'{tenant_id}:{key}'.encode()).hexdigest()[:26]}"
+    with repository.material_command_lock(tenant_id,attempt_id):
+        try:repository.require_new_creation_attempt(tenant_id,attempt_id)
+        except ValueError as exc:raise ErclaveError(str(exc),"Start a new creation after recovering this failed attempt.",status_code=409) from exc
+        tenant_id=require_tenant_id(x_tenant_id);eligible={item["id"]:item for item in hr_client.eligible(tenant_id,authorization)}
+        worker=eligible.get(payload.responsible_worker_id)
+        if not worker:raise ErclaveError("responsible_worker_not_eligible","General responsible must be an active production-eligible worker.",status_code=422)
+        assignments=[]
+        for item in payload.stage_assignments:
+            assignee=eligible.get(item.responsible_worker_id)
+            if not assignee:raise ErclaveError("stage_worker_not_eligible","Every stage responsible must be an active production-eligible worker.",status_code=422)
+            assignments.append(item.model_copy(update={"responsible_name":assignee["full_name"]}))
+        payload=payload.model_copy(update={"responsible_name":worker["full_name"],"stage_assignments":assignments})
+        version=repository.get_recipe_version(tenant_id,payload.recipe_version_id)
+        if version is None:raise ErclaveError("approved_recipe_required","An approved recipe version with the requested unit is required.",status_code=422)
+        observations=authorities.observations(tenant_id,version,payload,authorization,key)
+        preview=repository.preview_resources(tenant_id,payload,observations)
+        if preview is None or not preview.can_release:raise ErclaveError("resources_unavailable","Order cannot be released because authoritative resources are unavailable.",status_code=422,details={"blockers":preview.blockers if preview else []})
+        if payload.required_at and payload.required_at.date()<preview.planned_end_date:raise ErclaveError("required_date_precedes_planned_end","Required date cannot precede the planned production end date.",status_code=422,details={"planned_end_date":str(preview.planned_end_date)})
+        order_id=f"ord_{hashlib.sha256(f'{tenant_id}:{key}'.encode()).hexdigest()[:26]}";reservation_refs={};reserved=[]
+        try:
+            for row in preview.rows:
+                if row.resource_type=="material":
+                    refs=authorities.reserve(tenant_id,order_id,row,authorization,key);reservation_refs[(row.resource_ref_id or "",row.unit)]=refs;reserved.extend(refs)
+            value=repository.create_order(tenant_id,payload,observations,order_id,reservation_refs,key,request_fingerprint(payload),access.actor_id)
+        except Exception as exc:
+            if repository.record_failed_creation(tenant_id,order_id,payload.code,access.actor_id,getattr(exc,"code",str(exc))[:120]):
+                try:
+                    authorities.rollback_creation(tenant_id,order_id,authorization)
+                    repository.recover_failed_creation(tenant_id,order_id,access.actor_id)
+                except ErclaveError as recovery_error:
+                    raise ErclaveError("production_creation_recovery_pending","Recover the failed order reservations before creating a replacement.",status_code=409,details={"attempt_id":order_id,"cause":recovery_error.code}) from exc
+            if isinstance(exc,ValueError):raise ErclaveError(str(exc),"Order cannot be released with authoritative resources.",status_code=422) from exc
+            raise
+        return ProductionOrderResponse(data=value)
+
 
 
 @router.get("/orders/{order_id}",response_model=ProductionOrderResponse)
@@ -690,34 +733,33 @@ def get_order(order_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id")
 
 
 @router.patch("/orders/{order_id}/status",response_model=ProductionOrderResponse)
-def update_order_status(order_id:str,payload:ProductionOrderStatusRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),authorities:ResourceAuthorityClient=Depends(get_resource_authority_client),access:AuthorizedContext=Depends(require_production_access(ORDER_ACTION_PERMISSIONS))):
-    key=require_idempotency_key(idempotency_key)
-    tenant_id=require_tenant_id(x_tenant_id)
-    require_order_action_access(access,payload.status)
-    current=repository.get_order(tenant_id,order_id)
-    if current is None:raise ErclaveError("production_order_not_found","Production order not found.",status_code=404)
-    access.require(order_action_permission(current.status,payload.status))
-    try:before=repository.preflight_order_status(tenant_id,order_id,payload.status)
-    except ValueError as exc:raise ErclaveError(str(exc),"Production order status preconditions are not satisfied.",status_code=409) from exc
-    if before is None:raise ErclaveError("production_order_not_found","Production order not found.",status_code=404)
-    actuals={}
-    if payload.status=="cancelled":
-        if before.status in {"released","waiting_resources"}:
-            for resource in before.resources:
-                for reservation_id in resource.reservation_ref_ids:
-                    authorities.reservation_action(tenant_id,reservation_id,"release",authorization,key,payload.reason)
-        elif before.status not in {"in_progress","paused"}:raise ErclaveError("invalid_order_transition","Production order status transition is invalid.",status_code=409)
-    first_material_issue=payload.status=="in_progress" and before.status in {"released","waiting_resources"}
-    if first_material_issue:
-        consumption_key=f"production-order-{order_id}-material-start"
-        for resource in before.resources:
-            for reservation_id in resource.reservation_ref_ids:
-                movement=authorities.reservation_action(tenant_id,reservation_id,"consume",authorization,consumption_key,payload.reason)
-                actuals[reservation_id]={"quantity":float(movement["quantity"]),"cost":float(movement["quantity"])*float(movement.get("unit_cost") or 0)}
-    try: value=repository.update_order_status(tenant_id,order_id,payload,key,request_fingerprint(payload,{"order_id":order_id}),access.actor_id,actuals)
-    except ValueError as exc: raise ErclaveError(str(exc),"Production order status transition is invalid.",status_code=409) from exc
-    if value is None: raise ErclaveError("production_order_not_found","Production order not found.",status_code=404)
-    return ProductionOrderResponse(data=value)
+def update_order_status(order_id:str,payload:ProductionOrderStatusRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),authorities:ResourceAuthorityClient=Depends(get_resource_authority_client),hr_client:HrWorkerClient=Depends(get_hr_worker_client),access:AuthorizedContext=Depends(require_production_access(ORDER_ACTION_PERMISSIONS))):
+    with repository.material_command_lock(require_tenant_id(x_tenant_id),order_id):
+        key=require_idempotency_key(idempotency_key)
+        tenant_id=require_tenant_id(x_tenant_id)
+        require_order_action_access(access,payload.status)
+        current=repository.get_order(tenant_id,order_id)
+        if current is None:raise ErclaveError("production_order_not_found","Production order not found.",status_code=404)
+        access.require(order_action_permission(current.status,payload.status))
+        try:before=repository.preflight_order_status(tenant_id,order_id,payload.status)
+        except ValueError as exc:raise ErclaveError(str(exc),"Production order status preconditions are not satisfied.",status_code=409,details={"workflow":"production_order","current_status":current.status,"requested_status":payload.status}) from exc
+        if before is None:raise ErclaveError("production_order_not_found","Production order not found.",status_code=404)
+        actuals={}
+        if payload.status=="in_progress":
+            eligible={item["id"] for item in hr_client.eligible(tenant_id,authorization)}
+            worker_ids={before.responsible_worker_id} | {stage.responsible_worker_id for stage in before.stages if stage.status not in {"completed","skipped"}}
+            if None in worker_ids or not worker_ids.issubset(eligible):
+                raise ErclaveError("production_execution_worker_not_eligible","HR must validate the assigned workers before execution.",status_code=409)
+        if payload.status=="cancelled":
+            if before.status in {"released","waiting_resources"}:
+                for resource in before.resources:
+                    for reservation_id in (resource.reservation_ref_ids if resource.actual_quantity is None else []):
+                        authorities.reservation_action(tenant_id,reservation_id,"release",authorization,key,payload.reason)
+            elif before.status not in {"in_progress","paused"}:raise ErclaveError("invalid_order_transition","Production order status transition is invalid.",status_code=409)
+        try: value=repository.update_order_status(tenant_id,order_id,payload,key,request_fingerprint(payload,{"order_id":order_id}),access.actor_id,actuals)
+        except ValueError as exc: raise ErclaveError(str(exc),"Production order status transition is invalid.",status_code=409,details={"workflow":"production_order","current_status":current.status,"requested_status":payload.status}) from exc
+        if value is None: raise ErclaveError("production_order_not_found","Production order not found.",status_code=404)
+        return ProductionOrderResponse(data=value)
 
 
 @router.patch("/orders/{order_id}/resources/{resource_id}",response_model=ProductionOrderResourceResponse)
@@ -737,3 +779,42 @@ def update_order_stage(stage_id:str,payload:OrderStageUpdateRequest,x_tenant_id:
     except ValueError as exc: raise ErclaveError(str(exc),"Production order stage transition is invalid.",status_code=409) from exc
     if value is None: raise ErclaveError("production_order_stage_not_found","Production order stage not found.",status_code=404)
     return OrderStageResponse(data=value)
+
+
+@router.get("/returnable-materials")
+def returnable_materials(limit:int=Query(25,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str=Header(alias="X-Tenant-Id"),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access(("production.order.update","inventory.movement.read")))):
+    return {"data":repository.returnable_materials(require_tenant_id(x_tenant_id),limit,offset)}
+
+@router.post("/material-returns/validate")
+def validate_material_return(payload:MaterialReturnValidation,x_tenant_id:str=Header(alias="X-Tenant-Id"),repository:ProductionRepository=Depends(get_production_repository),_=Depends(require_production_access(("production.order.update","inventory.movement.create")))):
+    try:value=repository.validate_material_return(require_tenant_id(x_tenant_id),payload.model_dump(mode="json"))
+    except ValueError as exc:raise ErclaveError(str(exc),"The order must be finished or cancelled before returning unused materials.",status_code=409) from exc
+    return {"data":{"source_code":value["source_code"]}}
+
+@router.post("/material-returns/reconcile")
+def reconcile_material_return(payload:MaterialReturnReconcile,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),authority:MaterialReturnClient=Depends(get_material_return_client),access:AuthorizedContext=Depends(require_production_access("inventory.movement.create"))):
+    require_idempotency_key(idempotency_key)
+    value=authority.get_return(x_tenant_id,payload.return_id,authorization)
+    try:return {"data":repository.reconcile_material_return(require_tenant_id(x_tenant_id),value,access.actor_id)}
+    except ValueError as exc:raise ErclaveError(str(exc),"Confirm the physical return in Warehouse before adjusting the order.",status_code=409) from exc
+
+
+@router.get("/failed-order-creations")
+def failed_order_creations(limit:int=Query(25,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str=Header(alias="X-Tenant-Id"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access("production.order.release"))):
+    return {"data":repository.list_failed_creations(require_tenant_id(x_tenant_id),access.actor_id,limit,offset)}
+
+@router.get("/failed-order-creations/{order_id}")
+def failed_order_creation(order_id:str,x_tenant_id:str=Header(alias="X-Tenant-Id"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access("production.order.release"))):
+    value=repository.failed_creation(require_tenant_id(x_tenant_id),order_id,access.actor_id)
+    if value is None:raise ErclaveError("production_creation_recovery_not_allowed","Only a failed creation owned by this actor can release its reservations.",status_code=404)
+    return {"data":value}
+
+@router.post("/failed-order-creations/{order_id}/recover")
+def recover_order_creation(order_id:str,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:ProductionRepository=Depends(get_production_repository),authorities:ResourceAuthorityClient=Depends(get_resource_authority_client),access:AuthorizedContext=Depends(require_production_access("production.order.release"))):
+    require_idempotency_key(idempotency_key)
+    with repository.material_command_lock(x_tenant_id,order_id):
+        value=repository.failed_creation(require_tenant_id(x_tenant_id),order_id,access.actor_id)
+        if value is None:raise ErclaveError("production_creation_recovery_not_allowed","Failed creation not found for this actor.",status_code=404)
+        if value['status']=='recovered':return {"data":value}
+        authorities.rollback_creation(x_tenant_id,order_id,authorization)
+        return {"data":repository.recover_failed_creation(x_tenant_id,order_id,access.actor_id)}

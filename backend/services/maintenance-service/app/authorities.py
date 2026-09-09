@@ -1,6 +1,7 @@
 import json
 from urllib import error,parse,request
 from fastapi import Depends
+from fastapi.encoders import jsonable_encoder
 from erclave_common.config import Settings,get_settings
 from erclave_common.errors import ErclaveError
 
@@ -12,14 +13,14 @@ class MaintenanceAuthorityClient:
         if authorization:headers["Authorization"]=authorization
         if key:headers["Idempotency-Key"]=key
         body=None
-        if payload is not None:body=json.dumps(payload).encode();headers["Content-Type"]="application/json"
         try:
+            if payload is not None:body=json.dumps(jsonable_encoder(payload),allow_nan=False).encode();headers["Content-Type"]="application/json"
             with request.urlopen(request.Request(url,headers=headers,data=body,method=method),timeout=self.timeout) as response:return json.loads(response.read())["data"]
         except error.HTTPError as exc:
             try:details=json.loads(exc.read()).get("error",{})
             except Exception:details={}
             raise ErclaveError(details.get("code","maintenance_dependency_rejected"),details.get("message","An authoritative service rejected Maintenance data."),status_code=exc.code if exc.code<500 else 503) from exc
-        except (error.URLError,TimeoutError,KeyError,ValueError) as exc:raise ErclaveError("maintenance_dependency_unavailable","An authoritative service is unavailable.",status_code=503) from exc
+        except (error.URLError,TimeoutError,KeyError,ValueError,TypeError) as exc:raise ErclaveError("maintenance_dependency_unavailable","An authoritative service is unavailable.",status_code=503) from exc
     def workers(self,tenant,authorization):return self._call(f"{self.hr}/v1/hr/workers/maintenance-eligible",tenant,authorization)
     def machine(self,tenant,machine_id,authorization):return self._call(f"{self.production}/v1/production/machines/{parse.quote(machine_id)}",tenant,authorization)
     def production_order(self,tenant,order_id,authorization):return self._call(f"{self.production}/v1/production/orders/{parse.quote(order_id)}",tenant,authorization)

@@ -4187,6 +4187,153 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Rollback | Restaurar las referencias a `REANUDACION_CHG255.md` y retirar el handoff CHG-261; no existe estado operativo o persistente que revertir. |
 | Observaciones | Operacion `local-write` limitada a Markdown. No hubo llamadas API, migraciones, seeds, datos de prueba, despliegues, trafico, PR ni acceso a QA/Produccion. |
 
+### CHG-262
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-07 |
+| Cambio | Auditar y alinear formularios y permisos frontend con backend |
+| Autor | Codex |
+| Archivos | `AGENTES.md`, `TRAZABILIDAD.md`, `docs/auditorias/frontend_backend_2026-09-07.md`, `docs/contexto/DECISIONES.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/INICIO_SESION.md`, `docs/contexto/PENDIENTES.md`, `frontend/api/admin.js`, `frontend/api/hr.js`, `frontend/api/production.js`, `frontend/api/purchasing.js`, `frontend/app.js`, `frontend/i18n/translations.js`, `modulos/01_produccion.md`, `modulos/02_almacenes_inventarios.md`, `modulos/03_compras_abastecimiento.md`, `modulos/04_ventas_clientes.md`, `modulos/08_administracion_configuracion.md`, `modulos/10_recursos_humanos.md`, `modulos/11_mantenimiento.md`, `tests/e2e/backoffice-readonly.spec.js`, `tests/e2e/frontend-contracts.spec.js`, `tools/validators/validate-purchasing-cycle.js` |
+| Secciones | Formularios create/update / ramas condicionales / valores persistidos / permisos de lectura y comandos compuestos / Backoffice / E2E / documentacion viva |
+| Agentes consultados | Fichas negocio/tecnica de Produccion, Inventory, RH, Compras, Ventas, Mantenimiento y Administracion/Backoffice; Arquitectura SaaS/API, Seguridad, QA, Sinergia, UX/i18n y Gobierno documental de AGENTES.md. Consulta documental sin delegacion. Skills erclave-feature y erclave-environment-boundaries. |
+| Diagnostico | Revision posterior a CHG-260 confirma 17 grupos de desajustes: campos ignorados por PATCH/create, estatus inicial no persistido, vinculos ocultos, saldo parcial del navegador, unidades al alternar servicio/articulo, limites de motivo, valores cero, fechas date insertadas como datetime, consultas acopladas a permisos ajenos y comandos compuestos con autoridad incompleta. |
+| Descripcion | Alinea campos editables y valores iniciales a schemas existentes; separa el cambio de estatus de Producto/Servicio; limpia ramas ocultas; delega existencia a Inventory; preserva identidad/codigos y valores cero; carga cada coleccion segun su permiso; valida permisos antes de enviar/aprobar recetas; permite resolver Mantenimiento con diagnostico ya guardado sin PATCH no autorizado. Regresiones de navegador con mutaciones interceptadas y Backoffice solo lectura. |
+| Motivo | Evitar bloqueos y exitos aparentes cuando frontend y backend describen operaciones diferentes. |
+| Impacto | Solo Local. UI/consumidores/pruebas/documentacion; sin cambio de reglas backend, permisos, contratos OpenAPI, schema, migraciones ni ambientes remotos. |
+| APIs afectadas | Contratos modificados: ninguno. Matriz completa de metodos, rutas y permisos consumidos/condicionados sin cambio en docs/auditorias/frontend_backend_2026-09-07.md: consultas Admin/Production/RH/Purchasing, formularios Production/Inventory/RH/Purchasing/Sales y resolucion Maintenance. APIs backend y futuras no tocadas. |
+| Validacion | npm.cmd run verify:local: validadores, contratos, sintaxis, compilacion, PostgreSQL y navegador; npm.cmd run validate:documentation; ES/EN en contenedor estrecho. 245 pruebas backend PostgreSQL sin omisiones y 25 pruebas de navegador aprobadas; conteos sincronizados en ESTADO_ACTUAL.md. |
+| Rollback | Revertir exclusivamente el diff de CHG-262 preservando trabajo ajeno. No hay downgrade ni datos operativos que restaurar. |
+| Observaciones | read-only/local-write. PostgreSQL 127.0.0.1:5434/erclave_local, siete APIs loopback y Firebase Emulator demo-erclave. Tenant ten_739ee59d765d5e14818674800d. Sin seeds, migraciones, cargas operativas, QA/Produccion, deploy, push o PR. Pruebas backend con fixtures aisladas; las nuevas mutaciones de formularios son interceptadas. Limites combinatorios, volumen y fallas distribuidas permanecen documentados. |
+
 ## Convencion para futuros cambios
 
 Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el siguiente ID correlativo y dejar claro si el cambio fue funcional, documental, visual o tecnico.
+
+
+### CHG-263
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-07 |
+| Cambio | Entregar solicitudes de refacciones desde Movimientos de Almacen |
+| Autor | Codex |
+| Archivos | `backend/pyproject.toml`; `backend/services/maintenance-service/app/api.py`, `authorization.py`, `repositories.py`, `schemas.py`; `backend/services/inventory-service/app/api.py`, `repositories.py`; contratos OpenAPI Maintenance/Inventory; `frontend/api/maintenance.js`, `frontend/app.js`, `frontend/state/app-state.js`, `frontend/styles.css`, `frontend/i18n/translations.js`, `frontend/i18n/api-errors.js`; pruebas de ambos servicios y `tests/e2e/warehouse-material-requests.spec.js`; `backend/scripts/smoke_maintenance_local.py`; modulos 02/11; docs de contexto, ownership, API, datos, permisos y diagramas; `AGENTES.md`; `docs/auditorias/refacciones_movimientos_2026-09-07.md`; `TRAZABILIDAD.md`. |
+| Secciones | Movimientos / solicitudes y entregas / resolucion tecnica / permisos / idempotencia / conciliacion / ES-EN / documentacion viva |
+| Agentes consultados | Consulta documental de negocio/tecnica de Mantenimiento e Inventarios y Arquitectura SaaS/API, Seguridad, Sinergia, UX/i18n, QA y Gobierno documental en AGENTES.md. Sin delegacion. Skills erclave-feature y erclave-environment-boundaries; instrucciones DB revisadas, sin migracion necesaria. |
+| Descripcion | Agrega bandeja paginada en Movimientos junto a producto terminado. Almacen confirma entrega completa o rechaza con motivo; Inventory crea salida o libera reserva. Mantenimiento ya no consume al resolver ni conciliar ordenes. Locks por tenant/solicitud, estado durable previo a HTTP, reintentos por partida y permiso por origen previenen duplicados y cruces de autoridad. Nuevas reservas Maintenance sin fecha no vencen automaticamente; no hay backfill historico. |
+| Motivo | Representar la entrega fisica y su autorizacion por Almacen; evitar que el cierre tecnico se haga pasar por entrega. |
+| Impacto | Solo Local; contratos y comportamiento de Maintenance/Inventory con consumidores, pruebas y documentos alineados. Sin nuevas tablas, permisos, migracion o cambio de cabeza Alembic. Se preserva CHG-262. |
+| APIs afectadas | Nuevos GET /v1/maintenance/warehouse-material-requests (inventory.movement.read) y POST /v1/maintenance/material-requests/{id}/issue y /reject (inventory.movement.create; rechazo con reason). Cambian semanticas de POST transitions/reconcile de orden Maintenance y reservation-requests/consume/release de Inventory, sin cambiar sus payloads. Matriz completa de metodos, rutas, permisos, responses, consumidores sin cambio y APIs no tocadas en docs/auditorias/refacciones_movimientos_2026-09-07.md. |
+| Validacion | npm.cmd run verify:local aprobado: 290 pruebas backend PostgreSQL sin omisiones y 30 de navegador; validadores, contratos, sintaxis y compilacion. Smoke HTTP Local con Firebase Emulator aprobado: una salida unica tras entrega, repeticion y cierre. Compras/Mantenimiento incorporados a pytest por defecto. ES/EN a 520 px y capturas revisadas. validate:documentation y git diff --check aprobados. |
+| Rollback | Restaurar exclusivamente codigo y contratos CHG-263 preservando CHG-262; sin downgrade ni reversa automatica de movimientos. Conciliar operaciones pendientes antes de regresar al flujo previo. |
+| Observaciones | local-write: PostgreSQL 127.0.0.1:5434/erclave_local, APIs loopback y Firebase Emulator demo-erclave. Tenant ten_739ee59d765d5e14818674800d. Sin migraciones, seeds, QA/Produccion, despliegues, commit, push ni PR. Entregas parciales elegidas, devoluciones, aprobacion previa separada y volumen quedan pendientes explicitos. |
+### CHG-264
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-08 |
+| Cambio | Salida de materiales por Almacen antes de iniciar Produccion |
+| Autor | Codex |
+| Archivos | Production API, repositorio, autorizacion, schemas y pruebas; Inventory API/repositorio/contrato; migracion `20260908_0031_production_warehouse_issue.py`; contratos Production/Inventory; frontend/api/production.js, app.js, state, translations, api-errors y styles; pruebas E2E de materiales/refacciones; validate-production-cycle.js y validate-agents.js; smoke_production_warehouse_local.py; modulos 01/02; AGENTES.md; documentos de contexto, arquitectura y diagramas; docs/auditorias/materiales_produccion_movimientos_2026-09-08.md; TRAZABILIDAD.md. |
+| Secciones | Movimientos / salida de materiales / inicio y cancelacion / permisos / recuperacion / ES-EN / persistencia |
+| Agentes consultados | Consulta documental de negocio/tecnica Production e Inventory, Sinergia, Arquitectura SaaS/API/Datos, Custodio DB, Seguridad, UX/i18n, QA y Gobierno documental. Sin delegacion. Skills erclave-feature, erclave-environment-boundaries y erclave-db-migration. |
+| Descripcion | Bandeja paginada de materiales reservados para productos y servicios con receta; Almacen confirma entrega completa y Production registra movimientos/costo antes de habilitar inicio. Transiciones no consumen. Registro durable y lock por tenant/orden permiten reintentar sin duplicar y bloquean cancelacion incierta. |
+| Motivo | Exigir salida fisica confirmada por Almacen antes de ejecutar una orden. |
+| Impacto | Solo Local; nueva tabla de coordinacion en schema Production y revision 0031. Sin nuevas entidades comerciales ni permisos; servicios comerciales Sales siguen sin materiales. Se preservan CHG-262/263 y QA. |
+| APIs afectadas | Nuevos Production GET /warehouse-material-requests y POST /orders/{id}/issue-materials con inventory.movement.read/create. Cambia semantica de Production PATCH status y Inventory POST reservation-requests/consume sin cambiar payloads. Matriz de rutas, permisos, responses, consumidores sin cambio y APIs no tocadas en docs/auditorias/materiales_produccion_movimientos_2026-09-08.md. |
+| Validacion | verify:local aprobado con 33 browser; verify:postgres final aprobado con 297 pruebas sin omisiones. Contratos, validadores, sintaxis y compilacion aprobados. Upgrade/downgrade vacio/upgrade, recuperacion parcial, permisos, tenant, lock y costo certificados. Smoke HTTP real aprobado: bloqueo, entrega, repeticion sin duplicado e inicio. ES/EN, contenedor estrecho y capturas revisadas; documentacion y diff verificados. |
+| Rollback | Conciliar y resguardar entregas antes de restaurar solo CHG-264; downgrade elimina coordinacion, no revierte movimientos. Preservar CHG-262/263. |
+| Observaciones | Local aislado 127.0.0.1:5434/erclave_local; tenant ten_739ee59d765d5e14818674800d. Migracion local aplicada; sin seeds, datos QA/Produccion, despliegues, commit, push o PR. Parcialidad elegida, rechazo productivo, devoluciones y carga sostenida pendientes. |
+
+
+### CHG-265
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-08 |
+| Cambio | Confirmaciones de Almacén, aceptación de servicios y mensajes claros de flujo |
+| Autor | Codex |
+| Archivos | Servicios Inventory/Production/Purchasing/Sales/Maintenance/HR; shared material_return_client; contratos de seis servicios; migraciones 0032–0034; frontend/api, app, state, estilos e i18n; pruebas de integración y operational-handoffs.spec.js; módulos, arquitectura, diagramas, contexto, AGENTES.md y reporte CHG-265. |
+| Secciones | Recepción, despacho, tránsito, retorno, sobrantes, elegibilidad, recuperación, permisos, mensajes ES/EN y documentación viva |
+| Agentes consultados | Negocio/técnicos de seis módulos, Arquitectura/API/Datos, Custodio DB, Seguridad, Sinergia, UX/i18n, QA y Gobierno documental; consulta documental sin delegación. Skills erclave-feature, erclave-environment-boundaries, erclave-db-migration. |
+| Descripcion | Separa preparación comercial y movimiento físico; solicitante acepta servicios; destino recibe transferencia; Almacén recibe sobrantes y propietarios ajustan costo por HTTP. Bloquea inicio/reanudación sin requisitos; corrige reversas y recuperación de reservas de creación fallida. Mensajes indican requisito, responsable y pantalla, incluidos CHG-263/264. |
+| Motivo | Evitar inventario/documentos desalineados y bloqueos sin instrucciones para usuarios. |
+| Impacto | Local head 20260908_0034; historial previo preservado, sin permisos nuevos ni escrituras/FK entre schemas. |
+| APIs afectadas | Matriz por método/ruta, permisos, payload, consumidores y APIs no tocadas en docs/auditorias/flujos_almacen_mensajes_2026-09-08.md. Seis contratos modificados; Admin y APIs planned conservados. |
+| Validacion | npm run verify aprobado: 257 backend, 51 omitidas sin DB; 19 PostgreSQL seleccionadas, 40 browser y dos smokes HTTP reales aprobados. Downgrade vacío/upgrade 0034 y documentación validados; alcance en informe CHG-265. |
+| Rollback | Conciliar/resguardar operaciones antes de downgrade protegido; no revertir movimientos por borrar coordinación. Preservar CHG-262/263/264. |
+| Observaciones | Local aislado, tenant ten_739ee59d765d5e14818674800d, sin seeds ni escrituras remotas, deploy, commit, push o PR. Callback Ventas/Producción y materiales de servicios comerciales continúan planned. |
+
+### CHG-266
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-08 |
+| Cambio | Correcciones UAT responsive y operabilidad de proveedores y cotizaciones |
+| Autor | Codex |
+| Archivos | frontend/app.js, styles.css, index.html e i18n/translations.js; tests/e2e/local-uat-layout.spec.js y frontend-contracts.spec.js; Admin test_permission_seeds.py; módulos 01/03/04/08; responsive y selección escalable; documentos de contexto, AGENTES.md, informe UAT y TRAZABILIDAD.md. |
+| Secciones | Órdenes / Proveedores / Requisiciones / Cotizaciones / permisos Local / ES-EN |
+| Agentes consultados | Consulta documental sin delegación: negocio/técnicos de Producción, Compras, Ventas y Administración; Arquitectura/API, Seguridad, UX/i18n, QA y Gobierno documental. Skills erclave-feature y erclave-environment-boundaries. |
+| Descripcion | Separa Control de orden del riel colapsable; Proveedores abre en listado y captura en modal; redistribuye Requisiciones por ancho real; mensajes y acciones explícitas del ciclo de cotización. Restaura cuatro permisos canónicos faltantes del catálogo Local y sus asignaciones al Owner demo mediante Admin auditado, preservando alcances. |
+| Motivo | Resolver hallazgos manuales de compresión vertical, captura no estándar y acciones de cotización ausentes. |
+| Impacto | Solo Local, con clases responsive acotadas; sin cambios de contrato, estados, migraciones ni bypass de autorización. Preserva CHG-262–265. |
+| APIs afectadas | Contratos modificados: Ninguna. Consumo existente de Suppliers GET/POST/PATCH; Requisitions GET/POST/PATCH; Items GET; Quotes GET y POST submit/approve/expire/cancel. Reparación Local: Admin GET session/context y roles, PUT roles/{role_id}/permissions. Métodos, rutas, permisos y APIs no tocadas en docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md. |
+| Validacion | npm run verify aprobado: validadores, compilación y 258 pruebas backend, 51 omitidas sin DB. Regresión completa: 47 pruebas browser aprobadas. Tras el ajuste visual final del modal se repitieron las siete UAT y verify, aprobados. ES/EN y capturas de contenedores 320–1100 px revisadas; selector conserva ID/unidad, modal preserva captura al fallar y permisos de sesión Local comprobados. validate:documentation y git diff --check aprobados. |
+| Rollback | Restaurar solo UI/pruebas CHG-266; retirar únicamente cuatro grants locales por Admin con revisión actual si se requiere. Sin downgrade ni reversa de inventario. |
+| Observaciones | Local aislado, tenant ten_739ee59d765d5e14818674800d; bootstrap acotado de cuatro metadatos y grants Owner. Sin seed completo, grants a otros roles/tenants, documentos comerciales mutados, QA/Producción, despliegue, commit, push o PR. Pendiente aceptación manual. |
+
+### CHG-267
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-08 |
+| Cambio | Solicitudes de Almacén en desplegable con aviso de pendientes |
+| Autor | Codex |
+| Archivos | frontend/app.js, styles.css, index.html e i18n/translations.js; pruebas E2E warehouse-pending-summary, warehouse-material-requests, production-warehouse-issue y operational-handoffs; módulo 02, responsive, contexto, AGENTES.md e informe CHG-267. |
+| Secciones | Movimientos / resumen de solicitudes / historial / accesibilidad / ES-EN |
+| Agentes consultados | Consulta documental sin delegación: Inventarios negocio/técnico, Sinergia, UX/i18n, Arquitectura/API, Seguridad, QA y Gobierno documental; skills erclave-feature y erclave-environment-boundaries. |
+| Descripcion | Agrupa siete bandejas en un details cerrado al entrar, con aviso de pendientes y distinción de carga/error/página vacía. Mantiene abierto al actualizar, actualiza resumen con cargas parciales y permite reintentar consulta de terminado. Historial inmediatamente debajo. |
+| Motivo | Evitar que solicitudes detalladas, incluso vacías, oculten el historial en la primera vista. |
+| Impacto | Solo presentación Local con CSS acotado; sin cambios de contratos, permisos, persistencia o comandos. Preserva CHG-262–266. |
+| APIs afectadas | Contratos modificados: Ninguna. Reutiliza GET de candidatos/recepciones de terminado, solicitudes Production/Maintenance, recepciones Purchasing, entregas Sales, transferencias y devoluciones Inventory. Métodos, rutas, permisos y APIs no tocadas en docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md. |
+| Validacion | npm run verify aprobado: validadores, compilación y 258 pruebas backend, 51 omitidas sin DB. Veinte casos de navegador del alcance aprobados: quince de flujos existentes y cinco del resumen; las cinco pruebas del resumen se repitieron tras ajustes finales. Capturas ES/EN con paneles 1100/520/360 px revisadas. validate:documentation y git diff --check aprobados. |
+| Rollback | Restaurar solo UI/i18n/cachebuster/pruebas CHG-267; sin downgrade ni reversa de movimientos. |
+| Observaciones | Local aislado, tenant ten_739ee59d765d5e14818674800d; sin seeds, grants, migraciones, escrituras comerciales persistentes o remotas, QA/Producción, deploy, commit, push o PR. |
+
+
+### CHG-268
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-08 |
+| Cambio | Recuperación segura de reservas de refacciones interrumpidas |
+| Autor | Codex |
+| Archivos | Maintenance authorities/api/repositories y pruebas; contrato Maintenance; frontend app/i18n/styles/index; frontend-contracts.spec.js; módulos 02/11, arquitectura de APIs/feedback/responsive y diagrama operativo; contexto, AGENTES.md e informe recuperacion_refacciones_2026-09-08.md. |
+| Secciones | Cantidades Decimal / recuperación / idempotencia / concurrencia / permisos / ES-EN / Local |
+| Agentes consultados | Consulta documental sin delegación: Mantenimiento e Inventarios negocio/técnico; Arquitectura/API/Datos, Seguridad, Sinergia, UX/i18n, QA y Gobierno documental. Skills erclave-feature y erclave-environment-boundaries. |
+| Descripcion | Codifica cantidades Decimal para HTTP; recupera reservas/cancelaciones interrumpidas bajo exclusión por tenant/orden/solicitud y claves estables. UI ofrece reintento con permiso propio y destino explícito de entrega por Almacén; layout acotado por ancho de contenedor. Recupera MTO-000001 vía API Local sin salida. |
+| Motivo | Reintento abandonado en processing/reserve después de una falta de stock, sin acción visible ni respuesta de idempotencia. |
+| Impacto | Una reserva activa de 1 H87; stock físico 2, disponible 1, sin duplicados ni movimientos nuevos. Sin migraciones ni permisos nuevos; conserva CHG-262–267. |
+| APIs afectadas | Contrato Maintenance POST orders/{id}/material-requests y POST material-requests/{id}/reconcile: describe exclusión y recuperación, sin cambio de request/response. Consumo Inventory reservation-requests/release y consultas; cancel/issue/reject comparten lock. Matriz de métodos/rutas/permisos y APIs no tocadas en docs/auditorias/recuperacion_refacciones_2026-09-08.md. |
+| Validacion | npm run verify aprobado: validadores, compilación y 261 pruebas backend; 55 omitidas sin DB. Cuatro pruebas PostgreSQL seleccionadas y 25 de navegador aprobadas; recuperación y replay HTTP reales comprobados. ES/EN en panel de 520 px y capturas revisadas; comprobación final responsive de botones acotada al alcance. validate:documentation y diff --check aprobados. |
+| Rollback | Restaurar solo CHG-268, conservar evidencia/reserva. Si el negocio desiste, cancelar por API Maintenance/Inventory; no borrar registros ni revertir stock por inferencia. |
+| Observaciones | Local aislado, tenant ten_739ee59d765d5e14818674800d. Solo Maintenance reiniciado. Sin seeds, grants, migraciones, QA/Producción, deploy, commit, push o PR. Pendiente entrega física por Almacén, aceptación manual y promoción gobernada. |
+
+
+### CHG-269
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-08 |
+| Cambio | Candidato QA integral y protección de promoción multi-servicio |
+| Autor | Codex |
+| Archivos | Workflows qa-release/qa-candidate/validate; shared config y pruebas; promote_qa_traffic y prueba compensatoria; expediente release_qa_20260908, contexto, arquitectura, infra/qa, AGENTES y trazabilidad. Incluye el conjunto previo CHG-255–268 al promover. |
+| Secciones | Delta Local/QA, configuración, migraciones, tráfico, rollback, evidencia y gates |
+| Agentes consultados | Arquitectura, Seguridad, QA/Release, API, Datos/Custodio DB, Sinergia, UX/i18n y siete módulos; consulta documental sin delegación. Skills environment-boundaries, qa-release y db-migration. |
+| Descripcion | Prepara candidato integral contra a119ddf certificado. Completa URL QA Inventory→Maintenance y bloquea dependencia localhost. Registra rollback, detecta drift y compensa promoción parcial de tráfico; conserva evidencia como artifact. |
+| Motivo | Promoción solicitada por el propietario para UAT del tester y dependencias nuevas de devoluciones. |
+| Impacto | Siete servicios/Hosting; migraciones 0030–0034 y configuración estructural del tenant permitido mediante workflow. Sin copia de Local ni datos funcionales nuevos. |
+| APIs afectadas | Ningún contrato funcional adicional; promueve contratos CHG-255–268. GET health/ready/version/openapi.json en siete APIs; workflows GitHub. Matriz y fronteras en docs/operaciones/release_qa_20260908.md. |
+| Validacion | 54 navegador, 262 backend (55 omitidas sin DB), validadores y dos pruebas sin cloud de promoción/rollback. CI y evidencia del despliegue pendientes de ejecución sobre candidato publicado. |
+| Observaciones | Preparación Local y preflight QA de lectura. No afirmar release completado hasta registrar SHA/runs/digests/revisiones/Hosting. Base requiere forward-fix/PITR; servicios tienen compensación y Hosting conserva release anterior. |

@@ -59,8 +59,8 @@ class FakeRepository:
             "id": "rcp_service",
             "code": payload.code,
             "purchase_order_id": payload.purchase_order_id,
-            "status": "processing",
-            "lines": [{"id": "rcl_service", "reconciliation_status": "processing"}],
+            "status": "pending_confirmation",
+            "lines": [{"id": "rcl_service", "reconciliation_status": "pending"}],
         }
         return self.receipt, [{
             "receipt_line_id": "rcl_service",
@@ -203,7 +203,7 @@ def test_issue_requires_idempotency_before_authority_lookup():
     assert authority.units == []
 
 
-def test_service_receipt_completes_without_warehouse_or_inventory_movement():
+def test_service_receipt_waits_for_requester_acceptance_without_inventory_movement():
     response = client().post(
         "/v1/purchasing/receipts",
         headers=headers(True),
@@ -216,9 +216,8 @@ def test_service_receipt_completes_without_warehouse_or_inventory_movement():
     )
 
     assert response.status_code == 201
-    assert response.json()["data"]["status"] == "completed"
-    assert response.json()["data"]["lines"][0]["inventory_movement_ref_id"] is None
-    assert repo.completed_movements == [{"id": None}]
+    assert response.json()["data"]["status"] == "pending_confirmation"
+    assert repo.completed_movements is None
     assert authority.warehouse_calls == []
     assert authority.inventory_calls == []
 

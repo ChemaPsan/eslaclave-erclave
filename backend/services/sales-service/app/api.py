@@ -324,9 +324,14 @@ def transition_service_order(service_order_id: str, action: Literal["assign", "s
             worker = authority.get_worker(x_tenant_id, payload.responsible_worker_id, authorization)
             value = repository.assign_service_order(x_tenant_id, service_order_id, worker, command_key, request_hash, access.actor_id)
         else:
+            if action in {"start","resume"}:
+                current=repository.get_service_order(x_tenant_id,service_order_id)
+                if not current:raise ErclaveError("service_order_not_found","Service order not found.",status_code=404)
+                authority.get_worker(x_tenant_id,current.responsible_worker_id,authorization)
             reason = payload.reason if isinstance(payload, ServiceOrderTransitionRequest) else None
             value = repository.transition_service_order(x_tenant_id, service_order_id, action, reason, command_key, request_hash, access.actor_id)
-    except ValueError as exc: raise conflict(exc) from exc
+    except ValueError as exc:
+        result=conflict(exc);result.details={"workflow":"sales_service","requested_status":action};raise result from exc
     if not value: raise ErclaveError("service_order_not_found", "Service order not found.", status_code=404)
     return ServiceOrderResponse(data=value)
 
@@ -424,7 +429,14 @@ def create_delivery(payload: DeliveryCreateRequest, x_tenant_id: str = Header(al
 
 
 @router.post("/deliveries/{delivery_id}/confirm", response_model=DeliveryResponse)
-def confirm_delivery(delivery_id: str, payload: ActionReasonRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client), access: AuthorizedContext = Depends(require_sales_access("sales.delivery.confirm"))):
+def confirm_delivery(delivery_id: str, payload: ActionReasonRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client), access: AuthorizedContext = Depends(require_sales_access(("sales.delivery.confirm","inventory.movement.create")))):
+    if "inventory.movement.create" not in (access.permissions or frozenset({access.permission})):
+        raise ErclaveError("sales_warehouse_dispatch_required","Warehouse must issue this delivery in Movements.",status_code=403)
+    with repository.delivery_command_lock(x_tenant_id,delivery_id):
+        return dispatch_delivery(delivery_id,payload,x_tenant_id,authorization,idempotency_key,repository,authority,access)
+
+
+def dispatch_delivery(delivery_id,payload,x_tenant_id,authorization,idempotency_key,repository,authority,access):
     command_key = require_key(idempotency_key); request_hash = fingerprint(payload, {"delivery_id": delivery_id})
     try: planned = repository.prepare_delivery_confirmation(x_tenant_id, delivery_id, command_key, request_hash)
     except ValueError as exc: raise conflict(exc) from exc
@@ -449,3 +461,8 @@ def cancel_delivery(delivery_id: str, payload: ActionReasonRequest, x_tenant_id:
     except ValueError as exc: raise conflict(exc) from exc
     if not value: raise ErclaveError("delivery_not_found", "Delivery not found.", status_code=404)
     return DeliveryResponse(data=value)
+
+
+@router.get("/warehouse-deliveries")
+def warehouse_deliveries(limit:int=Query(25,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str=Header(alias="X-Tenant-Id"),repository:SalesRepository=Depends(get_sales_repository),_=Depends(require_sales_access("inventory.movement.read"))):
+    return {"data":repository.list_warehouse_deliveries(x_tenant_id,limit,offset)}

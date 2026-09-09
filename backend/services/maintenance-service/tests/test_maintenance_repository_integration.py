@@ -84,7 +84,9 @@ def test_material_request_persists_multiple_lines_and_reconciles(repository):
     completed = repo.complete_material_request(tenant, request["id"], "material-maintenance-1", [{"id": "res_a", "unit_cost_snapshot": 10}, {"id": "res_b", "unit_cost_snapshot": 20}])
     assert len(plan) == 2
     assert completed["status"] == "reserved"
-    repo.complete_material_issue(tenant, order["id"], [{"id": "mov_a"}, {"id": "mov_b"}])
+    with repo.material_command_lock(tenant,request["id"]):
+        _,issue_plan=repo.prepare_warehouse_issue(tenant,request["id"],"usr_warehouse")
+        repo.complete_warehouse_issue(tenant,request["id"],[(issue_plan[0]["id"],{"id":"mov_a"}),(issue_plan[1]["id"],{"id":"mov_b"})],None,"usr_warehouse")
     assert repo.get_order(tenant, order["id"])["material_requests"][0]["status"] == "issued"
 
 
@@ -143,3 +145,80 @@ def test_partial_material_cancellation_is_retryable(repository):
     completed = repo.complete_material_reconciliation(tenant, request["id"], "reconcile-parts-maintenance", [{"id": retry[0]["reservation_id"]}], None, "usr_test")
     assert completed["status"] == "cancelled"
     assert completed["pending_operation"] is None
+
+
+def pending_material(repo,tenant,suffix):
+    order=repo.create_order(tenant,facility("MT-"+suffix),{"machine_code_snapshot":None,"machine_name_snapshot":None,"source_production_order_code_snapshot":None},suffix+"-create","create","usr_test")
+    repo.transition(tenant,order["id"],transition("request"),None,suffix+"-request","request","usr_test")
+    worker={"id":"hrw_test","full_name":"Tecnico Prueba"}
+    repo.transition(tenant,order["id"],transition("assign",worker["id"]),worker,suffix+"-assign","assign","usr_test")
+    payload=schemas.MaterialRequestCreate(warehouse_id="wh_parts",lines=[schemas.MaterialLine(item_id="itm_a",quantity=2,unit_code="PZA"),schemas.MaterialLine(item_id="itm_b",quantity=1,unit_code="PZA")])
+    req,_=repo.prepare_material_request(tenant,order["id"],payload,{"warehouse_name":"Refacciones","items":[{"code":"A","name":"Sello"},{"code":"B","name":"Banda"}]},suffix+"-materials","materials","usr_test")
+    req=repo.complete_material_request(tenant,req["id"],suffix+"-materials",[{"id":"res_a","unit_cost_snapshot":10},{"id":"res_b","unit_cost_snapshot":20}])
+    return order,req
+
+
+def test_warehouse_partial_failure_queue_isolation_and_retry(repository):
+    repo,tenant=repository
+    order,req=pending_material(repo,tenant,"WH-RETRY")
+    page,more=repo.list_warehouse_material_requests(tenant,1,0)
+    assert repo.list_warehouse_material_requests("ten_other")[0]==[]
+    all_rows,_=repo.list_warehouse_material_requests(tenant,100)
+    row=next(x for x in all_rows if x["id"]==req["id"])
+    assert row["order_code"]==order["code"]
+    assert row["assigned_worker_name"]=="Tecnico Prueba"
+    assert "diagnosis" not in row
+    with repo.material_command_lock(tenant,req["id"]):
+        _,plan=repo.prepare_warehouse_issue(tenant,req["id"],"usr_warehouse")
+        partial=repo.complete_warehouse_issue(tenant,req["id"],[(plan[0]["id"],{"id":"mov_a"})],"dependency_unavailable","usr_warehouse")
+    assert partial["status"]=="needs_reconciliation"
+    assert partial["lines"][0]["line_status"]=="issued"
+    with pytest.raises(ValueError,match="material_request_not_cancellable"):
+        repo.prepare_material_cancellation(tenant,req["id"],"warehouse-cancel","cancel","usr_test")
+    with repo.material_command_lock(tenant,req["id"]):
+        _,retry=repo.prepare_warehouse_issue(tenant,req["id"],"usr_warehouse")
+        assert [line["id"] for line in retry]==[plan[1]["id"]]
+        done=repo.complete_warehouse_issue(tenant,req["id"],[(retry[0]["id"],{"id":"mov_b"})],None,"usr_warehouse")
+        assert repo.prepare_warehouse_issue(tenant,req["id"],"usr_warehouse")[1] is None
+    assert done["status"]=="issued"
+    assert req["id"] not in [x["id"] for x in repo.list_warehouse_material_requests(tenant,100)[0]]
+    with repo.engine.connect() as c:
+        audit=c.execute(text("select actor_id,payload from maintenance.audit_events where tenant_id=:t and entity_id=:r and action='maintenance.material_request.authorize_issue' order by occurred_at limit 1"),{"t":tenant,"r":req["id"]}).mappings().one()
+        assert audit["actor_id"]=="usr_warehouse"
+        assert audit["payload"]["recipient_worker_id"]=="hrw_test"
+
+
+def test_warehouse_lock_rejects_competing_commands_and_recovers_after_crash(repository):
+    from concurrent.futures import ThreadPoolExecutor
+    repo,tenant=repository
+    _,req=pending_material(repo,tenant,"WH-LOCK")
+    def competing():
+        with repo.material_command_lock(tenant,req["id"]):return "unexpected"
+    with repo.material_command_lock(tenant,req["id"]):
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with pytest.raises(ValueError,match="command_in_progress"):pool.submit(competing).result()
+        _,plan=repo.prepare_warehouse_issue(tenant,req["id"],"usr_warehouse")
+    # Simulate process loss after durable preparation, before receiving Inventory responses.
+    with repo.material_command_lock(tenant,req["id"]):
+        _,retry=repo.prepare_warehouse_issue(tenant,req["id"],"usr_warehouse")
+        assert [x["id"] for x in retry]==[x["id"] for x in plan]
+    assert repo.prepare_warehouse_issue("ten_other",req["id"],"usr_test")== (None,None)
+
+
+def test_warehouse_rejection_preserves_reason_and_releases_without_issue(repository):
+    repo,tenant=repository
+    _,req=pending_material(repo,tenant,"WH-REJECT")
+    with repo.material_command_lock(tenant,req["id"]):
+        repo.record_warehouse_rejection(tenant,req["id"],"Solicitud duplicada","warehouse-reject","hash-reason","usr_warehouse")
+        repo.record_warehouse_rejection(tenant,req["id"],"Solicitud duplicada","warehouse-reject","hash-reason","usr_warehouse")
+        with pytest.raises(ValueError,match="idempotency_key_reused"):
+            repo.record_warehouse_rejection(tenant,req["id"],"Otro motivo","warehouse-reject","different","usr_warehouse")
+        _,plan=repo.prepare_material_cancellation(tenant,req["id"],"warehouse-reject","cancel","usr_warehouse")
+        cancelled=repo.complete_material_cancellation(tenant,req["id"],"warehouse-reject",[x["line_id"] for x in plan],None,"usr_warehouse")
+    assert cancelled["status"]=="cancelled"
+    assert all(x["inventory_movement_id"] is None for x in cancelled["lines"])
+    with pytest.raises(ValueError,match="material_request_not_issuable"):
+        repo.prepare_warehouse_issue(tenant,req["id"],"usr_warehouse")
+    with repo.engine.connect() as c:
+        reasons=c.execute(text("select payload->>'reason' from maintenance.audit_events where tenant_id=:t and entity_id=:r and action='maintenance.material_request.reject'"),{"t":tenant,"r":req["id"]}).scalars().all()
+        assert reasons==["Solicitud duplicada"]

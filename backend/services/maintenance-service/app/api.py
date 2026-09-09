@@ -1,3 +1,4 @@
+from erclave_common.material_return_client import MaterialReturnValidation,MaterialReturnReconcile,MaterialReturnClient,get_material_return_client
 import hashlib,json
 from datetime import date
 from typing import Literal
@@ -42,6 +43,12 @@ def apply_machine_integration(tenant_id,order,authorization,r,a,actor):
         return r.set_order_integration(tenant_id,order["id"],"completed",actor=actor)
     except ErclaveError as exc:return r.set_order_integration(tenant_id,order["id"],"needs_reconciliation",str(exc.code),actor)
 def cancel_material(tenant_id,request_id,authorization,k,r,a,actor):
+    try:
+        with r.material_command_lock(tenant_id,request_id):
+            return cancel_material_locked(tenant_id,request_id,authorization,k,r,a,actor)
+    except ValueError as exc:raise failure(exc) from exc
+
+def cancel_material_locked(tenant_id,request_id,authorization,k,r,a,actor):
     value,plan=r.prepare_material_cancellation(tenant_id,request_id,k,digest(path={"id":request_id}),actor)
     if plan is None:return value
     released=[]
@@ -51,6 +58,41 @@ def cancel_material(tenant_id,request_id,authorization,k,r,a,actor):
             released.append(line["line_id"])
     except ErclaveError as exc:return r.complete_material_cancellation(tenant_id,request_id,k,released,str(exc.code),actor)
     return r.complete_material_cancellation(tenant_id,request_id,k,released,None,actor)
+
+@router.get("/warehouse-material-requests",response_model=WarehouseMaterialListResponse)
+def warehouse_material_requests(limit:int=Query(50,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str=Header(alias="X-Tenant-Id"),r=Depends(get_maintenance_repository),_=Depends(require_maintenance_access("inventory.movement.read"))):
+    data,has_more=r.list_warehouse_material_requests(x_tenant_id,limit,offset)
+    return WarehouseMaterialListResponse(data=data,page={"limit":limit,"offset":offset,"has_more":has_more})
+
+@router.post("/material-requests/{id}/issue",response_model=DataResponse)
+def issue_material_request(id:str,p:MaterialIssueRequest|None=None,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),r=Depends(get_maintenance_repository),a=Depends(get_maintenance_authority_client),access:AuthorizedContext=Depends(require_maintenance_access("inventory.movement.create"))):
+    key(idempotency_key)
+    try:
+        with r.material_command_lock(x_tenant_id,id):
+            value,plan=r.prepare_warehouse_issue(x_tenant_id,id,access.actor_id)
+            if not value:raise ErclaveError("maintenance_material_request_not_found","Material request not found.",status_code=404)
+            if plan is None:return DataResponse(data=value)
+            results=[];error=None
+            try:
+                for line in plan:
+                    movement=a.consume(x_tenant_id,line["reservation_id"],float(line["quantity"]),authorization,f"maintenance-{value['order_id']}-consume-{line['id']}")
+                    if not movement.get("id"):raise ErclaveError("maintenance_reconciliation_incomplete","Inventory did not confirm the movement.",status_code=503)
+                    results.append((line["id"],movement))
+            except ErclaveError as exc:error=str(exc.code)
+            return DataResponse(data=r.complete_warehouse_issue(x_tenant_id,id,results,error,access.actor_id))
+    except ValueError as exc:raise failure(exc) from exc
+
+@router.post("/material-requests/{id}/reject",response_model=DataResponse)
+def reject_material_request(id:str,p:MaterialRejectRequest,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),r=Depends(get_maintenance_repository),a=Depends(get_maintenance_authority_client),access:AuthorizedContext=Depends(require_maintenance_access("inventory.movement.create"))):
+    k=key(idempotency_key)
+    try:
+        with r.material_command_lock(x_tenant_id,id):
+            value=r.get_material_request(x_tenant_id,id)
+            if not value:raise ErclaveError("maintenance_material_request_not_found","Material request not found.",status_code=404)
+            r.record_warehouse_rejection(x_tenant_id,id,p.reason,k,digest(p,{"id":id}),access.actor_id)
+            if value["status"]=="cancelled":return DataResponse(data=value)
+            return DataResponse(data=cancel_material_locked(x_tenant_id,id,authorization,k,r,a,access.actor_id))
+    except ValueError as exc:raise failure(exc) from exc
 
 @router.get("/orders",response_model=ListResponse)
 def orders(q:str|None=None,status:str|None=None,limit:int=Query(100,ge=1,le=200),x_tenant_id:str=Header(alias="X-Tenant-Id"),r=Depends(get_maintenance_repository),_=Depends(require_maintenance_access("maintenance.order.read"))):return ListResponse(data=r.list_orders(x_tenant_id,q,status,limit))
@@ -84,38 +126,25 @@ def transition_order(id:str,p:TransitionRequest,x_tenant_id:str=Header(alias="X-
     if not before:raise ErclaveError("maintenance_order_not_found","Maintenance order not found.",status_code=404)
     worker=None
     if p.assigned_worker_id:worker=eligible_worker(a.workers(x_tenant_id,authorization),p.assigned_worker_id)
-    if p.transition=="start":worker=eligible_worker(a.workers(x_tenant_id,authorization),before.get("assigned_worker_id"))
+    if p.transition in {"start","resume","reopen"}:worker=eligible_worker(a.workers(x_tenant_id,authorization),before.get("assigned_worker_id"))
     if p.transition=="resolve":
         if not all(before.get(field) and str(before[field]).strip() for field in ("diagnosis","work_performed","verification_notes")):raise failure(ValueError("maintenance_resolution_evidence_required"))
         if before.get("total_minutes",0)<=0:raise failure(ValueError("maintenance_time_required"))
-        if any(request["status"] not in {"reserved","issued","cancelled"} for request in before.get("material_requests",[])):raise failure(ValueError("maintenance_materials_not_reconciled"))
-        plan=r.material_plan(x_tenant_id,id);movements=[]
-        try:
-            for line in plan:movements.append(a.consume(x_tenant_id,line["reservation_id"],float(line["quantity"]),authorization,f"maintenance-{id}-consume-{line['line_id']}"))
-        except ErclaveError as exc:
-            r.complete_material_issue(x_tenant_id,id,movements,str(exc.code),access.actor_id);return DataResponse(data=r.set_order_integration(x_tenant_id,id,"needs_reconciliation",str(exc.code),access.actor_id))
-        r.complete_material_issue(x_tenant_id,id,movements,actor=access.actor_id)
+        if any(request["status"] not in {"issued","cancelled"} for request in before.get("material_requests",[])):raise failure(ValueError("maintenance_materials_not_reconciled"))
     if p.transition=="cancel":
         for request_value in before.get("material_requests",[]):
             if request_value["status"] not in {"issued","cancelled"}:
                 cancelled=cancel_material(x_tenant_id,request_value["id"],authorization,f"{k}-cancel-{request_value['id']}",r,a,access.actor_id)
                 if cancelled["status"]!="cancelled":raise failure(ValueError("maintenance_materials_not_reconciled"))
     try:value=r.transition(x_tenant_id,id,p,worker,k,digest(p,{"id":id}),access.actor_id)
-    except ValueError as exc:raise failure(exc) from exc
+    except ValueError as exc:
+        result=failure(exc);result.details={"workflow":"maintenance","requested_status":p.transition,"current_status":before["status"]};raise result from exc
     if value["production_machine_id"] and p.transition in {"request","resolve","cancel","reopen"}:value=apply_machine_integration(x_tenant_id,value,authorization,r,a,access.actor_id)
     return DataResponse(data=value)
 @router.post("/orders/{id}/reconcile",response_model=DataResponse)
 def reconcile_order(id:str,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),r:MaintenanceRepository=Depends(get_maintenance_repository),a:MaintenanceAuthorityClient=Depends(get_maintenance_authority_client),access:AuthorizedContext=Depends(require_maintenance_access("maintenance.order.reconcile"))):
     key(idempotency_key);value=r.get_order(x_tenant_id,id)
     if not value:raise ErclaveError("maintenance_order_not_found","Maintenance order not found.",status_code=404)
-    issue_pending=[request for request in value.get("material_requests",[]) if request.get("pending_operation")=="issue"]
-    if issue_pending:
-        plan=r.material_plan(x_tenant_id,id);movements=[]
-        try:
-            for line in plan:movements.append(a.consume(x_tenant_id,line["reservation_id"],float(line["quantity"]),authorization,f"maintenance-{id}-consume-{line['line_id']}"))
-        except ErclaveError as exc:
-            r.complete_material_issue(x_tenant_id,id,movements,str(exc.code),access.actor_id);return DataResponse(data=r.set_order_integration(x_tenant_id,id,"needs_reconciliation",str(exc.code),access.actor_id))
-        r.complete_material_issue(x_tenant_id,id,movements,actor=access.actor_id);value=r.get_order(x_tenant_id,id)
     if any(request.get("pending_operation") for request in value.get("material_requests",[])):raise failure(ValueError("maintenance_materials_not_reconciled"))
     if value.get("integration_operation"):value=apply_machine_integration(x_tenant_id,value,authorization,r,a,access.actor_id)
     elif value.get("integration_status")=="needs_reconciliation":value=r.set_order_integration(x_tenant_id,id,"completed",actor=access.actor_id)
@@ -139,6 +168,12 @@ def material_requests(id:str,x_tenant_id:str=Header(alias="X-Tenant-Id"),r=Depen
     return ListResponse(data=value["material_requests"])
 @router.post("/orders/{id}/material-requests",response_model=DataResponse,status_code=201)
 def create_material_request(id:str,p:MaterialRequestCreate,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),r:MaintenanceRepository=Depends(get_maintenance_repository),a:MaintenanceAuthorityClient=Depends(get_maintenance_authority_client),access:AuthorizedContext=Depends(require_maintenance_access("maintenance.material_request.create"))):
+    try:
+        with r.material_creation_lock(x_tenant_id,id):
+            return create_material_request_locked(id,p,x_tenant_id,authorization,idempotency_key,r,a,access)
+    except ValueError as exc:raise failure(exc) from exc
+
+def create_material_request_locked(id,p,x_tenant_id,authorization,idempotency_key,r,a,access):
     warehouse=a.warehouse(x_tenant_id,p.warehouse_id,authorization)
     if warehouse.get("status")!="active" or warehouse.get("type") not in {"spare_parts","spareParts"}:raise ErclaveError("spare_parts_warehouse_required","Select an active spare-parts warehouse.",status_code=422)
     items=[]
@@ -165,6 +200,12 @@ def cancel_material_request(id:str,x_tenant_id:str=Header(alias="X-Tenant-Id"),a
     return DataResponse(data=value)
 @router.post("/material-requests/{id}/reconcile",response_model=DataResponse)
 def reconcile_material_request(id:str,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),r:MaintenanceRepository=Depends(get_maintenance_repository),a:MaintenanceAuthorityClient=Depends(get_maintenance_authority_client),access:AuthorizedContext=Depends(require_maintenance_access("maintenance.material_request.reconcile"))):
+    try:
+        with r.material_command_lock(x_tenant_id,id):
+            return reconcile_material_request_locked(id,x_tenant_id,authorization,idempotency_key,r,a,access)
+    except ValueError as exc:raise failure(exc) from exc
+
+def reconcile_material_request_locked(id,x_tenant_id,authorization,idempotency_key,r,a,access):
     k=key(idempotency_key)
     try:value,plan=r.prepare_material_reconciliation(x_tenant_id,id,k,digest(path={"id":id}),access.actor_id)
     except ValueError as exc:raise failure(exc) from exc
@@ -179,3 +220,21 @@ def reconcile_material_request(id:str,x_tenant_id:str=Header(alias="X-Tenant-Id"
                 a.release_reservation(x_tenant_id,line["reservation_id"],authorization,f"maintenance-{id}-release-{line['line_id']}");results.append({"id":line["reservation_id"]})
     except ErclaveError as exc:return DataResponse(data=r.complete_material_reconciliation(x_tenant_id,id,k,results,str(exc.code),access.actor_id))
     return DataResponse(data=r.complete_material_reconciliation(x_tenant_id,id,k,results,None,access.actor_id))
+
+
+@router.get("/returnable-materials")
+def returnable_materials(limit:int=Query(25,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str=Header(alias="X-Tenant-Id"),repository:MaintenanceRepository=Depends(get_maintenance_repository),_=Depends(require_maintenance_access(("maintenance.material_request.create","inventory.movement.read")))):
+    return {"data":repository.returnable_materials(x_tenant_id,limit,offset)}
+
+@router.post("/material-returns/validate")
+def validate_material_return(payload:MaterialReturnValidation,x_tenant_id:str=Header(alias="X-Tenant-Id"),repository:MaintenanceRepository=Depends(get_maintenance_repository),_=Depends(require_maintenance_access(("maintenance.material_request.create","inventory.movement.create")))):
+    try:value=repository.validate_material_return(x_tenant_id,payload.model_dump(mode="json"))
+    except ValueError as exc:raise ErclaveError(str(exc),"The order must be finished or cancelled before returning unused materials.",status_code=409) from exc
+    return {"data":{"source_code":value["source_code"]}}
+
+@router.post("/material-returns/reconcile")
+def reconcile_material_return(payload:MaterialReturnReconcile,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:MaintenanceRepository=Depends(get_maintenance_repository),authority:MaterialReturnClient=Depends(get_material_return_client),access:AuthorizedContext=Depends(require_maintenance_access("inventory.movement.create"))):
+    key(idempotency_key)
+    value=authority.get_return(x_tenant_id,payload.return_id,authorization)
+    try:return {"data":repository.reconcile_material_return(x_tenant_id,value,access.actor_id)}
+    except ValueError as exc:raise ErclaveError(str(exc),"Confirm the physical return in Warehouse before adjusting the order.",status_code=409) from exc

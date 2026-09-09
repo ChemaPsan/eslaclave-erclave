@@ -1,7 +1,7 @@
 import hashlib,json
 from datetime import date
 from typing import Literal
-from fastapi import APIRouter,Depends,Header
+from fastapi import APIRouter,Depends,Header,Query
 from erclave_common.errors import ErclaveError
 from erclave_common.csv_reports import csv_report_response,validate_date_range
 from .authorization import AuthorizedContext,require_purchasing_access
@@ -89,7 +89,8 @@ def update_requisition(id:str,p:RequisitionWrite,x_tenant_id:str=Header(alias="X
     return DataResponse(data=value)
 def transition(id,target,reason,t,k,r,access):
     try:value=r.transition_requisition(t,id,target,reason,key(k),digest(path={"id":id,"target":target,"reason":reason}),access.actor_id)
-    except ValueError as exc:raise fail(exc) from exc
+    except ValueError as exc:
+        result=fail(exc);result.details={"workflow":"requisition","requested_status":target};raise result from exc
     if not value:raise ErclaveError("requisition_not_found","Requisition not found.",status_code=404)
     return DataResponse(data=value)
 @router.post("/requisitions/{id}/submit",response_model=DataResponse)
@@ -144,31 +145,45 @@ def create_receipt(p:ReceiptWrite,x_tenant_id:str=Header(alias="X-Tenant-Id"),au
     except ValueError as exc:raise fail(exc) from exc
     if not receipt:raise ErclaveError("order_not_found","Purchase order not found.",status_code=404)
     if plan is None:return DataResponse(data=receipt)
-    movements=[];dependency_error=None
-    for line in plan:
-        if line["line_type"]=="service":movements.append({"id":None});continue
-        if dependency_error:movements.append(None);continue
-        try:movements.append(a.receive(x_tenant_id,line,receipt["id"],p.purchase_order_id,authorization,line["inventory_idempotency_key"]))
-        except ErclaveError as exc:dependency_error=str(exc.code);movements.append(None)
-    if dependency_error:
-        value=r.complete_receipt(x_tenant_id,receipt,plan,movements,k,access.actor_id,dependency_error); return DataResponse(data=value)
-    return DataResponse(data=r.complete_receipt(x_tenant_id,receipt,plan,movements,k,access.actor_id))
+    return DataResponse(data=receipt)
 @router.post("/receipts/{id}/reconcile",response_model=DataResponse)
-def reconcile_receipt(id:str,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),r=Depends(get_purchasing_repository),a:PurchasingAuthorityClient=Depends(get_purchasing_authority_client),access:AuthorizedContext=Depends(require_purchasing_access("purchasing.receipt.reconcile"))):
+def reconcile_receipt(id:str,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),r=Depends(get_purchasing_repository),a:PurchasingAuthorityClient=Depends(get_purchasing_authority_client),access:AuthorizedContext=Depends(require_purchasing_access(("purchasing.receipt.reconcile","inventory.movement.create")))):
+    permissions=access.permissions or frozenset({access.permission})
+    if "inventory.movement.create" not in permissions:
+        raise ErclaveError("purchase_warehouse_receipt_required","Warehouse must confirm or reconcile physical receipt in Movements.",status_code=403)
+    return confirm_receipt_lines(id,"inventory_item",x_tenant_id,authorization,idempotency_key,r,a,access)
+
+
+def confirm_receipt_lines(id,line_type,tenant,authorization,idempotency_key,r,a,access):
     k=key(idempotency_key)
-    try:receipt,plan=r.prepare_reconciliation(x_tenant_id,id,k,digest(path={"id":id}),access.actor_id)
-    except ValueError as exc:raise fail(exc) from exc
-    if not receipt:raise ErclaveError("receipt_not_found","Purchase receipt not found.",status_code=404)
-    if plan is None:return DataResponse(data=receipt)
-    movements=[];dependency_error=None
-    for line in plan:
-        if line["line_type"]=="inventory_item":
+    with r.receipt_command_lock(tenant,id):
+        if line_type=="service":r.require_service_requester(tenant,id,access.actor_id)
+        try:receipt,plan=r.prepare_reconciliation(tenant,id,k,digest(path={"id":id,"line_type":line_type}),access.actor_id)
+        except ValueError as exc:raise fail(exc) from exc
+        if not receipt:raise ErclaveError("receipt_not_found","Receipt not found.",status_code=404)
+        if plan is None:return DataResponse(data=receipt)
+        plan=[line for line in plan if line["line_type"]==line_type]
+        movements=[];dependency_error=None
+        for line in plan:
             if dependency_error:movements.append(None);continue
             try:
-                warehouse=a.warehouse(x_tenant_id,line["warehouse_id"],authorization)
-                if warehouse.get("status")!="active":raise ErclaveError("inactive_purchase_warehouse","Purchasing receipts require active warehouses.",status_code=422)
-                movements.append(a.receive(x_tenant_id,line,receipt["id"],receipt["purchase_order_id"],authorization,line["inventory_idempotency_key"]))
-            except ErclaveError as exc:dependency_error=str(exc.code);movements.append(None)
-        else:movements.append({"id":None})
-    if dependency_error:return DataResponse(data=r.complete_receipt(x_tenant_id,receipt,plan,movements,k,access.actor_id,dependency_error,"receipt.reconcile"))
-    return DataResponse(data=r.complete_receipt(x_tenant_id,receipt,plan,movements,k,access.actor_id,operation="receipt.reconcile"))
+                if line_type=="service":movements.append({"id":None})
+                else:
+                    movement=a.receive(tenant,line,receipt["id"],receipt["purchase_order_id"],authorization,line["inventory_idempotency_key"])
+                    if not movement.get("id"):raise ErclaveError("inventory_response_incomplete","Inventory did not confirm a movement.",status_code=502)
+                    movements.append(movement)
+            except ErclaveError as exc:dependency_error=exc.code;movements.append(None)
+        return DataResponse(data=r.complete_receipt(tenant,receipt,plan,movements,k,access.actor_id,dependency_error,"receipt.reconcile"))
+
+
+@router.get("/warehouse-receipts",response_model=ListResponse)
+def warehouse_receipts(limit:int=Query(25,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str=Header(alias="X-Tenant-Id"),r=Depends(get_purchasing_repository),_=Depends(require_purchasing_access("inventory.movement.read"))):
+    return ListResponse(data=r.list_pending_receipts(x_tenant_id,"inventory_item",limit=limit,offset=offset))
+
+@router.get("/service-acceptances",response_model=ListResponse)
+def service_acceptances(limit:int=Query(25,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str=Header(alias="X-Tenant-Id"),r=Depends(get_purchasing_repository),access:AuthorizedContext=Depends(require_purchasing_access(("purchasing.requisition.create","purchasing.order.create")))):
+    return ListResponse(data=r.list_pending_receipts(x_tenant_id,"service",access.actor_id,limit,offset))
+
+@router.post("/receipts/{id}/accept-services",response_model=DataResponse)
+def accept_receipt_services(id:str,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),r=Depends(get_purchasing_repository),a=Depends(get_purchasing_authority_client),access:AuthorizedContext=Depends(require_purchasing_access(("purchasing.requisition.create","purchasing.order.create")))):
+    return confirm_receipt_lines(id,"service",x_tenant_id,authorization,idempotency_key,r,a,access)

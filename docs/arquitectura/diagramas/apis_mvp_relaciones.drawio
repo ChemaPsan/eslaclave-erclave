@@ -86,7 +86,7 @@
         <mxCell id="e6" value="policy" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="admin" target="sales">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e7" value="disponibilidad / reserva / consumo" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2E7D32;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="production" target="inventory">
+        <mxCell id="e7" value="reserva / entrega por Almacén antes de iniciar" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2E7D32;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="production" target="inventory">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e8" value="capacidad" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2E7D32;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="production" target="hr">
@@ -104,7 +104,7 @@
         <mxCell id="e12" value="entrada física condicional" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#C17A00;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="purchasing" target="inventory">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e13" value="refacciones" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#1E5AA8;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="maintenance" target="inventory">
+        <mxCell id="e13" value="Local: reserva / entrega por Almacen" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#1E5AA8;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="maintenance" target="inventory">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e14" value="bloquear / liberar" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#1E5AA8;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="maintenance" target="production">
@@ -122,7 +122,7 @@
         <mxCell id="e18" value="eventos futuros" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#777777;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=6 4;" edge="1" parent="1" source="planned" target="events">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-      </root>
+      <mxCell id="chg265_handoffs" value="CHG-265 Local: Compras prepara; Almacén recibe / Ventas prepara; Almacén despacha&lt;br&gt;Servicios: acepta solicitante / Transferencias: destino recibe&lt;br&gt;Sobrantes: Inventory recibe; Production o Maintenance concilia por HTTP&lt;br&gt;Sin escrituras entre schemas; QA sin cambios" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="20" y="2100" width="950" height="120" as="geometry" /></mxCell></root>
     </mxGraphModel>
   </diagram>
 </mxfile>

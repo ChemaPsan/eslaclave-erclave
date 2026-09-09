@@ -50,6 +50,7 @@ class ProductionOrderClient:
             if exc.code==404: raise ErclaveError("production_reference_not_found","The production order or product was not found.",status_code=404) from exc
             raise ErclaveError("production_reference_denied","Production rejected finished-goods receipt validation.",status_code=403 if exc.code in (401,403) else 503) from exc
         except (error.URLError,TimeoutError,KeyError,ValueError) as exc: raise ErclaveError("production_service_unavailable","Production service is unavailable.",status_code=503) from exc
+    def get_failed_creation(self,tenant_id,order_id,authorization=None):return self._get(f"/v1/production/failed-order-creations/{quote(str(order_id),safe='')}",tenant_id,authorization)
     def get_finished_goods_candidate(self,tenant_id,order_id,authorization=None): return self._get(f"/v1/production/finished-goods-candidates/{quote(str(order_id),safe='')}",tenant_id,authorization)
 def get_production_order_client(settings: Settings=Depends(get_settings)): return ProductionOrderClient(settings)
 def require_inventory_access(permission):

@@ -41,8 +41,8 @@ class FakeRepo:
         row=schemas.AvailabilityItemRead(inventory_item_id=item.inventory_item_id,item_code="har",item_name="Harina",unit=item.unit,required_quantity=item.quantity,on_hand_quantity=5,reserved_quantity=1,available_quantity=4,unit_cost=12,total_cost=item.quantity*12,ok=True,allocations=[allocation])
         return schemas.AvailabilityCheckRead(source=p.source,available=True,items=[row])
     def create_reservation(self,t,p,k,h,a):return schemas.ReservationRead(id="rsv_1",inventory_item_id=p.inventory_item_id,warehouse_id=p.warehouse_id,quantity=p.quantity,unit=p.unit,unit_cost_snapshot=12,source_type=p.source.type,source_id=p.source.id,source_line_id=p.source.line_id,status="active",created_at=datetime.now(timezone.utc))
-    def release_reservation(self,t,i,reason,k,h,a):return schemas.ReservationRead(id=i,inventory_item_id="itm_1",warehouse_id="whs_1",quantity=2,unit="kg",unit_cost_snapshot=12,source_type="production_order",source_id="ord_1",source_line_id="line_1",status="released",created_at=datetime.now(timezone.utc))
-    def consume_reservation(self,t,i,reason,k,h,a,quantity=None):return schemas.MovementRead(id="mov_consume",movement_code="MOV-C",movement_type="exit",inventory_item_id="itm_1",warehouse_id="whs_1",direction="out",quantity=quantity or 2,unit="kg",unit_cost=12,reason=reason,source_type="reservation",source_id=i,status="recorded",occurred_at=datetime.now(timezone.utc))
+    def release_reservation(self,t,i,reason,k,h,a,allowed_sources=None):return schemas.ReservationRead(id=i,inventory_item_id="itm_1",warehouse_id="whs_1",quantity=2,unit="kg",unit_cost_snapshot=12,source_type="production_order",source_id="ord_1",source_line_id="line_1",status="released",created_at=datetime.now(timezone.utc))
+    def consume_reservation(self,t,i,reason,k,h,a,quantity=None,allowed_sources=None):return schemas.MovementRead(id="mov_consume",movement_code="MOV-C",movement_type="exit",inventory_item_id="itm_1",warehouse_id="whs_1",direction="out",quantity=quantity or 2,unit="kg",unit_cost=12,reason=reason,source_type="reservation",source_id=i,status="recorded",occurred_at=datetime.now(timezone.utc))
 
 class FakeUnitCatalogClient:
     def require_active(self,tenant_id,code,authorization=None): return code.upper()
@@ -120,3 +120,20 @@ def test_finished_goods_receipt_is_not_authorized_by_generic_movement_permission
     response=c.post("/v1/inventory/finished-goods-receipts",headers={**headers(True),"Authorization":"Bearer test-token","Idempotency-Key":"fg-exact-permission"},json={"production_order_id":"ord_1","warehouse_id":"whs_1","quantity":1,"received_at":datetime.now(timezone.utc).isoformat()})
     assert response.status_code==403
     assert response.json()["error"]["details"]["permission"]=="inventory.finished_goods_receipt.receive"
+def test_only_warehouse_permission_consumes_production_reservations():
+    class Session:
+        permissions=["production.order.start","production.order.resume"]
+        def get_context(self,*args):return {"tenant":{"id":TENANT,"status":"active"},"user":{"id":"usr_warehouse"},"active_modules":["production","inventory"],"permissions":self.permissions}
+    class SourceRepo(FakeRepo):
+        def consume_reservation(self,t,i,reason,k,h,a,quantity=None,allowed_sources=None):
+            assert "production_order" in allowed_sources
+            assert "sales_order" in allowed_sources
+            return super().consume_reservation(t,i,reason,k,h,a,quantity,allowed_sources)
+    session=Session();c=client()
+    app.dependency_overrides[auth.get_settings]=lambda:Settings(auth_mode="firebase")
+    app.dependency_overrides[auth.get_admin_session_client]=lambda:session
+    app.dependency_overrides[repos.get_inventory_repository]=lambda:SourceRepo()
+    h={**headers(True),"Authorization":"Bearer test"}
+    assert c.post("/v1/inventory/reservations/rsv_1/consume",headers=h,json={"reason":"Entrega autorizada"}).status_code==403
+    session.permissions=["inventory.movement.create"]
+    assert c.post("/v1/inventory/reservations/rsv_1/consume",headers=h,json={"reason":"Entrega autorizada"}).status_code==201

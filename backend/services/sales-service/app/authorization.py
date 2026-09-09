@@ -68,6 +68,7 @@ def require_sales_access(permission: str | tuple[str, ...]):
             raise ErclaveError("tenant_access_denied", "Tenant access denied.", status_code=403)
         if "sales" not in context.get("active_modules", []):
             raise ErclaveError("module_not_enabled", "Sales module is not enabled.", status_code=403)
+        if any(item.startswith("inventory.") and item in context.get("permissions",[]) for item in required) and "inventory" not in context.get("active_modules",[]):raise ErclaveError("module_not_enabled","Inventory module is not enabled.",status_code=403)
         if not any(item in context.get("permissions", []) for item in required):
             details = {"permission": required[0]} if len(required) == 1 else {"permissions_any": list(required)}
             raise ErclaveError("permission_denied", "Required Sales permission is missing.", status_code=403, details=details)

@@ -74,3 +74,7 @@ jobs:
 
       - name: Run complete verification
         run: npm run verify
+
+      - name: Verify compensating QA traffic promotion without cloud access
+        shell: pwsh
+        run: ./backend/scripts/test_promote_qa_traffic.ps1

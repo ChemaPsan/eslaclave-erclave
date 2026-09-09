@@ -5,288 +5,1196 @@ info:
   version: 1.4.0
   summary: Source-to-receipt de articulos y servicios con edicion, cancelacion, concurrencia y reconciliacion segura en Local.
 servers:
-  - url: http://127.0.0.1:8010
+- url: http://127.0.0.1:8010
 security:
-  - bearerAuth: []
+- bearerAuth: []
 paths:
   /v1/purchasing/reports/{report_code}/export:
     get:
-      tags: [Reports]
+      tags:
+      - Reports
       operationId: exportPurchasingStandardReport
       summary: Export a fixed Purchasing report as UTF-8 CSV.
       x-required-module: purchasing
       x-permissions: [purchasing.supplier.read, purchasing.requisition.read, purchasing.order.read, purchasing.receipt.read]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - { name: report_code, in: path, required: true, schema: { type: string } }
-        - { name: lang, in: query, schema: { type: string, enum: [es, en], default: es } }
-        - { name: date_from, in: query, schema: { type: string, format: date } }
-        - { name: date_to, in: query, schema: { type: string, format: date } }
-        - { name: status, in: query, schema: { type: string } }
-        - { name: priority, in: query, schema: { type: string } }
-        - { name: q, in: query, schema: { type: string } }
-        - { name: currency, in: query, schema: { type: string } }
-        - { name: supplier_id, in: query, schema: { type: string } }
-        - { name: line_type, in: query, schema: { type: string } }
+      - $ref: '#/components/parameters/TenantHeader'
+      - name: report_code
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: lang
+        in: query
+        schema:
+          type: string
+          enum:
+          - es
+          - en
+          default: es
+      - name: date_from
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: date_to
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+      - name: priority
+        in: query
+        schema:
+          type: string
+      - name: q
+        in: query
+        schema:
+          type: string
+      - name: currency
+        in: query
+        schema:
+          type: string
+      - name: supplier_id
+        in: query
+        schema:
+          type: string
+      - name: line_type
+        in: query
+        schema:
+          type: string
       responses:
-        '200': { description: CSV export. }
-        '204': { description: No rows matched the filters. }
+        '200':
+          description: CSV export.
+        '204':
+          description: No rows matched the filters.
   /v1/purchasing/suppliers:
     get:
       operationId: listPurchasingSuppliers
       x-required-module: purchasing
       x-permissions: [purchasing.supplier.read]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
-      responses: { '200': { description: Proveedores del tenant. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Proveedores del tenant.
     post:
       operationId: createPurchasingSupplier
       x-required-module: purchasing
       x-permissions: [purchasing.supplier.create]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SupplierWrite' } } } }
-      responses: { '201': { description: Proveedor creado. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierWrite'
+      responses:
+        '201':
+          description: Proveedor creado.
   /v1/purchasing/suppliers/{id}:
     patch:
       operationId: updatePurchasingSupplier
       x-required-module: purchasing
       x-permissions: [purchasing.supplier.update]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SupplierUpdate' } } } }
-      responses: { '200': { description: Proveedor actualizado. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierUpdate'
+      responses:
+        '200':
+          description: Proveedor actualizado.
   /v1/purchasing/requisitions:
     get:
       operationId: listPurchasingRequisitions
       x-required-module: purchasing
       x-permissions: [purchasing.requisition.read]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
-      responses: { '200': { description: Requisiciones del tenant. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Requisiciones del tenant.
     post:
       operationId: createPurchasingRequisition
       x-required-module: purchasing
       x-permissions: [purchasing.requisition.create]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RequisitionWrite' } } } }
-      responses: { '201': { description: Requisicion en borrador. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequisitionWrite'
+      responses:
+        '201':
+          description: Requisicion en borrador.
   /v1/purchasing/requisitions/{id}:
     patch:
       operationId: updatePurchasingRequisition
       x-required-module: purchasing
       x-permissions: [purchasing.requisition.update]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RequisitionWrite' } } } }
-      responses: { '200': { description: Requisicion actualizada. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequisitionWrite'
+      responses:
+        '200':
+          description: Requisicion actualizada.
   /v1/purchasing/requisitions/{id}/submit:
     post:
       operationId: submitPurchasingRequisition
       x-required-module: purchasing
       x-permissions: [purchasing.requisition.submit]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
-      responses: { '200': { description: Requisicion enviada. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Requisicion enviada.
   /v1/purchasing/requisitions/{id}/approve:
     post:
       operationId: approvePurchasingRequisition
       x-required-module: purchasing
       x-permissions: [purchasing.requisition.approve]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
-      responses: { '200': { description: Requisicion aprobada. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Requisicion aprobada.
   /v1/purchasing/requisitions/{id}/reject:
     post:
       operationId: rejectPurchasingRequisition
       x-required-module: purchasing
       x-permissions: [purchasing.requisition.reject]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReasonRequest' } } } }
-      responses: { '200': { description: Requisicion rechazada. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Requisicion rechazada.
   /v1/purchasing/requisitions/{id}/cancel:
     post:
       operationId: cancelPurchasingRequisition
       x-required-module: purchasing
       x-permissions: [purchasing.requisition.cancel]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReasonRequest' } } } }
-      responses: { '200': { description: Requisicion cancelada con motivo auditable. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Requisicion cancelada con motivo auditable.
   /v1/purchasing/orders:
     get:
       operationId: listPurchasingOrders
       x-required-module: purchasing
       x-permissions: [purchasing.order.read]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
-      responses: { '200': { description: Ordenes de compra del tenant. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Ordenes de compra del tenant.
     post:
       operationId: createPurchasingOrder
       x-required-module: purchasing
       x-permissions: [purchasing.order.create]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseOrderWrite' } } } }
-      responses: { '201': { description: Orden de compra en borrador; si nace de requisicion, sus partidas deben coincidir exactamente salvo precio. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseOrderWrite'
+      responses:
+        '201':
+          description: Orden de compra en borrador; si nace de requisicion
+          sus partidas deben coincidir exactamente salvo precio.: null
   /v1/purchasing/orders/{id}:
     patch:
       operationId: updatePurchasingOrder
       x-required-module: purchasing
       x-permissions: [purchasing.order.update]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseOrderWrite' } } } }
-      responses: { '200': { description: Orden en borrador actualizada sin cambiar su origen. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseOrderWrite'
+      responses:
+        '200':
+          description: Orden en borrador actualizada sin cambiar su origen.
   /v1/purchasing/orders/{id}/issue:
     post:
       operationId: issuePurchasingOrder
       x-required-module: purchasing
       x-permissions: [purchasing.order.issue]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
-      responses: { '200': { description: Orden emitida y congelada. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Orden emitida y congelada.
   /v1/purchasing/orders/{id}/cancel:
     post:
       operationId: cancelPurchasingOrder
       x-required-module: purchasing
       x-permissions: [purchasing.order.cancel]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReasonRequest' } } } }
-      responses: { '200': { description: Orden cancelada; conserva recepciones previas y libera la requisicion si no hubo recepcion. } }
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Orden cancelada; conserva recepciones previas y libera la requisicion si no hubo recepcion.
   /v1/purchasing/receipts:
     get:
       operationId: listPurchasingReceipts
       x-required-module: purchasing
       x-permissions: [purchasing.receipt.read]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }]
-      responses: { '200': { description: Recepciones del tenant. } }
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      tags:
+      - purchasing
+      summary: Receipts
+      x-implementation-status: implemented
     post:
       operationId: createPurchasingReceipt
       x-required-module: purchasing
       x-permissions: [purchasing.receipt.create]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReceiptWrite' } } } }
-      responses: { '201': { description: Recepcion completada o pendiente de reconciliacion. } }
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiptWrite'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      tags:
+      - purchasing
+      summary: Create Receipt
+      x-implementation-status: implemented
+      description: Prepares a pending_confirmation receipt without receiving goods or accepting services. Pending quantities count against over-receipt
+        checks. Warehouse confirms inventory lines; the original requisition requester (buyer for direct purchases) accepts service lines.
   /v1/purchasing/receipts/{id}/reconcile:
     post:
       operationId: reconcilePurchasingReceipt
       x-required-module: purchasing
-      x-permissions: [purchasing.receipt.reconcile]
-      parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IdPath' }]
-      responses: { '200': { description: Reintenta solo partidas pendientes con claves estables de Inventory. } }
+      x-permissions: [inventory.movement.create, purchasing.receipt.reconcile]
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      tags:
+      - purchasing
+      summary: Reconcile Receipt
+      x-implementation-status: implemented
+      x-required-modules:
+      - purchasing
+      - inventory
+      description: Warehouse confirms/retries inventory lines only. The legacy purchasing.receipt.reconcile permission is recognized but alone
+        returns purchase_warehouse_receipt_required; inventory.movement.create is required to post stock. Service lines remain pending requester
+        acceptance.
+  /v1/purchasing/warehouse-receipts:
+    get:
+      tags:
+      - purchasing
+      summary: Warehouse Receipts
+      operationId: warehouse_receipts_v1_purchasing_warehouse_receipts_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: purchasing
+      x-permissions: [inventory.movement.read]
+      x-required-modules:
+      - purchasing
+      - inventory
+  /v1/purchasing/service-acceptances:
+    get:
+      tags:
+      - purchasing
+      summary: Service Acceptances
+      operationId: service_acceptances_v1_purchasing_service_acceptances_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: purchasing
+      x-permissions: [purchasing.order.create, purchasing.requisition.create]
+  /v1/purchasing/receipts/{id}/accept-services:
+    post:
+      tags:
+      - purchasing
+      summary: Accept Receipt Services
+      operationId: accept_receipt_services_v1_purchasing_receipts__id__accept_services_post
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: purchasing
+      x-permissions: [purchasing.order.create, purchasing.requisition.create]
 components:
   securitySchemes:
-    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   parameters:
-    TenantHeader: { name: X-Tenant-Id, in: header, required: true, schema: { type: string } }
-    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8 } }
-    IdPath: { name: id, in: path, required: true, schema: { type: string } }
+    TenantHeader:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     SupplierWrite:
       type: object
-      required: [code, commercial_name, legal_name, tax_id, tax_regime, billing_email, fiscal_postal_code, currency, payment_terms]
+      required:
+      - code
+      - commercial_name
+      - legal_name
+      - tax_id
+      - tax_regime
+      - billing_email
+      - fiscal_postal_code
+      - currency
+      - payment_terms
       properties:
-        code: { type: string, maxLength: 40 }
-        commercial_name: { type: string, maxLength: 240 }
-        legal_name: { type: [string, 'null'], maxLength: 240 }
-        tax_id: { type: [string, 'null'], maxLength: 40 }
-        tax_regime: { type: [string, 'null'], pattern: '^\d{3}$' }
-        billing_email: { type: [string, 'null'], format: email, maxLength: 254 }
-        contact_name: { type: [string, 'null'], maxLength: 200 }
-        email: { type: [string, 'null'], format: email, maxLength: 254 }
-        phone: { type: [string, 'null'], maxLength: 30 }
-        website: { type: [string, 'null'], maxLength: 300 }
-        fiscal_street: { type: [string, 'null'], maxLength: 200 }
-        fiscal_exterior_number: { type: [string, 'null'], maxLength: 40 }
-        fiscal_interior_number: { type: [string, 'null'], maxLength: 40 }
-        fiscal_neighborhood: { type: [string, 'null'], maxLength: 160 }
-        fiscal_municipality: { type: [string, 'null'], maxLength: 160 }
-        fiscal_state: { type: [string, 'null'], maxLength: 120 }
-        fiscal_postal_code: { type: [string, 'null'], maxLength: 12 }
-        fiscal_country: { type: [string, 'null'], minLength: 2, maxLength: 2 }
-        currency: { type: string, maxLength: 12 }
-        payment_terms: { type: string, maxLength: 40 }
-        lead_time_days: { type: integer, minimum: 0 }
-        status: { type: string, enum: [active, inactive] }
+        code:
+          type: string
+          maxLength: 40
+        commercial_name:
+          type: string
+          maxLength: 240
+        legal_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 240
+        tax_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        tax_regime:
+          type:
+          - string
+          - 'null'
+          pattern: ^\d{3}$
+        billing_email:
+          type:
+          - string
+          - 'null'
+          format: email
+          maxLength: 254
+        contact_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        email:
+          type:
+          - string
+          - 'null'
+          format: email
+          maxLength: 254
+        phone:
+          type:
+          - string
+          - 'null'
+          maxLength: 30
+        website:
+          type:
+          - string
+          - 'null'
+          maxLength: 300
+        fiscal_street:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        fiscal_exterior_number:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        fiscal_interior_number:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        fiscal_neighborhood:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+        fiscal_municipality:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+        fiscal_state:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+        fiscal_postal_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 12
+        fiscal_country:
+          type:
+          - string
+          - 'null'
+          minLength: 2
+          maxLength: 2
+        currency:
+          type: string
+          maxLength: 12
+        payment_terms:
+          type: string
+          maxLength: 40
+        lead_time_days:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
     SupplierUpdate:
       type: object
       properties:
-        commercial_name: { type: string, maxLength: 240 }
-        legal_name: { type: [string, 'null'], maxLength: 240 }
-        tax_id: { type: [string, 'null'], maxLength: 40 }
-        tax_regime: { type: [string, 'null'], pattern: '^\d{3}$' }
-        billing_email: { type: [string, 'null'], format: email, maxLength: 254 }
-        contact_name: { type: [string, 'null'], maxLength: 200 }
-        email: { type: [string, 'null'], format: email, maxLength: 254 }
-        phone: { type: [string, 'null'], maxLength: 30 }
-        website: { type: [string, 'null'], maxLength: 300 }
-        fiscal_street: { type: [string, 'null'], maxLength: 200 }
-        fiscal_exterior_number: { type: [string, 'null'], maxLength: 40 }
-        fiscal_interior_number: { type: [string, 'null'], maxLength: 40 }
-        fiscal_neighborhood: { type: [string, 'null'], maxLength: 160 }
-        fiscal_municipality: { type: [string, 'null'], maxLength: 160 }
-        fiscal_state: { type: [string, 'null'], maxLength: 120 }
-        fiscal_postal_code: { type: [string, 'null'], maxLength: 12 }
-        fiscal_country: { type: [string, 'null'], minLength: 2, maxLength: 2 }
-        currency: { type: string, maxLength: 12 }
-        payment_terms: { type: string, maxLength: 40 }
-        lead_time_days: { type: integer, minimum: 0 }
-        status: { type: string, enum: [active, inactive] }
+        commercial_name:
+          type: string
+          maxLength: 240
+        legal_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 240
+        tax_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        tax_regime:
+          type:
+          - string
+          - 'null'
+          pattern: ^\d{3}$
+        billing_email:
+          type:
+          - string
+          - 'null'
+          format: email
+          maxLength: 254
+        contact_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        email:
+          type:
+          - string
+          - 'null'
+          format: email
+          maxLength: 254
+        phone:
+          type:
+          - string
+          - 'null'
+          maxLength: 30
+        website:
+          type:
+          - string
+          - 'null'
+          maxLength: 300
+        fiscal_street:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        fiscal_exterior_number:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        fiscal_interior_number:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        fiscal_neighborhood:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+        fiscal_municipality:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+        fiscal_state:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+        fiscal_postal_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 12
+        fiscal_country:
+          type:
+          - string
+          - 'null'
+          minLength: 2
+          maxLength: 2
+        currency:
+          type: string
+          maxLength: 12
+        payment_terms:
+          type: string
+          maxLength: 40
+        lead_time_days:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
     PurchaseLine:
       type: object
-      description: Una partida inventariable exige inventory_item_id; una partida de servicio lo prohibe. unit_code siempre se valida contra el catalogo activo de Administracion.
+      description: Una partida inventariable exige inventory_item_id; una partida de servicio lo prohibe. unit_code siempre se valida contra el
+        catalogo activo de Administracion.
       allOf:
-        - if:
-            properties: { line_type: { const: inventory_item } }
-            required: [line_type]
-          then:
-            required: [inventory_item_id]
-            properties: { inventory_item_id: { type: string, minLength: 1 } }
-        - if:
-            properties: { line_type: { const: service } }
-            required: [line_type]
-          then:
-            properties: { inventory_item_id: { type: 'null' } }
-      required: [line_type, description, quantity, unit_code]
+      - if:
+          properties:
+            line_type:
+              const: inventory_item
+          required:
+          - line_type
+        then:
+          required:
+          - inventory_item_id
+          properties:
+            inventory_item_id:
+              type: string
+              minLength: 1
+      - if:
+          properties:
+            line_type:
+              const: service
+          required:
+          - line_type
+        then:
+          properties:
+            inventory_item_id:
+              type: 'null'
+      required:
+      - line_type
+      - description
+      - quantity
+      - unit_code
       properties:
-        line_type: { type: string, enum: [inventory_item, service] }
-        inventory_item_id: { type: [string, 'null'], description: Obligatorio solo para inventory_item y prohibido para service. }
-        description: { type: string, minLength: 1, maxLength: 300 }
-        quantity: { type: number, exclusiveMinimum: 0 }
-        unit_code: { type: string, minLength: 1, maxLength: 20, description: Codigo estable y activo del catalogo tenant-safe de Administracion. }
-        unit_price: { type: [number, 'null'], minimum: 0 }
+        line_type:
+          type: string
+          enum:
+          - inventory_item
+          - service
+        inventory_item_id:
+          type:
+          - string
+          - 'null'
+          description: Obligatorio solo para inventory_item y prohibido para service.
+        description:
+          type: string
+          minLength: 1
+          maxLength: 300
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+        unit_code:
+          type: string
+          minLength: 1
+          maxLength: 20
+          description: Codigo estable y activo del catalogo tenant-safe de Administracion.
+        unit_price:
+          type:
+          - number
+          - 'null'
+          minimum: 0
     RequisitionWrite:
       type: object
-      required: [code, required_date, priority, lines]
+      required:
+      - code
+      - required_date
+      - priority
+      - lines
       properties:
-        code: { type: string, maxLength: 60 }
-        required_date: { type: string, format: date }
-        priority: { type: string, enum: [normal, urgent] }
-        source_type: { type: string, enum: [manual, inventory_shortage, production_shortage] }
-        source_id: { type: [string, 'null'] }
+        code:
+          type: string
+          maxLength: 60
+        required_date:
+          type: string
+          format: date
+        priority:
+          type: string
+          enum:
+          - normal
+          - urgent
+        source_type:
+          type: string
+          enum:
+          - manual
+          - inventory_shortage
+          - production_shortage
+        source_id:
+          type:
+          - string
+          - 'null'
         lines:
           type: array
           minItems: 1
           description: Partidas solicitadas; un mismo articulo de Inventory no puede repetirse dentro de la requisicion.
-          items: { $ref: '#/components/schemas/PurchaseLine' }
+          items:
+            $ref: '#/components/schemas/PurchaseLine'
     PurchaseOrderWrite:
       type: object
-      required: [code, supplier_id, currency, payment_terms, lines]
+      required:
+      - code
+      - supplier_id
+      - currency
+      - payment_terms
+      - lines
       properties:
-        code: { type: string, maxLength: 60 }
-        requisition_id: { type: [string, 'null'] }
-        direct_purchase_reason: { type: [string, 'null'], maxLength: 500 }
-        supplier_id: { type: string }
-        currency: { type: string }
-        payment_terms: { type: string }
-        lines: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PurchaseLine' } }
+        code:
+          type: string
+          maxLength: 60
+        requisition_id:
+          type:
+          - string
+          - 'null'
+        direct_purchase_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+        supplier_id:
+          type: string
+        currency:
+          type: string
+        payment_terms:
+          type: string
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PurchaseLine'
     ReceiptLine:
       type: object
-      required: [order_line_id, quantity]
+      required:
+      - order_line_id
+      - quantity
       properties:
-        order_line_id: { type: string }
-        quantity: { type: number, exclusiveMinimum: 0 }
-        warehouse_id: { type: [string, 'null'], description: Obligatorio para articulos inventariables y prohibido para servicios; una recepcion de servicio es comercial y no genera movimiento de Inventory. }
+        order_line_id:
+          type: string
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+        warehouse_id:
+          type:
+          - string
+          - 'null'
+          description: Obligatorio para articulos inventariables y prohibido para servicios; una recepcion de servicio es comercial y no genera
+            movimiento de Inventory.
     ReceiptWrite:
-      type: object
-      required: [code, purchase_order_id, received_at, lines]
       properties:
-        code: { type: string, maxLength: 60 }
-        purchase_order_id: { type: string }
-        received_at: { type: string, format: date-time }
-        supplier_document_reference: { type: [string, 'null'], maxLength: 120 }
-        lines: { type: array, minItems: 1, items: { $ref: '#/components/schemas/ReceiptLine' } }
+        code:
+          type: string
+          maxLength: 60
+          minLength: 1
+          title: Code
+        purchase_order_id:
+          type: string
+          title: Purchase Order Id
+        received_at:
+          type: string
+          format: date-time
+          title: Received At
+        supplier_document_reference:
+          anyOf:
+          - type: string
+            maxLength: 120
+          - type: 'null'
+          title: Supplier Document Reference
+        lines:
+          items:
+            $ref: '#/components/schemas/ReceiptLineInput'
+          type: array
+          minItems: 1
+          title: Lines
+      type: object
+      required:
+      - code
+      - purchase_order_id
+      - received_at
+      - lines
+      title: ReceiptWrite
     ReasonRequest:
       type: object
-      required: [reason]
+      required:
+      - reason
       properties:
-        reason: { type: string, minLength: 3, maxLength: 500 }
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+    ListResponse:
+      properties:
+        data:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Data
+      type: object
+      required:
+      - data
+      title: ListResponse
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    ReceiptLineInput:
+      properties:
+        order_line_id:
+          type: string
+          title: Order Line Id
+        quantity:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
+          title: Quantity
+        warehouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      type: object
+      required:
+      - order_line_id
+      - quantity
+      title: ReceiptLineInput
+    DataResponse:
+      properties:
+        data:
+          additionalProperties: true
+          type: object
+          title: Data
+      type: object
+      required:
+      - data
+      title: DataResponse

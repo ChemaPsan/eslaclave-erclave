@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+from erclave_common.errors import ErclaveError
 import json
 import hashlib
 from datetime import date
@@ -465,6 +467,38 @@ class SalesRepository:
             where tenant_id=:tenant and delivery_id=:id order by line_number"""), {"tenant": tenant_id, "id": delivery_id}).mappings().all()
         return DeliveryRead.model_validate({**dict(row), "lines": [dict(item) for item in lines]})
 
+    @contextmanager
+    def delivery_command_lock(self,tenant,id):
+        with self.engine.connect() as c:
+            key=f"sales-delivery:{tenant}:{id}"
+            if not c.execute(text("select pg_try_advisory_lock(hashtextextended(:k,0))"),{"k":key}).scalar_one():
+                raise ErclaveError("delivery_confirmation_in_progress","Warehouse dispatch is in progress.",status_code=409)
+            c.commit()
+            try:yield
+            finally:
+                c.execute(text("select pg_advisory_unlock(hashtextextended(:k,0))"),{"k":key});c.commit()
+
+    def list_warehouse_deliveries(self,tenant,limit=25,offset=0):
+        with self.engine.connect() as c:
+            ids=c.execute(text("select id from sales.deliveries where tenant_id=:t and status='draft' order by created_at,id limit :limit offset :offset"),{"t":tenant,"limit":limit,"offset":offset}).scalars().all()
+            result=[]
+            for id in ids:
+                delivery=self._delivery(c,tenant,id)
+                order=self._order(c,tenant,delivery.order_id)
+                order_lines={line.id:line for line in order.lines}
+                value={key:getattr(delivery,key) for key in ("id","code","order_code","customer_name","status","confirmation_state","scheduled_date")}
+                value["lines"]=[]
+                for line in delivery.lines:
+                    source=order_lines[line.order_line_id]
+                    pending=line.quantity;allocations=[]
+                    for reservation in source.reservations:
+                        quantity=min(pending,reservation.reserved_quantity-reservation.consumed_quantity) if reservation.status=="active" else Decimal("0")
+                        if quantity>0:allocations.append({"warehouse_id":reservation.warehouse_ref_id,"quantity":quantity});pending-=quantity
+                        if pending<=0:break
+                    value["lines"].append({"id":line.id,"description":line.product_service_name,"item_code_snapshot":line.product_service_code,"quantity":line.quantity,"unit_code":line.unit,"allocations":allocations})
+                result.append(value)
+            return result
+
     def list_deliveries(self, tenant_id, status=None, order_id=None):
         filters = ["tenant_id=:tenant"]
         params = {"tenant": tenant_id}
@@ -570,7 +604,7 @@ class SalesRepository:
             for delivery_line in delivery.lines:
                 order_line = by_id[delivery_line.order_line_id]
                 if order_line.fulfillment_mode != "stock":
-                    continue
+                    raise ValueError("order_line_not_ready_for_delivery")
                 pending = delivery_line.quantity
                 for reservation in order_line.reservations:
                     available = reservation.reserved_quantity - reservation.consumed_quantity if reservation.status == "active" else Decimal("0")

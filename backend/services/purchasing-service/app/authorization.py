@@ -30,6 +30,7 @@ def require_purchasing_access(permission):
         context=client.get_context(x_tenant_id,authorization); tenant=context.get("tenant") or {}; user=context.get("user") or {}
         if tenant.get("id")!=x_tenant_id or tenant.get("status")!="active": raise ErclaveError("tenant_access_denied","Tenant access denied.",status_code=403)
         if "purchasing" not in context.get("active_modules",[]): raise ErclaveError("module_not_enabled","Purchasing module is not enabled.",status_code=403)
+        if any(item.startswith("inventory.") and item in context.get("permissions",[]) for item in required) and "inventory" not in context.get("active_modules",[]):raise ErclaveError("module_not_enabled","Inventory module is not enabled.",status_code=403)
         if not any(item in context.get("permissions",[]) for item in required): raise ErclaveError("permission_denied","Required Purchasing permission is missing.",status_code=403)
         return AuthorizedContext(x_tenant_id,str(user.get("id") or ""),required[0],frozenset(context.get("permissions",[])))
     return dependency

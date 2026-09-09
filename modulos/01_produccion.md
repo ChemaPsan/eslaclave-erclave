@@ -1,5 +1,13 @@
 # ERClave - Modulo de Produccion
 
+## Entrega previa de materiales CHG-264
+
+CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+
+## Coherencia de formularios Local (CHG-262)
+
+El tipo de Producto/Servicio es inmutable al editar. La ficha conserva el estatus y el cambio usa la accion separada del catalogo. Maquinaria nueva nace activa y conserva costos cero al editar. Version y centro de receta son campos derivados; editar inicia un borrador, y enviar/aprobar exige cada permiso antes de la primera mutacion. No se ofrece obsoletar ni eliminar mediante un comando inexistente. Consultar `docs/auditorias/frontend_backend_2026-09-07.md` para evidencia y APIs.
+
 ## Autorizacion operativa Local
 
 Las autoridades de liberar, iniciar, pausar, reanudar, enviar a validacion, finalizar y cancelar una orden son permisos independientes. Actualizar avance no concede terminar una etapa. La matriz contractual vive en `docs/arquitectura/matriz_autorizacion_operativa.md`. La orden nueva vigente nace liberada, por lo que su alta exige `production.order.release`; el borrador previo a liberacion no esta implementado.
@@ -209,7 +217,7 @@ Funciones actuales:
 - consultar costo real;
 - consultar variacion;
 - registrar porcentaje real de avance por etapa; la captura de tiempo real de mano de obra y maquinaria se reserva para una fase futura de eficiencia;
-- reservar materiales al liberar, consumirlos al iniciar por primera vez y liberarlos si se cancela antes de iniciar;
+- reservar materiales al liberar, entregarlos desde Almacen antes de iniciar y liberar reservas si se cancela antes de la entrega;
 - cambiar estatus desde un catalogo directo;
 - imprimir o generar vista de orden;
 - avanzar etapas operativas.
@@ -220,10 +228,10 @@ Catalogo actual de estatus:
 |---|---|
 | Liberada | Orden autorizada para iniciar. |
 | En espera de recursos | Orden bloqueada por recursos, capacidad o confirmacion; solo puede iniciar si conserva todas sus reservas materiales. |
-| En produccion | Orden en ejecucion; al entrar por primera vez consume las reservas y registra las salidas fisicas por almacen. |
+| En produccion | Orden en ejecucion; exige que Almacen ya haya confirmado las salidas fisicas de todos los materiales. |
 | Pausada | Orden detenida temporalmente. |
 | En validacion | Orden en revision antes de cierre. |
-| Terminada | Orden completada; exige etapas concluidas y consolida el costo real sin duplicar las salidas registradas al iniciar. |
+| Terminada | Orden completada; exige etapas concluidas y consolida el costo real sin duplicar las salidas confirmadas por Almacen. |
 | Cancelada | Orden cancelada. |
 
 Reglas clave:
@@ -450,10 +458,10 @@ El costo debe considerar:
 
 - Actualizar estatus general de orden.
 - Actualizar avance por etapa.
-- Registrar porcentaje real por etapa; las reservas ya consumidas al iniciar aportan el costo real de materiales. La medicion de tiempos y eficiencia se incorporara cuando exista su modelo operativo.
+- Registrar porcentaje real por etapa; las reservas ya entregadas por Almacen aportan el costo real de materiales. La medicion de tiempos y eficiencia se incorporara cuando exista su modelo operativo.
 - Registrar pausas, cancelaciones o cierre.
 
-La reserva al liberar y la salida al iniciar representan hechos distintos. La primera entrada a **En produccion** solicita a Almacenes consumir cada reserva y crear una salida inmutable en el almacen que la otorgo. Reanudar una orden pausada o cerrarla no vuelve a descontar. Cancelar antes del inicio libera la reserva; cancelar despues conserva las salidas fisicas ya registradas. El frontend debe impedir materiales cuya UOM no pertenezca al catalogo activo de Administracion y conservar visibles, pero bloqueados, los recursos invalidos de versiones heredadas.
+La reserva al liberar y la entrega fisica son hechos distintos. Desde **Movimientos**, Almacen confirma la entrega completa y consume cada reserva en el almacen que la otorgo. Solo entonces puede pasar a **En produccion**. Iniciar, reanudar y cerrar no descuentan. Cancelar antes de la entrega libera la reserva; cancelar despues conserva las salidas fisicas ya registradas. Una entrega incompleta exige conciliar antes de cancelar. El frontend debe impedir materiales cuya UOM no pertenezca al catalogo activo de Administracion y conservar visibles, pero bloqueados, los recursos invalidos de versiones heredadas.
 
 ---
 
@@ -522,3 +530,17 @@ CHG-242 reemplaza la restriccion operativa de CHG-215: una maquina activa o en m
 ## CHG-243: validacion de definicion frente a disponibilidad
 
 El editor de Recetas valida que los recursos seleccionados sigan existiendo en sus catalogos elegibles y calcula cantidades/costo para el lote simulado. No usa existencias actuales ni compara horas-persona u horas-maquina; la duracion sugerida tampoco altera ese resultado. La orden de produccion realiza la validacion operativa autoritativa con inventario, capacidad diaria, compromisos e intervalo multi-dia.
+
+
+## Confirmaciones y recuperaciones Local CHG-265
+
+La salida completa de materiales sigue siendo previa al inicio (CHG-264). Las transiciones no consumen reservas. El responsable general y los de fases pendientes deben seguir elegibles en RH. Las máquinas deben estar activas y sin bloqueo de Mantenimiento. Órdenes terminadas/canceladas pueden solicitar devolución; costo neto y cantidades devueltas se consultan sin borrar cantidad entregada. Creaciones fallidas dejan recuperación del mismo actor; Inventory libera por origen demostrado y bloquea reservas tardías de ese intento.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+
+## Ajustes UAT Local CHG-266
+
+Órdenes mantiene Control de orden y las bandejas operativas en la columna principal al colapsar la guía. La clase production-orders-layout apila guía y contenido bajo 720 px reales del panel; no cambia el componente compartido ni las reglas de salida/inicio.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.

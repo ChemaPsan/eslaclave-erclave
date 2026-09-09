@@ -181,7 +181,7 @@ const documentationChecks = [
   },
   {
     path: "docs/arquitectura/diagramas/estado_actual_backend_mvp.drawio",
-    required: ["Local head", "QA head", "20260901_0030", "20260825_0029"],
+    required: ["Local head", "QA head", "20260908_0034", "20260825_0029"],
     forbidden: ["Local head 20260817_0015", "Alembic head 20260817_0015", "Ventas planned/mock"]
   },
   {
@@ -190,7 +190,7 @@ const documentationChecks = [
       "SERVICIOS DE DOMINIO - REAL LOCAL Y QA",
       "inventory-service",
       "balances · Kardex · reservas",
-      "disponibilidad / reserva / consumo",
+      "reserva / entrega por Almacén antes de iniciar",
       "entrada física condicional"
     ],
     forbidden: ["reservas/consumos planned", "OBJETIVO: availability / consumption / receipts"]

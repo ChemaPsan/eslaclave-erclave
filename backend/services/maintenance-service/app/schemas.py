@@ -73,3 +73,19 @@ class MaterialRequestCreate(BaseModel):
 
 class DataResponse(BaseModel):data:dict
 class ListResponse(BaseModel):data:list[dict]
+
+class WarehouseMaterialPage(BaseModel):
+    limit:int
+    offset:int
+    has_more:bool
+
+class MaterialIssueRequest(BaseModel):
+    model_config={"extra":"forbid"}
+
+class MaterialRejectRequest(BaseModel):
+    model_config={"extra":"forbid","str_strip_whitespace":True}
+    reason:str=Field(min_length=3,max_length=500)
+
+class WarehouseMaterialListResponse(BaseModel):
+    data:list[dict]
+    page:WarehouseMaterialPage

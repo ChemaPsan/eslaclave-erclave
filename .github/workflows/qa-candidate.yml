@@ -50,6 +50,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "${{ inputs.release_sha }}"
           python -m pip install -e "./backend[dev]"
           npm run verify
+          pwsh -File backend/scripts/test_promote_qa_traffic.ps1
 
   build:
     needs: validate

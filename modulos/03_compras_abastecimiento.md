@@ -1,5 +1,9 @@
 # ERClave — Módulo de Compras y Abastecimiento
 
+## Coherencia de formularios Local (CHG-262)
+
+Las lecturas del workspace se seleccionan por permisos de cada recurso. Alternar Servicio/Articulo restaura la unidad autoritativa del articulo y deshabilita Inventory para servicios. Cancelar exige un motivo de 3 a 500 caracteres. Editar proveedor conserva sus codigos estables aunque no aparezcan en las listas cortas de la UI y aplica el formato postal correspondiente al pais existente. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+
 ## 1. Objetivo
 
 El módulo de Compras y Abastecimiento permitirá controlar necesidades de compra, proveedores, requisiciones, órdenes de compra, recepciones, precios, tiempos de entrega y relación con inventarios, producción y gastos.
@@ -257,8 +261,9 @@ draft -> issued -> partially_received -> received -> closed
 ### Recepcion
 
 ```text
-processing -> completed
-          \-> needs_reconciliation
+pending_confirmation -> completed (bienes y servicios confirmados)
+                     \-> needs_reconciliation -> pending_confirmation / completed
+processing se conserva para recuperaciones históricas
 ```
 
 - Cada cantidad debe ser positiva y no superar el saldo abierto de su linea.
@@ -275,7 +280,7 @@ processing -> completed
 | Proveedor | `purchasing.supplier.read` | `purchasing.supplier.create`, `purchasing.supplier.update` |
 | Requisicion | `purchasing.requisition.read` | `create`, `update`, `submit`, `approve`, `reject`, `cancel` |
 | Orden | `purchasing.order.read` | `create`, `update`, `issue`, `cancel` |
-| Recepcion | `purchasing.receipt.read` | `purchasing.receipt.create`, `purchasing.receipt.reconcile` |
+| Recepcion | `purchasing.receipt.read` | Preparar: `purchasing.receipt.create`; confirmar bienes: `inventory.movement.create`; aceptar servicios: solicitante con `purchasing.requisition.create` o `purchasing.order.create`. |
 
 La segregacion no se implementa con nombres fijos de rol. Cada accion usa permiso puntual; una politica futura por monto/centro complementara, no sustituira, el permiso.
 
@@ -320,3 +325,17 @@ La requisicion aprobada conserva ademas una accion **Crear orden de compra** mie
 - Cancelar una Requisicion u Orden de compra abre un modal ERClave bilingue, no una ventana nativa del navegador.
 - El modal identifica el folio, explica que la trazabilidad se conserva, exige un motivo no vacio y presenta errores dentro del mismo formulario.
 - Los comandos y permisos no cambian: `purchasing.requisition.cancel` y `purchasing.order.cancel` siguen siendo autoridades backend independientes e idempotentes.
+
+
+## Confirmaciones y recuperaciones Local CHG-265
+
+Crear recepción conserva pending_confirmation y no cambia existencias ni acepta servicios. Las cantidades pendientes evitan sobre-recepción. Almacén confirma/reintenta únicamente partidas de inventario desde Movimientos. Quien solicitó la requisición acepta sus servicios; en compra directa lo hace el comprador. Una recepción mixta termina cuando ambas responsabilidades confirmaron. purchasing.receipt.reconcile por sí solo no permite entrada física. Las partidas conservan actor y fecha de confirmación.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+
+## Ajustes UAT Local CHG-266
+
+Proveedores abre en listado; Nuevo proveedor y Editar usan un modal independiente con permisos create/update, captura conservada ante error y recarga al guardar. Requisiciones dedica toda la fila al artículo bajo 680 px del formulario y apila campos bajo 380 px. Su clase purchasing-requisitions-layout apila el riel bajo 720 px del panel; otras pantallas conservan su composición.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.

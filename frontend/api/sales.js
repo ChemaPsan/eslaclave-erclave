@@ -48,3 +48,5 @@ export async function addSalesServiceOrderTimeEntry(id,payload){return (await re
 export async function addSalesServiceOrderCostEntry(id,payload){return (await request(`/v1/sales/service-orders/${id}/cost-entries`,{method:"POST",body:JSON.stringify(payload)})).data;}
 export async function addSalesServiceOrderEvidence(id,payload){return (await request(`/v1/sales/service-orders/${id}/evidence`,{method:"POST",body:JSON.stringify(payload)})).data;}
 export async function transitionSalesServiceOrder(id,action,payload={}){return (await request(`/v1/sales/service-orders/${id}/transitions/${action}`,{method:"POST",body:JSON.stringify(payload)})).data;}
+
+export function getWarehouseSalesDeliveries(offset=0){return request(`/v1/sales/warehouse-deliveries?limit=26&offset=${offset}`);}

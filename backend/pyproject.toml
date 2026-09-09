@@ -36,6 +36,8 @@ pythonpath = [
   "services/inventory-service",
   "services/hr-service"
   ,"services/sales-service"
+  ,"services/purchasing-service"
+  ,"services/maintenance-service"
 ]
 testpaths = [
   "services/admin-service/tests",
@@ -43,4 +45,6 @@ testpaths = [
   "services/inventory-service/tests",
   "services/hr-service/tests"
   ,"services/sales-service/tests"
+  ,"services/purchasing-service/tests"
+  ,"services/maintenance-service/tests"
 ]

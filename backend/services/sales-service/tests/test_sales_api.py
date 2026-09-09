@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 import importlib
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -46,10 +47,11 @@ def delivery(status="draft"):
 def service_order(status="draft"):
     return schemas.ServiceOrderRead(id="svo_1",code="OS-000001",order_id="sor_1",order_code="PED-001",order_line_id="sol_1",
         customer_id="cus_1",customer_name="Cliente Demo",product_service_id="prd_1",product_service_code="SERV-1",
-        product_service_name="Servicio",unit="HUR",ordered_quantity=2,status=status,created_at=NOW,updated_at=NOW)
+        product_service_name="Servicio",unit="HUR",ordered_quantity=2,status=status,responsible_worker_id="hrw_1",created_at=NOW,updated_at=NOW)
 
 
 class FakeRepository:
+    def delivery_command_lock(self,*args):return nullcontext()
     def list_customers(self, tenant_id, status=None, q=None): return [customer()] if tenant_id == TENANT else []
     def get_customer(self, tenant_id, customer_id): return customer() if tenant_id == TENANT and customer_id == "cus_1" else None
     def create_customer(self, tenant_id, payload, worker, key, fingerprint, actor): return customer(payload.status)

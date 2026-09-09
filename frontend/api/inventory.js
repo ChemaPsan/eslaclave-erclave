@@ -14,3 +14,10 @@ export async function updateInventoryItem(id,payload){return (await request(`/v1
 export async function createInventoryMovement(payload){return (await request("/v1/inventory/movements",{method:"POST",body:JSON.stringify(payload)})).data;}
 export async function getFinishedGoodsReceipts(){return request("/v1/inventory/finished-goods-receipts");}
 export async function createFinishedGoodsReceipt(payload){return (await request("/v1/inventory/finished-goods-receipts",{method:"POST",body:JSON.stringify(payload)})).data;}
+
+export function getInventoryTransfers(offset=0){return request(`/v1/inventory/transfers?limit=26&offset=${offset}`);}
+export async function transitionInventoryTransfer(id,action,payload,commandKey){return (await request(`/v1/inventory/transfers/${encodeURIComponent(id)}/${action}`,{method:"POST",body:JSON.stringify(payload),headers:{"Idempotency-Key":commandKey}})).data;}
+export function getInventoryMaterialReturns(offset=0){return request(`/v1/inventory/material-returns?limit=26&offset=${offset}`);}
+export async function requestInventoryMaterialReturn(payload,commandKey){return (await request('/v1/inventory/material-returns',{method:'POST',body:JSON.stringify(payload),headers:{'Idempotency-Key':commandKey}})).data;}
+export async function receiveInventoryMaterialReturn(id){return (await request(`/v1/inventory/material-returns/${encodeURIComponent(id)}/receive`,{method:'POST'})).data;}
+export async function cancelInventoryMaterialReturn(id,reason){return (await request(`/v1/inventory/material-returns/${encodeURIComponent(id)}/cancel`,{method:"POST",body:JSON.stringify({reason})})).data;}

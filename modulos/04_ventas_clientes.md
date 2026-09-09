@@ -1,5 +1,9 @@
 # ERClave - Ventas y Clientes
 
+## Coherencia de formularios Local (CHG-262)
+
+La planeacion de una orden de servicio usa controles de fecha desde el primer render y conserva las fechas recuperadas del backend. El registro de tiempo respeta el limite contractual de 1440 minutos. Las pruebas nuevas usan respuestas mutantes interceptadas, sin crear ordenes ni registrar costos reales. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+
 ## Objetivo
 
 Ventas conecta la relacion comercial con los maestros autoritativos de ERClave. El segundo corte real esta desplegado en Local y QA y cubre Clientes, Cotizaciones, Pedidos, surtido y Entregas mediante `sales-service`; no convierte texto libre ni datos del navegador en maestros operativos.
@@ -138,3 +142,17 @@ Ventas conserva la identidad comercial de Producción y usa el artículo vincula
 ## CHG-209: seleccion escalable
 
 Clientes, productos/servicios, responsables, cotizaciones, pedidos y almacenes de surtido se seleccionan mediante búsqueda acotada. Los documentos conservan filtros especializados de elegibilidad; las relaciones usan IDs y snapshots visibles. Estatus, moneda, condición de pago y modo de surtido se mantienen como listas cerradas.
+
+
+## Confirmaciones y recuperaciones Local CHG-265
+
+Ventas prepara entrega; inventory.movement.create confirma salida desde Movimientos. sales.delivery.confirm por sí solo recibe guía para continuar en Almacén. Reintentos conservan las claves durables por reserva. Las partidas sin surtido stock comprobable no se despachan; conectar automáticamente solicitud comercial, Producción y recepción/entrega sigue planned. Inicio/reanudación de servicio comercial revalida responsable RH; no se agregan materiales a ese tipo de orden en este corte.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+
+## Ajustes UAT Local CHG-266
+
+Las tarjetas indican Borrador → Emitir cotización → Cotizada → Aprobar cotización → Aprobada. Emitir requiere sales.quote.submit y aprobar sales.quote.approve. Cuando falte autoridad se orienta a solicitar intervención del usuario autorizado o administrador de roles. La reparación del catálogo/Owner de pruebas fue exclusiva de Local; contratos y ciclo backend no cambian.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.

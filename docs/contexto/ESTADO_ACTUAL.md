@@ -1,6 +1,42 @@
 # Estado actual de ERClave
 
+## Promoción QA en preparación CHG-269
+
+CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
+
+
+## Continuidad vigente CHG-268
+
+CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+
+
+## Confirmaciones operativas Local CHG-265
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+Cabeza Alembic Local `20260908_0034`; QA head `20260825_0029`, sin cambios remotos. Migraciones 0032–0034 aplicadas en PostgreSQL loopback `erclave_local`. Verificación Local: 257 pruebas backend (51 omitidas sin DB), 19 integraciones PostgreSQL seleccionadas y 40 pruebas browser aprobadas. Dos smokes HTTP reales y downgrade vacío/upgrade 0034 aprobados; seis APIs Local reiniciadas. Pruebas y limitaciones en el informe CHG-265. Las secciones siguientes conservan evidencia de cortes anteriores.
+
+## Materiales por Almacen antes de iniciar CHG-264
+
+CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+
+Cabeza Alembic Local `20260908_0031`; QA conserva `20260825_0029` y el release a119ddf. Migracion Local aplicada, reversa vacia y nueva aplicacion verificadas. APIs Production/Inventory reiniciadas en loopback. Verificacion aprobada: verify:local con 33 pruebas de navegador y suite backend, ampliada y repetida con verify:postgres a 297 pruebas sin omisiones. Smoke HTTP real aprobado (bloqueo, entrega, repeticion, inicio, costo y salidas unicas); no desplegado a QA/Produccion. Se preservan CHG-262 y CHG-263.
+
+## Refacciones desde Movimientos Local CHG-263
+
+- Implementacion Local de bandeja paginada, confirmacion completa de entrega, rechazo con motivo y reintento de partidas pendientes por Almacen. Resolver Mantenimiento ya no genera salidas.
+- Contratos Maintenance e Inventory actualizados; permisos existentes, schemas y cabeza Alembic `20260901_0030` conservados. Detalle: `docs/auditorias/refacciones_movimientos_2026-09-07.md`.
+- `npm.cmd run verify:local` aprobado: 290 pruebas backend PostgreSQL sin omisiones y 30 de navegador; contratos, validadores, sintaxis y compilacion aprobados. Smoke HTTP real aprobado con reserva, entrega por Almacen, reintento sin duplicado y cierre. Compras/Mantenimiento ya entran a la coleccion general de pytest.
+- Se preservan los cambios previos CHG-262. Se reiniciaron solo Inventory y Maintenance Local; fixtures sinteticas del tenant autorizado limpiadas por sus propios IDs. Sin migraciones, seeds, escrituras remotas, commit, push, PR ni promocion QA/Produccion.
+
 > Reanudacion vigente: consultar `docs/contexto/REANUDACION_CHG261.md`. El handoff CHG-255 se conserva solo como evidencia historica del corte previo.
+
+## Auditoria frontend/backend Local CHG-262
+
+- Se corrigieron 17 grupos de desajustes de formularios, campos no persistidos, valores iniciales, ramas condicionales y permisos. Detalle y matriz de APIs: `docs/auditorias/frontend_backend_2026-09-07.md`.
+- Produccion, Inventory, RH, Compras, Ventas y Mantenimiento conservan contratos y schemas. Administracion carga consultas por permiso; Backoffice fue recorrido en lectura.
+- Evidencia integral: npm.cmd run verify:local aprobado; 245 pruebas backend PostgreSQL sin omisiones y 25 pruebas de navegador aprobadas, incluidos Backoffice y ES/EN en contenedor estrecho. Validadores, contratos, sintaxis y compilacion aprobados.
+- Cambios sin commit en el working tree sobre `735312b`. No hubo migraciones, seeds, cargas operativas, escrituras QA/Produccion, despliegue, push ni PR.
 
 ## Release QA CHG-254
 
@@ -354,3 +390,17 @@ En Local, Mantenimiento hace visible el tecnico asignado y conserva su seleccion
 # Actualizacion CHG-240 (2026-08-24)
 
 En Local, **Compras > Ordenes de compra** muestra primero el historial completo sin filtrar estatus y solo presenta el alta cuando hay requisiciones aprobadas pendientes de conversion. El diagnostico autenticado encontro dos OC emitidas (`OC_0001`, `OC_0002`) y ninguna requisicion elegible: `REQ_001`/`REQ_003` ya estan convertidas y `REQ_002` cancelada. **Reabastecimiento** queda visual y semánticamente separado como capacidad planeada; no contiene OC. No hubo escritura operativa, migracion ni cambios en QA/Produccion.
+
+
+## Ajustes UAT Local CHG-266
+
+CHG-266 implementado solo en Local: Proveedores listado/modal; Requisiciones legible en contenedores estrechos; Control de orden fuera del riel colapsado; acciones y mensajes del ciclo de cotizaciones. Reparación acotada del catálogo y cuatro asignaciones al Owner del tenant ten_739ee59d765d5e14818674800d, por API auditada. Local continúa en 20260908_0034, sin migración de este corte ni promoción QA.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Solicitudes compactas Local CHG-267
+
+CHG-267 implementado solo en Local: Movimientos abre con resumen desplegable cerrado para las siete bandejas y aviso de pendientes; historial visible debajo. Sin contratos, migraciones, permisos ni datos persistentes modificados. Cabeza Local 20260908_0034; QA permanece igual.
+
+Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.

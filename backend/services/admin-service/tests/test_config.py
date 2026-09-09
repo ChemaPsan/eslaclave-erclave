@@ -15,6 +15,7 @@ QA_SETTINGS = {
     "hr_service_url": "https://hr-service-qa.example.run.app",
     "inventory_service_url": "https://inventory-service-qa.example.run.app",
     "production_service_url": "https://production-service-qa.example.run.app",
+    "maintenance_service_url": "https://maintenance-service-qa.example.run.app",
 }
 
 
@@ -118,6 +119,7 @@ def test_inventory_uses_its_service_database_url_for_readiness():
     ("service_name", "field", "message"),
     [
         ("inventory-service", "production_service_url", "ERCLAVE_PRODUCTION_SERVICE_URL"),
+        ("inventory-service", "maintenance_service_url", "ERCLAVE_MAINTENANCE_SERVICE_URL"),
         ("sales-service", "inventory_service_url", "ERCLAVE_INVENTORY_SERVICE_URL"),
     ],
 )

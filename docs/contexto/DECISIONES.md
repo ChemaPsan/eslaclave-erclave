@@ -1,5 +1,25 @@
 # Decisiones vigentes de ERClave
 
+## Autoridad de salida antes del inicio CHG-264
+
+CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+
+La orden permanece Liberada/En espera de recursos despues de entregar; iniciar sigue siendo un comando propio de Produccion. Sin materiales no exige entrega. Cancelar antes de entregar libera reservas; despues de entregar conserva los movimientos. Una entrega iniciada e incompleta bloquea cancelacion hasta conciliar. El lock por tenant/orden cubre entrega y cambios de estado durante HTTP; la intencion se persiste antes de consumir. Reintentos usan la identidad estable por orden/reserva y conservan movimientos confirmados. Nuevas reservas productivas sin fecha explicita no vencen a las 24 horas; no se reactivan reservas historicas.
+
+## Refacciones y entrega fisica Local CHG-263
+
+- Solicitar aparta material; Almacen confirma la entrega completa desde Movimientos y ese es el momento de registrar la salida. Resolver la reparacion no consume.
+- La confirmacion combina autorizacion y entrega; no se agrega una aprobacion previa independiente ni una entrega parcial editable. El tecnico asignado es el receptor y queda en la auditoria de la confirmacion.
+- Se reutilizan `inventory.movement.read|create` para consulta y registro/rechazo de esta salida interna; los permisos de Mantenimiento no conceden entrega. Inventory valida ademas el origen de la reserva, de modo que esa capacidad no consume/libera reservas de Produccion o Ventas.
+- Las nuevas reservas de Mantenimiento sin vencimiento explicito permanecen hasta entrega/cancelacion. No se reactivan reservas historicas vencidas ni se reinterpretan movimientos previos.
+- El rechazo usa `cancelled` con motivo auditado; no crea un estado persistente adicional. Solicitudes ya emitidas o con entrega en conciliacion no se rechazan.
+
+## Coherencia frontend/backend
+
+- CHG-262 aplica los contratos existentes a campos inmutables, valores iniciales y ramas condicionales. No se agrega un campo al backend solo para sostener una captura heredada de la maqueta.
+- Los permisos de lectura son independientes por recurso y se validan antes de componer consultas; un comando compuesto comprueba todas sus autoridades antes de la primera mutacion.
+- Un saldo parcial del navegador no autoriza ni bloquea salidas API; Inventory es la autoridad de existencia y reservas.
+
 ## Autorizacion operativa por capacidad
 
 - Cada aprobacion, aceptacion, liberacion, finalizacion, cancelacion o recepcion implementada usa un permiso puntual derivado del contrato.
@@ -50,7 +70,7 @@
 - Editar permisos usa draft, diff, guardado unico, revision optimista e idempotencia. Los filtros no limitan el payload ni eliminan asignaciones ocultas; scopes existentes se preservan.
 - Un articulo solo es candidato de receta cuando esta activo y tiene `use_in_recipe=true`; la disponibilidad se calcula desde movimientos de todos los almacenes del tenant.
 - Una orden de Produccion solo se crea desde una version aprobada vigente. Produccion orquesta, pero Inventarios es autoridad de existencia, reservas, movimientos y valuacion; RH es autoridad de trabajadores, puestos y capacidad laboral; Produccion es autoridad de maquinaria y compromisos de capacidad. El navegador no puede declarar disponibilidad ni costo.
-- Liberar una orden reserva materiales por almacen y compromete minutos de mano de obra/maquinaria por fecha. La primera entrada a `in_progress` consume cada reserva mediante Inventory y registra una salida inmutable en el almacen que la otorgo; reanudar o cerrar no vuelve a consumir. Cancelar antes del inicio libera reservas y cancelar despues conserva las salidas fisicas. El cierre exige cantidades reales temporales y calcula el costo real desde snapshots verificables. Los comandos externos y locales son idempotentes y los bloqueos se ordenan por recurso para evitar sobreasignacion concurrente.
+- Liberar una orden reserva materiales por almacen y compromete minutos de mano de obra/maquinaria por fecha. Almacen confirma la entrega desde Movimientos y registra salidas inmutables antes de `in_progress`; iniciar, reanudar o cerrar no consume. Cancelar antes de entregar libera reservas y cancelar despues conserva salidas. El cierre exige materiales entregados y etapas completas; tiempos reales temporales permanecen diferidos. Los comandos externos y locales son idempotentes y los bloqueos se ordenan por recurso para evitar sobreasignacion concurrente.
 - En modo API, una receta solo selecciona articulos activos marcados `use_in_recipe`, puestos RH activos con `intervenes_in_production=true` y, como etapas, areas RH activas que tengan al menos uno de esos puestos productivos. La etapa conserva `labor_area_ref_id` y nombre snapshot, sin FK ni escritura cruzada.
 - Las fases activas de una receta se numeran en orden consecutivo y sus porcentajes deben sumar exactamente 100. La orden copia numero, area y peso; su avance general es la suma ponderada del avance de cada fase, no un promedio simple.
 - El costo manual de un articulo pertenece a Inventory y significa costo por una unidad base del articulo. Las conversiones solo se permiten entre unidades activas, compatibles y con factor estandar inequívoco; Compras sera la autoridad futura para recalcularlo desde recepciones u ordenes de compra.
@@ -150,3 +170,32 @@ Una decision nueva o reemplazada debe registrarse tambien en `TRAZABILIDAD.md` y
 - La duracion sugerida de receta es solo un valor inicial para planeacion y no participa en la elegibilidad de sus recursos.
 - La orden de produccion es el unico punto que valida disponibilidad material, capacidad laboral/maquinaria, compromisos concurrentes, inicio y numero de dias productivos.
 - Un faltante operativo nunca invalida historicamente la definicion de una receta; impide liberar la orden concreta hasta resolverlo o cambiar su horizonte.
+
+
+## 2026-09-08 — Responsabilidades CHG-265
+
+El usuario confirmó: solicitante acepta servicios comprados, destino confirma transferencias y Almacén confirma devoluciones. La preparación comercial no implica movimiento físico. No se agregan permisos nuevos ni escrituras entre schemas. CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+
+## Ajustes UAT Local CHG-266
+
+Mantener listado como entrada de Proveedores y separar captura en modal. Corregir la compresión con clases y container queries acotadas, sin alterar globalmente el riel. Explicar transiciones de cotización según permiso efectivo; conservar el ciclo backend y restaurar únicamente el baseline Owner del tenant demo Local con los cuatro permisos ya declarados en OpenAPI.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Solicitudes compactas Local CHG-267
+
+Agrupar todas las bandejas operativas de Movimientos en un desplegable inicial cerrado, antes del historial. Mostrar existencia de pendientes sin sumar páginas como totales. Mantener consultas y comandos existentes; distinguir errores y carga. La expansión es temporal de la pantalla, no preferencia persistente global.
+
+Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.
+
+
+## Recuperación de refacciones Local CHG-268
+
+CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+
+
+## Candidato de continuidad CHG-269
+
+CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.

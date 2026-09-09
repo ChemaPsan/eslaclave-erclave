@@ -1,4 +1,152 @@
+const TRANSITION_GUIDANCE = {
+  "production_order": {
+    "in_progress": {
+      "es": "Para iniciar o reanudar, la orden debe estar Liberada, En espera de recursos o Pausada. Producción debe revisar la orden; Almacén debe confirmar antes la salida de materiales en Movimientos.",
+      "en": "To start or resume, the order must be Released, Waiting for resources, or Paused. Production must review the order; Warehouse must first confirm material issue in Movements."
+    },
+    "in_validation": {
+      "es": "Solo una orden en producción puede pasar a validación. Producción debe completar todas sus fases al 100% y después enviarla a validación desde Órdenes.",
+      "en": "Only an in-progress order can move to validation. Production must complete every phase at 100%, then send it to validation from Orders."
+    },
+    "completed": {
+      "es": "Primero envía la orden a Validación. Producción debe completar sus fases y verificar sus materiales; después puede seleccionar Terminar en Órdenes.",
+      "en": "First send the order to Validation. Production must complete its phases and verify its materials, then select Complete in Orders."
+    },
+    "paused": {
+      "es": "Solo se puede pausar una orden que esté en producción. Revisa su estatus confirmado en Producción → Órdenes.",
+      "en": "Only an in-progress order can be paused. Check its confirmed status in Production → Orders."
+    },
+    "released": {
+      "es": "Una orden nueva se libera validando receta, responsables y recursos desde Crear orden. Las órdenes terminadas o canceladas conservan su historial; crea una orden nueva para otro trabajo.",
+      "en": "A new order is released by validating its recipe, owners, and resources in Create order. Completed or cancelled orders retain their history; create a new order for additional work."
+    },
+    "waiting_resources": {
+      "es": "Solo una orden liberada puede ponerse en espera de recursos. Revisa su estatus en Producción → Órdenes; si ya trabaja, utiliza Pausar.",
+      "en": "Only a released order can wait for resources. Check its status in Production → Orders; if it is running, use Pause."
+    },
+    "cancelled": {
+      "es": "La cancelación se solicita desde Producción → Órdenes mientras la orden está liberada, esperando recursos, en producción o pausada. Una orden terminada conserva su historial; sus sobrantes se tramitan como devolución.",
+      "en": "Cancellation is requested in Production → Orders while the order is released, waiting for resources, in progress, or paused. A completed order retains its history; unused materials require a return."
+    }
+  },
+  "requisition": {
+    "submitted": {
+      "es": "Solo se envía una requisición en Borrador. El solicitante debe completar sus partidas en Compras → Requisiciones y seleccionar Enviar.",
+      "en": "Only a Draft requisition can be submitted. The requester must complete its lines in Purchasing → Requisitions and select Submit."
+    },
+    "approved": {
+      "es": "Primero el solicitante debe Enviar la requisición. Después una persona con permiso de aprobación podrá autorizarla en Compras → Requisiciones.",
+      "en": "The requester must Submit the requisition first. A person with approval permission can then authorize it in Purchasing → Requisitions."
+    },
+    "rejected": {
+      "es": "Solo se rechaza una requisición Enviada, indicando el motivo. Revisa la solicitud en Compras → Requisiciones antes de continuar.",
+      "en": "Only a Submitted requisition can be rejected, with a reason. Review it in Purchasing → Requisitions before continuing."
+    }
+  },
+  "recipe": {
+    "submit": {
+      "es": "Solo una versión en Borrador se envía a revisión. Completa sus recursos y fases en Producción → Recetas y selecciona Enviar a revisión.",
+      "en": "Only a Draft version can be submitted for review. Complete its resources and phases in Production → Recipes, then select Submit for review."
+    },
+    "approve": {
+      "es": "Primero envía la versión de receta a Revisión. Después una persona con permiso de aprobación podrá autorizarla en Producción → Recetas.",
+      "en": "First submit the recipe version for Review. A person with approval permission can then authorize it in Production → Recipes."
+    }
+  },
+  "maintenance": {
+    "request": {
+      "es": "Primero crea la orden en Borrador y revisa el equipo. Después selecciona Solicitar en Mantenimiento → Órdenes para registrar el paro cuando corresponda.",
+      "en": "First create the Draft order and check the equipment. Then select Request in Maintenance → Orders to record downtime when applicable."
+    },
+    "assign": {
+      "es": "La orden debe estar solicitada antes de asignar un técnico. Revisa la solicitud y selecciona un trabajador habilitado en Mantenimiento → Órdenes.",
+      "en": "The order must be requested before assigning a technician. Review the request and select an eligible worker in Maintenance → Orders."
+    },
+    "start": {
+      "es": "Primero asigna un técnico habilitado a la orden solicitada. Después podrá iniciarse o retomarse desde Mantenimiento → Órdenes.",
+      "en": "First assign an eligible technician to the requested order. It can then be started or resumed in Maintenance → Orders."
+    },
+    "resolve": {
+      "es": "El técnico debe iniciar el mantenimiento y registrar trabajo, verificación y tiempo. Almacén debe confirmar las refacciones solicitadas; después puede seleccionar Resolver.",
+      "en": "The technician must start maintenance and record work, verification, and time. Warehouse must confirm requested spare parts; then Resolve can be selected."
+    },
+    "close": {
+      "es": "Primero el técnico debe Resolver la orden con su evidencia y refacciones conciliadas. Después puede cerrarse en Mantenimiento → Órdenes.",
+      "en": "The technician must first Resolve the order with evidence and reconciled spare parts. It can then be closed in Maintenance → Orders."
+    },
+    "reopen": {
+      "es": "Solo una orden Resuelta puede reabrirse. Revisa su estatus en Mantenimiento → Órdenes; una orden Cerrada conserva su historial.",
+      "en": "Only a Resolved order can be reopened. Review its status in Maintenance → Orders; a Closed order retains its history."
+    },
+    "cancel": {
+      "es": "Revisa el estatus confirmado de la orden en Mantenimiento → Órdenes. Las refacciones pendientes deben cancelarse; las entregadas se tramitan como devolución física.",
+      "en": "Check the confirmed order status in Maintenance → Orders. Pending spare parts must be cancelled; issued parts require a physical return."
+    },
+    "resume": {
+      "es": "Solo se reanuda una orden En espera de refacciones. Confirma con Almacén la entrega pendiente y selecciona Reanudar en Mantenimiento → Órdenes.",
+      "en": "Only an order Waiting for parts can be resumed. Confirm the pending issue with Warehouse and select Resume in Maintenance → Orders."
+    },
+    "wait_for_parts": {
+      "es": "Primero inicia la orden de mantenimiento asignada. Mientras esté En ejecución podrás ponerla En espera de refacciones y solicitar las piezas.",
+      "en": "First start the assigned maintenance order. While In progress, it can be placed Waiting for parts and the parts requested."
+    }
+  },
+  "sales_service": {
+    "start": {
+      "es": "Primero Planea la orden y Asigna un responsable activo. Después selecciona Iniciar en Ventas → Órdenes de servicio.",
+      "en": "First Plan the order and Assign an active owner. Then select Start in Sales → Service orders."
+    },
+    "resume": {
+      "es": "Solo se reanuda una orden En espera. Revisa el responsable y su estatus en Ventas → Órdenes de servicio y selecciona Reanudar.",
+      "en": "Only an On hold order can be resumed. Check its owner and status in Sales → Service orders, then select Resume."
+    },
+    "wait": {
+      "es": "Solo una orden En ejecución puede ponerse En espera. Revisa su estatus y registra el motivo en Ventas → Órdenes de servicio.",
+      "en": "Only an In progress order can be placed On hold. Check its status and record the reason in Sales → Service orders."
+    },
+    "submit_acceptance": {
+      "es": "Primero inicia la ejecución del servicio y registra evidencia y tiempo o costos. Después selecciona Enviar a aceptación en la orden de servicio.",
+      "en": "First start the service and record evidence and time or costs. Then select Submit for acceptance on the service order."
+    },
+    "accept": {
+      "es": "Primero envía el servicio a Aceptación con evidencia y tiempo o costos registrados. Después la persona autorizada podrá Aceptar la orden.",
+      "en": "First submit the service for Acceptance with evidence and time or costs recorded. The authorized person can then Accept the order."
+    }
+  }
+};
 const ERROR_MESSAGES = Object.freeze({
+  material_return_not_cancellable: {"es": "La devolución ya fue recibida físicamente y no puede cancelarse. Almacén debe finalizar su conciliación en Movimientos si sigue pendiente.", "en": "The return has already been physically received and cannot be cancelled. Warehouse must finish reconciliation in Movements if it is still pending."},
+  material_return_not_receivable: {"es": "La solicitud de devolución está cancelada. Revisa el sobrante real y solicita una nueva devolución desde la orden si todavía corresponde.", "en": "The return request is cancelled. Review the actual unused materials and request a new return from the order if still needed."},
+  material_return_not_found: {"es": "Esta devolución ya no está disponible en la empresa activa. Actualiza las devoluciones pendientes en Almacenes → Movimientos.", "en": "This return is unavailable in the active company. Refresh pending returns in Inventory → Movements."},
+  material_return_dependency_unavailable: {"es": "No fue posible confirmar el paso con la orden de origen. Almacén debe actualizar Devoluciones en Movimientos y reintentar la conciliación; el sistema conserva cualquier entrada ya registrada.", "en": "The originating order could not confirm this step. Warehouse must refresh Returns in Movements and retry reconciliation; any recorded entry is preserved."},
+  order_line_not_ready_for_delivery: {"es": "No se puede entregar esta partida: falta surtido confirmado. Ventas debe revisar el pedido y sus reservas en Pedidos. Las solicitudes pendientes de Producción aún no pueden pasar a entrega.", "en": "This line cannot be delivered: confirmed fulfillment is missing. Sales must review the order and its reservations in Orders. Pending Production requests cannot proceed to delivery yet."},
+  material_return_terminal_order_required: {"es": "No se solicitó la devolución: primero termina o cancela la orden de producción, o resuelve/cancela el mantenimiento. Después solicita devolver el sobrante desde la orden; Almacén confirmará su entrada en Movimientos.", "en": "The return was not requested: first complete or cancel production, or resolve/cancel maintenance. Then request return of unused materials from the order; Warehouse confirms their entry in Movements."},
+  material_return_quantity_exceeded: {"es": "La cantidad excede lo entregado que todavía puede devolverse. Revisa las devoluciones ya recibidas y las solicitudes pendientes en Movimientos antes de registrar otra.", "en": "The quantity exceeds issued materials still available for return. Review received returns and pending requests in Movements before recording another."},
+  material_return_source_invalid: {"es": "No se identificó una salida de materiales de esta orden. Revisa la entrega confirmada por Almacén antes de solicitar la devolución.", "en": "An issued material movement for this order could not be identified. Review the Warehouse-confirmed issue before requesting a return."},
+  material_return_receipt_required: {"es": "La devolución todavía no tiene una recepción física confirmada. Almacén debe recibirla desde Almacenes → Movimientos → Devoluciones de materiales por recibir.", "en": "The return has no confirmed physical receipt yet. Warehouse must receive it in Inventory → Movements → Material returns awaiting receipt."},
+  production_creation_recovery_pending: {"es": "La orden no pudo crearse y quedaron reservas por recuperar. En Producción → Órdenes, usa Recuperar reservas en la sección de creaciones pendientes. Cuando termine, vuelve a crear la orden.", "en": "The order could not be created and reservations still need recovery. In Production → Orders, use Recover reservations in the pending creations section. Once complete, create the order again."},
+  production_creation_attempt_failed: {"es": "Este intento de creación ya falló. Recupera sus reservas pendientes en Producción → Órdenes y abre nuevamente Crear orden para iniciar otro intento.", "en": "This creation attempt has already failed. Recover its pending reservations in Production → Orders, then reopen Create order to start a new attempt."},
+  production_creation_recovery_not_allowed: {"es": "Solo quien intentó crear la orden puede recuperar sus reservas fallidas. Pide a esa persona usar Recuperar reservas en Producción → Órdenes. No se cancelan órdenes existentes.", "en": "Only the person who attempted to create the order can recover its failed reservations. Ask that person to use Recover reservations in Production → Orders. Existing orders are not cancelled."},
+  production_creation_materials_already_issued: {"es": "Las reservas ya registran una salida física y no se pueden liberar automáticamente. Almacén debe revisar los movimientos vinculados antes de continuar con la recuperación.", "en": "The reservations already have a physical issue and cannot be released automatically. Warehouse must review the linked movements before continuing recovery."},
+
+  sales_responsible_invalid: {"es": "No se continuó la operación: el responsable ya no está activo o su puesto no está habilitado. RH debe revisar el expediente en Recursos humanos → Trabajadores; después vuelve a Ventas e intenta nuevamente.", "en": "The operation did not continue: the owner is no longer active or their position is not enabled. HR must review the record in Human resources → Workers; then return to Sales and try again."},
+  transfer_return_already_requested: {"es": "La devolución del saldo ya fue solicitada. Espera la recepción física y pide al almacén de origen confirmarla desde Transferencias en tránsito.", "en": "Return of the remainder was already requested. Wait for physical receipt and ask the origin warehouse to confirm it in Transfers in transit."},
+  transfer_return_request_required: {"es": "Antes de recibir una devolución, el almacén destino debe solicitar el retorno del saldo en Transferencias en tránsito. Después el origen podrá confirmar lo recibido.", "en": "Before receiving a return, the destination must request return of the remainder in Transfers in transit. The origin can then confirm receipt."},
+  transfer_return_in_progress: {"es": "No se recibió en destino: ya se solicitó devolver el saldo al origen. El almacén de origen debe confirmar la devolución cuando reciba los bienes.", "en": "Destination receipt was not recorded: return of the remainder was already requested. The origin warehouse must confirm the return when the goods arrive."},
+  transfer_already_completed: {"es": "La transferencia ya no tiene saldo en tránsito. Actualiza Movimientos para consultar las recepciones o devoluciones confirmadas.", "en": "The transfer has no remaining quantity in transit. Refresh Movements to review confirmed receipts or returns."},
+  transfer_receipt_quantity_exceeded: {"es": "No se registró la recepción: indica una cantidad mayor a cero que no exceda el saldo en tránsito. Actualiza la transferencia para consultar el saldo y registra solo lo que llegó.", "en": "The receipt was not recorded: enter a positive quantity no greater than the quantity still in transit. Refresh the transfer to check the balance and record only what arrived."},
+  transfer_receiving_warehouse_required: {"es": "No se registró la recepción: debe confirmarse en el almacén indicado como destino. Para una devolución, debe confirmar el almacén de origen. Actualiza la transferencia y revisa ambos almacenes.", "en": "The receipt was not recorded: it must be confirmed at the designated destination. For a return, the origin warehouse must confirm. Refresh the transfer and check both warehouses."},
+  transfer_requires_receipt_or_return: {"es": "No se revirtió la transferencia: los bienes salieron del origen. Continúa en Almacenes → Movimientos → Transferencias en tránsito; el destino confirma la recepción o solicita devolver el saldo, y el origen confirma la devolución al recibirla.", "en": "The transfer was not reversed: the goods left the origin. Continue in Inventory → Movements → Transfers in transit; the destination confirms receipt or requests return of the remainder, and the origin confirms the return when received."},
+  movement_already_reversed: {"es": "El movimiento ya fue revertido. Actualiza Movimientos para consultar la corrección registrada; no necesitas repetirla.", "en": "The movement was already reversed. Refresh Movements to view the recorded correction; you do not need to repeat it."},
+  reversal_cannot_be_reversed: {"es": "Esta corrección ya compensa otro movimiento y no puede volver a revertirse. Revisa el movimiento original y registra una corrección nueva con Almacén si corresponde.", "en": "This correction already compensates another movement and cannot be reversed again. Review the original movement and record a new correction with Warehouse if appropriate."},
+  linked_movement_requires_return: {"es": "No se revirtió el movimiento porque está vinculado a una orden. Para sobrantes de Producción o Mantenimiento, solicita la devolución desde Órdenes y pide a Almacén recibirla en Movimientos. Para compras o ventas, solicita revisión del documento: la devolución comercial aún no está disponible.", "en": "The movement was not reversed because it is linked to an order. For unused Production or Maintenance materials, request a return from Orders and ask Warehouse to receive it in Movements. For purchases or sales, request a document review: commercial returns are not yet available."},
+  sales_warehouse_dispatch_required: {"es": "La entrega sigue pendiente de salida. Almacén debe ir a Almacenes → Movimientos → Salidas de pedidos de venta y confirmar la entrega física de los productos. Después Ventas mostrará el pedido actualizado.", "en": "The delivery is awaiting dispatch. Warehouse must go to Inventory → Movements → Sales order dispatches and confirm the physical product handoff. Sales will then show the updated order."},
+  purchased_service_requester_required: {"es": "No se aceptó el servicio: debe confirmarlo quien creó la requisición. Si fue una compra directa, lo confirma quien creó la orden de compra. Esa persona encontrará la tarea en Compras → Requisiciones u Órdenes de compra.", "en": "The service was not accepted: the requisition creator must confirm it. For a direct purchase, the purchase order creator confirms it. That person will find the task in Purchasing → Requisitions or Purchase orders."},
+  purchase_warehouse_receipt_required: {"es": "La recepción sigue pendiente. Almacén debe ir a Almacenes → Movimientos → Recepciones de compras pendientes y confirmar los bienes recibidos. Compras prepara la solicitud; los servicios los acepta el solicitante en Compras.", "en": "The receipt is still pending. Warehouse must go to Inventory → Movements → Pending purchase receipts and confirm the goods received. Purchasing prepares the request; services are accepted by their requester in Purchasing."},
+  production_execution_worker_not_eligible: {"es": "No se inició ni reanudó la orden: el responsable o un encargado de fase ya no está habilitado para producción. RH debe revisar que el trabajador y su puesto estén activos y sean elegibles en Recursos humanos → Trabajadores; después vuelve a intentar.", "en": "The order was not started or resumed: the owner or a phase assignee is no longer eligible for production. HR must check the worker and position are active and eligible in Human resources → Workers, then try again."},
+  production_machine_unavailable: {"es": "No se inició ni reanudó la orden: una máquina asignada está inactiva. Producción debe revisar su disponibilidad en Maquinaria antes de volver a intentar.", "en": "The order was not started or resumed: an assigned machine is inactive. Production must review its availability in Machinery before trying again."},
+  machine_maintenance_release_required: {"es": "No se cambió la máquina: tiene un mantenimiento abierto. Mantenimiento debe resolver o cancelar esa orden para liberarla. Después podrás cambiar su estatus desde Producción → Maquinaria.", "en": "The machine was not changed: it has an open maintenance order. Maintenance must resolve or cancel that order to release it. You can then change its status in Production → Machinery."},
+  production_machine_maintenance_required: {"es": "No se inició ni reanudó la orden: una máquina sigue bloqueada por Mantenimiento. Pide a Mantenimiento resolver la orden y liberar la máquina; después vuelve a Producción → Órdenes para iniciar o reanudar.", "en": "The order was not started or resumed: a machine is still blocked by Maintenance. Ask Maintenance to resolve its order and release the machine, then return to Production → Orders to start or resume."},
   network_unavailable: {
     es: "No pudimos comunicarnos con {service}. Comprueba que el servicio esté disponible y vuelve a intentar.",
     en: "We could not reach {service}. Check that the service is available and try again."
@@ -91,14 +239,9 @@ const ERROR_MESSAGES = Object.freeze({
     es: "No se puede iniciar la orden: faltan reservas vigentes de materia prima. Revisa disponibilidad y vuelve a liberar la orden.",
     en: "The order cannot start: active raw-material reservations are missing. Review availability and release the order again."
   },
-  material_consumption_required: {
-    es: "No se puede continuar porque Almacenes no confirmó el consumo de todos los materiales reservados. Revisa los movimientos e intenta nuevamente.",
-    en: "The operation cannot continue because Inventory did not confirm consumption of all reserved materials. Review the movements and try again."
-  },
-  production_stages_incomplete: {
-    es: "No se puede terminar la orden: todas sus fases deben estar al 100%. Registra el avance pendiente y vuelve a intentar.",
-    en: "The order cannot be completed: every phase must be at 100%. Record the pending progress and try again."
-  },
+  production_material_issue_pending: {"es": "No se canceló la orden: Almacén tiene una entrega de materiales sin terminar de confirmar. Debe continuar la misma solicitud en Almacenes → Movimientos → Solicitudes de materiales para producción. Después podrás cancelar y tramitar la devolución de lo entregado.", "en": "The order was not cancelled: Warehouse has a material issue whose confirmation is incomplete. Continue the same request in Inventory → Movements → Production material requests. You can then cancel and request return of issued materials."},
+  material_consumption_required: {"es": "No se cambió el estatus de la orden: falta la salida completa de sus materiales. Pide a Almacén ir a Almacenes → Movimientos → Solicitudes de materiales para producción y seleccionar Autorizar y entregar. Después vuelve a Producción → Órdenes e intenta el cambio.", "en": "The order status was not changed: its materials have not all been issued. Ask Warehouse to go to Inventory → Movements → Production material requests and select Authorize and issue. Then return to Production → Orders and retry the status change."},
+  production_stages_incomplete: {"es": "No se avanzó la orden a validación o terminación: hay fases pendientes. Producción debe registrar 100% de avance y terminar u omitir cada fase en la orden. Después podrá validar y terminar la orden.", "en": "The order was not moved to validation or completion: phases are pending. Production must record 100% progress and complete or skip each phase on the order. It can then validate and complete the order."},
   resources_unavailable: {
     es: "La disponibilidad cambió y la orden ya no puede liberarse con estos recursos. Valida nuevamente materiales, personal y maquinaria.",
     en: "Availability changed and the order can no longer be released with these resources. Validate materials, workers, and machinery again."
@@ -107,10 +250,7 @@ const ERROR_MESSAGES = Object.freeze({
     es: "La fecha requerida queda antes del fin calculado. Amplía la fecha requerida o ajusta la duración y los recursos.",
     en: "The required date is before the calculated completion date. Extend the required date or adjust duration and resources."
   },
-  production_order_must_be_in_progress: {
-    es: "No se puede actualizar la fase porque la orden todavía no está en producción. Inicia la orden y vuelve a intentar.",
-    en: "The phase cannot be updated because the order is not in production yet. Start the order and try again."
-  },
+  production_order_must_be_in_progress: {"es": "No se inició ni terminó la fase: primero debe estar trabajando la orden. Pide a Almacén confirmar sus materiales en Movimientos; después inicia o reanuda la orden en Producción → Órdenes y vuelve a la fase.", "en": "The phase was not started or completed: its order must be running first. Ask Warehouse to confirm its materials in Movements, then start or resume the order in Production → Orders and return to the phase."},
   terminal_stage_requires_full_progress: {
     es: "Una fase terminada debe conservar 100% de avance. Corrige el porcentaje o selecciona otro estado.",
     en: "A completed phase must remain at 100% progress. Correct the percentage or select another status."
@@ -183,18 +323,9 @@ const ERROR_MESSAGES = Object.freeze({
     es: "La cantidad recibida excede el saldo pendiente de la orden. Corrige la cantidad de la partida.",
     en: "The received quantity exceeds the remaining order balance. Correct the line quantity."
   },
-  maintenance_resolution_evidence_required: {
-    es: "No se puede resolver la orden: completa Diagnóstico, Trabajo realizado y Verificación.",
-    en: "The order cannot be resolved: complete Diagnosis, Work performed, and Verification."
-  },
-  maintenance_time_required: {
-    es: "Registra al menos una entrada de tiempo antes de resolver la orden.",
-    en: "Record at least one time entry before resolving the order."
-  },
-  maintenance_materials_not_reconciled: {
-    es: "No se puede resolver la orden mientras existan solicitudes de refacciones sin emitir, cancelar o conciliar.",
-    en: "The order cannot be resolved while spare-parts requests remain unissued, uncancelled, or unreconciled."
-  },
+  maintenance_resolution_evidence_required: {"es": "No se resolvió el mantenimiento: faltan los datos del trabajo. El técnico debe completar Diagnóstico, Trabajo realizado y Verificación en la orden de Mantenimiento y volver a seleccionar Resolver.", "en": "Maintenance was not resolved: work details are missing. The technician must complete Diagnosis, Work performed, and Verification on the Maintenance order, then select Resolve again."},
+  maintenance_time_required: {"es": "No se resolvió el mantenimiento: falta registrar tiempo trabajado. El técnico asignado debe agregar al menos una entrada de tiempo en la orden de Mantenimiento y después volver a seleccionar Resolver.", "en": "Maintenance was not resolved: worked time is missing. The assigned technician must add at least one time entry to the Maintenance order, then select Resolve again."},
+  maintenance_materials_not_reconciled: {"es": "No se resolvió el mantenimiento: hay refacciones sin entrega confirmada. Almacén debe atender la solicitud en Almacenes → Movimientos → Solicitudes de refacciones. Si ya no se necesitan, cancela la solicitud pendiente en Mantenimiento; después vuelve a resolver la orden.", "en": "Maintenance was not resolved: some spare parts have no confirmed issue. Warehouse must process the request in Inventory → Movements → Spare-parts requests. If they are no longer needed, cancel the pending request in Maintenance, then resolve the order again."},
   maintenance_integration_pending: {
     es: "Hay una operación externa pendiente. Concíliala antes de cambiar el estatus de mantenimiento.",
     en: "An external operation is pending. Reconcile it before changing the maintenance status."
@@ -262,6 +393,10 @@ const ERROR_MESSAGES = Object.freeze({
   incomplete_billing_profile: {
     es: "El perfil fiscal está incompleto. Completa juntos los datos de facturación requeridos.",
     en: "The billing profile is incomplete. Complete the required billing fields together."
+  },
+  material_request_not_issuable: {
+    es: "La solicitud no está lista para entregar. Actualiza la lista y verifica que Mantenimiento haya completado la reserva.",
+    en: "The request is not ready for delivery. Refresh the list and check that Maintenance has completed the reservation."
   },
   purchase_unit_not_found: {
     es: "No se cambió el documento: la unidad no está activa en Administración. Revisa el catálogo de unidades y vuelve a intentar.",
@@ -376,6 +511,10 @@ export function getLocalizedErrorMessage(error, options = {}) {
   const definition = ERROR_MESSAGES[code];
   const service = error?.details?.service || error?.payload?.error?.details?.service || options.service || (lang === "en" ? "the service" : "el servicio");
   let message = firebaseMessage || (definition ? interpolate(definition[lang], { service }) : "");
+  const details=error?.details||error?.payload?.error?.details||{};
+  const transition=["invalid_order_transition","invalid_status_transition","invalid_requisition_transition","invalid_maintenance_transition","service_order_transition_invalid"].includes(code);
+  const guidance=transition?TRANSITION_GUIDANCE[details.workflow]?.[details.requested_status]?.[lang]:null;
+  if(guidance)message=(lang==="en"?"The status was not changed. ":"No se cambió el estatus. ")+guidance;
 
   if (!message && error?.name !== "ErclaveApiError" && options.fallback) message = options.fallback;
   if (!message) message = genericMessage(code, status, lang);

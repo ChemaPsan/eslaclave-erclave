@@ -480,3 +480,8 @@ Ya estan implementados la definicion canonica, agentes transversales, separacion
 ## 18. Criterio de mantenimiento
 
 Toda modificacion de ambientes debe actualizar este documento, agentes, skills, validadores, runbooks y trazabilidad en el mismo corte; Produccion continúa bloqueada hasta autorizacion explicita y certificacion completa.
+
+
+## Candidato de continuidad CHG-269
+
+CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
