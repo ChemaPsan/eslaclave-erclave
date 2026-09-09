@@ -4,6 +4,7 @@ const errors = [];
 const catalogSource = readText("frontend/i18n/api-errors.js");
 const clientSource = readText("frontend/api/client.js");
 const appSource = readText("frontend/app.js");
+const featureSource = readText("frontend/features/error-feedback.js");
 const backofficeSource = readText("frontend/backoffice/app.js");
 const backofficeMarkup = readText("frontend/backoffice/index.html");
 const stylesSource = readText("frontend/styles.css");
@@ -46,7 +47,7 @@ if (clientSource.includes('payload?.error?.message || `API request failed')) {
 
 const requiredAppTokens = [
   "function showApiError(",
-  "getApiErrorTone(error)",
+  "errorFeedback.show(error, fallback)",
   'toast.dataset.tone = tone',
   'tone === "danger" ? "alert" : "status"',
   "function renderModuleLoadError(",
@@ -68,6 +69,12 @@ if (/state\.(productionApi|hrApi|salesApi|inventoryApi)\.error}<\/p>/.test(appSo
 }
 if (/error\.message\s*\|\|/.test(backofficeSource)) {
   errors.push("frontend/backoffice/app.js: raw runtime/backend messages must use the localized resolver.");
+}
+if (/error\.message|reason\?\.message/.test(appSource)) {
+  errors.push("frontend/app.js: raw runtime/backend messages must use the shared error feedback feature.");
+}
+for (const token of ["getLocalizedErrorMessage", "getApiErrorTone", "function createErrorFeedback"]) {
+  if (!featureSource.includes(token)) errors.push(`frontend/features/error-feedback.js: missing '${token}'.`);
 }
 if (!backofficeMarkup.includes("app.js?v=20260827-chg251-error-feedback")) {
   errors.push("frontend/backoffice/index.html: the cachebuster must expose CHG-251 error localization.");

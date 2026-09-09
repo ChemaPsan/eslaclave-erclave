@@ -97,3 +97,22 @@ En cada tamano se repite con guia abierta/cerrada, alertas presentes/ausentes, r
 No existe scroll horizontal de pagina, superposicion, texto esencial cortado, foco invisible, control inaccesible, accion fuera de pantalla ni cambio de significado entre layouts. Si una tabla usa scroll horizontal, solo su region puede desplazarse.
 
 La evidencia minima incluye capturas de estados amplio, intermedio y estrecho, navegacion por teclado y navegador probado. Una excepcion documenta motivo, alcance, alternativa accesible y deuda de seguimiento.
+
+
+## Ajustes UAT Local CHG-266
+
+Excepciones acotadas: production-orders-layout y purchasing-requisitions-layout apilan el riel bajo 720 px de module-panel. Control de orden pertenece al contenido principal, nunca al contenedor colapsable. Requisiciones usa el ancho de su formulario y Proveedores el del modal. Se verifican ES/EN y contenedores estrechos dentro de viewport ancho. La composición compartida fuera de estas clases no cambia.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Solicitudes compactas Local CHG-267
+
+El bloque .warehouse-pending de Movimientos usa details/summary nativo y container query de 520 px, sin cambiar el riel global. El aviso se entiende por texto/icono además de color; las solicitudes no desplazan el historial al entrar. Se valida teclado y ES/EN en paneles reales de 1100/520/360 px.
+
+Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.
+
+
+## Mantenimiento CHG-268
+
+La clase explícita `.maintenance-workspace` apila guía y contenido cuando el contenedor module-panel mide hasta 850 px. Las acciones y partidas permiten texto completo sin desbordar. Mantiene el patrón de otros módulos. Validación ES/EN con panel de 520 px.

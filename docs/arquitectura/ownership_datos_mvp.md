@@ -1,5 +1,13 @@
 # ERClave - Ownership de datos y contratos MVP
 
+## Entrega previa de materiales CHG-264
+
+CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+
+## Entrega de refacciones Local CHG-263
+
+La UI de Almacenes compone en Movimientos una proyeccion minima de solicitudes pertenecientes a Maintenance. La confirmacion/rechazo del almacenista entra al servicio propietario de la solicitud con su permiso Inventory; Maintenance orquesta los comandos HTTP de Inventory, sin escribir su schema. Inventory conserva stock, costo, reserva y salida; Maintenance conserva estado de solicitud, IDs de movimientos y auditoria del actor, receptor y motivo. La resolucion tecnica queda separada del movimiento fisico.
+
 ## 1. Objetivo
 
 Este documento define quien es dueno de cada dato del MVP real de ERClave y que contratos deben usar los modulos para comunicarse sin escribir informacion ajena.
@@ -44,9 +52,9 @@ Complemento recomendado:
 | `admin-service` | Administracion | Tenants, usuarios, roles, permisos, unidades de negocio, modulos activos y configuracion por tenant. |
 | `production-service` | Produccion | Productos/servicios, recetas, versiones de receta, recursos productivos, maquinaria, ordenes y avance por etapas. |
 | `inventory-service` | Almacenes | Almacenes, articulos inventariables, ubicaciones, movimientos, existencias, kardex, reservas y valuacion de materiales. |
-| `sales-service` | Ventas | Local real: clientes, contactos, cotizaciones, pedidos, surtido y entregas. Devoluciones permanecen planeadas. |
-| `purchasing-service` | Compras | Local: proveedores, requisiciones, ordenes, recepciones comerciales y reconciliacion con entradas de Inventory. |
-| `maintenance-service` | Mantenimiento (Local) | Ordenes correctivas, asignaciones, tiempos, solicitudes internas de refacciones y estado de sus efectos. |
+| `sales-service` | Ventas | Local y QA: clientes, contactos, cotizaciones, pedidos, surtido y entregas. Local CHG-255 agrega Ordenes de servicio; devoluciones permanecen planeadas. |
+| `purchasing-service` | Compras | Local y QA: proveedores, requisiciones, ordenes, recepciones comerciales y reconciliacion con Inventory; Local CHG-255 agrega servicios sin movimiento fisico. |
+| `maintenance-service` | Mantenimiento | Local y QA: ordenes correctivas, asignaciones, tiempos, solicitudes internas de refacciones y estado de sus efectos. |
 | `billing-service` | Billing / SaaS | Planes comerciales, suscripciones, eventos de pago, activaciones manuales y estado de cobro. |
 | `provisioning-service` | Provisioning | Orquestacion de alta de tenant, activacion de modulos e invitacion del administrador inicial. |
 | `integration-service` | Integraciones | Clientes API, scopes, cuotas, llaves, uso de API y politicas de integracion. |
@@ -340,7 +348,7 @@ Reglas:
 - Produccion no descuenta inventario.
 - Almacenes no decide si una orden se libera; solo responde disponibilidad o registra movimientos solicitados.
 - Toda solicitud debe incluir `source`, `source_id` e idempotency key.
-- La primera entrada de la orden a `in_progress` solicita el consumo de cada reserva; Inventory conserva ownership, usa el almacen de esa reserva y crea una sola salida inmutable. Reanudar o completar no repite la solicitud.
+- Almacen confirma el consumo de cada reserva desde Movimientos antes de `in_progress`; Inventory conserva ownership, usa el almacen de esa reserva y crea una sola salida inmutable. Iniciar, reanudar o completar no consume.
 
 ### 6.4 Ventas y Produccion
 
@@ -594,3 +602,10 @@ docs/arquitectura/apis_mvp.md
 ```
 
 Estado: definido en `docs/arquitectura/apis_mvp.md`.
+
+
+## Flujo operativo Local CHG-265
+
+Inventory posee transfers, material_returns y reservation_source_rollbacks. Production posee failed_order_creations y material_return_adjustments; Maintenance posee su propia material_return_adjustments; Purchasing conserva receipt/receipt_lines con confirmación por actor. Comunicación de validación/conciliación mediante HTTP, sin FK ni escritura entre schemas.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.

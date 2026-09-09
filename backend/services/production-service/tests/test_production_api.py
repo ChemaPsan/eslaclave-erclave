@@ -42,6 +42,8 @@ PRODUCT_SERVICE_ID = "prs_demo"
 
 
 class FakeProductionRepository:
+    def require_new_creation_attempt(self,*args):pass
+    def material_command_lock(self,*args):return __import__("contextlib").nullcontext()
     def list_product_services(self, tenant_id: str, limit: int = 50, status: str | None = None, q: str | None = None, type_: str | None = None, inventory_mapping: str | None = None):
         if tenant_id != TENANT_ID:
             return []
@@ -203,9 +205,9 @@ class FakeProductionRepository:
     def preview_resources(self,tenant_id,payload,observations):return self._validation() if tenant_id==TENANT_ID else None
 
     def _stage(self, status="pending", progress=0):
-        return ProductionOrderStageRead(id="ost_demo",recipe_stage_id="rst_demo",name="Mezclar",sort_order=1,weight_percent=100,status=status,planned_minutes=10,responsible_name="Ana",progress_percent=progress)
+        return ProductionOrderStageRead(id="ost_demo",recipe_stage_id="rst_demo",name="Mezclar",sort_order=1,weight_percent=100,status=status,planned_minutes=10,responsible_name="Ana",responsible_worker_id="hrw_demo",progress_percent=progress)
     def _order(self, status="released"):
-        return ProductionOrderRead(id="ord_demo",code="OP-001",product_service_id=PRODUCT_SERVICE_ID,recipe_id="rec_demo",recipe_version_id="rcv_demo",quantity=2,unit="pza",status=status,priority="medium",responsible_name="Ana",source_type="manual",planned_cost=4,recipe_snapshot={},resource_validation_snapshot={},stages=[self._stage()],created_at=datetime.now(timezone.utc))
+        return ProductionOrderRead(id="ord_demo",code="OP-001",product_service_id=PRODUCT_SERVICE_ID,recipe_id="rec_demo",recipe_version_id="rcv_demo",quantity=2,unit="pza",status=status,priority="medium",responsible_name="Ana",responsible_worker_id="hrw_demo",source_type="manual",planned_cost=4,recipe_snapshot={},resource_validation_snapshot={},stages=[self._stage()],created_at=datetime.now(timezone.utc))
     def list_orders(self, tenant_id, limit=50, status=None): return [self._order()] if tenant_id == TENANT_ID else []
     def get_order(self, tenant_id, order_id): return self._order() if tenant_id == TENANT_ID and order_id == "ord_demo" else None
     def preflight_order_status(self,tenant_id,order_id,target_status):return self.get_order(tenant_id,order_id)
@@ -352,7 +354,7 @@ def test_order_rejects_required_date_before_planned_end():
     assert response.json()["error"]["code"]=="required_date_precedes_planned_end"
 
 
-def test_first_start_consumes_material_reservations_with_stable_key():
+def test_start_never_consumes_material_reservations():
     material=ProductionOrderResourceRead(id="por_material",resource_type="material",resource_ref_id="itm_demo",resource_code="MAT-1",resource_name="Material",unit="PZA",planned_quantity=2,unit_cost=3,planned_cost=6,reservation_ref_id="res_demo",reservation_ref_ids=["res_demo"])
 
     class MaterialOrderRepository(FakeProductionRepository):
@@ -374,8 +376,8 @@ def test_first_start_consumes_material_reservations_with_stable_key():
     app.dependency_overrides[api_module.get_resource_authority_client]=lambda:spy
     response=client.patch("/v1/production/orders/ord_demo/status",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"start-materials-test"},json={"status":"in_progress","reason":"Inicio autorizado"})
     assert response.status_code==200
-    assert spy.actions==[("res_demo","consume","production-order-ord_demo-material-start")]
-    assert repository.received_actuals=={"res_demo":{"quantity":2.0,"cost":6.0}}
+    assert spy.actions==[]
+    assert repository.received_actuals=={}
 
 
 def test_resume_completion_and_post_start_cancellation_do_not_issue_materials_again():
@@ -392,13 +394,36 @@ def test_resume_completion_and_post_start_cancellation_do_not_issue_materials_ag
         def __init__(self):self.actions=[]
         def reservation_action(self,*args,**kwargs):self.actions.append((args,kwargs));return {"quantity":2,"unit_cost":3}
 
-    for source,target in (("paused","in_progress"),("in_validation","completed"),("in_progress","cancelled")):
+    for source,target in (("paused","in_progress"),("in_validation","completed"),("in_progress","cancelled"),("released","cancelled")):
         spy=ReservationSpy();client=client_with_fake_repo()
         app.dependency_overrides[get_production_repository]=lambda source=source,target=target:ExistingIssueRepository(source,target)
         app.dependency_overrides[api_module.get_resource_authority_client]=lambda spy=spy:spy
         response=client.patch("/v1/production/orders/ord_demo/status",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":f"no-double-{source}-{target}"},json={"status":target,"reason":"Continuidad operativa"})
         assert response.status_code==200
         assert spy.actions==[]
+
+
+def test_warehouse_queue_requires_warehouse_read_and_both_modules():
+    class Queue(FakeProductionRepository):
+        def list_warehouse_material_requests(self,t,limit,offset):
+            assert t==TENANT_ID and limit==25 and offset==25
+            return {"data":[],"page":{"limit":limit,"offset":offset,"has_more":False}}
+    for permissions,modules,expected in [
+        (["inventory.movement.read"],["production","inventory"],200),
+        (["production.order.read"],["production","inventory"],403),
+        (["inventory.movement.read"],["production"],403)]:
+        client=firebase_client(permissions,modules)
+        app.dependency_overrides[get_production_repository]=lambda:Queue()
+        assert client.get("/v1/production/warehouse-material-requests?offset=25",headers={"X-Tenant-Id":TENANT_ID,"Authorization":"Bearer test"}).status_code==expected
+
+
+def test_production_start_permission_cannot_authorize_warehouse_issue():
+    client=firebase_client(["production.order.start"],["production","inventory"])
+    response=client.post("/v1/production/orders/ord_demo/issue-materials",headers={"X-Tenant-Id":TENANT_ID,"Authorization":"Bearer test","Idempotency-Key":"issue-no-permission"})
+    assert response.status_code==403
+    client=firebase_client(["inventory.movement.create"],["production","inventory"])
+    response=client.post("/v1/production/orders/ord_demo/issue-materials",headers={"X-Tenant-Id":TENANT_ID,"Authorization":"Bearer test","Idempotency-Key":"issue-extra-payload"},json={"quantity":1})
+    assert response.status_code==422
 
 
 def test_waiting_resources_order_can_start_but_cannot_skip_to_validation():

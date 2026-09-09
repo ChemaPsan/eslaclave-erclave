@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import NullPool
 
 from app.repositories import (
     AdminRepository,
@@ -29,7 +30,7 @@ class TransactionEngine:
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_role_permission_replace_is_tenant_safe_idempotent_and_revision_guarded():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"])
+    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:
@@ -209,7 +210,7 @@ def test_role_permission_replace_is_tenant_safe_idempotent_and_revision_guarded(
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_unit_commands_are_tenant_safe_idempotent_and_audited():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"])
+    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:
@@ -242,7 +243,7 @@ def test_unit_commands_are_tenant_safe_idempotent_and_audited():
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_backoffice_entitlement_and_tenant_preference_are_separate_tenant_safe_commands():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"])
+    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:
@@ -278,6 +279,14 @@ def test_backoffice_entitlement_and_tenant_preference_are_separate_tenant_safe_c
             assert granted.tenant_enabled is True
             assert granted.effective_active is True
             assert repository.list_entitlements(other_tenant.id) == []
+
+            purchasing = repository.set_backoffice_entitlement(
+                tenant.id, "purchasing", "active", {}, "manual",
+                f"grant-purchasing-{suffix}", f"test-{suffix}",
+            )
+            assert purchasing is not None
+            assert purchasing.effective_active is True
+            assert not any(item.module_code == "inventory" for item in repository.list_entitlements(tenant.id))
 
             with pytest.raises(ValueError, match="module_dependencies_required:hr"):
                 repository.set_backoffice_entitlement(
@@ -343,7 +352,7 @@ def test_backoffice_entitlement_and_tenant_preference_are_separate_tenant_safe_c
             assert connection.execute(
                 text("select count(*) from admin.audit_events where tenant_id=:tenant_id and action like '%entitlement%'") ,
                 {"tenant_id": tenant.id},
-            ).scalar_one() == 6
+            ).scalar_one() == 7
         finally:
             transaction.rollback()
             engine.dispose()
@@ -351,7 +360,7 @@ def test_backoffice_entitlement_and_tenant_preference_are_separate_tenant_safe_c
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_onboarding_assigns_owner_permissions_after_modules_are_created():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"])
+    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:

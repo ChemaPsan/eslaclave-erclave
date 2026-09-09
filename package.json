@@ -27,10 +27,17 @@
     "validate:traceability": "node tools/validators/validate-traceability.js",
     "validate:syntax": "node tools/validators/validate-syntax.js",
     "verify": "node tools/verify.js",
+    "verify:postgres": "node tools/verify-postgres.js",
+    "verify:local": "node tools/verify-local.js",
+    "test:e2e:local": "playwright test",
+    "test:e2e:local:headed": "playwright test --headed",
     "traceability:draft": "node tools/traceability-draft.js",
     "session:context": "node tools/session-context.js",
     "build:frontend:qa": "node tools/build-qa-frontend.js",
     "qa:document": "python tools/generate-qa-document.py",
     "smoke:maintenance:local": "backend\\.venv\\Scripts\\python.exe backend\\scripts\\smoke_maintenance_local.py"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
   }
 }

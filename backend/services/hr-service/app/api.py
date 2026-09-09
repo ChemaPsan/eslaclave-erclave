@@ -1,10 +1,19 @@
 import hashlib,json
+from typing import Literal
 from fastapi import APIRouter,Depends,Header
 from erclave_common.errors import ErclaveError
+from erclave_common.csv_reports import csv_report_response
 from .authorization import AuthorizedContext,require_hr_access
 from .repositories import HrRepository,get_hr_repository
+from .reports import REPORT_PERMISSIONS,build_report
 from .schemas import *
 router=APIRouter(prefix="/v1/hr",tags=["hr"])
+@router.get("/reports/{report_code}/export")
+def export_report(report_code:str,lang:Literal["es","en"]="es",status:str|None=None,area_id:str|None=None,position_id:str|None=None,eligibility:str|None=None,purpose:str|None=None,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:HrRepository=Depends(get_hr_repository),access:AuthorizedContext=Depends(require_hr_access(tuple(REPORT_PERMISSIONS.values())))):
+    permission=REPORT_PERMISSIONS.get(report_code)
+    if not permission:raise ErclaveError("report_not_found","HR report does not exist.",status_code=404)
+    access.require(permission)
+    return csv_report_response(build_report(repository,tenant(x_tenant_id),report_code,{"status":status,"area_id":area_id,"position_id":position_id,"eligibility":eligibility,"purpose":purpose}),lang)
 def tenant(v):
     if not v:raise ErclaveError("tenant_required","X-Tenant-Id header is required.",status_code=400)
     return v
@@ -52,11 +61,11 @@ def update_position(position_id:str,payload:RoleUpdate,x_tenant_id:str|None=Head
 @router.get("/workers",response_model=WorkerListResponse)
 def workers(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),position_id:str|None=None,production_only:bool=False,active_only:bool=False,repository:HrRepository=Depends(get_hr_repository),_=Depends(require_hr_access("hr.worker.read"))):return WorkerListResponse(data=repository.list_workers(tenant(x_tenant_id),position_id,production_only,active_only))
 @router.get("/workers/production-eligible",response_model=WorkerListResponse)
-def production_workers(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:HrRepository=Depends(get_hr_repository),_=Depends(require_hr_access("production.order.release"))):return WorkerListResponse(data=repository.list_workers(tenant(x_tenant_id),production_only=True))
+def production_workers(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:HrRepository=Depends(get_hr_repository),_=Depends(require_hr_access(("production.order.release","production.order.start","production.order.resume")))):return WorkerListResponse(data=repository.list_workers(tenant(x_tenant_id),production_only=True))
 @router.get("/workers/maintenance-eligible",response_model=WorkerListResponse)
-def maintenance_workers(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:HrRepository=Depends(get_hr_repository),_=Depends(require_hr_access(("maintenance.order.assign","maintenance.order.start","maintenance.time.create")))):return WorkerListResponse(data=repository.list_workers(tenant(x_tenant_id),maintenance_only=True))
+def maintenance_workers(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:HrRepository=Depends(get_hr_repository),_=Depends(require_hr_access(("maintenance.order.assign","maintenance.order.start","maintenance.order.resume","maintenance.order.reopen","maintenance.time.create")))):return WorkerListResponse(data=repository.list_workers(tenant(x_tenant_id),maintenance_only=True))
 @router.get("/workers/sales-eligible",response_model=SalesEligibleWorkerListResponse)
-def sales_workers(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:HrRepository=Depends(get_hr_repository),_=Depends(require_hr_access(("sales.customer.create","sales.customer.update","sales.quote.create","sales.quote.update")))):return SalesEligibleWorkerListResponse(data=repository.list_sales_eligible_workers(tenant(x_tenant_id)))
+def sales_workers(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:HrRepository=Depends(get_hr_repository),_=Depends(require_hr_access(("sales.customer.create","sales.customer.update","sales.quote.create","sales.quote.update","sales.quote.submit","sales.quote.approve","sales.order.create","sales.service_order.assign","sales.service_order.start","sales.service_order.resume","sales.service_order.time.create")))):return SalesEligibleWorkerListResponse(data=repository.list_sales_eligible_workers(tenant(x_tenant_id)))
 @router.get("/production-capacity",response_model=ProductionCapacityListResponse)
 def production_capacity(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:HrRepository=Depends(get_hr_repository),_=Depends(require_hr_access(("production.order.validate","production.order.release")))):return ProductionCapacityListResponse(data=repository.list_production_capacity(tenant(x_tenant_id)))
 @router.post("/workers",response_model=WorkerResponse,status_code=201)

@@ -1,12 +1,22 @@
 # Modulo 11 - Mantenimiento
 
-## Autorizacion operativa Local
+## Entrega por Almacen ? Local CHG-263
+
+Las solicitudes reservadas aparecen en **Almacenes > Movimientos > Solicitudes de refacciones**. El almacenista confirma la entrega completa o rechaza con motivo; Maintenance conserva solicitud, estado y auditoria, mientras Inventory escribe exclusivamente sus reservas y salidas. `issued` ahora significa entrega confirmada por el actor de Almacen. Resolver y conciliar la orden nunca consumen refacciones; se requiere que las solicitudes esten `issued|cancelled`.
+
+Una falla parcial de entrega queda durable como `needs_reconciliation/issue` y se reintenta desde Movimientos, no desde la conciliacion tecnica. Los estados `processing/issue` tras una interrupcion tambien son recuperables. Las cancelaciones del tecnico comparten el lock de la solicitud con las entregas del almacenista. Detalle de permisos, compatibilidad y validacion: `docs/auditorias/refacciones_movimientos_2026-09-07.md`. Este comportamiento no esta desplegado en QA.
+
+## Coherencia de resolucion Local (CHG-262)
+
+Resolver y editar diagnostico mantienen permisos independientes. Un rol que solo puede resolver utiliza los campos ya persistidos sin enviar PATCH; si falta diagnostico, trabajo o verificacion se conserva el bloqueo del formulario/backend. Las lecturas opcionales de Produccion solo solicitan maquinas/ordenes con permisos efectivos y no dependen de recetas/productos. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+
+## Autorizacion operativa Local y QA
 
 Solicitar, asignar, iniciar, esperar refacciones, reanudar, resolver, cerrar, reabrir y cancelar son capacidades independientes `maintenance.order.*`. El backend selecciona la requerida desde la transicion recibida; un tecnico con permiso de iniciar no obtiene por ello permiso de resolver o cerrar.
 
 ## Estado y objetivo
 
-Estado: `implemented` en Local desde CHG-234 y endurecido en CHG-235 con la revision `20260824_0028`. El modulo puede activarse desde Backoffice y el tenant demo Local ya lo tiene habilitado; QA y Produccion no cambian.
+Estado: `implemented` en Local desde CHG-234 y endurecido en CHG-235 con la revision `20260824_0028`; el corte acumulado esta desplegado en QA dentro de la cabeza `20260825_0029`. Produccion no esta provisionada. La disponibilidad efectiva depende del entitlement y de datos funcionales autorizados del tenant.
 
 El modulo controlara mantenimiento correctivo desde el reporte de una falla hasta su cierre verificado, incluyendo responsable, tiempo real, diagnostico, trabajo realizado y refacciones. El primer corte implementable sera correctivo; planes preventivos, recurrencia, garantias y proveedores quedan para cortes posteriores.
 
@@ -118,7 +128,7 @@ Alternos:
 
 1. El tecnico crea una solicitud multi-linea contra un almacen de tipo estable `spare_parts`.
 2. Inventory valida articulo, unidad, almacen y disponibilidad; reserva sin permitir existencia negativa.
-3. Al resolver, cada reserva se consume en una salida inmutable con costo snapshot. La devolucion de sobrantes queda para el siguiente corte y nunca editara la salida.
+3. En Local CHG-263, Almacen confirma la entrega desde Movimientos; cada reserva se consume en una salida inmutable con costo snapshot. Resolver exige entrega o cancelacion previa. QA conserva el consumo al resolver hasta una promocion aprobada. CHG-265 agrega devolución confirmada de sobrantes sin editar la salida.
 4. Si falta material, la orden puede quedar `waiting_parts`. Elevar la necesidad a Compras sera una accion explicita futura, no automatica.
 
 ## Reglas criticas
@@ -174,7 +184,7 @@ MTBF queda pendiente hasta contar con horas reales de operacion; no se inferira 
 2. Diseñar Activos para equipos no productivos con identificador, serie, garantia e historial.
 3. Definir escalamiento explicito de faltantes hacia Compras.
 4. Definir anexos/fotografias con almacenamiento y retencion.
-5. Agregar reintento automatico programado de operaciones `needs_reconciliation` y devolucion de sobrantes; el reintento manual ya esta implementado.
+5. Agregar reintento automatico programado de operaciones `needs_reconciliation`; la devolución de sobrantes y el reintento manual ya esta implementado.
 6. Incorporar participantes secundarios, adjuntos y reportes analiticos dedicados.
 
 ## Ajuste de continuidad CHG-239
@@ -187,7 +197,7 @@ MTBF queda pendiente hasta contar con horas reales de operacion; no se inferira 
 ## Guias de flujo transversales CHG-248
 
 - Ordenes muestra el recorrido Reporte, Asignacion, Ejecucion y Cierre; el ultimo paso conserva la regla de liberar sin reanudar Produccion automaticamente.
-- Refacciones muestra Orden, Almacen, Reserva y Conciliacion, manteniendo Inventory como autoridad de almacenes, reservas y movimientos.
+- Refacciones muestra Orden, Almacen, Reserva y Entrega: el ultimo paso dirige a la confirmacion del almacenista desde Movimientos, manteniendo Inventory como autoridad.
 - Ambas rutas reutilizan el riel vertical colapsable estandar, con contenido equivalente ES/EN y reacomodo por ancho real del contenedor.
 - La guia es ayuda contextual: no sustituye permisos `maintenance.*`, validaciones backend, conciliacion durable ni evidencia tecnica de cierre.
 
@@ -195,3 +205,15 @@ MTBF queda pendiente hasta contar con horas reales de operacion; no se inferira 
 
 - La carga inicial de Mantenimiento repinta la interfaz al terminar sus consultas API, tanto si obtiene datos como si debe presentar un error recuperable.
 - El modulo no permanece indefinidamente en `Cargando Mantenimiento` despues de recibir la respuesta autoritativa de `maintenance-service`.
+
+
+## Confirmaciones y recuperaciones Local CHG-265
+
+Inicio, reanudación y reapertura revalidan elegibilidad RH. La máquina permanece bloqueada hasta liberación por Mantenimiento; no puede liberarse editando su estatus en Producción. Solicitudes resueltas/cerradas/canceladas con refacciones emitidas permiten solicitar devolución de sobrantes. Almacén confirma entrada; Mantenimiento registra cantidad/costo devuelto sin editar la salida. Una reapertura concurrente no impide conciliar una devolución ya recibida físicamente. Cancelar puede liberar reservas propias sin permiso de emitir refacciones.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+
+## Recuperación de refacciones Local CHG-268
+
+CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.

@@ -234,7 +234,7 @@ def list_units_of_measure(
     include_inactive: bool = Query(default=False),
     q: str | None = Query(default=None, max_length=120),
     x_tenant_id: str = Header(alias="X-Tenant-Id"),
-    _authorization: None = Depends(require_permission_for_header_tenant(("admin.unit.read", "sales.quote.create", "sales.quote.update"))),
+    _authorization: None = Depends(require_permission_for_header_tenant(("admin.unit.read", "sales.quote.create", "sales.quote.update", "purchasing.requisition.create", "purchasing.requisition.update", "purchasing.order.create", "purchasing.order.update", "purchasing.order.issue"))),
     repository: AdminRepository = Depends(get_admin_repository),
 ):
     return UnitOfMeasureListResponse(data=repository.list_units_of_measure(x_tenant_id, include_inactive=include_inactive, q=q))
@@ -244,7 +244,7 @@ def list_units_of_measure(
 def get_unit_of_measure(
     code: str,
     x_tenant_id: str = Header(alias="X-Tenant-Id"),
-    _authorization: None = Depends(require_permission_for_header_tenant(("admin.unit.read", "sales.quote.create", "sales.quote.update"))),
+    _authorization: None = Depends(require_permission_for_header_tenant(("admin.unit.read", "sales.quote.create", "sales.quote.update", "purchasing.requisition.create", "purchasing.requisition.update", "purchasing.order.create", "purchasing.order.update", "purchasing.order.issue"))),
     repository: AdminRepository = Depends(get_admin_repository),
 ):
     item = repository.get_unit_of_measure(x_tenant_id, code, active_only=True)

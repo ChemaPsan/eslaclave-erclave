@@ -63,3 +63,10 @@ La API mantiene hoy el límite preventivo de 200 en varios catálogos. Antes de 
 - El resultado debe mostrar una identidad comprensible; nunca un ID técnico aislado.
 - Cero coincidencias, registro inelegible y permiso faltante deben tener mensajes distintos.
 - El validador `npm.cmd run validate:selectors` protege la cobertura transversal existente.
+
+
+## Ajustes UAT Local CHG-266
+
+El selector de artículo en Requisiciones conserva búsqueda/ID estable; dispone de seis de doce columnas y toda la fila bajo 680 px del formulario. Bajo 380 px se apilan todos los campos. El select fuente invisible no debe aportar ancho o scroll al formulario. La matriz de referencias y las APIs no cambian.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.

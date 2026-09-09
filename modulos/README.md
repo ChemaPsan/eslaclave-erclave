@@ -51,11 +51,12 @@ Cada módulo deberá documentarse con una estructura similar:
 |---|---|
 | Produccion | API, persistencia y UI reales en Local y QA: recetas ponderadas, validacion autoritativa, reservas/consumo, capacidad comprometida, avance porcentual y recepcion posterior de producto terminado. |
 | Almacenes | Inventory real en Local y QA para almacenes, articulos, movimientos, existencias, Kardex, reservas/consumo, disponibilidad neta, valuacion, concurrencia y recepcion de producto terminado. |
-| Ventas | Backend y UI reales en Local y QA para Clientes, Cotizaciones, Pedidos y Entregas hasta `20260818_0020`, con mapeo producto-articulo, sanitizacion, costo por fuente y orquestacion concurrente/reconciliable. Devoluciones y facturacion permanecen `planned`. |
+| Ventas | Local aplica `20260901_0030` con Clientes, Cotizaciones, Pedidos, Entregas y Ordenes de servicio; QA conserva el corte certificado hasta `20260825_0029`, sin Ordenes de servicio. Devoluciones y facturacion permanecen `planned`. |
 | Administracion | UI y `admin-service` reales en QA para organizacion, usuarios, roles, permisos, entitlements, sesion y backoffice. |
 | Recursos Humanos | `hr-service`, schema, contrato, UI, expedientes, elegibilidad productiva y capacidad autoritativa reales en Local y QA. Los datos QA dependen de captura funcional autorizada; no se asumen catalogos vacios. |
-| Mantenimiento | Backend, schema, contrato, permisos y UI reales en Local: correctivos manuales o desde Produccion, asignacion RH, tiempos, refacciones, bloqueo seguro y conciliacion durable. |
-| Resto de modulos | Mantienen MVP generico para especializarse progresivamente. |
+| Compras | Proveedores, Requisiciones, Ordenes y Recepciones estan desplegados en Local y QA hasta `20260825_0029`; Local aplica `20260901_0030` para partidas de servicio sin Inventory obligatorio. |
+| Mantenimiento | Correctivos, asignacion RH, tiempos, refacciones, bloqueo seguro y conciliacion durable estan desplegados en Local y QA hasta `20260825_0029`. |
+| Gastos, Costos, Reportes y Contabilidad | Permanecen `planned`; sus pantallas genericas no prueban runtime operativo. |
 
 La navegacion efectiva depende de `session/context`, entitlements y permisos. Cada capacidad debe identificarse como QA, Local, mock o futura conforme a `docs/contexto/ESTADO_ACTUAL.md`; el estado no se duplica en fichas de agentes.
 

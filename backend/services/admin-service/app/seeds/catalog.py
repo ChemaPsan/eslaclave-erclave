@@ -75,7 +75,6 @@ MVP_MODULE_SEEDS: tuple[ModuleSeed, ...] = (
         public_feature=True,
         implementation_status="implemented",
         sort_order=45,
-        dependencies=("inventory",),
     ),
     ModuleSeed(
         code="maintenance",

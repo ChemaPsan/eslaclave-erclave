@@ -49,7 +49,7 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 
 ## 4. Inventario actual confirmado
 
-### 4.1 QA verificado al 12 de agosto de 2026
+### 4.1 QA verificado al 1 de septiembre de 2026
 
 | Componente o capacidad | Estado confirmado | Evidencia o limite |
 |---|---|---|
@@ -57,17 +57,19 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 | `admin-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | `production-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | Firebase Auth | Integrado | Login y sesion QA documentados |
-| Cloud SQL `erclave_qa` | Migrado | Revision documentada `20260821_0023` |
+| Cloud SQL `erclave_qa` | Migrado | Revision documentada `20260825_0029` |
 | Administracion | Real QA | Tenant, sesion, permisos, roles, entitlements y organizacion |
 | Productos y servicios | Real QA | API de Produccion desplegada |
 | Recetas y versiones | Real QA | Integracion publicada y documentada |
 | Ordenes de produccion | Real QA | API, snapshots, etapas y validacion observada persistidos; no reserva Inventario |
-| `inventory-service` | Activo QA | Revision `inventory-service-qa-00006-ceb`; servicio y Cloud SQL reales |
-| Schema `inventory` | Presente en QA | Migrado hasta `20260821_0023`; datos solo por UAT autorizada |
-| `hr-service` | Activo QA | Revision `hr-service-qa-00006-xey`; servicio y entitlement estructural activos |
-| Schema `hr` | Presente en QA | Migrado hasta `20260821_0023`; datos solo por UAT autorizada |
-| Ventas | Activo QA | Revision `sales-service-qa-00001-gez`; activacion efectiva depende del entitlement |
-| Compras, Gastos, Costos, Contabilidad y Reportes | Demo o futuro | Sin backend productivo certificado |
+| `inventory-service` | Activo QA | Servicio real sobre el SHA certificado vigente |
+| Schema `inventory` | Presente en QA | Migrado hasta `20260825_0029`; datos solo por UAT autorizada |
+| `hr-service` | Activo QA | Servicio real y entitlement estructural activo |
+| Schema `hr` | Presente en QA | Migrado hasta `20260825_0029`; datos solo por UAT autorizada |
+| Ventas | Activo QA | Servicio real; activacion efectiva depende del entitlement |
+| Compras | Activo QA | `purchasing-service-qa`, schema propio y dependencia obligatoria de Inventory |
+| Mantenimiento | Activo QA | `maintenance-service-qa`, schema propio y dependencias RH e Inventory |
+| Gastos, Costos, Contabilidad y Reportes | Demo o futuro | Sin backend certificado en QA |
 | Infraestructura de Produccion | No confirmada | No hay evidencia documental de ambiente productivo desplegado |
 
 ### 4.2 Interpretacion obligatoria
@@ -478,3 +480,8 @@ Ya estan implementados la definicion canonica, agentes transversales, separacion
 ## 18. Criterio de mantenimiento
 
 Toda modificacion de ambientes debe actualizar este documento, agentes, skills, validadores, runbooks y trazabilidad en el mismo corte; Produccion continúa bloqueada hasta autorizacion explicita y certificacion completa.
+
+
+## Candidato de continuidad CHG-269
+
+CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.

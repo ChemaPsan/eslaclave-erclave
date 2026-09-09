@@ -1,3 +1,8 @@
+from contextlib import nullcontext
+from decimal import Decimal
+from io import BytesIO
+import json
+import pytest
 import importlib
 import sys
 from pathlib import Path
@@ -61,11 +66,44 @@ class FakeRepository:
             self.order["integration_operation"] = None
         return self.order
 
-    def material_plan(self, tenant, order_id):
-        return []
+    def material_command_lock(self, tenant, request_id):
+        return nullcontext()
 
-    def complete_material_issue(self, tenant, order_id, movements, error=None, actor="system"):
-        return None
+    def material_creation_lock(self, tenant, order_id):
+        return nullcontext()
+
+    def list_warehouse_material_requests(self, tenant, limit=50, offset=0):
+        return ([self.material] if tenant == TENANT and self.material else []), False
+
+    def get_material_request(self,tenant,request_id):
+        return self.material if tenant==TENANT and self.material and self.material["id"]==request_id else None
+
+    def record_warehouse_rejection(self,tenant,request_id,reason,key,request_hash,actor):
+        if self.material["pending_operation"]=="issue" or self.material["status"]=="issued":raise ValueError("material_request_not_cancellable")
+        self.material["rejection_reason"]=reason
+
+    def prepare_material_cancellation(self,tenant,request_id,key,request_hash,actor):
+        return self.material,[{"line_id":line["id"],"reservation_id":line["reservation_id"]} for line in self.material["lines"]]
+
+    def complete_material_cancellation(self,tenant,request_id,key,released,error,actor):
+        self.material["status"]="needs_reconciliation" if error else "cancelled"
+        return self.material
+
+    def prepare_warehouse_issue(self, tenant, request_id, actor):
+        value = self.material if tenant == TENANT and self.material and self.material["id"] == request_id else None
+        if not value: return None, None
+        if value["status"] == "issued": return value, None
+        if value["status"] != "reserved" and value.get("pending_operation") != "issue":
+            raise ValueError("material_request_not_issuable")
+        value["pending_operation"] = "issue"
+        return value, [line for line in value["lines"] if line["line_status"] == "reserved"]
+
+    def complete_warehouse_issue(self, tenant, request_id, results, error, actor):
+        for line_id, movement in results:
+            line = next(line for line in self.material["lines"] if line["id"] == line_id)
+            line.update(line_status="issued", inventory_movement_id=movement["id"])
+        self.material.update(status="needs_reconciliation" if error else "issued", pending_operation="issue" if error else None)
+        return self.material
 
     def prepare_material_request(self, tenant, order_id, payload, snapshots, key, request_hash, actor):
         return {"id": "mmr_1", "order_id": order_id}, [
@@ -140,6 +178,7 @@ def headers(command=False):
 
 def setup_function():
     repo.order = None
+    repo.material = None
     authority.blocked.clear()
     authority.consumed.clear()
     authority.reserved.clear()
@@ -214,3 +253,124 @@ def test_maintenance_transition_requires_the_exact_action_permission():
     response=client().post("/v1/maintenance/orders/mwo_1/transitions",headers={**headers(True),"Authorization":"Bearer test-token"},json={"transition":"request"})
     assert response.status_code==403
     assert response.json()["error"]["details"]["permission"]=="maintenance.order.request"
+
+
+def test_recovery_requires_its_own_permission():
+    h=warehouse_session(['inventory.movement.create','maintenance.material_request.cancel'])
+    response=client().post('/v1/maintenance/material-requests/mmr_1/reconcile',headers=h)
+    assert response.status_code==403
+    assert response.json()['error']['details']['permission']=='maintenance.material_request.reconcile'
+
+
+def test_real_authority_encodes_database_decimal_reservation(monkeypatch):
+    calls=[]
+    def send(request,timeout):
+        calls.append(json.loads(request.data))
+        return BytesIO(b'{"data":{"id":"res_decimal"}}')
+    monkeypatch.setattr(authorities.request,'urlopen',send)
+    real=authorities.MaintenanceAuthorityClient(Settings())
+    real.reserve(TENANT,'order','request',{'item_id':'item','line_id':'line','quantity':Decimal('1.125000'),'unit_code':'H87'},'warehouse',None,'stable-key')
+    assert calls[0]['quantity']==1.125
+    assert calls[0]['source']=={'type':'maintenance_order','id':'order','line_id':'line'}
+
+
+def test_invalid_payload_encoding_becomes_recoverable_error_before_http(monkeypatch):
+    def forbidden(*args,**kwargs):pytest.fail('No HTTP call expected')
+    monkeypatch.setattr(authorities.request,'urlopen',forbidden)
+    real=authorities.MaintenanceAuthorityClient(Settings())
+    with pytest.raises(ErclaveError) as result:real._call('http://127.0.0.1:8004',TENANT,None,'POST',{'quantity':float('nan')})
+    assert result.value.code=='maintenance_dependency_unavailable'
+
+
+def material_fixture():
+    repo.material = {"id":"mmr_1","order_id":"mwo_1","status":"reserved","pending_operation":None,"lines":[
+        {"id":"line_a","reservation_id":"res_a","quantity":2,"line_status":"reserved"},
+        {"id":"line_b","reservation_id":"res_b","quantity":1,"line_status":"reserved"}]}
+    return repo.material
+
+
+def warehouse_session(permissions, modules=("maintenance","inventory")):
+    class SessionClient:
+        def get_context(self, tenant_id, bearer):
+            return {"tenant":{"id":TENANT,"status":"active"},"user":{"id":"usr_warehouse"},"active_modules":list(modules),"permissions":permissions}
+    main.app.dependency_overrides[authorization.get_settings]=lambda:Settings(auth_mode="firebase")
+    main.app.dependency_overrides[authorization.get_admin_session_client]=lambda:SessionClient()
+    return {**headers(True),"Authorization":"Bearer test-token"}
+
+
+def test_warehouse_can_read_queue_without_maintenance_order_read():
+    material_fixture()
+    h=warehouse_session(["inventory.movement.read"])
+    assert client().get("/v1/maintenance/warehouse-material-requests",headers=h).json()["data"][0]["id"]=="mmr_1"
+    assert client().get("/v1/maintenance/orders",headers=h).status_code==403
+    assert client().post("/v1/maintenance/material-requests/mmr_1/issue",headers=h).status_code==403
+    assert authority.consumed==[]
+
+
+def test_warehouse_issue_is_idempotent_and_maintenance_resolve_cannot_issue():
+    material_fixture()
+    h=warehouse_session(["maintenance.order.resolve"])
+    assert client().post("/v1/maintenance/material-requests/mmr_1/issue",headers=h).status_code==403
+    h=warehouse_session(["inventory.movement.create"])
+    for _ in range(2):
+        response=client().post("/v1/maintenance/material-requests/mmr_1/issue",headers=h)
+        assert response.status_code==200
+        assert response.json()["data"]["status"]=="issued"
+    assert len(authority.consumed)==2
+    assert authority.consumed[0][-1]=="maintenance-mwo_1-consume-line_a"
+    assert client().post("/v1/maintenance/material-requests/mmr_other/issue",headers=h).status_code==404
+
+
+def test_warehouse_issue_retries_only_unconfirmed_lines():
+    material_fixture()
+    calls=[]
+    class PartialAuthority(FakeAuthority):
+        def consume(self, tenant, reservation_id, quantity, token, key):
+            calls.append(reservation_id)
+            if calls==["res_a","res_b"]:raise ErclaveError("maintenance_dependency_unavailable","Offline",status_code=503)
+            return {"id":"mov_"+reservation_id}
+    main.app.dependency_overrides[authorities.get_maintenance_authority_client]=lambda:PartialAuthority()
+    # client() installs the ordinary authority; override after constructing it.
+    c=client()
+    main.app.dependency_overrides[authorities.get_maintenance_authority_client]=lambda:PartialAuthority()
+    h=warehouse_session(["inventory.movement.create"])
+    first=c.post("/v1/maintenance/material-requests/mmr_1/issue",headers=h)
+    assert first.json()["data"]["status"]=="needs_reconciliation"
+    second=c.post("/v1/maintenance/material-requests/mmr_1/issue",headers=h)
+    assert second.json()["data"]["status"]=="issued"
+    assert calls==["res_a","res_b","res_b"]
+
+
+def test_resolve_blocks_reserved_parts_without_consumption():
+    client().post("/v1/maintenance/orders",headers=headers(True),json=production_payload())
+    repo.order.update(status="in_progress",diagnosis="Sello",work_performed="Cambio",verification_notes="Prueba",total_minutes=5,material_requests=[material_fixture()])
+    response=client().post("/v1/maintenance/orders/mwo_1/transitions",headers=headers(True),json={"transition":"resolve"})
+    assert response.status_code==409
+    assert response.json()["error"]["code"]=="maintenance_materials_not_reconciled"
+    assert authority.consumed==[]
+    repo.material["status"]="issued"
+    assert client().post("/v1/maintenance/orders/mwo_1/transitions",headers=headers(True),json={"transition":"resolve"}).status_code==200
+    assert authority.consumed==[]
+
+
+def test_warehouse_issue_requires_both_modules_and_rejects_partial_payload():
+    material_fixture()
+    h=warehouse_session(["inventory.movement.create"],modules=("maintenance",))
+    assert client().post("/v1/maintenance/material-requests/mmr_1/issue",headers=h).status_code==403
+    h=warehouse_session(["inventory.movement.create"])
+    assert client().post("/v1/maintenance/material-requests/mmr_1/issue",headers=h,json={"quantity":1}).status_code==422
+    assert authority.consumed==[]
+
+
+def test_warehouse_rejection_requires_reason_and_cannot_reject_issued_parts():
+    material_fixture()
+    h=warehouse_session(["inventory.movement.create"])
+    for reason in ["  ","ab","x"*501]:
+        assert client().post("/v1/maintenance/material-requests/mmr_1/reject",headers=h,json={"reason":reason}).status_code==422
+    response=client().post("/v1/maintenance/material-requests/mmr_1/reject",headers=h,json={"reason":"  Solicitud duplicada  "})
+    assert response.status_code==200
+    assert response.json()["data"]["status"]=="cancelled"
+    assert response.json()["data"]["rejection_reason"]=="Solicitud duplicada"
+    assert authority.consumed==[]
+    repo.material.update(status="issued",pending_operation=None)
+    assert client().post("/v1/maintenance/material-requests/mmr_1/reject",headers=h,json={"reason":"Duplicada"}).status_code==409

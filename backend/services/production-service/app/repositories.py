@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -27,7 +28,11 @@ def production_dates(start_date: date, duration_days: int) -> list[date]:
     return dates
 
 
-class ProductionRepository:
+from .material_returns import ProductionMaterialReturns
+
+from .creation_recovery import ProductionCreationRecovery
+
+class ProductionRepository(ProductionMaterialReturns,ProductionCreationRecovery):
     def __init__(self, engine: Engine):
         self.engine = engine
 
@@ -461,11 +466,13 @@ class ProductionRepository:
             replay = self._claim_idempotency(connection, tenant_id, "machine.update", key, request_hash, actor_id)
             if replay is not None:
                 return MachineRead.model_validate(replay)
-            before = connection.execute(text("select id,code,name,machine_type,area_ref_id,area_name,available_minutes_per_day,cost_per_minute,status from production.machines where tenant_id=:tenant_id and id=:id for update"), {"tenant_id": tenant_id, "id": machine_id}).mappings().first()
+            before = connection.execute(text("select id,code,name,machine_type,area_ref_id,area_name,available_minutes_per_day,cost_per_minute,status,maintenance_order_ref_id from production.machines where tenant_id=:tenant_id and id=:id for update"), {"tenant_id": tenant_id, "id": machine_id}).mappings().first()
             if before is None:
                 self._release_idempotency(connection, tenant_id, "machine.update", key)
                 return None
             data = payload.model_dump(exclude_none=True)
+            if before["maintenance_order_ref_id"] and data.get("status",before["status"]) != before["status"]:
+                raise ValueError("machine_maintenance_release_required")
             if data:
                 sets = ",".join(f"{name}=:{name}" for name in data)
                 connection.execute(text(f"update production.machines set {sets},updated_at=now() where tenant_id=:tenant_id and id=:id"), {"tenant_id": tenant_id, "id": machine_id, **data})
@@ -553,6 +560,79 @@ class ProductionRepository:
             rows.append(ResourceValidationRow(resource_type=resource.resource_type,resource_ref_id=resource.resource_ref_id,resource_code=resource.resource_code,resource_name=resource.resource_name,unit=resource.unit,required_quantity=required,available_quantity=available,unit_cost=unit_cost,total_cost=required*unit_cost,source=source,ok=ok,blocker_code=blocker,allocations=observation.allocations if observation else [],daily_allocations=daily_allocations))
         return ResourceValidationRead(recipe_version_id=version.id,quantity=payload.quantity,unit=payload.unit,can_release=not blockers,planned_cost=sum(row.total_cost for row in rows),planned_start_date=planned_days[0],planned_end_date=planned_days[-1],planned_duration_days=payload.planned_duration_days,minimum_duration_days=minimum_duration_days,validated_at=datetime.now(timezone.utc),rows=rows,blockers=blockers)
 
+    @contextmanager
+    def material_command_lock(self, tenant_id, order_id):
+        with self.engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+            params={"k":f"production-material:{tenant_id}:{order_id}"}
+            acquired=connection.execute(text("select pg_try_advisory_lock(hashtextextended(:k,0))"),params).scalar_one()
+            if not acquired:raise ErclaveError("command_in_progress","An order command is in progress.",status_code=409)
+            try:yield
+            finally:connection.execute(text("select pg_advisory_unlock(hashtextextended(:k,0))"),params)
+
+    def warehouse_material_request(self, tenant_id, order_id):
+        with self.engine.connect() as connection:
+            order=self._read_order(connection,tenant_id,order_id)
+            if not order:return None
+            issue=connection.execute(text("select status from production.material_issues where tenant_id=:t and production_order_id=:i"),{"t":tenant_id,"i":order_id}).scalar_one_or_none()
+            materials=[r for r in order.resources if r.resource_type=="material"]
+            allocations={r.get("resource_ref_id"): [{"warehouse_name":a.get("warehouse_name", ""),"quantity":a["quantity"]} for a in r.get("allocations",[])] for r in order.resource_validation_snapshot.get("rows",[]) if r.get("resource_type")=="material"}
+            return {"id":order.id,"order_code":order.code,"responsible_name":order.responsible_name,
+                "status":issue or ("issued" if all(r.actual_quantity is not None and r.actual_cost is not None for r in materials) else "reserved"),
+                "created_at":order.created_at,"lines":[{"id":r.id,"item_code":r.resource_code,"item_name":r.resource_name,"quantity":r.planned_quantity,"unit_code":r.unit,"allocations":allocations.get(r.resource_ref_id,[]),"issued":r.actual_quantity is not None and r.actual_cost is not None} for r in materials]}
+
+    def list_warehouse_material_requests(self, tenant_id, limit, offset):
+        with self.engine.connect() as connection:
+            ids=connection.execute(text("""select o.id from production.production_orders o
+                where o.tenant_id=:t and o.status in ('released','waiting_resources')
+                and exists(select 1 from production.production_order_resources r where r.tenant_id=o.tenant_id
+                    and r.production_order_id=o.id and r.resource_type='material' and (r.actual_quantity is null or r.actual_cost is null))
+                order by o.created_at,o.id limit :n offset :offset"""),{"t":tenant_id,"n":limit+1,"offset":offset}).scalars().all()
+        return {"data":[self.warehouse_material_request(tenant_id,i) for i in ids[:limit]],"page":{"limit":limit,"offset":offset,"has_more":len(ids)>limit}}
+
+    def prepare_warehouse_issue(self, tenant_id, order_id, actor_id, key):
+        with self.engine.begin() as connection:
+            connection.execute(text("select id from production.production_orders where tenant_id=:t and id=:i for update"),{"t":tenant_id,"i":order_id})
+            order=self._read_order(connection,tenant_id,order_id)
+            if not order:raise ErclaveError("production_order_not_found","Order not found.",status_code=404)
+            issue=connection.execute(text("select * from production.material_issues where tenant_id=:t and production_order_id=:i"),{"t":tenant_id,"i":order_id}).mappings().first()
+            if issue and issue["status"]=="issued":return order,dict(issue["movements"])
+            if order.status not in {"released","waiting_resources"}:raise ValueError("material_request_not_issuable")
+            self._require_material_reservations(connection,tenant_id,order_id)
+            connection.execute(text("""insert into production.material_issues(tenant_id,production_order_id,status,authorized_by)
+                values(:t,:i,'processing',:a) on conflict(tenant_id,production_order_id)
+                do update set status='processing',last_error_code=null,updated_at=now()"""),{"t":tenant_id,"i":order_id,"a":actor_id})
+            self._audit(connection,tenant_id,actor_id,"order.material_issue.authorize","production_order",order_id,None,{"responsible_worker_id":order.responsible_worker_id,"responsible_name":order.responsible_name},key)
+            return order,dict(issue["movements"]) if issue else {}
+
+    def complete_warehouse_issue(self, tenant_id, order_id, movements, error_code, actor_id, key):
+        with self.engine.begin() as connection:
+            order=self._read_order(connection,tenant_id,order_id)
+            complete=True
+            for resource in order.resources:
+                if resource.resource_type!="material":continue
+                if resource.actual_quantity is not None and resource.actual_cost is not None:continue
+                values=[movements.get(i) for i in resource.reservation_ref_ids]
+                if not values or any(v is None for v in values):complete=False;continue
+                quantity=sum(float(v["quantity"]) for v in values)
+                cost=sum(float(v["quantity"])*float(v.get("unit_cost") or 0) for v in values)
+                connection.execute(text("update production.production_order_resources set actual_quantity=:q,actual_cost=:c,updated_at=now() where tenant_id=:t and production_order_id=:o and id=:i"),{"t":tenant_id,"o":order_id,"i":resource.id,"q":quantity,"c":cost})
+            status="issued" if complete else "needs_reconciliation"
+            connection.execute(text("update production.material_issues set movements=cast(:m as jsonb),status=:s,last_error_code=:e,updated_at=now() where tenant_id=:t and production_order_id=:i"),{"m":json.dumps(movements),"s":status,"e":error_code,"t":tenant_id,"i":order_id})
+            connection.execute(text("update production.production_orders set actual_cost=(select coalesce(sum(actual_cost),0) from production.production_order_resources where tenant_id=:t and production_order_id=:i),updated_at=now() where tenant_id=:t and id=:i"),{"t":tenant_id,"i":order_id})
+            self._audit(connection,tenant_id,actor_id,"order.material_issue","production_order",order_id,None,{"status":status,"movements":movements,"error_code":error_code},key)
+        return self.warehouse_material_request(tenant_id,order_id)
+
+    def _require_materials_issued(self, connection, tenant_id, order_id):
+        self._require_material_reservations(connection,tenant_id,order_id)
+        if connection.execute(text("""select 1 from production.production_order_resources
+            where tenant_id=:t and production_order_id=:i and resource_type='material'
+            and (actual_quantity is null or actual_cost is null) limit 1"""),{"t":tenant_id,"i":order_id}).first():
+            raise ValueError("material_consumption_required")
+
+    def _require_cancellable_materials(self, connection, tenant_id, order_id):
+        if connection.execute(text("select 1 from production.material_issues where tenant_id=:t and production_order_id=:i and status<>'issued'"),{"t":tenant_id,"i":order_id}).first():
+            raise ValueError("production_material_issue_pending")
+
     def list_orders(self, tenant_id: str, limit: int = 50, status: str | None = None) -> list[ProductionOrderRead]:
         filters = ["tenant_id=:tenant_id"]
         params = {"tenant_id": tenant_id, "limit": limit}
@@ -574,13 +654,28 @@ class ProductionRepository:
                 return None
             if target_status not in ORDER_STATUS_TRANSITIONS[before.status]:
                 raise ValueError("invalid_order_transition")
+            if target_status == "cancelled":
+                self._require_cancellable_materials(connection,tenant_id,order_id)
             if target_status == "in_progress":
-                self._require_material_reservations(connection, tenant_id, order_id)
+                self._require_execution_machines(connection, tenant_id, order_id)
+                self._require_materials_issued(connection, tenant_id, order_id)
             if target_status == "in_validation":
                 self._require_stages_complete(connection, tenant_id, order_id)
             if target_status == "completed":
                 self._require_completion_preconditions(connection, tenant_id, order_id)
             return before
+
+    def _require_execution_machines(self, connection, tenant_id, order_id):
+        # Lock the authoritative machines until the status transaction commits.
+        machines=connection.execute(text("""select m.status,m.maintenance_order_ref_id
+            from production.machines m where m.tenant_id=:t and m.id in
+            (select resource_ref_id from production.production_order_resources
+             where tenant_id=:t and production_order_id=:o and resource_type='machine')
+            order by m.id for update"""),{"t":tenant_id,"o":order_id}).mappings().all()
+        if any(m["maintenance_order_ref_id"] or m["status"]=="maintenance" for m in machines):
+            raise ValueError("production_machine_maintenance_required")
+        if any(m["status"]!="active" for m in machines):
+            raise ValueError("production_machine_unavailable")
 
     def _require_material_reservations(self, connection, tenant_id: str, order_id: str) -> None:
         unreserved_material=connection.execute(text("""select 1 from production.production_order_resources r
@@ -671,26 +766,15 @@ class ProductionRepository:
             if payload.status not in allowed[before.status]:
                 self._release_idempotency(connection, tenant_id, "order.status", key); raise ValueError("invalid_order_transition")
             if payload.status == "in_progress":
-                try:self._require_material_reservations(connection,tenant_id,order_id)
+                self._require_execution_machines(connection,tenant_id,order_id)
+                try:self._require_materials_issued(connection,tenant_id,order_id)
                 except ValueError:
                     self._release_idempotency(connection, tenant_id, "order.status", key);raise
             if payload.status == "completed":
                 try:self._require_completion_preconditions(connection,tenant_id,order_id)
                 except ValueError:
                     self._release_idempotency(connection, tenant_id, "order.status", key);raise
-            if payload.status == "in_progress" and before.status in {"released","waiting_resources"}:
-                material_actuals=material_actuals or {}
-                material_rows=connection.execute(text("""select r.id,rr.reservation_ref_id from production.production_order_resources r
-                    left join production.production_order_resource_reservations rr on rr.tenant_id=r.tenant_id and rr.production_order_resource_id=r.id
-                    where r.tenant_id=:tenant_id and r.production_order_id=:order_id and r.resource_type='material' order by r.id"""),{"tenant_id":tenant_id,"order_id":order_id}).mappings().all()
-                grouped={}
-                for row in material_rows: grouped.setdefault(row["id"],[]).append(row["reservation_ref_id"])
-                for resource_id,reservations in grouped.items():
-                    values=[material_actuals.get(item) for item in reservations if item]
-                    if not values or any(item is None for item in values):
-                        self._release_idempotency(connection, tenant_id, "order.status", key);raise ValueError("material_consumption_required")
-                    quantity=sum(float(item["quantity"]) for item in values);cost=sum(float(item["cost"]) for item in values)
-                    connection.execute(text("update production.production_order_resources set actual_quantity=:quantity,actual_cost=:cost,updated_at=now() where tenant_id=:tenant_id and id=:id"),{"quantity":quantity,"cost":cost,"tenant_id":tenant_id,"id":resource_id})
+            if payload.status == "cancelled":self._require_cancellable_materials(connection,tenant_id,order_id)
             if payload.status in {"in_progress","completed"}:
                 actual_cost=float(connection.execute(text("select coalesce(sum(actual_cost),0) from production.production_order_resources where tenant_id=:tenant_id and production_order_id=:order_id"),{"tenant_id":tenant_id,"order_id":order_id}).scalar_one())
             else: actual_cost=None
@@ -772,7 +856,7 @@ class ProductionRepository:
         resource_ids=connection.execute(text("select id from production.production_order_resources where tenant_id=:tenant_id and production_order_id=:id order by resource_type,resource_code"),{"tenant_id":tenant_id,"id":order_id}).scalars().all()
         stages=[self._read_stage(connection, tenant_id, item) for item in stage_ids]
         overall_progress=sum(float(item.weight_percent)*float(item.progress_percent)/100 for item in stages)
-        return ProductionOrderRead(**dict(row), overall_progress_percent=round(overall_progress,2), stages=stages,resources=[self._read_order_resource(connection,tenant_id,item,order_id) for item in resource_ids])
+        return ProductionOrderRead(**dict(row),material_returns=[dict(a) for a in connection.execute(text("select return_id,resource_id,quantity,unit_cost,created_at from production.material_return_adjustments where tenant_id=:t and order_id=:o order by created_at"),{"t":tenant_id,"o":order_id}).mappings()], overall_progress_percent=round(overall_progress,2), stages=stages,resources=[self._read_order_resource(connection,tenant_id,item,order_id) for item in resource_ids])
 
     def _read_sales_request(self, connection, tenant_id: str, request_id: str):
         row = connection.execute(text("""select id,sales_order_id,sales_order_line_id,product_service_ref_id product_service_id,

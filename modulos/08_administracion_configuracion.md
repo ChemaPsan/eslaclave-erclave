@@ -1,5 +1,9 @@
 # ERClave — Módulo de Administración y Configuración
 
+## Coherencia de consultas Local (CHG-262)
+
+El dashboard consulta solo los recursos permitidos por la sesion: una lectura de Roles no exige permisos de Usuarios, Tenant o Configuracion. Las colecciones omitidas por falta de permiso no conceden autoridad ni fabrican datos. Backoffice conserva el control allowlisted y se verifica en lectura con Firebase Emulator. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+
 ## 1. Objetivo
 
 El módulo de Administración y Configuración permitirá controlar la configuración funcional del sistema por tenant, módulos, submódulos, usuarios, roles, permisos, centros de negocio, catálogos y parámetros operativos.
@@ -270,3 +274,10 @@ Rol, sucursal activa y entidad legal usan búsqueda por identidad visible. Permi
 ## CHG-211: excepcion de portada
 
 Administración conserva en su primera vista el centro de configuración de organización, usuarios, roles, permisos, módulos activos y catálogos base. No adopta la portada de reportes estándar de los módulos operativos porque es el lugar donde se gobierna el sistema. La excepción es funcional y está protegida por el validador transversal.
+
+
+## Ajustes UAT Local CHG-266
+
+Se repusieron en el catálogo Local los cuatro permisos existentes sales.quote.submit/approve/expire/cancel y se asignaron al Owner del tenant permitido mediante API auditada, preservando sus asignaciones y alcances. No se ejecutó el seed completo ni se concedieron a otros roles/tenants; no existe bypass por nombre Owner.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.

@@ -161,12 +161,14 @@ def main() -> int:
                 break
     require_local(database_url)
     engine = create_engine(database_url, pool_pre_ping=True)
-    cleanup_stale_smoke(engine)
     suffix = uuid4().hex[:8].upper()
     digits = "".join(str(random.SystemRandom().randrange(10)) for _ in range(10))
     prefix = f"smoke-maint-{suffix.lower()}"
     ids: dict[str, str] = {}
     token = firebase_token()
+    context = call(f"{LOCAL_APIS['admin']}/v1/session/context", token)
+    if context.get("tenant", {}).get("id") != TENANT:raise RuntimeError("Unexpected smoke tenant.")
+    print("Local-only smoke: tenant " + TENANT)
     key = lambda action: f"{prefix}-{action}"
     try:
         area = call(f"{LOCAL_APIS['hr']}/v1/hr/areas", token, "POST", {"code": f"MNT-{suffix}", "name": f"Mantenimiento Smoke {suffix}"}, key("area"));ids["area"] = area["id"]
@@ -187,13 +189,28 @@ def main() -> int:
         time_entry = call(f"{LOCAL_APIS['maintenance']}/v1/maintenance/orders/{order['id']}/time-entries", token, "POST", {"worker_id": worker["id"], "started_at": (ended - timedelta(minutes=20)).isoformat(), "ended_at": ended.isoformat(), "notes": "Smoke"}, key("time"));ids["time"] = time_entry["id"]
         material = call(f"{LOCAL_APIS['maintenance']}/v1/maintenance/orders/{order['id']}/material-requests", token, "POST", {"warehouse_id": warehouse["id"], "lines": [{"item_id": item["id"], "quantity": 2, "unit_code": "H87"}]}, key("material"));ids["material"] = material["id"];ids["reservation"] = material["lines"][0]["reservation_id"]
         call(f"{LOCAL_APIS['maintenance']}/v1/maintenance/orders/{order['id']}", token, "PATCH", {"diagnosis": "Prueba controlada", "work_performed": "Validacion completa", "verification_notes": "Resultado correcto"}, key("evidence"))
+        pending = call(f"{LOCAL_APIS['maintenance']}/v1/maintenance/warehouse-material-requests?limit=100", token)
+        if not any(row["id"] == material["id"] for row in pending):raise RuntimeError("Request missing from Warehouse queue.")
+        try:
+            call(f"{LOCAL_APIS['maintenance']}/v1/maintenance/orders/{order['id']}/transitions", token, "POST", {"transition":"resolve"}, key("resolve-before-delivery"))
+        except RuntimeError as exc:
+            if "maintenance_materials_not_reconciled" not in str(exc):raise
+        else:raise RuntimeError("Resolve bypassed Warehouse delivery.")
+        issued = call(f"{LOCAL_APIS['maintenance']}/v1/maintenance/material-requests/{material['id']}/issue", token, "POST", key=key("issue"))
+        ids["movement_issue"] = issued["lines"][0]["inventory_movement_id"]
+        if issued["status"] != "issued":raise RuntimeError("Warehouse issue did not complete.")
+        replay = call(f"{LOCAL_APIS['maintenance']}/v1/maintenance/material-requests/{material['id']}/issue", token, "POST", key=key("issue-retry"))
+        if replay["lines"][0]["inventory_movement_id"] != ids["movement_issue"]:raise RuntimeError("Issue replay duplicated a movement.")
         resolved = call(f"{LOCAL_APIS['maintenance']}/v1/maintenance/orders/{order['id']}/transitions", token, "POST", {"transition": "resolve"}, key("resolve"))
         ids["movement_issue"] = resolved["material_requests"][0]["lines"][0]["inventory_movement_id"]
         closed = call(f"{LOCAL_APIS['maintenance']}/v1/maintenance/orders/{order['id']}/transitions", token, "POST", {"transition": "close"}, key("close"))
         machine_after = call(f"{LOCAL_APIS['production']}/v1/production/machines/{machine['id']}", token)
         if closed["status"] != "closed" or closed["integration_status"] != "completed" or machine_after["status"] != "active":
             raise RuntimeError("Maintenance smoke did not close with the machine released.")
-        print(json.dumps({"status": "ok", "flow": "machine->assignment->time->parts->resolve->close", "tenant": TENANT}))
+        with engine.connect() as connection:
+            exits=connection.execute(text("select count(*),sum(quantity) from inventory.movements where tenant_id=:t and source_type='reservation' and source_id=:r"),{"t":TENANT,"r":ids["reservation"]}).one()
+            if exits[0] != 1 or float(exits[1]) != 2:raise RuntimeError("Warehouse issue and resolve did not preserve a single exit.")
+        print(json.dumps({"status": "ok", "flow": "machine->assignment->time->request->warehouse-issue->resolve->close", "tenant": TENANT}))
         return 0
     finally:
         cleanup(engine, ids, prefix)

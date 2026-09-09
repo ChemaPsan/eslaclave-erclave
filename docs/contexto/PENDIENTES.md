@@ -1,28 +1,50 @@
 # Pendientes priorizados de ERClave
 
-Ultima actualizacion: 2026-08-31.
+## Promoción QA en preparación CHG-269
+
+CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
+
+
+## Cierre Local CHG-268
+
+Reserva MTO-000001 recuperada y fallo Decimal corregido. Pendientes: confirmación física por Almacén cuando entregue, aceptación manual y promoción gobernada a QA. Reintentos automáticos siguen fuera de alcance; las fallas de existencia/dependencia conservan recuperaci?n manual. Informe: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+
+
+## Alcance posterior a CHG-264
+
+Entregas parciales elegidas, rechazo de la solicitud productiva, selector de receptor diferente al responsable quedan pendientes. Antes de promocion revisar reservas historicas vencidas e intentos anteriores con respuesta incierta; no se reactivan ni compensan por inferencia. El callback de servicios comerciales Sales a materiales sigue fuera de alcance. Evidencia: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+
+## Alcance posterior a la entrega de refacciones CHG-263
+
+- Entregas parciales elegidas por el almacenista y aprobacion separada de la entrega quedan fuera de este corte; la confirmacion actual entrega la solicitud completa.
+- Antes de promover, revisar reservas historicas con vencimiento: no reactivar stock expirado. Las solicitudes reservadas sin entrega pueden cancelarse y solicitarse nuevamente; movimientos ya emitidos conservan su historia.
+- Operaciones heredadas de entrega con error/resultado incierto requieren revision por Almacen; no se compensan ni se libera la maquina por inferencia. Los reintentos actuales preservan partidas ya confirmadas y claves Inventory.
+- La bandeja usa limit/offset; carga sostenida, cursor estable bajo cambios concurrentes y aprobacion QA siguen pendientes.
+
+Ultima actualizacion: 2026-09-07.
+
+## Cobertura posterior a auditoria CHG-262
+
+La auditoria Local de coherencia frontend/backend y sus correcciones estan documentadas en `docs/auditorias/frontend_backend_2026-09-07.md`. No quedan abiertos los 17 grupos de defectos reproducidos en ese corte. Mantener las regresiones de campos/roles al agregar flujos; la cobertura combinatoria completa de perfiles, el volumen y las fallas distribuidas no se sustituyen por esos tests. Los cambios Local no se han promovido a QA.
 
 ## Validacion del release QA
 
-0. Aprovisionar y verificar, con autorizacion `qa-write` independiente, las identidades `erclave-purchasing-qa` y `erclave-maintenance-qa` y las cuatro variables QA asociadas. Despues certificar el SHA final y ejecutar secuencialmente los gates documentados en `docs/operaciones/preparacion_release_qa_20260831.md`.
-
-0. Repetir en QA el onboarding con un tenant ficticio y confirmar recepcion del correo Firebase, incluido folder de spam. Admin revision `admin-service-qa-00021-669` ya tiene `roles/firebaseauth.admin` y `ERCLAVE_FIREBASE_WEB_API_KEY`. Despues validar eliminacion y que el tenant deje de aparecer.
-1. Promover mediante un nuevo candidato gobernado el endurecimiento CHG-226 de respuestas Firebase. La correccion IAM ya esta activa en QA, pero `invitation.delivery=pending`, `firebase_identity_cleanup` y los errores 502 seguros existen solo en la rama hasta fusionar, construir y aprobar sus gates.
+0. Completar la matriz UAT del SHA QA `a119ddf5e8d42376b8557b234e15e3681b19c2a7`: permisos, aislamiento entre tenants, dependencias modulares, Compras, Mantenimiento, referencias, reservas/consumos, recepciones, capacidad, valuacion, concurrencia, proteccion de datos e idempotencia.
+1. Repetir en QA el onboarding con un tenant ficticio y confirmar recepcion del correo Firebase, incluido folder de spam. Despues validar eliminacion, `firebase_identity_cleanup` y que el tenant deje de aparecer.
 2. Diseñar una reconciliacion durable/outbox para invitaciones o limpiezas Firebase pendientes; la respuesta explicita evita el falso fracaso, pero no sustituye un reintento persistente si el cliente pierde la respuesta.
-3. Completar la matriz UAT del SHA QA `a6524e44e5df9eaf6232adbe2a70bbfd65516f3c`: permisos, aislamiento entre tenants, dependencias modulares, referencias, reservas/consumos, recepcion de producto terminado, capacidad, valuacion, concurrencia, proteccion de datos e idempotencia.
-4. Comprobar que el administrador allowlisted accede a Backoffice mientras un owner ordinario conserva `403`, sin persistir tokens ni contraseñas.
-5. Comprobar con usuarios de tenants distintos que Admin, Produccion, Inventory, RH y Ventas seleccionan el tenant desde membresias, recargan datos de Cloud SQL y no muestran KPIs/transacciones simuladas; Integraciones permanece inactivo.
+3. Comprobar que el administrador allowlisted accede a Backoffice mientras un owner ordinario conserva `403`, sin persistir tokens ni contraseñas.
+4. Comprobar con usuarios de tenants distintos que los siete modulos seleccionan el tenant desde membresias, recargan datos de Cloud SQL y no muestran KPIs/transacciones simuladas; los modulos planeados permanecen inactivos.
 
 ## Prioridad siguiente
 
-0. Siguiente evolucion de Mantenimiento tras CHG-235: reintento automatico programado, devolucion de sobrantes, participantes secundarios, adjuntos y reportes operativos; despues abordar preventivos y activos generales. El reintento manual durable ya quedo cerrado.
-0.1. Siguiente evolucion de Compras: division/adjudicacion de partidas de una requisicion entre varios proveedores, reintento automatico programado de recepciones `needs_reconciliation` y paginacion server-side antes de promover a QA. CHG-232 ya cubre conciliacion manual durable, claves estables, recepcion multipardida y pruebas de contencion; no simula adjudicacion parcial.
-1. Definir el siguiente corte de Ventas tras CHG-204: devoluciones, facturacion/cobranza y callback de Production que convierta solicitudes en partidas entregables y reporte costo real. La recepcion manual, parcial e idempotente de producto terminado quedo cubierta por CHG-222.
-2. Agregar paginacion con cursor a Clientes, Cotizaciones, Pedidos y Entregas antes de volumen productivo; el limite preventivo actual permanece en 200.
+0. Siguiente evolucion de Mantenimiento tras CHG-257: reintento automatico programado, participantes secundarios y adjuntos; despues abordar preventivos y activos generales. Los reportes operativos basicos de ordenes, indisponibilidad, refacciones y tiempos ya quedaron cerrados.
+0.1. Siguiente evolucion de Compras: division/adjudicacion de partidas de una requisicion entre varios proveedores, reintento automatico programado de recepciones `needs_reconciliation` y paginacion server-side antes de promover a QA. CHG-259 ya prueba la recuperacion parcial y corrige partidas sin respuesta; CHG-255 permite servicios sin Inventory. No existe aun adjudicacion parcial, factura ni cuenta por pagar.
+1. Siguiente corte de Ventas despues de CHG-255: devoluciones, facturacion/cobranza y callback de Production que convierta solicitudes en partidas entregables y reporte costo real. La ejecucion/aceptacion de servicios ya tiene orden propia; la recepcion de producto terminado permanece cubierta por CHG-222.
+2. Evolucionar la paginacion visual transversal de CHG-259 a paginacion contractual con cursor en Clientes, Cotizaciones, Pedidos, Ordenes de servicio y Entregas antes de volumen productivo; el limite preventivo de API permanece en 200.
 3. Repetir en Local aislado las dos entradas funcionales que antes quedaron solo en `localStorage` y confirmar en navegador que Movimientos, Inventario y Kardex reflejan el mismo saldo; no copiar esos datos a QA.
 4. Completar el catalogo de Articulos para escala server-side; actualmente el corte escalable se concentro en balances de Inventario.
 5. Decidir funcionalmente si Categoria se convierte en catalogo jerarquico antes de modelar IDs, padres o migraciones.
-6. Ejecutar en PostgreSQL Local pruebas de contencion paralela sobre dos reservas/salidas del mismo articulo y dos ordenes que compiten por la misma capacidad; incluir interrupcion entre el consumo de Inventory y la confirmacion `in_progress` de Production, seguida de reintento/reconciliacion con clave estable. El corte de codigo ya usa bloqueos e idempotencia, pero requiere evidencia de carga antes de QA.
+6. CHG-264 separa consumo e inicio: pruebas PostgreSQL cubren entrega parcial, bloqueo de inicio/cancelacion, recuperacion y lock; completar carga sostenida y cortes de red reales antes de QA.
 7. Capturar y validar areas/puestos QA solamente con datos ficticios y autorizacion explicita; `hr-service` y el entitlement ya estan desplegados, pero sus catalogos permanecen vacios.
 8. Paginar el catalogo de articulos elegibles para recetas y exponer disponibilidad agregada server-side para volumen mayor a 200 combinaciones articulo/almacen.
 9. Ejecutar la prueba funcional del editor de permisos en QA tras renovar la sesion y confirmar persistencia, concurrencia y rechazo de grants prohibidos.
@@ -33,6 +55,7 @@ Ultima actualizacion: 2026-08-31.
 13. Cuando Compras sea operativo, definir la politica de valuacion que actualizara el costo unitario base del articulo desde recepciones u ordenes de compra; por ahora permanece como captura manual de Inventory.
 14. Integrar consumidores externos con la reserva central de folios o exigir una credencial interna de confianza; la UI Local ya usa el catalogo, pero los contratos propietarios conservan compatibilidad con clientes API que proporcionan un codigo valido.
 15. Estandarizar en backend todas las excepciones de validación y errores inesperados con la envoltura `ErclaveError`; propagar `X-Correlation-Id` entre servicios, exponerlo en CORS y declarar respuestas de error comunes en OpenAPI. CHG-251 ya evita exponer mensajes técnicos en la UI y conserva la referencia disponible, pero no cambia los contratos HTTP de los servicios.
+16. Diseñar el modulo Reportes para analitica transversal: XLSX con formato, PDF, constructor, cruces entre propietarios, graficas, vistas guardadas, programacion y distribucion. CHG-257 conserva reportes operativos simples en el servicio propietario y oculta su formato tecnico en la interfaz.
 
 ## Fuera del alcance actual
 
@@ -46,3 +69,22 @@ Ultima actualizacion: 2026-08-31.
 ## Regla de mantenimiento
 
 Mover un pendiente a `ESTADO_ACTUAL.md` solo cuando este implementado, probado y registrado en `TRAZABILIDAD.md`. Eliminar pendientes obsoletos explicando la decision en trazabilidad.
+
+
+## Pendientes posteriores a CHG-265
+
+Conectar automáticamente Ventas → Producción → recepción/entrega y materiales de servicios comerciales se mantienen planned. También devoluciones comerciales a proveedor/cliente, entregas productivas/refacciones parcialmente elegidas, aprobación separada, reintentos programados y asignación de usuarios por almacén. Las devoluciones de sobrantes de Producción/Mantenimiento ya tienen solicitud y confirmación por Almacén en Local. No confundirlas con devoluciones comerciales ni merma. Validar volumen y fallos prolongados antes de promoción; QA no recibe este cambio.
+
+
+## Ajustes UAT Local CHG-266
+
+Los cuatro hallazgos UAT de proveedores, requisiciones, riel de Órdenes y acceso al ciclo de cotizaciones están corregidos en Local. Resta aceptación manual del usuario; no hay autorización de promoción QA. La configuración de permisos del ambiente remoto debe evaluarse dentro de un release autorizado, sin copiar datos Local ni conceder permisos a roles por inferencia.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Solicitudes compactas Local CHG-267
+
+La presentación compacta de solicitudes en Movimientos está implementada en Local. Pendiente aceptación manual del usuario. QA no recibe código ni datos por inferencia; no se amplía este corte a permisos o flujos de almacén.
+
+Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.

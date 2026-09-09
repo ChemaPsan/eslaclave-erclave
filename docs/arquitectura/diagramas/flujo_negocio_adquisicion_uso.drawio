@@ -1,130 +1,92 @@
-<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.1 Chrome/142.0.7444.265 Electron/39.8.0 Safari/537.36" version="29.6.1">
-  <diagram id="flujo-negocio-adquisicion-uso" name="Flujo negocio adquisicion y uso">
-    <mxGraphModel dx="1223" dy="561" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" modified="2026-09-02T12:00:00.000Z" agent="ERClave documentation" version="24.7.17" type="device">
+  <diagram id="flujo_negocio_adquisicion_uso.drawio" name="Vista vigente">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1300" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#300C57;" value="ERClave - Flujo de negocio: adquisicion, activacion y uso" vertex="1">
-          <mxGeometry height="40" width="1000" x="300" y="20" as="geometry" />
+        <mxCell id="title" value="ERClave - Flujo de adquisición, activación y uso" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#351455;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="2320" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="phase1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7FF;strokeColor=#9B0FC9;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="1. Descubrimiento" vertex="1">
-          <mxGeometry height="230" width="300" x="60" y="110" as="geometry" />
+        <mxCell id="subtitle" value="Distingue el onboarding manual implementado del checkout automatizado que permanece como objetivo." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=14;fontColor=#555555;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="72" width="2320" height="46" as="geometry" />
         </mxCell>
-        <mxCell id="phase2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8E8FF;strokeColor=#6106A0;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="2. Contratacion" vertex="1">
-          <mxGeometry height="360" width="350" x="410" y="110" as="geometry" />
+        <mxCell id="discover" value="1. DESCUBRIMIENTO&lt;br&gt;Cliente conoce beneficios,&lt;br&gt;módulos y casos de uso" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#D9EAF7;strokeColor=#8A6AA3;fontColor=#17365D;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="180" width="410" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="phase3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2563EB;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="3. Activacion" vertex="1">
-          <mxGeometry height="360" width="350" x="810" y="110" as="geometry" />
+        <mxCell id="contract" value="2. CONTRATACIÓN&lt;br&gt;Ruta vigente: acuerdo comercial&lt;br&gt;Ruta futura: checkout/pago" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFF1CC;strokeColor=#8A6AA3;fontColor=#6A4A00;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="500" y="180" width="410" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="phase4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#059669;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="4. Primer uso" vertex="1">
-          <mxGeometry height="360" width="330" x="1210" y="110" as="geometry" />
+        <mxCell id="activate" value="3. ACTIVACIÓN&lt;br&gt;Backoffice crea tenant, owner,&lt;br&gt;plan, módulos y sucursal" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="960" y="180" width="410" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="phase5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontColor=#1F1233;fontStyle=1;verticalAlign=top;spacingTop=12;" value="5. Operacion continua" vertex="1">
-          <mxGeometry height="290" width="940" x="330" y="560" as="geometry" />
+        <mxCell id="access" value="4. PRIMER ACCESO&lt;br&gt;Firebase envía recuperación;&lt;br&gt;owner define contraseña" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1420" y="180" width="410" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="visitor" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B0FC9;fontColor=#1F1233;" value="Cliente potencial&#xa;visita EsLaClave" vertex="1">
-          <mxGeometry height="65" width="210" x="105" y="165" as="geometry" />
+        <mxCell id="operate" value="5. OPERACIÓN&lt;br&gt;Usuarios, roles, catálogos&lt;br&gt;y documentos operativos" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#5B2A86;strokeColor=#8A6AA3;fontColor=#FFFFFF;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1880" y="180" width="410" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="learn" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9B0FC9;fontColor=#1F1233;" value="Revisa beneficios, modulos, planes y casos de uso" vertex="1">
-          <mxGeometry height="65" width="210" x="105" y="255" as="geometry" />
+        <mxCell id="manual" value="IMPLEMENTADO HOY" style="swimlane;html=1;rounded=1;horizontal=1;startSize=34;fillColor=#DDF2E1;swimlaneFillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#20552A;fontStyle=1;fontSize=15;whiteSpace=wrap;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="410" width="2240" height="370" as="geometry" />
         </mxCell>
-        <mxCell id="decision" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FEF2FF;strokeColor=#6106A0;fontColor=#1F1233;fontStyle=1;" value="Elige camino de contratacion" vertex="1">
-          <mxGeometry height="100" width="160" x="505" y="160" as="geometry" />
+        <mxCell id="sales_team" value="Ventas / operador interno&lt;br&gt;captura datos acordados" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="90" y="495" width="360" height="110" as="geometry" />
         </mxCell>
-        <mxCell id="online" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="Compra en linea&#xa;elige plan y paga" vertex="1">
-          <mxGeometry height="70" width="150" x="455" y="300" as="geometry" />
+        <mxCell id="backoffice" value="Backoffice allowlisted&lt;br&gt;onboarding idempotente" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#D9EAF7;strokeColor=#8A6AA3;fontColor=#17365D;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="540" y="495" width="360" height="110" as="geometry" />
         </mxCell>
-        <mxCell id="contact" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6106A0;fontColor=#1F1233;" value="Contacta a ventas&#xa;contrato o acuerdo manual" vertex="1">
-          <mxGeometry height="70" width="150" x="625" y="300" as="geometry" />
+        <mxCell id="admin" value="Admin Service&lt;br&gt;tenant + owner + entitlements&lt;br&gt;+ perfil organizacional" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#5B2A86;strokeColor=#8A6AA3;fontColor=#FFFFFF;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="990" y="480" width="420" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="approved" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#D97706;fontColor=#1F1233;" value="Pago confirmado o activacion aprobada" vertex="1">
-          <mxGeometry height="55" width="200" x="505" y="400" as="geometry" />
+        <mxCell id="email" value="Firebase Auth&lt;br&gt;correo para definir contraseña&lt;br&gt;sin enviar credenciales" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="480" width="350" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="tenant" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Se crea espacio de la empresa&#xa;con plan y modulos contratados" vertex="1">
-          <mxGeometry height="75" width="210" x="880" y="160" as="geometry" />
+        <mxCell id="first_use" value="ERClave&lt;br&gt;selección de tenant&lt;br&gt;configuración y operación" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1940" y="480" width="290" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="invite" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Administrador recibe invitacion segura por correo" vertex="1">
-          <mxGeometry height="70" width="210" x="880" y="260" as="geometry" />
+        <mxCell id="operation" value="FLUJOS DE VALOR DISPONIBLES" style="swimlane;html=1;rounded=1;horizontal=1;startSize=34;fillColor=#EDE2F5;swimlaneFillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#351455;fontStyle=1;fontSize=15;whiteSpace=wrap;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="840" width="2240" height="340" as="geometry" />
         </mxCell>
-        <mxCell id="password" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F1233;" value="Administrador activa cuenta&#xa;y crea su contrasena" vertex="1">
-          <mxGeometry height="70" width="210" x="880" y="355" as="geometry" />
+        <mxCell id="prod" value="Producción&lt;br&gt;receta -&gt; orden -&gt; etapas&lt;br&gt;-&gt; recepción terminada" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="90" y="930" width="430" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="wizard" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="Wizard inicial&#xa;datos de empresa, unidades, usuarios y permisos" vertex="1">
-          <mxGeometry height="80" width="210" x="1270" y="160" as="geometry" />
+        <mxCell id="purch" value="Compras&lt;br&gt;requisición -&gt; OC -&gt; recepción&lt;br&gt;física o servicio Local" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="610" y="930" width="430" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="configure" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="Configura modulos activos&lt;br&gt;Produccion, Almacenes, Ventas, etc" vertex="1">
-          <mxGeometry height="75" width="210" x="1270" y="270" as="geometry" />
+        <mxCell id="sales" value="Ventas&lt;br&gt;cliente -&gt; cotización -&gt; pedido&lt;br&gt;-&gt; entrega / servicio Local" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="930" width="430" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="start" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#059669;fontColor=#1F1233;" value="Empieza operacion&#xa;captura catalogos y primeros documentos" vertex="1">
-          <mxGeometry height="75" width="210" x="1270" y="375" as="geometry" />
+        <mxCell id="maint" value="Mantenimiento&lt;br&gt;reporte -&gt; asignación -&gt; ejecución&lt;br&gt;-&gt; refacciones -&gt; cierre" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="1650" y="930" width="430" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="products" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#1F1233;" value="Produccion&#xa;productos, servicios, recetas y ordenes" vertex="1">
-          <mxGeometry height="80" width="210" x="380" y="635" as="geometry" />
+        <mxCell id="future" value="Checkout, billing, provisioning automático y portal de API: OBJETIVO FUTURO" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F1F3F5;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="90" y="1115" width="1990" height="48" as="geometry" />
         </mxCell>
-        <mxCell id="inventory" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#1F1233;" value="Almacenes&#xa;articulos, movimientos, existencias y kardex" vertex="1">
-          <mxGeometry height="80" width="210" x="695" y="635" as="geometry" />
-        </mxCell>
-        <mxCell id="sales" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#1F1233;" value="Ventas&#xa;clientes, cotizaciones, pedidos y entregas" vertex="1">
-          <mxGeometry height="80" width="210" x="1010" y="635" as="geometry" />
-        </mxCell>
-        <mxCell id="support" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#1F1233;" value="Crecimiento&#xa;invita usuarios, ajusta permisos, activa integraciones o cambia plan" vertex="1">
-          <mxGeometry height="70" width="490" x="555" y="755" as="geometry" />
-        </mxCell>
-        <mxCell id="note" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#D97706;fontColor=#1F1233;align=left;spacing=10;" value="Principios de experiencia&#xa;- No se envia contrasena por correo&#xa;- El cliente puede comprar en linea o contratar con ventas&#xa;- El administrador configura su propio sistema&#xa;- Solo ve modulos y limites de su plan&#xa;- Puede crecer a integraciones y mas usuarios" vertex="1">
-          <mxGeometry height="290" width="230" x="60" y="560" as="geometry" />
-        </mxCell>
-        <mxCell id="e1" edge="1" parent="1" source="visitor" style="endArrow=block;html=1;rounded=0;strokeColor=#9B0FC9;" target="learn" value="">
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="discover" target="contract">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e2" edge="1" parent="1" source="learn" style="endArrow=block;html=1;rounded=0;strokeColor=#9B0FC9;" target="decision" value="">
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="contract" target="activate">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e3" edge="1" parent="1" source="decision" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;fontColor=#300C57;" target="online" value="autoservicio">
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="activate" target="access">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e4" edge="1" parent="1" source="decision" style="endArrow=block;html=1;rounded=0;strokeColor=#6106A0;fontColor=#300C57;" target="contact" value="asesorado">
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="access" target="operate">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e5" edge="1" parent="1" source="online" style="endArrow=block;html=1;rounded=0;strokeColor=#D97706;" target="approved" value="">
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="sales_team" target="backoffice">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e6" edge="1" parent="1" source="contact" style="endArrow=block;html=1;rounded=0;strokeColor=#D97706;" target="approved" value="">
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="backoffice" target="admin">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e7" edge="1" parent="1" source="approved" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" target="tenant" value="">
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="admin" target="email">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e8" edge="1" parent="1" source="tenant" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" target="invite" value="">
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="email" target="first_use">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e9" edge="1" parent="1" source="invite" style="endArrow=block;html=1;rounded=0;strokeColor=#2563EB;" target="password" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e10" edge="1" parent="1" source="password" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;" target="wizard" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e11" edge="1" parent="1" source="wizard" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;" target="configure" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e12" edge="1" parent="1" source="configure" style="endArrow=block;html=1;rounded=0;strokeColor=#059669;" target="start" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e13" edge="1" parent="1" source="start" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;" target="products" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e14" edge="1" parent="1" source="start" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;" target="inventory" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e15" edge="1" parent="1" source="start" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;" target="sales" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e16" edge="1" parent="1" source="products" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;" target="support" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e17" edge="1" parent="1" source="inventory" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;" target="support" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e18" edge="1" parent="1" source="sales" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;" target="support" value="">
+        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#5B2A86;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="first_use" target="operation">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
       </root>

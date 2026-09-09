@@ -848,6 +848,18 @@ h3 {
   color: var(--muted);
 }
 
+.standard-report-card.actionable {
+  grid-template-rows: auto auto 1fr auto;
+}
+
+.standard-report-card.actionable .secondary-action {
+  justify-self: start;
+}
+
+.standard-report-form .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .report-source-list {
   display: grid;
   gap: 8px;
@@ -3201,6 +3213,10 @@ h3 {
   grid-column: 1 / -1;
 }
 
+[data-product-inventory-field][hidden] {
+  display: none !important;
+}
+
 .form-section-title {
   margin-top: 16px;
 }
@@ -3773,13 +3789,36 @@ h3 {
   align-items: stretch;
 }
 
+.maintenance-material-request .row-actions > *,
+.maintenance-material-request .purchasing-line-summary li > * {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@container module-panel (max-width: 850px) {
+  .maintenance-workspace,
+  .maintenance-workspace:has(> .flow-guide-card:not([open])) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .maintenance-workspace > .flow-guide-card,
+  .maintenance-workspace > :not(.flow-guide-card),
+  .maintenance-workspace:has(> .flow-guide-card:not([open])) > .flow-guide-card,
+  .maintenance-workspace:has(> .flow-guide-card:not([open])) > :not(.flow-guide-card) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
 @container maintenance-order-card (max-width: 520px) {
   .maintenance-order-meta {
     justify-items: start;
   }
 
   .maintenance-order-actions > button {
-    flex: 1 1 180px;
+    flex: 1 1 auto;
+    min-height: 44px;
   }
 }
 
@@ -4418,6 +4457,71 @@ h3 {
   background: #166534;
 }
 
+.service-orders-screen,
+.service-order-modal {
+  container-name: service-orders;
+  container-type: inline-size;
+}
+
+.service-order-summary,
+.service-order-history {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.service-order-history {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.service-order-summary article,
+.service-order-history > div,
+.service-order-operation {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--field);
+}
+
+.service-order-summary article {
+  display: grid;
+  gap: 5px;
+}
+
+.service-order-summary span {
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.service-order-operation,
+.service-order-history {
+  margin-top: 14px;
+}
+
+.service-order-card .catalog-card-main,
+.service-order-card .catalog-card-actions {
+  min-width: 0;
+}
+
+@container service-orders (max-width: 700px) {
+  .service-order-summary,
+  .service-order-history {
+    grid-template-columns: 1fr;
+  }
+
+  .service-order-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .service-order-card .catalog-card-actions,
+  .service-order-card button {
+    width: 100%;
+  }
+}
+
 .toast[data-tone="warning"] {
   border: 1px solid #f59e0b;
   color: #2f2100;
@@ -4785,4 +4889,148 @@ h3 {
   .quick-actions {
     grid-template-columns: 1fr;
   }
+}
+
+.list-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.list-pagination span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  min-width: 150px;
+  text-align: center;
+}
+
+@container main-panel (max-width: 560px) {
+  .list-pagination {
+    justify-content: stretch;
+  }
+
+  .list-pagination button {
+    flex: 1;
+  }
+
+  .list-pagination span {
+    flex-basis: 100%;
+    order: -1;
+  }
+}
+
+
+/* Warehouse spare-parts inbox: full identities and quantities at its actual width. */
+.warehouse-parts-queue {
+  container-type: inline-size;
+  container-name: warehouse-parts;
+  min-width: 0;
+}
+.warehouse-parts-queue .record-main > *,
+.warehouse-parts-queue .purchasing-line-summary li > * {
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+@container warehouse-parts (max-width: 560px) {
+  .warehouse-parts-queue .record-row { display: flex; flex-direction: column; align-items: stretch; }
+  .warehouse-parts-queue .record-main { width: 100%; }
+  .warehouse-parts-queue .row-actions { display: flex; width: 100%; flex-direction: row; align-items: center; flex-wrap: wrap; }
+  .warehouse-parts-queue .row-actions button { flex: 1 1 auto; min-height: 44px; }
+  .warehouse-parts-queue .purchasing-line-summary li { display: grid; grid-template-columns: minmax(0, 1fr); }
+}
+.warehouse-production-queue .purchasing-line-summary small,
+#warehouseProductionIssueForm .purchasing-line-summary small {
+  display: block;
+  margin-top: 0.25rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#warehouseProductionIssueForm {
+  container: production-issue / inline-size;
+}
+#warehouseProductionIssueForm .purchasing-line-summary li {
+  gap: 1rem;
+}
+@container production-issue (max-width: 560px) {
+  #warehouseProductionIssueForm .purchasing-line-summary li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.35rem;
+  }
+}
+
+.operational-handoff-queue { container-type: inline-size; min-width: 0; }
+.warehouse-pending { container: warehouse-pending / inline-size; min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.warehouse-pending > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; min-height: 44px; cursor: pointer; list-style: none; }
+.warehouse-pending > summary::-webkit-details-marker { display: none; }
+.warehouse-pending-heading { display: grid; gap: 6px; min-width: 0; }
+.warehouse-pending [data-warehouse-pending-status] { display: grid; gap: 4px; }
+.warehouse-pending .chip { white-space: normal; overflow-wrap: normal; justify-self: start; gap: 4px; }
+.warehouse-pending-toggle { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.warehouse-pending:not([open]) .when-open, .warehouse-pending[open] .when-closed { display: none; }
+.warehouse-pending[open] .warehouse-pending-toggle > [aria-hidden] { transform: rotate(180deg); }
+.warehouse-pending-body { display: grid; gap: 16px; min-width: 0; padding: 14px; border-top: 1px solid var(--line); }
+.warehouse-pending-body > * { min-width: 0; }
+@container warehouse-pending (max-width: 520px) {
+  .warehouse-pending > summary { flex-direction: column; align-items: stretch; gap: 10px; }
+  .warehouse-pending-toggle { justify-content: space-between; }
+}
+.operational-handoff-queue .record-card { min-width: 0; }
+.operational-handoff-queue .record-main { min-width: 0; overflow-wrap: anywhere; }
+.operational-handoff-dialog .purchasing-line-summary small { display: block; overflow-wrap: anywhere; }
+.production-orders-layout > .production-orders-main { min-width: 0; }
+.production-orders-layout > .section-card { min-width: 0; }
+@container module-panel (max-width: 720px) {
+  .purchasing-requisitions-layout.purchasing-requisitions-layout { grid-template-columns: minmax(0, 1fr); }
+  .purchasing-requisitions-layout.purchasing-requisitions-layout > * { grid-column: 1; grid-row: auto; }
+  .production-orders-layout.production-orders-layout { grid-template-columns: minmax(0, 1fr); }
+  .production-orders-layout.production-orders-layout > * { grid-column: 1; grid-row: auto; }
+}
+
+/* Requisition lines respond to the form width, after the flow rail is deducted. */
+#purchasingRequisitionForm { container: purchasing-requisition / inline-size; }
+#purchasingRequisitionForm > * { min-width: 0; }
+#purchasingRequisitionForm .purchasing-requisition-line {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  min-width: 0;
+}
+#purchasingRequisitionForm .purchasing-requisition-line > * { min-width: 0; grid-column: span 3; }
+#purchasingRequisitionForm .purchasing-line-item { grid-column: span 6; }
+#purchasingRequisitionForm .purchasing-line-description { grid-column: span 7; }
+#purchasingRequisitionForm .purchasing-line-unit { grid-column: span 3; }
+#purchasingRequisitionForm [data-remove-requisition-line] { grid-column: span 2; }
+#purchasingRequisitionForm .purchasing-requisition-line > [hidden] { display: none; }
+#purchasingRequisitionForm .entity-select-lookup { min-width: 0; width: 100%; }
+#purchasingRequisitionForm .entity-source-select { width: 1px; min-width: 0; padding: 0; border: 0; inset-inline-start: 0; top: 0; }
+@container purchasing-requisition (max-width: 680px) {
+  #purchasingRequisitionForm .purchasing-requisition-line > * { grid-column: span 6; }
+  #purchasingRequisitionForm .purchasing-line-item,
+  #purchasingRequisitionForm .purchasing-line-description { grid-column: 1 / -1; }
+}
+@container purchasing-requisition (max-width: 380px) {
+  #purchasingRequisitionForm > * { grid-column: 1 / -1; }
+  #purchasingRequisitionForm .purchasing-lines-head { flex-wrap: wrap; }
+  #purchasingRequisitionForm .purchasing-requisition-line > * { grid-column: 1 / -1; }
+}
+.purchasing-supplier-dialog { container: purchasing-supplier / inline-size; min-width: 0; padding: 18px; }
+.purchasing-supplier-dialog .form-grid > * { min-width: 0; }
+@container purchasing-supplier (max-width: 600px) {
+  .purchasing-supplier-dialog .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .purchasing-supplier-dialog .form-grid > * { grid-column: 1; }
+}
+.sales-quote-card.catalog-card { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.sales-quote-card .catalog-card-main { min-width: 0; overflow-wrap: anywhere; }
+.sales-quote-card .catalog-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; min-width: 0; }
+.sales-quote-card .catalog-card-actions button { white-space: normal; overflow-wrap: normal; min-height: 44px; }
+.sales-quote-next-step { margin: 0; }
+@container (max-width: 560px) {
+  .operational-handoff-queue .record-card { grid-template-columns: minmax(0, 1fr); }
+  .operational-handoff-queue .panel-head { flex-wrap: wrap; }
+  .operational-handoff-queue .purchasing-line-summary li { grid-template-columns: minmax(0, 1fr); }
 }

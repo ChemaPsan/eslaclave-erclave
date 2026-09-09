@@ -90,6 +90,7 @@ class Settings(BaseSettings):
                 require_public_https(self.inventory_service_url, "ERCLAVE_INVENTORY_SERVICE_URL")
             if self.service_name == "inventory-service":
                 require_public_https(self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL")
+                require_public_https(self.maintenance_service_url, "ERCLAVE_MAINTENANCE_SERVICE_URL")
             if self.service_name == "sales-service":
                 require_public_https(self.hr_service_url, "ERCLAVE_HR_SERVICE_URL")
                 require_public_https(self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL")

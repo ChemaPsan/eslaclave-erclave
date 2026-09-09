@@ -19,16 +19,22 @@ export async function getAdminDashboard() {
   const tenantId = getDemoTenantId();
   const session = await getSessionContext();
 
-  const tenant = await apiRequest(`/v1/tenants/${tenantId}`);
-  const entitlements = await apiRequest(`/v1/tenants/${tenantId}/entitlements`);
-  const settings = await apiRequest("/v1/settings?module_code=admin", { headers: { "X-Tenant-Id": tenantId } });
-  const users = await apiRequest("/v1/users", { headers: { "X-Tenant-Id": tenantId } });
-  const roles = await apiRequest("/v1/roles", { headers: { "X-Tenant-Id": tenantId } });
-  const permissions = await apiRequest("/v1/permissions", { headers: { "X-Tenant-Id": tenantId } });
-  const units = await apiRequest("/v1/catalogs/units-of-measure", { headers: { "X-Tenant-Id": tenantId } });
-  const currencies = await apiRequest("/v1/catalogs/commercial/currencies?include_inactive=true", { headers: { "X-Tenant-Id": tenantId } });
-  const paymentTerms = await apiRequest("/v1/catalogs/commercial/payment_terms?include_inactive=true", { headers: { "X-Tenant-Id": tenantId } });
-  const documentTemplate = await apiRequest("/v1/document-template", { headers: { "X-Tenant-Id": tenantId } });
+  const can = (permission) => (session?.permissions || []).includes(permission);
+  const read = (permission, path, fallback = []) => can(permission)
+    ? apiRequest(path, { headers: { "X-Tenant-Id": tenantId } })
+    : Promise.resolve({ data: fallback });
+  const [tenant, entitlements, settings, users, roles, permissions, units, currencies, paymentTerms, documentTemplate] = await Promise.all([
+    read("admin.tenant.read", `/v1/tenants/${tenantId}`, session.tenant),
+    read("admin.tenant.read", `/v1/tenants/${tenantId}/entitlements`),
+    read("admin.setting.read", "/v1/settings?module_code=admin"),
+    read("admin.user.read", "/v1/users"),
+    read("admin.role.read", "/v1/roles"),
+    read("admin.role.read", "/v1/permissions"),
+    read("admin.unit.read", "/v1/catalogs/units-of-measure"),
+    read("admin.catalog.read", "/v1/catalogs/commercial/currencies?include_inactive=true"),
+    read("admin.catalog.read", "/v1/catalogs/commercial/payment_terms?include_inactive=true"),
+    read("admin.setting.read", "/v1/document-template", null)
+  ]);
   const codeSequences = (session?.permissions || []).includes("admin.setting.read")
     ? await apiRequest("/v1/catalogs/code-sequences", { headers: { "X-Tenant-Id": tenantId } })
     : { data: [] };

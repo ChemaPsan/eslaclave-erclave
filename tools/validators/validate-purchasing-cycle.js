@@ -28,7 +28,8 @@ for (const token of [
   'renderFlowGuide(getPurchasingFlowTitle(title),getPurchasingFlowSteps(id))',
   "openPurchasingCancellationModal",
   'id="purchasingCancellationForm"',
-  'renderFormErrors([t("cancellationReasonRequired")])'
+  'renderFormErrors([t("purchasingCancellationReasonLength")])',
+  'minlength="3" maxlength="500"'
 ]) {
   if (!frontend.includes(token)) errors.push(`Purchasing UI continuity missing ${token}`);
 }

@@ -1,5 +1,21 @@
 # ERClave — Módulo de Almacenes e Inventarios
 
+## Entrega previa de materiales CHG-264
+
+CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+
+## Solicitudes de refacciones en Movimientos ? Local CHG-263
+
+Movimientos conserva Entradas de produccion terminada y agrega una bandeja paginada de solicitudes de refacciones antes del historial. Cada solicitud muestra orden, tecnico asignado, almacen, partidas, cantidades y estado. `inventory.movement.read` permite consultar; `inventory.movement.create` permite **Autorizar y entregar** o **Rechazar solicitud** con motivo de 3 a 500 caracteres. Se reutiliza la capacidad de registrar salidas del almacen; no se conceden permisos de ordenes tecnicas ni de recepcion de producto terminado.
+
+La confirmacion entrega todas las partidas reservadas al tecnico asignado, registra actor/receptor en auditoria y crea salidas inmutables en Inventory. El rechazo cancela la solicitud en Maintenance y libera reservas sin salida. Una entrega iniciada no admite rechazo: sus fallos parciales se reintentan desde la misma bandeja con claves estables. Resolver Mantenimiento no vuelve a consumir. La UI mantiene ES/EN, confirmacion, error recuperable y el patron responsive existente; `warehouse-parts-queue` apila la tarjeta por ancho real y muestra nombres/cantidades completos sin alterar otras secciones.
+
+Ambos modulos deben estar activos. Contratos y evidencia: `docs/auditorias/refacciones_movimientos_2026-09-07.md`. QA conserva su release anterior; no hay migracion ni permisos nuevos.
+
+## Coherencia de formularios Local (CHG-262)
+
+Las altas de almacenes/articulos muestran el estatus activo admitido por sus contratos. La politica de articulo se conserva como solo lectura al editar. Cambiar la naturaleza del articulo limpia el vinculo productivo oculto; un movimiento solo envia destino cuando es transferencia. En modo API el saldo disponible y las reservas los valida Inventory, nunca una suma parcial de movimientos del navegador. Los campos de maqueta sin contrato (permite reservas y ubicacion del movimiento) no se ofrecen como editables en API. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+
 ## Autorizacion de producto terminado Local
 
 Leer recepciones y confirmar la recepcion fisica usan `inventory.finished_goods_receipt.read` y `inventory.finished_goods_receipt.receive`. Crear movimientos generales no concede esta aceptacion. Produccion expone al rol receptor solo las proyecciones de orden terminada y producto necesarias.
@@ -122,7 +138,7 @@ Los movimientos usan exclusivamente articulos dados de alta en el catalogo maest
 | Devolución a proveedor | Reduce inventario recibido. |
 | Reserva | Aparta inventario para una orden de Produccion o un compromiso comercial. Implementada en Local y QA. |
 | Liberación de reserva | Regresa inventario apartado a disponible cuando una orden se cancela. Implementada para Produccion en codigo Local. |
-| Consumo de reserva | Convierte una reserva de Produccion en una salida inmutable cuando la orden inicia por primera vez. Implementado en codigo Local. |
+| Consumo de reserva | Convierte una reserva de Produccion en salida inmutable cuando Almacen confirma la entrega desde Movimientos, antes del inicio. Implementado en codigo Local. |
 
 ### Reservas por ambiente
 
@@ -133,7 +149,7 @@ Limites actuales:
 - QA conserva el corte anterior hasta una promocion gobernada;
 - no existe todavia una interfaz independiente para administrar reservas manuales;
 - Las reservas de pedidos de Ventas estan implementadas en Local y QA y admiten consumo parcial; lotes y otros origenes permanecen futuros;
-- la recepcion total o parcial de producto terminado desde ordenes terminadas esta implementada en Local; merma, bloqueos, transito, lotes y series siguen fuera de este corte.
+- la recepcion total o parcial de producto terminado desde ordenes terminadas esta implementada en Local; CHG-265 agrega tránsito entre almacenes; merma, bloqueos, lotes y series siguen pendientes.
 
 Produccion es consumidor del contrato; Inventory conserva ownership de reservas, movimientos, disponibilidad y valuacion.
 
@@ -339,3 +355,22 @@ Almacenes consulta ordenes terminadas y confirma la recepcion fisica total o par
 ## CHG-214: alias heredados de unidad
 
 La revision `20260821_0023`, desplegada en Local y QA, reconoce exclusivamente dos equivalencias empresariales inequivocas heredadas: `LTS` como `LTR` y `MT` como `MTR`. La normalizacion actualiza de forma atomica el articulo, sus movimientos y los snapshots relacionados, sin cambiar cantidad, costo, identidad ni almacen, y registra una auditoria por fila. Cualquier otro cambio de unidad conserva la regla general: si existen movimientos o reservas, no se permite reinterpretar la historia y se requiere un articulo sustituto con regularizacion autorizada.
+
+
+## Confirmaciones y recuperaciones Local CHG-265
+
+Movimientos reúne recepciones de Compras, entregas de Ventas, transferencias en tránsito y devoluciones de materiales, además de producto terminado, refacciones y materiales productivos. El permiso inventory.movement.create confirma los nuevos movimientos físicos; inventory.movement.read consulta bandejas paginadas. Transferir descuenta origen; recibir incrementa destino; devolver pendiente requiere recepción en origen. La autorización sigue siendo global por tenant y permiso: no se introduce membresía individual por almacén. Reversas manuales cuentan original más compensación una sola vez y bloquean documentos vinculados, compensaciones y transferencias nuevas.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+
+## Solicitudes compactas Local CHG-267
+
+Movimientos agrupa las siete bandejas en un desplegable cerrado al entrar, antes del historial. El resumen advierte pendientes y distingue carga/error/páginas posteriores sin inventar un total. Conserva apertura durante recargas y vuelve cerrado al regresar. Acciones y permisos no cambian; producto terminado permite reintentar su consulta fallida.
+
+Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.
+
+
+## Recuperación de refacciones Local CHG-268
+
+CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.

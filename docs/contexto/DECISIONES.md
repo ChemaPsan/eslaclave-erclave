@@ -1,5 +1,25 @@
 # Decisiones vigentes de ERClave
 
+## Autoridad de salida antes del inicio CHG-264
+
+CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+
+La orden permanece Liberada/En espera de recursos despues de entregar; iniciar sigue siendo un comando propio de Produccion. Sin materiales no exige entrega. Cancelar antes de entregar libera reservas; despues de entregar conserva los movimientos. Una entrega iniciada e incompleta bloquea cancelacion hasta conciliar. El lock por tenant/orden cubre entrega y cambios de estado durante HTTP; la intencion se persiste antes de consumir. Reintentos usan la identidad estable por orden/reserva y conservan movimientos confirmados. Nuevas reservas productivas sin fecha explicita no vencen a las 24 horas; no se reactivan reservas historicas.
+
+## Refacciones y entrega fisica Local CHG-263
+
+- Solicitar aparta material; Almacen confirma la entrega completa desde Movimientos y ese es el momento de registrar la salida. Resolver la reparacion no consume.
+- La confirmacion combina autorizacion y entrega; no se agrega una aprobacion previa independiente ni una entrega parcial editable. El tecnico asignado es el receptor y queda en la auditoria de la confirmacion.
+- Se reutilizan `inventory.movement.read|create` para consulta y registro/rechazo de esta salida interna; los permisos de Mantenimiento no conceden entrega. Inventory valida ademas el origen de la reserva, de modo que esa capacidad no consume/libera reservas de Produccion o Ventas.
+- Las nuevas reservas de Mantenimiento sin vencimiento explicito permanecen hasta entrega/cancelacion. No se reactivan reservas historicas vencidas ni se reinterpretan movimientos previos.
+- El rechazo usa `cancelled` con motivo auditado; no crea un estado persistente adicional. Solicitudes ya emitidas o con entrega en conciliacion no se rechazan.
+
+## Coherencia frontend/backend
+
+- CHG-262 aplica los contratos existentes a campos inmutables, valores iniciales y ramas condicionales. No se agrega un campo al backend solo para sostener una captura heredada de la maqueta.
+- Los permisos de lectura son independientes por recurso y se validan antes de componer consultas; un comando compuesto comprueba todas sus autoridades antes de la primera mutacion.
+- Un saldo parcial del navegador no autoriza ni bloquea salidas API; Inventory es la autoridad de existencia y reservas.
+
 ## Autorizacion operativa por capacidad
 
 - Cada aprobacion, aceptacion, liberacion, finalizacion, cancelacion o recepcion implementada usa un permiso puntual derivado del contrato.
@@ -50,21 +70,21 @@
 - Editar permisos usa draft, diff, guardado unico, revision optimista e idempotencia. Los filtros no limitan el payload ni eliminan asignaciones ocultas; scopes existentes se preservan.
 - Un articulo solo es candidato de receta cuando esta activo y tiene `use_in_recipe=true`; la disponibilidad se calcula desde movimientos de todos los almacenes del tenant.
 - Una orden de Produccion solo se crea desde una version aprobada vigente. Produccion orquesta, pero Inventarios es autoridad de existencia, reservas, movimientos y valuacion; RH es autoridad de trabajadores, puestos y capacidad laboral; Produccion es autoridad de maquinaria y compromisos de capacidad. El navegador no puede declarar disponibilidad ni costo.
-- Liberar una orden reserva materiales por almacen y compromete minutos de mano de obra/maquinaria por fecha. La primera entrada a `in_progress` consume cada reserva mediante Inventory y registra una salida inmutable en el almacen que la otorgo; reanudar o cerrar no vuelve a consumir. Cancelar antes del inicio libera reservas y cancelar despues conserva las salidas fisicas. El cierre exige cantidades reales temporales y calcula el costo real desde snapshots verificables. Los comandos externos y locales son idempotentes y los bloqueos se ordenan por recurso para evitar sobreasignacion concurrente.
+- Liberar una orden reserva materiales por almacen y compromete minutos de mano de obra/maquinaria por fecha. Almacen confirma la entrega desde Movimientos y registra salidas inmutables antes de `in_progress`; iniciar, reanudar o cerrar no consume. Cancelar antes de entregar libera reservas y cancelar despues conserva salidas. El cierre exige materiales entregados y etapas completas; tiempos reales temporales permanecen diferidos. Los comandos externos y locales son idempotentes y los bloqueos se ordenan por recurso para evitar sobreasignacion concurrente.
 - En modo API, una receta solo selecciona articulos activos marcados `use_in_recipe`, puestos RH activos con `intervenes_in_production=true` y, como etapas, areas RH activas que tengan al menos uno de esos puestos productivos. La etapa conserva `labor_area_ref_id` y nombre snapshot, sin FK ni escritura cruzada.
 - Las fases activas de una receta se numeran en orden consecutivo y sus porcentajes deben sumar exactamente 100. La orden copia numero, area y peso; su avance general es la suma ponderada del avance de cada fase, no un promedio simple.
 - El costo manual de un articulo pertenece a Inventory y significa costo por una unidad base del articulo. Las conversiones solo se permiten entre unidades activas, compatibles y con factor estandar inequívoco; Compras sera la autoridad futura para recalcularlo desde recepciones u ordenes de compra.
-- CHG-228 preparo Compras y CHG-229 implemento su primer corte supplier-to-receipt en Local, activable en Backoffice con dependencia obligatoria de Inventory. Admin conserva unidades, monedas, condiciones, folios y autorizacion. Compras es dueno de proveedor/requisicion/orden/recepcion comercial e Inventory del articulo/almacen/movimiento/saldo. Factura, pago, devolucion y contabilidad quedan fuera hasta definir sus owners y contratos.
+- CHG-228 preparo Compras y CHG-229 implemento su primer corte supplier-to-receipt, hoy desplegado en Local y QA. Admin conserva unidades, monedas, condiciones, folios y autorizacion. Compras es dueno de proveedor/requisicion/orden/recepcion comercial e Inventory del articulo/almacen/movimiento/saldo. CHG-255 mantiene Inventory como dependencia condicional solo para partidas inventariables; factura, pago, devolucion y contabilidad quedan fuera hasta definir sus owners y contratos.
 - Desde CHG-230, todo proveedor nuevo exige perfil fiscal minimo y RFC unico por tenant. Los proveedores heredados incompletos permanecen legibles y solo deben completar el conjunto al editar datos fiscales. El maestro sigue siendo editable; cualquier factura fiscal futura conservara snapshots propios.
 - Desde CHG-231, una requisicion de Compras agrupa multiples partidas y consolida cada articulo en una sola linea. La orden conserva precio por partida. Dividir una requisicion entre varios proveedores requiere un corte posterior con saldo adjudicable por linea y no se simula duplicando documentos.
 - Desde CHG-232, una orden originada en requisicion debe coincidir exactamente en tipo, articulo, descripcion, cantidad y unidad; solo agrega precio. Requisiciones y ordenes se cancelan con motivo y actor. Cada recepcion reclama saldo bajo bloqueo, conserva una clave Inventory estable por linea y su conciliacion reintenta exclusivamente lineas no completadas.
-- CHG-234 implementa Mantenimiento correctivo solo en Local, con RH e Inventory como dependencias duras y Production como integracion opcional. `maintenance-service` es dueno de ordenes, asignaciones, tiempos y solicitudes internas; RH de elegibilidad, Production de maquinas/ordenes y del hold `maintenance_order_ref_id`, e Inventory de refacciones, reservas, movimientos y costos. Resolver nunca reanuda Produccion automaticamente.
+- CHG-234 implementa Mantenimiento correctivo y CHG-235 endurece su conciliacion; el corte acumulado esta desplegado en Local y QA. RH e Inventory son dependencias duras y Production es integracion opcional. `maintenance-service` es dueno de ordenes, asignaciones, tiempos y solicitudes internas; RH de elegibilidad, Production de maquinas/ordenes y del hold `maintenance_order_ref_id`, e Inventory de refacciones, reservas, movimientos y costos. Resolver nunca reanuda Produccion automaticamente.
 - Una orden de Mantenimiento apunta a una maquina de Production o a una descripcion/ubicacion libre de edificio u otro objetivo. Un articulo de Inventory no se convierte en activo. Solo una falla bloqueante puede permanecer activa por maquina.
 - Una falla productiva deja la orden en `waiting_resources` si no inicio o la pasa a `paused` si estaba en proceso. Resolver libera la maquina, pero nunca reanuda Produccion automaticamente: el operador debe revalidar y reanudar.
 - La primera entrega de Mantenimiento sera correctiva. Preventivos recurrentes, Activos, garantias, anexos y escalamiento automatico a Compras permanecen fuera hasta un corte propio.
 - Los estados de orden y etapa son maquinas de estado backend; las etapas terminadas u omitidas son terminales y el cierre de orden requiere una transicion explicita desde validacion.
 - Inventario incluye articulos sin movimientos con saldo cero cuando tienen almacen sugerido, sin fabricar movimientos ni existencias.
-- El primer corte de Ventas es Local y comprende Clientes/Cotizaciones. Sales conserva ownership de sus documentos y snapshots; RH, Produccion y Administracion siguen siendo autoridades de responsables, productos/servicios y unidades.
+- El corte certificado de Ventas esta desplegado en Local y QA para Clientes, Cotizaciones, Pedidos y Entregas. CHG-255 agrega Ordenes de servicio solo en Local hasta una promocion posterior. Sales conserva ownership de sus documentos y snapshots; RH, Produccion y Administracion siguen siendo autoridades de responsables, productos/servicios y unidades.
 - La activacion de `sales` exige `hr` y `production` efectivos en los dos niveles de gobierno. Las transiciones de entitlements bloquean todas las filas modulares del tenant y no permiten apagar una autoridad mientras Ventas permanezca activa. Onboarding crea entitlements antes de asignar permisos al owner.
 - La UI comercial carga documentos y catalogos de mutacion por separado. La indisponibilidad o falta de permisos sobre responsables, productos o unidades no debe ocultar Clientes/Cotizaciones a un usuario de solo lectura.
 - Un cliente exige contacto principal y responsable RH activo. El perfil fiscal es opcional, pero razon social, RFC/ID fiscal y correo de facturacion se vuelven obligatorios juntos al iniciarlo.
@@ -75,6 +95,8 @@
 - Toda operacion de Ventas que produzca efectos en Inventory o Production usa un reclamo local durable antes de la llamada, claves derivadas estables y estado `needs_reconciliation` reanudable; una llamada HTTP seguida de una transaccion local nunca se considera atomicidad.
 - Una unidad coincidente no demuestra que un articulo de Inventory corresponde al producto vendido. Production es dueno del mapeo por ID, valida el articulo por API de Inventory y Sales vuelve a validarlo al surtir.
 - Un costo solo se etiqueta como real cuando proviene de consumo o captura operativa trazable. Sales conserva `actual_cost_source`; el costo estandar permanece exclusivamente estimado.
+- Una partida `service` confirmada en un Pedido genera exactamente una orden de servicio propiedad de Sales. Su planeacion, asignacion, ejecucion, tiempos, costos, evidencia y aceptacion usan permisos puntuales, idempotencia, auditoria y snapshots; no se representan como Entrega ni generan movimientos de Inventory.
+- Compras puede operar para un tenant de servicios sin habilitar Inventory. Admin sigue siendo dependencia transversal; Inventory se exige y consulta solo cuando una partida es `inventory_item`. Una partida `service` prohibe articulo y almacen, pero conserva recepcion comercial parcial o total en Compras.
 
 ## Ambientes
 
@@ -114,6 +136,13 @@ Una decision nueva o reemplazada debe registrarse tambien en `TRAZABILIDAD.md` y
 - Un error de mutación nunca confirma ni conserva visualmente un estado no aceptado. La UI restaura o recarga la proyección autoritativa y explica el siguiente paso.
 - La severidad visible distingue éxito, bloqueo funcional, conciliación y fallo técnico; sólo los casos inesperados o inciertos muestran `correlation_id` como referencia de soporte.
 - El contrato y la taxonomía completos viven en `docs/arquitectura/feedback_operativo_y_errores.md`.
+- Desde CHG-259, toda presentacion de errores del shell usa `frontend/features/error-feedback.js`; `frontend/app.js` no puede leer `error.message` ni `reason.message` para mostrarlo. El validador transversal bloquea regresiones.
+
+## Verificacion y paginacion Local
+
+- La verificacion PostgreSQL completa es un comando explicito y reproducible: `npm run verify:postgres`. Solo admite `erclave_local` en loopback `5434` y convierte cualquier prueba omitida en fallo.
+- `npm run verify:local` compone la integracion PostgreSQL estricta con Playwright. El E2E usa Chrome instalado, Firebase Emulator y URLs loopback; una dependencia Local ausente o una base remota detiene el recorrido.
+- La primera paginacion transversal es de presentacion: pagina en bloques de 25 los registros que la pantalla ya cargo, sin perder acciones ni filtros. No sustituye la busqueda/paginacion server-side obligatoria para maestros y documentos de alto volumen.
 
 ## Continuidad del flujo de Compras
 
@@ -141,3 +170,32 @@ Una decision nueva o reemplazada debe registrarse tambien en `TRAZABILIDAD.md` y
 - La duracion sugerida de receta es solo un valor inicial para planeacion y no participa en la elegibilidad de sus recursos.
 - La orden de produccion es el unico punto que valida disponibilidad material, capacidad laboral/maquinaria, compromisos concurrentes, inicio y numero de dias productivos.
 - Un faltante operativo nunca invalida historicamente la definicion de una receta; impide liberar la orden concreta hasta resolverlo o cambiar su horizonte.
+
+
+## 2026-09-08 — Responsabilidades CHG-265
+
+El usuario confirmó: solicitante acepta servicios comprados, destino confirma transferencias y Almacén confirma devoluciones. La preparación comercial no implica movimiento físico. No se agregan permisos nuevos ni escrituras entre schemas. CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+
+## Ajustes UAT Local CHG-266
+
+Mantener listado como entrada de Proveedores y separar captura en modal. Corregir la compresión con clases y container queries acotadas, sin alterar globalmente el riel. Explicar transiciones de cotización según permiso efectivo; conservar el ciclo backend y restaurar únicamente el baseline Owner del tenant demo Local con los cuatro permisos ya declarados en OpenAPI.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Solicitudes compactas Local CHG-267
+
+Agrupar todas las bandejas operativas de Movimientos en un desplegable inicial cerrado, antes del historial. Mostrar existencia de pendientes sin sumar páginas como totales. Mantener consultas y comandos existentes; distinguir errores y carga. La expansión es temporal de la pantalla, no preferencia persistente global.
+
+Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.
+
+
+## Recuperación de refacciones Local CHG-268
+
+CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+
+
+## Candidato de continuidad CHG-269
+
+CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.

@@ -91,7 +91,7 @@ const moduleOptions = [
   { code: "hr", label: "Recursos Humanos" },
   { code: "inventory", label: "Almacenes" },
   { code: "sales", label: "Ventas", dependencies: ["hr", "production"] },
-  { code: "purchasing", label: "Compras", dependencies: ["inventory"] },
+  { code: "purchasing", label: "Compras", dependencies: [] },
   { code: "maintenance", label: "Mantenimiento", dependencies: ["hr", "inventory"] }
 ];
 const defaultUsageToDate = new Date().toISOString().slice(0, 10);

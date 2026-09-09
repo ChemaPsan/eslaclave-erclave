@@ -1,7 +1,8 @@
-import { apiRequestAt } from "./client.js";
+import { apiDownloadAt, apiRequestAt } from "./client.js";
 import { getDemoTenantId, getInventoryApiBaseUrl } from "./config.js";
 function headers(command=false){const id=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;return {"X-Tenant-Id":getDemoTenantId(),"X-Correlation-Id":`web-${id}`,...(command?{"Idempotency-Key":`web-${id}`}:{})};}
 function request(path,options={}){return apiRequestAt(getInventoryApiBaseUrl(),path,{...options,headers:{...headers(Boolean(options.method&&options.method!=="GET")),...(options.headers||{})}},"Inventory API");}
+export function downloadInventoryReport(code,filters={}){const query=new URLSearchParams();Object.entries(filters).forEach(([key,value])=>{if(value!==undefined&&value!==null&&value!==""&&value!=="all")query.set(key,String(value));});return apiDownloadAt(getInventoryApiBaseUrl(),`/v1/inventory/reports/${encodeURIComponent(code)}/export?${query}`,{headers:headers()},"Inventory API");}
 export async function getInventoryCatalog(){const warehouses=await request("/v1/inventory/warehouses");return {warehouses:warehouses.data};}
 export async function getInventoryItems(filters={}){const query=new URLSearchParams();Object.entries(filters).forEach(([key,value])=>{if(value!==undefined&&value!==null&&value!==""&&value!=="all")query.set(key,String(value));});return request(`/v1/inventory/items?${query.toString()}`);}
 export async function getInventoryMovements(filters={}){const query=new URLSearchParams();Object.entries(filters).forEach(([key,value])=>{if(value!==undefined&&value!==null&&value!==""&&value!=="all")query.set(key,String(value));});return request(`/v1/inventory/movements?${query.toString()}`);}
@@ -13,3 +14,10 @@ export async function updateInventoryItem(id,payload){return (await request(`/v1
 export async function createInventoryMovement(payload){return (await request("/v1/inventory/movements",{method:"POST",body:JSON.stringify(payload)})).data;}
 export async function getFinishedGoodsReceipts(){return request("/v1/inventory/finished-goods-receipts");}
 export async function createFinishedGoodsReceipt(payload){return (await request("/v1/inventory/finished-goods-receipts",{method:"POST",body:JSON.stringify(payload)})).data;}
+
+export function getInventoryTransfers(offset=0){return request(`/v1/inventory/transfers?limit=26&offset=${offset}`);}
+export async function transitionInventoryTransfer(id,action,payload,commandKey){return (await request(`/v1/inventory/transfers/${encodeURIComponent(id)}/${action}`,{method:"POST",body:JSON.stringify(payload),headers:{"Idempotency-Key":commandKey}})).data;}
+export function getInventoryMaterialReturns(offset=0){return request(`/v1/inventory/material-returns?limit=26&offset=${offset}`);}
+export async function requestInventoryMaterialReturn(payload,commandKey){return (await request('/v1/inventory/material-returns',{method:'POST',body:JSON.stringify(payload),headers:{'Idempotency-Key':commandKey}})).data;}
+export async function receiveInventoryMaterialReturn(id){return (await request(`/v1/inventory/material-returns/${encodeURIComponent(id)}/receive`,{method:'POST'})).data;}
+export async function cancelInventoryMaterialReturn(id,reason){return (await request(`/v1/inventory/material-returns/${encodeURIComponent(id)}/cancel`,{method:"POST",body:JSON.stringify({reason})})).data;}

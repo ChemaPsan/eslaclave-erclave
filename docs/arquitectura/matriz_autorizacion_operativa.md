@@ -1,5 +1,15 @@
 # Matriz de autorizacion operativa
 
+## Entrega previa de materiales CHG-264
+
+CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+
+## Refacciones Local CHG-263
+
+La bandeja de Movimientos exige `inventory.movement.read`; confirmar o rechazar esta salida interna exige `inventory.movement.create` y los entitlements Maintenance e Inventory. Esta capacidad existente de escritura de movimientos autoriza una entrega completa y su rechazo auditado. No autoriza recepcion de producto terminado, lectura de diagnosticos ni otras transiciones tecnicas. `maintenance.order.resolve` deja de ser una autoridad de consumo.
+
+En `/reservations/{id}/consume|release`, Inventory vuelve a comprobar el origen: el permiso de Almacen aqui solo opera sobre `maintenance_order`; Produccion y Ventas conservan sus capacidades propias.
+
 Ultima revision: 2026-08-24. Estado: implementado solo en Local.
 
 ## Regla transversal
@@ -37,3 +47,10 @@ Compras ya separa enviar, aprobar, rechazar y cancelar requisiciones; emitir/can
 ## Administracion
 
 Los permisos se derivan de OpenAPI, se sincronizan con el catalogo Admin y son asignables desde **Administracion > Roles > Permisos** cuando el modulo correspondiente esta activo. Los permisos genericos retirados dejan de producir autorizacion; no se convierten automaticamente en todos los permisos nuevos para evitar escalar privilegios silenciosamente.
+
+
+## Flujo operativo Local CHG-265
+
+No se crean permisos. inventory.movement.read/create consulta/confirma bandejas y movimientos; servicios comprados usan purchasing.requisition.create/order.create y pertenencia al solicitante; recuperaciones de creación usan production.order.release con prueba de fallo y mismo actor. Inventory verifica permiso por tipo de origen. Mantenimiento cancelación puede liberar únicamente sus reservas.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.

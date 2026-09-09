@@ -24,6 +24,8 @@ Cada agente debe poder responder:
 
 Reglas transversales vigentes:
 
+- Coherencia frontend/backend: revisar campos condicionales, propiedades admitidas en create/update, valores cero, identidad estable, permisos por consulta y permisos completos antes de comandos compuestos. No ofrecer como editables campos ignorados por el backend ni usar saldos parciales del navegador como autoridad en API. Cobertura Local de referencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+
 - Todo agente funcional define bloqueos y siguiente acción; todo agente técnico conserva códigos estables y aplica `docs/arquitectura/feedback_operativo_y_errores.md`. El frontend localiza por código, no expone diagnósticos backend y restaura el estado confirmado cuando una mutación falla.
 - Un contrato OpenAPI debe parsear y reflejar el runtime; toda operacion futura se identifica con `x-implementation-status: planned`.
 - Los manifiestos usan permisos puntuales con puntos y declaran si estan `implemented` o `planned`.
@@ -1245,6 +1247,8 @@ Entregables:
 
 ### Produccion
 
+CHG-264 Local: verificar entrega de materiales por Almacen antes de in_progress para productos y servicios con receta; lock compartido con cancelacion, registro durable, actor/receptor, recuperacion y costo Inventory. Consultar `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+
 #### Agente de negocio: Especialista en flujos productivos y servicios repetibles
 
 Responsabilidad:
@@ -1294,6 +1298,8 @@ Entregables:
 - Riesgos antes de actualizar el modulo.
 
 ### Almacenes e inventarios
+
+CHG-263 Local: revisar la bandeja de solicitudes en Movimientos, entrega completa/rechazo por actor de Almacen, costo y movimiento unico, permisos por origen, pagina de pendientes y conciliacion durable. El cierre tecnico no descuenta refacciones. Ver `docs/auditorias/refacciones_movimientos_2026-09-07.md`.
 
 #### Agente de negocio: Especialista en inventario vivo
 
@@ -1753,6 +1759,8 @@ Estas referencias sirven como base conceptual para entrenar a los agentes. No su
 
 ### Mantenimiento
 
+CHG-263 Local: solicitar reserva; Almacen confirma o rechaza desde Movimientos. Resolver requiere solicitudes entregadas/canceladas y nunca consume. Validar aislamiento, lock compartido entrega/cancelacion, reintentos por partida y auditoria de actor/receptor/motivo. QA conserva el flujo previo hasta promocion aprobada.
+
 #### Agente de negocio: mantenimiento y confiabilidad
 
 Debe validar criticidad, prioridad, seguridad, indisponibilidad, personal elegible, evidencias de cierre, tiempos, insumos, recurrencia y continuidad productiva. Debe rechazar automatismos que oculten una maquina insegura o reanuden Produccion sin verificacion.
@@ -1779,3 +1787,36 @@ No debe autorizar runtime hasta existir contrato complementario propietario en R
 - Crear fichas individuales solo si un agente necesita instrucciones que ya no quepan de forma clara en este documento.
 - Ampliar validadores cuando una nueva regla objetiva no quede cubierta por `validate-agents`, `validate-architecture`, `validate-i18n` o `validate-environment-boundaries`.
 - No asignar responsables humanos adicionales mientras el usuario propietario conserve la aprobacion directa de releases.
+
+
+## Actualización de fichas operativas CHG-265
+
+Consultados documentalmente agentes de negocio/técnicos Producción, Inventarios, Compras, Ventas, Mantenimiento y RH; transversales Arquitectura/API/Datos, Custodio DB, Seguridad, Sinergia, UX/i18n, QA y Gobierno documental. Sin delegación.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+Fichas de Inventarios y Sinergia deben conservar recepción/expedición explícitas, transferencia en tránsito y ajustes mediante propietarios HTTP. Compras distingue recepción física de aceptación por solicitante. Producción/Mantenimiento conservan salida original y costo neto de retornos. Seguridad verifica actor/origen/tenant y locks; UX muestra mensajes estables ES/EN. QA usa Local aislado y limpieza por IDs propios; no ejecutar suites históricas que escriban otros tenants.
+
+
+## Ajustes UAT Local CHG-266
+
+Fichas de Producción/Compras y UX/frontend: conservar contenido operativo fuera del riel colapsable; listado inicial de Proveedores, formulario modal y búsqueda de requisición legible por ancho real. Ventas/Administración/Seguridad: emitir y aprobar son permisos independientes; orientar cuando falten y diagnosticar catálogo/asignación efectivos sin bypass por nombre de rol. La reparación del Owner demo CHG-266 solo aplica a Local; no autoriza grants o seeds remotos. QA/Gobierno documental: contrastar ES/EN, rechazo sin pérdida de captura y evidencia Local antes de promoción.
+
+Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Solicitudes compactas Local CHG-267
+
+Inventarios/Sinergia y UX/frontend deben mantener las solicitudes antes del historial, cerradas al entrar y con resumen de pendientes. Seguridad/QA deben comprobar que ocultar detalles no cambia autorización ni efectos, que errores/carga no aparentan ausencia de trabajo y que cada actualización parcial refresca el resumen. Gobierno documental conserva evidencia Local y contratos/diagramas sin cambios.
+
+Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.
+
+
+## Recuperación de refacciones Local CHG-268
+
+CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+
+
+## Candidato de continuidad CHG-269
+
+CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.

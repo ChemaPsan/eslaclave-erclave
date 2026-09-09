@@ -13,6 +13,12 @@ class AuthorizedContext:
     tenant_id: str
     actor_id: str
     permission: str
+    permissions: frozenset[str] = frozenset()
+
+    def require(self, permission: str) -> None:
+        allowed = self.permissions or frozenset({self.permission})
+        if permission not in allowed:
+            raise ErclaveError("permission_denied", "Required Sales permission is missing.", status_code=403, details={"permission": permission})
 
 
 class AdminSessionClient:
@@ -52,7 +58,7 @@ def require_sales_access(permission: str | tuple[str, ...]):
             raise ErclaveError("tenant_required", "X-Tenant-Id header is required.", status_code=400)
         required = (permission,) if isinstance(permission, str) else permission
         if settings.auth_mode != "firebase":
-            return AuthorizedContext(x_tenant_id, x_actor_id or "usr_demo", required[0])
+            return AuthorizedContext(x_tenant_id, x_actor_id or "usr_demo", required[0], frozenset(required))
         if not authorization or not authorization.lower().startswith("bearer "):
             raise ErclaveError("auth_required", "Authorization Bearer token is required.", status_code=401)
         context = client.get_context(x_tenant_id, authorization)
@@ -62,12 +68,46 @@ def require_sales_access(permission: str | tuple[str, ...]):
             raise ErclaveError("tenant_access_denied", "Tenant access denied.", status_code=403)
         if "sales" not in context.get("active_modules", []):
             raise ErclaveError("module_not_enabled", "Sales module is not enabled.", status_code=403)
+        if any(item.startswith("inventory.") and item in context.get("permissions",[]) for item in required) and "inventory" not in context.get("active_modules",[]):raise ErclaveError("module_not_enabled","Inventory module is not enabled.",status_code=403)
         if not any(item in context.get("permissions", []) for item in required):
             details = {"permission": required[0]} if len(required) == 1 else {"permissions_any": list(required)}
             raise ErclaveError("permission_denied", "Required Sales permission is missing.", status_code=403, details=details)
         actor_id = str(user.get("id") or "")
         if not actor_id:
             raise ErclaveError("authorization_service_unavailable", "Authorization context is incomplete.", status_code=503)
-        return AuthorizedContext(x_tenant_id, actor_id, required[0])
+        return AuthorizedContext(x_tenant_id, actor_id, required[0], frozenset(context.get("permissions", [])))
 
     return dependency
+
+
+def require_service_order_transition_access(
+    action: str,
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_actor_id: str | None = Header(default=None, alias="X-Actor-Id"),
+    settings: Settings = Depends(get_settings),
+    client: AdminSessionClient = Depends(get_admin_session_client),
+) -> AuthorizedContext:
+    allowed_actions = {"assign", "start", "wait", "resume", "submit_acceptance", "accept", "cancel"}
+    if action not in allowed_actions:
+        raise ErclaveError("service_order_action_invalid", "Service order action is not supported.", status_code=422)
+    permission = f"sales.service_order.{action}"
+    if not x_tenant_id:
+        raise ErclaveError("tenant_required", "X-Tenant-Id header is required.", status_code=400)
+    if settings.auth_mode != "firebase":
+        return AuthorizedContext(x_tenant_id, x_actor_id or "usr_demo", permission)
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise ErclaveError("auth_required", "Authorization Bearer token is required.", status_code=401)
+    context = client.get_context(x_tenant_id, authorization)
+    tenant = context.get("tenant") or {}
+    user = context.get("user") or {}
+    if tenant.get("id") != x_tenant_id or tenant.get("status") != "active":
+        raise ErclaveError("tenant_access_denied", "Tenant access denied.", status_code=403)
+    if "sales" not in context.get("active_modules", []):
+        raise ErclaveError("module_not_enabled", "Sales module is not enabled.", status_code=403)
+    if permission not in context.get("permissions", []):
+        raise ErclaveError("permission_denied", "Required Sales permission is missing.", status_code=403, details={"permission": permission})
+    actor_id = str(user.get("id") or "")
+    if not actor_id:
+        raise ErclaveError("authorization_service_unavailable", "Authorization context is incomplete.", status_code=503)
+    return AuthorizedContext(x_tenant_id, actor_id, permission)

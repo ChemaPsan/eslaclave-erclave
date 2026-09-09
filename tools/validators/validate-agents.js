@@ -109,7 +109,9 @@ const moduleIndex = readText("modulos/README.md");
 for (const fragment of [
   "UI y `admin-service` reales en QA",
   "Produccion | API, persistencia y UI reales en Local y QA",
-  "Ventas | Backend y UI reales en Local y QA",
+  "Ventas | Local aplica `20260901_0030`",
+  "Compras | Proveedores, Requisiciones, Ordenes y Recepciones estan desplegados en Local y QA",
+  "Mantenimiento | Correctivos, asignacion RH, tiempos, refacciones, bloqueo seguro y conciliacion durable estan desplegados en Local y QA",
   "expedientes, elegibilidad productiva y capacidad autoritativa reales en Local y QA"
 ]) {
   if (!moduleIndex.includes(fragment)) {
@@ -155,7 +157,10 @@ const documentationChecks = [
   },
   {
     path: "modulos/10_recursos_humanos.md",
-    required: ["corte acumulado `20260818_0017`, hoy desplegado en Local y QA"],
+    required: [
+      "capacidad autoritativa forma parte del corte acumulado `20260818_0017`, desplegado en Local y QA",
+      "consultar `docs/contexto/ESTADO_ACTUAL.md` para las cabezas vigentes de Local y QA"
+    ],
     forbidden: ["La migracion `20260730_0010` y el seed de permisos deben ejecutarse primero"]
   },
   {
@@ -176,14 +181,17 @@ const documentationChecks = [
   },
   {
     path: "docs/arquitectura/diagramas/estado_actual_backend_mvp.drawio",
-    required: ["Local head 20260825_0029", "QA head 20260821_0023"],
+    required: ["Local head", "QA head", "20260908_0034", "20260825_0029"],
     forbidden: ["Local head 20260817_0015", "Alembic head 20260817_0015", "Ventas planned/mock"]
   },
   {
     path: "docs/arquitectura/diagramas/apis_mvp_relaciones.drawio",
     required: [
-      "REAL LOCAL/QA: almacenes, articulos, movimientos, balances y Kardex",
-      "LOCAL/QA: availability / reserve / release / consume / finished goods receipt"
+      "SERVICIOS DE DOMINIO - REAL LOCAL Y QA",
+      "inventory-service",
+      "balances · Kardex · reservas",
+      "reserva / entrega por Almacén antes de iniciar",
+      "entrada física condicional"
     ],
     forbidden: ["reservas/consumos planned", "OBJETIVO: availability / consumption / receipts"]
   }

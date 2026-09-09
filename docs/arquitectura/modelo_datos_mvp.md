@@ -1,5 +1,15 @@
 # ERClave - Modelo de datos MVP
 
+## Registro durable de entrega productiva CHG-264
+
+Revision Local `20260908_0031`, posterior a `20260901_0030`. `production.material_issues` pertenece a Production: PK `(tenant_id, production_order_id)`, FK interna compuesta a orden, `status` processing/needs_reconciliation/issued, `movements` JSONB por reserva externa (id, cantidad y costo unitario), `last_error_code`, `authorized_by` y timestamps. Indice `(tenant_id,status,created_at)` y unique interno `(tenant_id,id)` en orden. No hay FK ni escritura a Inventory. Los recursos conservan actual_quantity/actual_cost al completar todas sus reservas; el costo de la orden se actualiza en la misma transaccion. No backfill ni cambios de permisos/seed. Upgrade, downgrade con tabla vacia y nuevo upgrade probados en Local; antes de cualquier reversa con uso se exige conciliar y conservar evidencia, nunca revertir salidas fisicas por borrar el registro. El servicio usa repositorios SQL, sin ORM propio.
+
+## Reutilizacion de persistencia CHG-263
+
+La entrega de refacciones desde Almacen reutiliza `maintenance.material_requests`, sus partidas, `pending_operation=issue|cancel`, estados existentes, referencias a movimientos y auditoria. Se agrega lock de sesion PostgreSQL por tenant/solicitud durante comandos externos, y lock de orden para serializar solicitud/resolucion; no hay tablas, columnas, indices nuevos ni migracion. CHG-263 se implemento sobre `20260901_0030`; cabeza Local vigente `20260908_0031`.
+
+Las nuevas reservas `maintenance_order` usan el campo nullable `expires_at`: sin fecha explicita permanecen activas hasta entrega/cancelacion. Las demas fuentes conservan su vencimiento por defecto. No hay backfill ni cambio de reservas historicas. La entrega crea una salida por partida y la resolucion no duplica movimientos.
+
 ## 1. Objetivo
 
 Este documento convierte el ownership de datos del MVP en un modelo inicial para PostgreSQL.
@@ -1733,3 +1743,10 @@ La migracion se probo con ciclo reversible `0026 -> 0027 -> 0026 -> 0027` exclus
 - `production.capacity_commitments` admite una fila por `(tenant_id, production_order_id, resource_type, resource_ref_id, planned_date)`. Cada fila contiene solo los minutos asignados en esa fecha.
 - Production genera dias productivos lunes-viernes, resta compromisos activos y distribuye mano de obra/maquinaria en orden cronologico. Los materiales no se multiplican por el horizonte.
 - El downgrade agrega minutos por orden/recurso sobre su primera fecha antes de restaurar la unicidad anterior, evitando perder el total comprometido.
+
+
+## Flujo operativo Local CHG-265
+
+Revisiones 20260908_0032 (confirmaciones de recepción y transferencias), 0033 (devoluciones y ajustes en propietarios) y 0034 (recuperación de creación y bloqueo de reservas tardías). Todas las identidades, índices, consultas y locks incluyen tenant. Recepciones históricas completadas se preservan y transferencias antiguas no se reinterpretan como tránsito. Downgrade requiere ausencia de operaciones activas y resguardo de historial; no revierte stock automáticamente.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.

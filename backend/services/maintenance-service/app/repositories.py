@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from datetime import datetime,timezone
 from uuid import uuid4
 from fastapi import Depends
@@ -6,15 +7,79 @@ from sqlalchemy import create_engine,text
 from sqlalchemy.exc import IntegrityError
 from erclave_common.config import Settings,get_settings
 
-class MaintenanceRepository:
+from .material_returns import MaintenanceMaterialReturns
+
+class MaintenanceRepository(MaintenanceMaterialReturns):
     def __init__(self,database_url):
         if not database_url:raise RuntimeError("Maintenance database URL is required.")
         self.engine=create_engine(database_url,pool_pre_ping=True)
-    def _claim(self,c,t,o,k,h):
+    @contextmanager
+    def _material_locks(self,keys):
+        # Session locks cover external calls; no open transaction during Inventory HTTP.
+        with self.engine.connect().execution_options(isolation_level="AUTOCOMMIT") as c:
+            acquired=[]
+            try:
+                for key in keys:
+                    if not c.execute(text("select pg_try_advisory_lock(hashtextextended(:key,0))"),{"key":key}).scalar_one():raise ValueError("command_in_progress")
+                    acquired.append(key)
+                yield
+            finally:
+                for key in reversed(acquired):c.execute(text("select pg_advisory_unlock(hashtextextended(:key,0))"),{"key":key})
+    @contextmanager
+    def material_creation_lock(self,t,order_id):
+        with self._material_locks([f"maintenance-material-order:{t}:{order_id}"]):yield
+    @contextmanager
+    def material_command_lock(self,t,rid):
+        with self.engine.connect() as c:
+            order_id=c.execute(text("select order_id from maintenance.material_requests where tenant_id=:t and id=:r"),{"t":t,"r":rid}).scalar()
+        keys=([f"maintenance-material-order:{t}:{order_id}"] if order_id else [])+[f"maintenance-material:{t}:{rid}"]
+        with self._material_locks(keys):yield
+    def list_warehouse_material_requests(self,t,limit=50,offset=0):
+        with self.engine.connect() as c:
+            rows=c.execute(text("""select r.id,o.code order_code,o.title order_title,
+                o.assigned_worker_ref_id assigned_worker_id,o.assigned_worker_name_snapshot assigned_worker_name
+                from maintenance.material_requests r join maintenance.orders o on o.tenant_id=r.tenant_id and o.id=r.order_id
+                where r.tenant_id=:t and r.status not in ('issued','cancelled')
+                order by r.created_at,r.id limit :limit offset :offset"""),{"t":t,"limit":limit+1,"offset":offset}).mappings().all()
+            return [{**self._material(c,t,row["id"]),**dict(row)} for row in rows[:limit]],len(rows)>limit
+    def prepare_warehouse_issue(self,t,rid,a):
+        with self.engine.begin() as c:
+            c.execute(text("select id from maintenance.material_requests where tenant_id=:t and id=:r for update"),{"t":t,"r":rid}).first()
+            value=self._material(c,t,rid)
+            if not value:return None,None
+            if value["status"]=="issued":return value,None
+            if value["status"]!="reserved" and not (value["status"] in {"processing","needs_reconciliation"} and value["pending_operation"]=="issue"):
+                raise ValueError("material_request_not_issuable")
+            order=self._order(c,t,value["order_id"])
+            if order["status"] not in {"assigned","in_progress","waiting_parts"}:raise ValueError("maintenance_material_status_invalid")
+            c.execute(text("update maintenance.material_requests set status='processing',pending_operation='issue',integration_error=null,updated_at=now() where tenant_id=:t and id=:r"),{"t":t,"r":rid})
+            self._audit(c,t,a,"maintenance.material_request.authorize_issue","material_request",rid,{"order_id":order["id"],"recipient_worker_id":order["assigned_worker_id"],"recipient_name":order["assigned_worker_name"],"lines":[{"id":x["id"],"quantity":x["quantity"]} for x in value["lines"]]})
+            return value,[x for x in value["lines"] if x["line_status"]=="reserved"]
+    def record_warehouse_rejection(self,t,rid,reason,k,h,a):
+        with self.engine.begin() as c:
+            replay=self._claim(c,t,"material_request.reject",k,h)
+            if replay:return
+            value=self._material(c,t,rid)
+            if not value:raise ValueError("material_request_not_cancellable")
+            if value["status"] not in {"reserved","needs_reconciliation","cancelling","cancelled"} or value["pending_operation"]=="issue":raise ValueError("material_request_not_cancellable")
+            self._audit(c,t,a,"maintenance.material_request.reject","material_request",rid,{"reason":reason,"order_id":value["order_id"]})
+            self._finish(c,t,"material_request.reject",k,{"id":rid,"reason":reason})
+    def complete_warehouse_issue(self,t,rid,results,error,a):
+        with self.engine.begin() as c:
+            for line_id,movement in results:
+                c.execute(text("update maintenance.material_request_lines set inventory_movement_ref_id=:m,line_status='issued' where tenant_id=:t and material_request_id=:r and id=:i and line_status='reserved'"),{"m":movement["id"],"t":t,"r":rid,"i":line_id})
+            remaining=c.execute(text("select count(*) from maintenance.material_request_lines where tenant_id=:t and material_request_id=:r and line_status!='issued'"),{"t":t,"r":rid}).scalar_one()
+            done=not error and remaining==0
+            c.execute(text("""update maintenance.material_requests set status=:s,pending_operation=:op,integration_error=:e,
+                integration_attempts=integration_attempts+1,last_integration_at=now(),updated_at=now() where tenant_id=:t and id=:r"""),{"s":"issued" if done else "needs_reconciliation","op":None if done else "issue","e":None if done else error or "maintenance_reconciliation_incomplete","t":t,"r":rid})
+            value=self._material(c,t,rid)
+            self._audit(c,t,a,"maintenance.material_request.issue","material_request",rid,{"status":value["status"],"movements":[m["id"] for _,m in results],"error":error})
+            return value
+    def _claim(self,c,t,o,k,h,resume=False):
         row=c.execute(text("select request_hash,response_payload from maintenance.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k for update"),{"t":t,"o":o,"k":k}).mappings().first()
         if row:
             if row["request_hash"]!=h:raise ValueError("idempotency_key_reused")
-            if row["response_payload"] is None:raise ValueError("command_in_progress")
+            if row["response_payload"] is None and not resume:raise ValueError("command_in_progress")
             return row["response_payload"]
         c.execute(text("insert into maintenance.idempotency_records(id,tenant_id,operation,idempotency_key,request_hash) values(:id,:t,:o,:k,:h)"),{"id":f"mid_{uuid4().hex[:26]}","t":t,"o":o,"k":k,"h":h});return None
     def _finish(self,c,t,o,k,v):c.execute(text("update maintenance.idempotency_records set response_payload=cast(:p as jsonb) where tenant_id=:t and operation=:o and idempotency_key=:k"),{"p":json.dumps(v,default=str),"t":t,"o":o,"k":k})
@@ -27,6 +92,7 @@ class MaintenanceRepository:
         reqs=[]
         for request_row in c.execute(text("select id,warehouse_ref_id warehouse_id,warehouse_name_snapshot warehouse_name,status,pending_operation,integration_error,integration_attempts,last_integration_at,created_at,updated_at from maintenance.material_requests where tenant_id=:t and order_id=:i order by created_at"),{"t":t,"i":i}).mappings():
             req=dict(request_row);req["lines"]=[dict(x) for x in c.execute(text("select id,line_number,inventory_item_ref_id item_id,item_code_snapshot item_code,item_name_snapshot item_name,quantity,unit_code,reservation_ref_id reservation_id,inventory_movement_ref_id inventory_movement_id,unit_cost_snapshot,line_status from maintenance.material_request_lines where tenant_id=:t and material_request_id=:r order by line_number"),{"t":t,"r":req["id"]}).mappings()];reqs.append(req)
+        value["material_returns"]=[dict(a) for a in c.execute(text("select return_id,resource_id,quantity,unit_cost,created_at from maintenance.material_return_adjustments where tenant_id=:t and order_id=:o order by created_at"),{"t":t,"o":i}).mappings()]
         value["material_requests"]=reqs
         value["total_minutes"]=sum(x["minutes"] for x in value["time_entries"])
         return value
@@ -62,6 +128,7 @@ class MaintenanceRepository:
         with self.engine.begin() as c:
             replay=self._claim(c,t,"order.transition",k,h)
             if replay:return replay
+            c.execute(text("select id from maintenance.orders where tenant_id=:t and id=:i for update"),{"t":t,"i":i}).first()
             before=self._order(c,t,i)
             if not before:return None
             if before["status"] not in allowed[p.transition]:raise ValueError("invalid_maintenance_transition")
@@ -113,6 +180,7 @@ class MaintenanceRepository:
         with self.engine.begin() as c:
             replay=self._claim(c,t,"material_request.create",k,h)
             if replay:return replay,None
+            c.execute(text("select id from maintenance.orders where tenant_id=:t and id=:i for update"),{"t":t,"i":order_id}).first()
             order=self._order(c,t,order_id)
             if not order:return None,None
             if order["status"] not in {"assigned","in_progress","waiting_parts"}:raise ValueError("maintenance_material_status_invalid")
@@ -136,25 +204,19 @@ class MaintenanceRepository:
         value=dict(row);value["lines"]=[dict(x) for x in c.execute(text("select id,line_number,inventory_item_ref_id item_id,item_code_snapshot item_code,item_name_snapshot item_name,quantity,unit_code,reservation_ref_id reservation_id,inventory_movement_ref_id inventory_movement_id,unit_cost_snapshot,line_status from maintenance.material_request_lines where tenant_id=:t and material_request_id=:r order by line_number"),{"t":t,"r":rid}).mappings()];return value
     def get_material_request(self,t,rid):
         with self.engine.connect() as c:return self._material(c,t,rid)
-    def material_plan(self,t,order_id):
-        with self.engine.connect() as c:return [dict(x) for x in c.execute(text("select l.id line_id,l.reservation_ref_id reservation_id,l.quantity from maintenance.material_request_lines l join maintenance.material_requests r on r.tenant_id=l.tenant_id and r.id=l.material_request_id where l.tenant_id=:t and r.order_id=:o and r.status in ('reserved','needs_reconciliation') and coalesce(r.pending_operation,'issue')='issue' and l.line_status='reserved' order by r.created_at,l.line_number"),{"t":t,"o":order_id}).mappings()]
-    def complete_material_issue(self,t,order_id,movements,error=None,actor="system"):
-        with self.engine.begin() as c:
-            plan=[dict(x) for x in c.execute(text("select l.id line_id,r.id request_id from maintenance.material_request_lines l join maintenance.material_requests r on r.tenant_id=l.tenant_id and r.id=l.material_request_id where l.tenant_id=:t and r.order_id=:o and r.status='reserved' and l.line_status='reserved' order by r.created_at,l.line_number for update"),{"t":t,"o":order_id}).mappings()]
-            for item,movement in zip(plan,movements):c.execute(text("update maintenance.material_request_lines set inventory_movement_ref_id=:m,line_status='issued' where tenant_id=:t and id=:i"),{"m":movement.get("id"),"t":t,"i":item["line_id"]})
-            request_ids={x["request_id"] for x in plan}
-            for rid in request_ids:
-                c.execute(text("""update maintenance.material_requests set status=:s,pending_operation=:pending,
-                    integration_error=:e,integration_attempts=integration_attempts+1,last_integration_at=now(),updated_at=now() where tenant_id=:t and id=:r"""),{"s":"needs_reconciliation" if error else "issued","pending":"issue" if error else None,"e":error,"t":t,"r":rid})
-                self._audit(c,t,actor,"maintenance.material_request.issue","material_request",rid,{"status":"needs_reconciliation" if error else "issued","error":error})
     def prepare_material_reconciliation(self,t,rid,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"material_request.reconcile",k,h)
-            if replay:return replay,None
             value=self._material(c,t,rid)
             if not value:return None,None
-            if value["status"]!="needs_reconciliation" or value["pending_operation"] not in {"reserve","cancel"}:raise ValueError("material_request_not_reconcilable")
+            # Caller owns order + request locks, so a pending identical command is abandoned.
+            replay=self._claim(c,t,"material_request.reconcile",k,h,resume=True)
+            if replay:return replay,None
+            if value["status"] in {"reserved","issued","cancelled"} and not value["pending_operation"]:
+                self._finish(c,t,"material_request.reconcile",k,value)
+                return value,None
+            if value["status"] not in {"needs_reconciliation","processing","cancelling"} or value["pending_operation"] not in {"reserve","cancel"}:raise ValueError("material_request_not_reconcilable")
             if value["pending_operation"]=="reserve":
+                if self._order(c,t,value["order_id"])["status"] not in {"assigned","in_progress","waiting_parts"}:raise ValueError("maintenance_material_status_invalid")
                 plan=[{"line_id":x["id"],"item_id":x["item_id"],"quantity":x["quantity"],"unit_code":x["unit_code"]} for x in value["lines"] if x["line_status"] in {"pending","failed"}]
             else:plan=[{"line_id":x["id"],"reservation_id":x["reservation_id"]} for x in value["lines"] if x["reservation_id"] and x["line_status"]=="reserved"]
             c.execute(text("update maintenance.material_requests set status=:s,integration_error=null,updated_at=now() where tenant_id=:t and id=:r"),{"s":"cancelling" if value["pending_operation"]=="cancel" else "processing","t":t,"r":rid})

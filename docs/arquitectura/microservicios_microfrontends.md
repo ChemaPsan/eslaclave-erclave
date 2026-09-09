@@ -18,6 +18,8 @@ El frontend actual funciona como prototipo navegable, pero concentra demasiada r
 
 Mientras todo viva junto, un cambio pequeno en un boton, formulario o submodulo puede tener impacto accidental en otras partes.
 
+CHG-259 inicia la separacion sin reescritura: `frontend/state/app-state.js` es dueno del estado inicial, `frontend/features/error-feedback.js` concentra la presentacion segura de fallos y `frontend/features/list-pagination.js` pagina colecciones renderizadas. `frontend/app.js` sigue siendo el shell temporal y conserva aun los renders de dominio; la extraccion de Produccion y los demas microfrontends permanece incremental.
+
 ## Objetivo
 
 ERClave debe evolucionar hacia una arquitectura donde:

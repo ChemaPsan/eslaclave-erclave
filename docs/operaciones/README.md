@@ -9,6 +9,9 @@ memoria o instrucciones sueltas en una conversacion.
 ## Guias disponibles
 
 - `cloud_sql_postgres_qa.md`: crear y conectar una base PostgreSQL QA en Google Cloud SQL.
+- `preparacion_release_qa_20260831.md`: evidencia historica y plan del candidato QA de siete servicios.
+- `resultado_release_qa_20260901.md`: resultado, incidente controlado y verificacion del release QA de siete servicios.
+- `verificacion_local_integral.md`: PostgreSQL sin omisiones, concurrencia y regresion E2E aislada.
 
 ## Reglas de uso
 

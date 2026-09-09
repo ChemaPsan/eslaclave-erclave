@@ -1,5 +1,19 @@
 # ERClave - APIs MVP
 
+## Entrega previa de materiales CHG-264
+
+CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+
+## Solicitudes de refacciones Local CHG-263
+
+| Metodo | Ruta | Permiso | Contrato |
+|---|---|---|---|
+| GET | `/v1/maintenance/warehouse-material-requests` | `inventory.movement.read` | Nuevo listado minimo con `limit`, `offset`, `data` y `page`; requiere Maintenance e Inventory activos. |
+| POST | `/v1/maintenance/material-requests/{id}/issue` | `inventory.movement.create` | Nuevo comando sin cantidades editables; devuelve solicitud emitida o conciliacion pendiente. |
+| POST | `/v1/maintenance/material-requests/{id}/reject` | `inventory.movement.create` | Nuevo comando con `reason` 3..500; audita y cancela/libera sin salida. |
+
+Las transiciones y conciliacion de la orden ya no consumen material. Inventory condiciona consumo/liberacion al origen de la reserva; la reserva de Mantenimiento sin fecha explicita no expira automaticamente. Matriz completa y compatibilidad en `docs/auditorias/refacciones_movimientos_2026-09-07.md`.
+
 ## 1. Objetivo
 
 Este documento define los contratos API iniciales para convertir el modelo de datos MVP en servicios reales.
@@ -9,10 +23,10 @@ Aplica a:
 - `admin-service`;
 - `production-service`;
 - `inventory-service`;
-- `sales-service`;
-- `purchasing-service` (runtime Local en `:8010`; proveedor fiscal, requisicion multipardida y ciclo hasta recepcion implementados, sin despliegue QA/Produccion);
-- `maintenance-service` (Local implementado en `8012`; ordenes correctivas, tiempos y refacciones);
-- Purchasing Local expone edicion/cancelacion de requisiciones y ordenes, recepcion multipardida y conciliacion manual durable. Inventory aporta `GET /v1/inventory/warehouses/{id}` para validar tenant, estado y destino antes de cada entrada.
+- `sales-service` (Local aplica y certifica Ordenes de servicio en `20260901_0030`; QA conserva Clientes, Cotizaciones, Pedidos y Entregas hasta `20260825_0029`);
+- `purchasing-service` (Local y QA cubren proveedor fiscal, requisicion multipardida y recepcion inventariable; Local aplica y certifica recepciones de servicio sin Inventory obligatorio en `20260901_0030`);
+- `maintenance-service` (Local y QA cubren ordenes correctivas, tiempos, refacciones y conciliacion durable);
+- Purchasing expone edicion/cancelacion de requisiciones y ordenes, recepcion multipardida y conciliacion manual durable. Inventory aporta `GET /v1/inventory/warehouses/{id}` para validar tenant, estado y destino de partidas inventariables.
 - `billing-service`;
 - `provisioning-service`;
 - `integration-service`.
@@ -433,8 +447,8 @@ Administra almacenes, articulos, ubicaciones, movimientos, existencias, kardex, 
 | `GET` | `/v1/inventory/finished-goods-receipts` | `inventory.finished_goods_receipt.read` | No | Consultar recepciones agrupadas por orden. |
 | `POST` | `/v1/inventory/finished-goods-receipts` | `inventory.finished_goods_receipt.receive` | Si | Confirmar entrada total o parcial usando la proyeccion minima de Produccion. |
 | `POST` | `/v1/inventory/reservation-requests` | `production.order.release` | Si | Reservar material por almacen para una orden. |
-| `POST` | `/v1/inventory/reservations/{id}/release` | `production.order.cancel`, `sales.order.cancel` o `maintenance.material_request.cancel` | Si | Liberar una reserva desde el comando propietario autorizado. |
-| `POST` | `/v1/inventory/reservations/{id}/consume` | `production.order.start|resume`, `sales.delivery.confirm` o `maintenance.order.resolve` | Si | Convertir reserva en salida inmutable desde el comando propietario. |
+| `POST` | `/v1/inventory/reservations/{id}/release` | `production.order.cancel`, `sales.order.cancel`, `maintenance.material_request.cancel` o `inventory.movement.create` segun origen | Si | Liberar una reserva desde el comando propietario autorizado. |
+| `POST` | `/v1/inventory/reservations/{id}/consume` | `inventory.movement.create` para salida de Producción, Mantenimiento y Ventas | Si | Convertir reserva en salida inmutable desde el comando propietario. |
 
 ### 7.3 Request ejemplo: movimiento manual
 
@@ -551,7 +565,7 @@ En el segundo corte Local administra clientes, contactos principales, cotizacion
 | `POST` | `/v1/sales/orders/{id}/fulfillment` | `sales.order.fulfill` | Si | Configurar servicio, reservas Inventory o solicitud Production por partida. |
 | `POST` | `/v1/sales/orders/{id}/cancel` | `sales.order.cancel` | Si | Cancelar y liberar reservas activas. |
 | `GET/POST` | `/v1/sales/deliveries` | `sales.delivery.read/create` | POST | Listar o registrar entrega parcial/total en borrador. |
-| `POST` | `/v1/sales/deliveries/{id}/confirm` | `sales.delivery.confirm` | Si | Consumir reservas y recalcular costo/margen real. |
+| `POST` | `/v1/sales/deliveries/{id}/confirm` | `inventory.movement.create`; solo `sales.delivery.confirm` devuelve guía de Almacén | Si | Almacén confirma salida; Sales recalcula costo/margen real. |
 | `POST` | `/v1/sales/deliveries/{id}/cancel` | `sales.delivery.cancel` | Si | Cancelar una entrega borrador. |
 
 La conversion a pedido, el fulfillment y las entregas forman parte del runtime Local desde `20260818_0019`; `20260818_0020` agrega mapeo producto-articulo, reclamos durables, cantidad comprometida y costo real con procedencia. Devoluciones, facturacion y cobranza aun no forman parte del runtime vigente.
@@ -964,3 +978,20 @@ Este documento se considera suficiente para iniciar OpenAPI cuando:
 - estan documentadas reglas de seguridad;
 - cada operacion critica tiene evento o auditoria;
 - ningun endpoint escribe datos de otro servicio.
+
+
+## Flujo operativo Local CHG-265
+
+Seis contratos afectados: Inventory, Production, Purchasing, Sales, Maintenance y HR. La matriz exhaustiva por método/ruta, permisos y payload está en el informe CHG-265. Admin y APIs planned no cambian.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+
+## Recuperación de refacciones Local CHG-268
+
+CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+
+
+## Candidato de continuidad CHG-269
+
+CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.

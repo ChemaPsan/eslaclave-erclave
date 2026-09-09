@@ -1,5 +1,9 @@
 # ERClave — Recursos Humanos
 
+## Coherencia de formularios Local (CHG-262)
+
+Consultar Areas o Puestos no requiere leer expedientes de trabajadores. Areas y puestos nuevos muestran el estatus activo que admite el alta; la edicion conserva su cambio de estatus. Fecha de nacimiento es capturable en el alta y solo lectura al editar, conforme a WorkerUpdate. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+
 ## Alcance MVP
 
 Recursos Humanos administra áreas, puestos y expedientes de trabajadores. Un área se crea y edita sin puestos; un puesto sólo puede crearse dentro de un área activa y existente del mismo tenant. Cada trabajador mantiene un solo puesto vigente y un puesto puede agrupar cualquier cantidad de trabajadores.
@@ -42,7 +46,7 @@ El seed de permisos reconcilia de forma idempotente los contratos: conserva los 
 
 ## Operación segura
 
-El schema base de RH nacio en `20260730_0010`; expedientes de trabajadores se agregaron en `20260817_0014` y la capacidad autoritativa forma parte del corte acumulado `20260818_0017`, hoy desplegado en Local y QA dentro de la cabeza `20260821_0023`. Siempre se ejecuta la cadena Alembic completa hasta la cabeza autorizada del ambiente, nunca una revision aislada como procedimiento operativo. Ninguna migracion, seed, activacion o dato de prueba se aplica a QA sin autorizacion explicita; consultar `docs/contexto/ESTADO_ACTUAL.md` para las cabezas vigentes de Local y QA.
+El schema base de RH nacio en `20260730_0010`; expedientes de trabajadores se agregaron en `20260817_0014` y la capacidad autoritativa forma parte del corte acumulado `20260818_0017`, desplegado en Local y QA. Siempre se ejecuta la cadena Alembic completa hasta la cabeza autorizada del ambiente, nunca una revision aislada como procedimiento operativo. Ninguna migracion, seed, activacion o dato de prueba se aplica a QA sin autorizacion explicita; consultar `docs/contexto/ESTADO_ACTUAL.md` para las cabezas vigentes de Local y QA.
 
 ## CHG-209: seleccion escalable
 
@@ -54,3 +58,10 @@ El schema base de RH nacio en `20260730_0010`; expedientes de trabajadores se ag
 - Los estados API `active`, `inactive` y `terminated` se presentan como `Activo`, `Inactivo` y `Baja` en espanol, con sus equivalentes ingleses.
 - La guia de configuracion, busqueda, etiquetas, resumen de capacidad y estatus de areas/puestos cambian con el idioma; nombres y descripciones capturados por el tenant permanecen como datos, sin traduccion automatica.
 - La navegacion, contexto de sesion y acciones globales del shell exponen etiquetas y atributos accesibles en ambos idiomas.
+
+
+## Confirmaciones y recuperaciones Local CHG-265
+
+Consultas de elegibilidad admiten los permisos puntuales de inicio/reanudación de Producción, Mantenimiento y servicios comerciales. Se revalida el trabajador al ejecutar/reanudar; un snapshot histórico no sustituye elegibilidad actual. RH conserva propiedad de personas/puestos/áreas y no escribe órdenes de otros schemas.
+
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.

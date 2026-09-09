@@ -78,3 +78,8 @@ GitHub Pages queda como maqueta manual y ya no se publica automaticamente al cam
 - Frontend: restaurar el release previo de Firebase Hosting.
 - Backoffice Admin: devolver 100% del trafico a `rollback_revision` registrado por el artefacto del workflow de configuracion.
 - Datos: usar restauracion o `forward-fix`; no ejecutar downgrade despues de admitir escrituras sin una decision explicita.
+
+
+## Candidato de continuidad CHG-269
+
+CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.

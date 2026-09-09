@@ -1,10 +1,12 @@
 import json
+from contextlib import contextmanager
 from decimal import Decimal
 from uuid import uuid4
 from fastapi import Depends
 from sqlalchemy import create_engine,text
 from sqlalchemy.exc import IntegrityError
 from erclave_common.config import Settings,get_settings
+from erclave_common.errors import ErclaveError
 
 class PurchasingRepository:
     def __init__(self,database_url):
@@ -187,7 +189,7 @@ class PurchasingRepository:
                 if item.order_line_id in seen:raise ValueError("duplicate_receipt_line")
                 seen.add(item.order_line_id); line=by_id.get(item.order_line_id)
                 if not line:raise ValueError("order_line_not_found")
-                pending=Decimal(c.execute(text("select coalesce(sum(rl.quantity),0) from purchasing.purchase_receipt_lines rl join purchasing.purchase_receipts r on r.tenant_id=rl.tenant_id and r.id=rl.receipt_id where rl.tenant_id=:t and rl.order_line_id=:line and rl.reconciliation_status!='completed' and r.status in ('processing','needs_reconciliation')"),{"t":t,"line":line["id"]}).scalar_one())
+                pending=Decimal(c.execute(text("select coalesce(sum(rl.quantity),0) from purchasing.purchase_receipt_lines rl join purchasing.purchase_receipts r on r.tenant_id=rl.tenant_id and r.id=rl.receipt_id where rl.tenant_id=:t and rl.order_line_id=:line and rl.reconciliation_status!='completed' and r.status in ('pending_confirmation','processing','needs_reconciliation')"),{"t":t,"line":line["id"]}).scalar_one())
                 if item.quantity > Decimal(line["quantity"])-Decimal(line["received_quantity"])-pending:raise ValueError("over_receipt")
                 if line["line_type"]=="inventory_item" and not item.warehouse_id:raise ValueError("inventory_warehouse_required")
                 if line["line_type"]=="service" and item.warehouse_id:raise ValueError("service_warehouse_not_allowed")
@@ -196,14 +198,57 @@ class PurchasingRepository:
             for n,item in enumerate(plan,1):
                 item["receipt_line_id"]=f"rcl_{uuid4().hex[:26]}";item["inventory_idempotency_key"]=f"purchase-receipt-{item['receipt_line_id']}"
                 c.execute(text("insert into purchasing.purchase_receipt_lines(id,tenant_id,receipt_id,line_number,order_line_id,quantity,warehouse_ref_id,inventory_idempotency_key) values(:id,:t,:receipt,:n,:line,:quantity,:warehouse,:inventory_key)"),{"id":item["receipt_line_id"],"t":t,"receipt":rid,"n":n,"line":item["order_line_id"],"quantity":item["quantity"],"warehouse":item["warehouse_id"],"inventory_key":item["inventory_idempotency_key"]})
-            return self._receipt(c,t,rid),plan
+            c.execute(text("update purchasing.purchase_receipts set status='pending_confirmation' where tenant_id=:t and id=:id"),{"t":t,"id":rid})
+            value=self._receipt(c,t,rid)
+            self._audit(c,t,actor,"receipt.create","purchase_receipt",rid,{"result":"pending_confirmation"})
+            self._finish(c,t,"receipt.create",key,value)
+            return value,plan
+    @contextmanager
+    def receipt_command_lock(self,t,id):
+        with self.engine.connect() as c:
+            lock=f"purchasing-receipt:{t}:{id}"
+            if not c.execute(text("select pg_try_advisory_lock(hashtextextended(:k,0))"),{"k":lock}).scalar_one():
+                raise ErclaveError("command_in_progress","Receipt confirmation is in progress.",status_code=409)
+            c.commit()
+            try:yield
+            finally:
+                c.execute(text("select pg_advisory_unlock(hashtextextended(:k,0))"),{"k":lock});c.commit()
+
+    def require_service_requester(self,t,id,actor):
+        with self.engine.connect() as c:
+            requester=c.execute(text("""select coalesce(q.requested_by_actor_id,o.buyer_actor_id)
+                from purchasing.purchase_receipts r join purchasing.purchase_orders o on o.tenant_id=r.tenant_id and o.id=r.purchase_order_id
+                left join purchasing.requisitions q on q.tenant_id=o.tenant_id and q.id=o.requisition_id
+                where r.tenant_id=:t and r.id=:id"""),{"t":t,"id":id}).scalar()
+            if requester!=actor:raise ErclaveError("purchased_service_requester_required","Only the original requester may accept purchased services.",status_code=403)
+
+    def list_pending_receipts(self,t,line_type,actor=None,limit=25,offset=0):
+        with self.engine.connect() as c:
+            rows=c.execute(text("""select distinct r.id,r.created_at from purchasing.purchase_receipts r
+                join purchasing.purchase_receipt_lines rl on rl.tenant_id=r.tenant_id and rl.receipt_id=r.id
+                join purchasing.purchase_order_lines l on l.tenant_id=rl.tenant_id and l.id=rl.order_line_id
+                join purchasing.purchase_orders o on o.tenant_id=r.tenant_id and o.id=r.purchase_order_id
+                left join purchasing.requisitions q on q.tenant_id=o.tenant_id and q.id=o.requisition_id
+                where r.tenant_id=:t and l.line_type=:type and rl.reconciliation_status!='completed'
+                and (cast(:actor as varchar) is null or coalesce(q.requested_by_actor_id,o.buyer_actor_id)=:actor)
+                order by r.created_at,r.id limit :limit offset :offset"""),{"t":t,"type":line_type,"actor":actor,"limit":limit,"offset":offset}).mappings().all()
+            result=[]
+            for row in rows:
+                receipt=self._receipt(c,t,row["id"])
+                receipt["lines"]=[dict(x) for x in c.execute(text("""select rl.id,rl.quantity,rl.warehouse_ref_id,rl.reconciliation_status,
+                    l.description,l.item_code_snapshot,l.item_name_snapshot,l.unit_code
+                    from purchasing.purchase_receipt_lines rl join purchasing.purchase_order_lines l on l.tenant_id=rl.tenant_id and l.id=rl.order_line_id
+                    where rl.tenant_id=:t and rl.receipt_id=:id and l.line_type=:type and rl.reconciliation_status!='completed' order by rl.line_number"""),{"t":t,"id":row["id"],"type":line_type}).mappings()]
+                result.append(receipt)
+            return result
+
     def prepare_reconciliation(self,t,id,key,digest,actor):
         with self.engine.begin() as c:
             replay=self._claim(c,t,"receipt.reconcile",key,digest)
             if replay:return replay,None
             receipt=self._receipt(c,t,id,True)
             if not receipt:return None,None
-            if receipt["status"] not in {"processing","needs_reconciliation"}:raise ValueError("receipt_not_reconcilable")
+            if receipt["status"] not in {"pending_confirmation","processing","needs_reconciliation"}:raise ValueError("receipt_not_reconcilable")
             c.execute(text("update purchasing.purchase_receipts set reconciliation_attempts=reconciliation_attempts+1,last_reconciliation_at=now(),reconciled_by_actor_id=:actor where tenant_id=:t and id=:id"),{"actor":actor,"t":t,"id":id})
             rows=c.execute(text("""select rl.id receipt_line_id,rl.order_line_id,rl.quantity,rl.warehouse_ref_id warehouse_id,rl.inventory_idempotency_key,ol.inventory_item_ref_id inventory_item_id,ol.line_type,ol.unit_code,ol.unit_price,r.received_at
                 from purchasing.purchase_receipt_lines rl join purchasing.purchase_receipts r on r.tenant_id=rl.tenant_id and r.id=rl.receipt_id
@@ -211,11 +256,12 @@ class PurchasingRepository:
                 where rl.tenant_id=:t and rl.receipt_id=:id and rl.reconciliation_status!='completed' order by rl.line_number for update of rl"""),{"t":t,"id":id}).mappings()
             plan=[{**dict(row),"received_at":row["received_at"].isoformat()} for row in rows]
             return self._receipt(c,t,id),plan
-    def _apply_receipt_movements(self,c,t,receipt,plan,movements):
+    def _apply_receipt_movements(self,c,t,receipt,plan,movements,actor):
         for item,movement in zip(plan,movements):
+            if movement is None:continue
             status=c.execute(text("select reconciliation_status from purchasing.purchase_receipt_lines where tenant_id=:t and id=:id for update"),{"t":t,"id":item["receipt_line_id"]}).scalar_one()
             if status=="completed":continue
-            c.execute(text("update purchasing.purchase_receipt_lines set reconciliation_status='completed',inventory_movement_ref_id=:m where tenant_id=:t and id=:id"),{"m":movement.get("id"),"t":t,"id":item["receipt_line_id"]})
+            c.execute(text("update purchasing.purchase_receipt_lines set reconciliation_status='completed',inventory_movement_ref_id=:m,confirmed_by_actor_id=:actor,confirmed_at=now() where tenant_id=:t and id=:id"),{"actor":actor,"m":movement.get("id"),"t":t,"id":item["receipt_line_id"]})
             c.execute(text("update purchasing.purchase_order_lines set received_quantity=received_quantity+:q where tenant_id=:t and id=:id"),{"q":item["quantity"],"t":t,"id":item["order_line_id"]})
     def _refresh_order_status(self,c,t,order_id):
         totals=c.execute(text("select bool_and(received_quantity=quantity) all_received,bool_or(received_quantity>0) any_received from purchasing.purchase_order_lines where tenant_id=:t and purchase_order_id=:id"),{"t":t,"id":order_id}).mappings().one()
@@ -223,14 +269,15 @@ class PurchasingRepository:
         c.execute(text("update purchasing.purchase_orders set status=:s,updated_at=now() where tenant_id=:t and id=:id and status!='cancelled'"),{"s":status,"t":t,"id":order_id});return status
     def complete_receipt(self,t,receipt,plan,movements,key,actor,error=None,operation="receipt.create"):
         with self.engine.begin() as c:
-            self._apply_receipt_movements(c,t,receipt,plan,movements)
+            self._apply_receipt_movements(c,t,receipt,plan,movements,actor)
             order_status=self._refresh_order_status(c,t,receipt["purchase_order_id"])
             if error:
-                remaining=[item["receipt_line_id"] for item in plan[len(movements):]]
+                remaining=[item["receipt_line_id"] for index,item in enumerate(plan) if index>=len(movements) or movements[index] is None]
                 if remaining:c.execute(text("update purchasing.purchase_receipt_lines set reconciliation_status='failed' where tenant_id=:t and id=any(:ids) and reconciliation_status!='completed'"),{"t":t,"ids":remaining})
                 c.execute(text("update purchasing.purchase_receipts set status='needs_reconciliation',reconciliation_error=:e where tenant_id=:t and id=:id"),{"e":error,"t":t,"id":receipt["id"]})
-                value=self._receipt(c,t,receipt["id"]);self._audit(c,t,actor,operation,"purchase_receipt",receipt["id"],{"result":"needs_reconciliation","completed_lines":len(movements),"error":error});self._finish(c,t,operation,key,value);return value
-            c.execute(text("update purchasing.purchase_receipts set status='completed',reconciliation_error=null where tenant_id=:t and id=:id"),{"t":t,"id":receipt["id"]})
-            value=self._receipt(c,t,receipt["id"]);self._audit(c,t,actor,operation,"purchase_receipt",receipt["id"],{"result":"completed","order_status":order_status});self._finish(c,t,operation,key,value);return value
+                value=self._receipt(c,t,receipt["id"]);self._audit(c,t,actor,operation,"purchase_receipt",receipt["id"],{"result":"needs_reconciliation","completed_lines":sum(movement is not None for movement in movements),"error":error});self._finish(c,t,operation,key,value);return value
+            pending=c.execute(text("select 1 from purchasing.purchase_receipt_lines where tenant_id=:t and receipt_id=:id and reconciliation_status!='completed' limit 1"),{"t":t,"id":receipt["id"]}).first()
+            c.execute(text("update purchasing.purchase_receipts set status=:status,reconciliation_error=null where tenant_id=:t and id=:id"),{"status":"pending_confirmation" if pending else "completed","t":t,"id":receipt["id"]})
+            value=self._receipt(c,t,receipt["id"]);self._audit(c,t,actor,operation,"purchase_receipt",receipt["id"],{"result":value["status"],"order_status":order_status});self._finish(c,t,operation,key,value);return value
 
 def get_purchasing_repository(settings:Settings=Depends(get_settings)): return PurchasingRepository(settings.effective_database_url)

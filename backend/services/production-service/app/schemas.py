@@ -499,6 +499,7 @@ class ProductionOrderRead(BaseModel):
     source_id: str | None = None
     planned_cost: float
     actual_cost: float | None = None
+    material_returns: list[dict] = Field(default_factory=list)
     overall_progress_percent: float = 0
     recipe_snapshot: dict
     resource_validation_snapshot: dict
@@ -514,6 +515,44 @@ class ProductionOrderResponse(BaseModel):
 class ProductionOrderListResponse(BaseModel):
     data: list[ProductionOrderRead]
     page: Page = Field(default_factory=Page)
+
+
+class WarehouseIssueRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+
+class WarehouseMaterialLine(BaseModel):
+    id: str
+    item_code: str
+    item_name: str
+    quantity: float
+    unit_code: str
+    issued: bool
+    allocations: list[dict] = Field(default_factory=list)
+
+
+class WarehouseMaterialRead(BaseModel):
+    id: str
+    order_code: str
+    responsible_name: str
+    status: Literal["reserved", "processing", "needs_reconciliation", "issued"]
+    created_at: datetime
+    lines: list[WarehouseMaterialLine]
+
+
+class WarehouseMaterialPage(BaseModel):
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class WarehouseMaterialResponse(BaseModel):
+    data: WarehouseMaterialRead
+
+
+class WarehouseMaterialListResponse(BaseModel):
+    data: list[WarehouseMaterialRead]
+    page: WarehouseMaterialPage
 
 
 class FinishedGoodsOrderProjection(BaseModel):

@@ -5,208 +5,872 @@ info:
   version: 1.0.0
   summary: Corrective maintenance orders, assignments, labor and spare-parts requests.
 servers:
-  - url: http://127.0.0.1:8012
+- url: http://127.0.0.1:8012
 security:
-  - bearerAuth: []
+- bearerAuth: []
 tags:
-  - name: MaintenanceOrders
-  - name: Labor
-  - name: SpareParts
+- name: MaintenanceOrders
+- name: Labor
+- name: SpareParts
 paths:
-  /v1/maintenance/orders:
+  /v1/maintenance/warehouse-material-requests:
     get:
-      tags: [MaintenanceOrders]
-      operationId: searchMaintenanceOrders
-      summary: Search maintenance orders with bounded, server-side filters.
+      tags:
+      - SpareParts
+      operationId: listWarehouseMaintenanceMaterialRequests
+      summary: Pending spare-parts requests for Warehouse Movements, without technical order evidence.
       x-required-module: maintenance
-      x-permissions: [maintenance.order.read]
+      x-required-modules:
+      - maintenance
+      - inventory
+      x-permissions: [inventory.movement.read]
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Search'
-        - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/TenantId'
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
       responses:
-        '200': { description: Matching maintenance orders. }
+        '200':
+          description: Pending requests ordered by creation and ID; issued and cancelled requests are excluded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - data
+                - page
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WarehouseMaterialRequest'
+                  page:
+                    type: object
+                    required:
+                    - limit
+                    - offset
+                    - has_more
+                    properties:
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+                      has_more:
+                        type: boolean
+  /v1/maintenance/material-requests/{id}/issue:
     post:
-      tags: [MaintenanceOrders]
-      operationId: createMaintenanceOrder
-      summary: Create a corrective order for a Production machine or a free-form facility target.
+      tags:
+      - SpareParts
+      operationId: issueWarehouseMaintenanceMaterialRequest
+      summary: Warehouse authorizes and confirms delivery of all reserved request lines to the assigned technician.
+      description: Records immutable Inventory exits with the warehouse actor. Retries only unconfirmed lines with stable reservation keys. An
+        issued request is replayed without effects. Partial delivery quantities are not accepted. Resolve never issues materials.
       x-required-module: maintenance
-      x-permissions: [maintenance.order.create]
+      x-required-modules:
+      - maintenance
+      - inventory
+      x-permissions: [inventory.movement.create]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Current request, issued or needs_reconciliation with pending_operation issue; a pending state is not delivery success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/WarehouseMaterialRequest'
+        '403':
+          description: Warehouse movement permission or module is missing.
+        '404':
+          description: Request does not exist in this tenant.
+        '409':
+          description: Request is not issuable or another command owns its lock.
+  /v1/maintenance/material-requests/{id}/reject:
+    post:
+      tags:
+      - SpareParts
+      operationId: rejectWarehouseMaintenanceMaterialRequest
+      summary: Reject an unissued request with an audited reason and release its reservations without an exit.
+      x-required-module: maintenance
+      x-required-modules:
+      - maintenance
+      - inventory
+      x-permissions: [inventory.movement.create]
+      parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MaintenanceOrderCreateRequest' }
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - reason
+              properties:
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 500
       responses:
-        '201':
-          description: Maintenance order created.
+        '200':
+          description: Cancelled request or needs_reconciliation with pending_operation cancel; retry rejection to release remaining lines.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/MaintenanceOrderResponse' }
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/WarehouseMaterialRequest'
+        '403':
+          description: Warehouse movement permission or module is missing.
+        '404':
+          description: Request does not exist in this tenant.
+        '409':
+          description: Delivery has started or another command owns the request lock.
+  /v1/maintenance/reports/{report_code}/export:
+    get:
+      tags:
+      - Reports
+      operationId: exportMaintenanceStandardReport
+      summary: Export a fixed Maintenance report as UTF-8 CSV.
+      x-required-module: maintenance
+      x-permissions: [maintenance.order.read, maintenance.time.read, maintenance.material_request.read]
+      parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: report_code
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: lang
+        in: query
+        schema:
+          type: string
+          enum:
+          - es
+          - en
+          default: es
+      - name: date_from
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: date_to
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+      - name: priority
+        in: query
+        schema:
+          type: string
+      - name: q
+        in: query
+        schema:
+          type: string
+      - name: target_type
+        in: query
+        schema:
+          type: string
+      - name: responsible_worker_id
+        in: query
+        schema:
+          type: string
+      - name: worker_id
+        in: query
+        schema:
+          type: string
+      - name: warehouse_id
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: CSV export.
+        '204':
+          description: No rows matched the filters.
+  /v1/maintenance/orders:
+    get:
+      tags:
+      - MaintenanceOrders
+      operationId: searchMaintenanceOrders
+      summary: Orders
+      x-required-module: maintenance
+      x-permissions: [maintenance.order.read]
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Q
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+    post:
+      tags:
+      - MaintenanceOrders
+      operationId: createMaintenanceOrder
+      summary: Create Order
+      x-required-module: maintenance
+      x-permissions: [maintenance.order.create]
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
   /v1/maintenance/orders/{id}:
     get:
-      tags: [MaintenanceOrders]
+      tags:
+      - MaintenanceOrders
       operationId: getMaintenanceOrder
       x-required-module: maintenance
       x-permissions: [maintenance.order.read]
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Maintenance order detail.
+          description: Successful Response
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/MaintenanceOrderResponse' }
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      summary: Get Order
+      x-implementation-status: implemented
     patch:
-      tags: [MaintenanceOrders]
+      tags:
+      - MaintenanceOrders
       operationId: updateMaintenanceOrder
-      summary: Edit an order in draft, requested, assigned, in-progress or waiting-parts state without bypassing commands.
+      summary: Update Order
       x-required-module: maintenance
       x-permissions: [maintenance.order.update]
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MaintenanceOrderUpdateRequest' }
+            schema:
+              $ref: '#/components/schemas/OrderUpdate'
       responses:
-        '200': { description: Maintenance order updated. }
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
   /v1/maintenance/orders/{id}/transitions:
     post:
-      tags: [MaintenanceOrders]
+      tags:
+      - MaintenanceOrders
       operationId: transitionMaintenanceOrder
-      summary: Request, assign, start, wait for parts, resolve, close or cancel an order.
+      summary: Transition Order
       x-required-module: maintenance
       x-permissions: [maintenance.order.request, maintenance.order.assign, maintenance.order.start, maintenance.order.wait_for_parts, maintenance.order.resume, maintenance.order.resolve, maintenance.order.close, maintenance.order.reopen, maintenance.order.cancel]
       x-permission-mode: by-requested-transition
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MaintenanceTransitionRequest' }
+            schema:
+              $ref: '#/components/schemas/TransitionRequest'
       responses:
         '200':
-          description: Transition applied or safely replayed.
+          description: Successful Response
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/MaintenanceOrderResponse' }
-        '409': { description: Invalid transition, duplicate active machine outage or external reconciliation required. }
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
   /v1/maintenance/orders/{id}/reconcile:
     post:
-      tags: [MaintenanceOrders]
+      tags:
+      - MaintenanceOrders
       operationId: reconcileMaintenanceOrder
-      summary: Retry the durable pending Inventory or Production operation without duplicating side effects.
+      summary: Retry the durable pending Production operation; material issues must be reconciled by Warehouse from Movements.
       x-required-module: maintenance
       x-permissions: [maintenance.order.reconcile]
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
       responses:
-        '200': { description: Reconciliation attempted and current durable state returned. }
+        '200':
+          description: Reconciliation attempted and current durable state returned.
   /v1/maintenance/orders/{id}/time-entries:
     get:
-      tags: [Labor]
+      tags:
+      - Labor
       operationId: listMaintenanceTimeEntries
       x-required-module: maintenance
       x-permissions: [maintenance.time.read]
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdPath'
       responses:
-        '200': { description: Time entries. }
+        '200':
+          description: Time entries.
     post:
-      tags: [Labor]
+      tags:
+      - Labor
       operationId: createMaintenanceTimeEntry
       x-required-module: maintenance
       x-permissions: [maintenance.time.create]
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/TimeEntryCreateRequest' }
+            schema:
+              $ref: '#/components/schemas/TimeEntryCreateRequest'
       responses:
-        '201': { description: Time entry created. }
+        '201':
+          description: Time entry created.
   /v1/maintenance/orders/{id}/material-requests:
     get:
-      tags: [SpareParts]
+      tags:
+      - SpareParts
       operationId: listMaintenanceMaterialRequests
       x-required-module: maintenance
       x-permissions: [maintenance.material_request.read]
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdPath'
       responses:
-        '200': { description: Material requests and Inventory reconciliation status. }
+        '200':
+          description: Material requests and Inventory reconciliation status.
     post:
-      tags: [SpareParts]
+      tags:
+      - SpareParts
       operationId: createMaintenanceMaterialRequest
       summary: Create a multi-line internal request against a spare-parts warehouse.
+      description: Creation and Inventory reservation are serialized with material recovery, cancellation and issue for the same tenant and order. A concurrent command returns command_in_progress.
       x-required-module: maintenance
       x-permissions: [maintenance.material_request.create]
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MaterialRequestCreateRequest' }
+            schema:
+              $ref: '#/components/schemas/MaterialRequestCreateRequest'
       responses:
-        '201': { description: Material request created and ready for Inventory reservation. }
+        '201':
+          description: Material request created and ready for Inventory reservation.
   /v1/maintenance/material-requests/{id}/cancel:
     post:
-      tags: [SpareParts]
+      tags:
+      - SpareParts
       operationId: cancelMaintenanceMaterialRequest
       x-required-module: maintenance
       x-permissions: [maintenance.material_request.cancel]
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
       responses:
-        '200': { description: Request cancelled and active reservations released. }
+        '200':
+          description: Request cancelled and active reservations released.
   /v1/maintenance/material-requests/{id}/reconcile:
     post:
-      tags: [SpareParts]
+      tags:
+      - SpareParts
       operationId: reconcileMaintenanceMaterialRequest
       summary: Retry only the pending reservation or release lines using stable Inventory keys.
+      description: Resumes needs_reconciliation, interrupted processing/reserve and cancelling/cancel under order and request locks. The same unfinished idempotency key can resume when no command is running. Completed requests return without Inventory effects. Reservations never issue stock; Warehouse confirms delivery separately.
       x-required-module: maintenance
       x-permissions: [maintenance.material_request.reconcile]
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
       responses:
-        '200': { description: Material reconciliation attempted and current durable state returned. }
+        '200':
+          description: Material reconciliation attempted and current durable state returned.
+  /v1/maintenance/returnable-materials:
+    get:
+      tags:
+      - maintenance
+      summary: Returnable Materials
+      operationId: returnable_materials_v1_maintenance_returnable_materials_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: maintenance
+      x-permissions: [inventory.movement.read, maintenance.material_request.create]
+      x-required-modules:
+      - maintenance
+      - inventory
+  /v1/maintenance/material-returns/validate:
+    post:
+      tags:
+      - maintenance
+      summary: Validate Material Return
+      operationId: validate_material_return_v1_maintenance_material_returns_validate_post
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaterialReturnValidation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: maintenance
+      x-permissions: [inventory.movement.create, maintenance.material_request.create]
+      x-required-modules:
+      - maintenance
+      - inventory
+  /v1/maintenance/material-returns/reconcile:
+    post:
+      tags:
+      - maintenance
+      summary: Reconcile Material Return
+      operationId: reconcile_material_return_v1_maintenance_material_returns_reconcile_post
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaterialReturnReconcile'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: maintenance
+      x-permissions: [inventory.movement.create]
+      x-required-modules:
+      - maintenance
+      - inventory
 components:
   securitySchemes:
     bearerAuth:
@@ -218,100 +882,650 @@ components:
       name: X-Tenant-Id
       in: header
       required: true
-      schema: { type: string, minLength: 1, maxLength: 40 }
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 40
     CorrelationId:
       name: X-Correlation-ID
       in: header
       required: false
-      schema: { type: string, maxLength: 120 }
+      schema:
+        type: string
+        maxLength: 120
     IdempotencyKey:
       name: Idempotency-Key
       in: header
       required: true
-      schema: { type: string, minLength: 8, maxLength: 160 }
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 160
     IdPath:
       name: id
       in: path
       required: true
-      schema: { type: string, minLength: 1, maxLength: 40 }
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 40
     Search:
       name: q
       in: query
-      schema: { type: string, maxLength: 120 }
+      schema:
+        type: string
+        maxLength: 120
     Limit:
       name: limit
       in: query
-      schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 100
   schemas:
+    WarehouseMaterialRequest:
+      type: object
+      required:
+      - id
+      - order_id
+      - warehouse_id
+      - warehouse_name
+      - status
+      - lines
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        order_code:
+          type: string
+          description: Included in the Warehouse inbox.
+        order_title:
+          type: string
+          description: Included in the Warehouse inbox.
+        assigned_worker_id:
+          type:
+          - string
+          - 'null'
+        assigned_worker_name:
+          type:
+          - string
+          - 'null'
+        warehouse_id:
+          type: string
+        warehouse_name:
+          type: string
+        status:
+          type: string
+          enum:
+          - processing
+          - reserved
+          - issued
+          - cancelling
+          - cancelled
+          - needs_reconciliation
+        pending_operation:
+          type:
+          - string
+          - 'null'
+          enum:
+          - reserve
+          - issue
+          - cancel
+          - null
+        integration_error:
+          type:
+          - string
+          - 'null'
+        integration_attempts:
+          type: integer
+        last_integration_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              line_number:
+                type: integer
+              item_id:
+                type: string
+              item_code:
+                type: string
+              item_name:
+                type: string
+              quantity:
+                type: number
+              unit_code:
+                type: string
+              reservation_id:
+                type:
+                - string
+                - 'null'
+              inventory_movement_id:
+                type:
+                - string
+                - 'null'
+              unit_cost_snapshot:
+                type:
+                - number
+                - 'null'
+              line_status:
+                type: string
     MaintenanceOrderCreateRequest:
       type: object
-      required: [code, target_type, priority, title, description, location]
+      required:
+      - code
+      - target_type
+      - priority
+      - title
+      - description
+      - location
       properties:
-        code: { type: string, minLength: 1, maxLength: 60 }
-        target_type: { type: string, enum: [production_machine, facility, other] }
-        production_machine_id: { type: [string, 'null'], maxLength: 40 }
-        source_type: { type: string, enum: [manual, production_order], default: manual }
-        source_production_order_id: { type: [string, 'null'], maxLength: 40 }
-        priority: { type: string, enum: [low, medium, high, critical] }
-        title: { type: string, minLength: 3, maxLength: 180 }
-        description: { type: string, minLength: 3, maxLength: 4000 }
-        location: { type: string, minLength: 2, maxLength: 300 }
-        safety_notes: { type: [string, 'null'], maxLength: 2000 }
+        code:
+          type: string
+          minLength: 1
+          maxLength: 60
+        target_type:
+          type: string
+          enum:
+          - production_machine
+          - facility
+          - other
+        production_machine_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        source_type:
+          type: string
+          enum:
+          - manual
+          - production_order
+          default: manual
+        source_production_order_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        priority:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          - critical
+        title:
+          type: string
+          minLength: 3
+          maxLength: 180
+        description:
+          type: string
+          minLength: 3
+          maxLength: 4000
+        location:
+          type: string
+          minLength: 2
+          maxLength: 300
+        safety_notes:
+          type:
+          - string
+          - 'null'
+          maxLength: 2000
     MaintenanceOrderUpdateRequest:
       type: object
       properties:
-        priority: { type: string, enum: [low, medium, high, critical] }
-        title: { type: string, minLength: 3, maxLength: 180 }
-        description: { type: string, minLength: 3, maxLength: 4000 }
-        location: { type: string, minLength: 2, maxLength: 300 }
-        diagnosis: { type: [string, 'null'], maxLength: 4000 }
-        work_performed: { type: [string, 'null'], maxLength: 4000 }
-        root_cause: { type: [string, 'null'], maxLength: 2000 }
-        verification_notes: { type: [string, 'null'], maxLength: 2000 }
+        priority:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          - critical
+        title:
+          type: string
+          minLength: 3
+          maxLength: 180
+        description:
+          type: string
+          minLength: 3
+          maxLength: 4000
+        location:
+          type: string
+          minLength: 2
+          maxLength: 300
+        diagnosis:
+          type:
+          - string
+          - 'null'
+          maxLength: 4000
+        work_performed:
+          type:
+          - string
+          - 'null'
+          maxLength: 4000
+        root_cause:
+          type:
+          - string
+          - 'null'
+          maxLength: 2000
+        verification_notes:
+          type:
+          - string
+          - 'null'
+          maxLength: 2000
     MaintenanceTransitionRequest:
       type: object
-      required: [transition]
+      required:
+      - transition
       properties:
-        transition: { type: string, enum: [request, assign, start, wait_for_parts, resume, resolve, close, reopen, cancel] }
-        assigned_worker_id: { type: [string, 'null'], maxLength: 40 }
-        reason: { type: [string, 'null'], maxLength: 1000 }
+        transition:
+          type: string
+          enum:
+          - request
+          - assign
+          - start
+          - wait_for_parts
+          - resume
+          - resolve
+          - close
+          - reopen
+          - cancel
+        assigned_worker_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
     TimeEntryCreateRequest:
       type: object
-      required: [worker_id, started_at, ended_at]
+      required:
+      - worker_id
+      - started_at
+      - ended_at
       properties:
-        worker_id: { type: string, maxLength: 40 }
-        started_at: { type: string, format: date-time }
-        ended_at: { type: string, format: date-time }
-        notes: { type: [string, 'null'], maxLength: 1000 }
+        worker_id:
+          type: string
+          maxLength: 40
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+        notes:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
     MaterialRequestCreateRequest:
       type: object
-      required: [warehouse_id, lines]
+      required:
+      - warehouse_id
+      - lines
       properties:
-        warehouse_id: { type: string, maxLength: 40 }
+        warehouse_id:
+          type: string
+          maxLength: 40
         lines:
           type: array
           minItems: 1
           maxItems: 100
           items:
             type: object
-            required: [item_id, quantity, unit_code]
+            required:
+            - item_id
+            - quantity
+            - unit_code
             properties:
-              item_id: { type: string, maxLength: 40 }
-              quantity: { type: number, exclusiveMinimum: 0 }
-              unit_code: { type: string, minLength: 1, maxLength: 30 }
+              item_id:
+                type: string
+                maxLength: 40
+              quantity:
+                type: number
+                exclusiveMinimum: 0
+              unit_code:
+                type: string
+                minLength: 1
+                maxLength: 30
     MaintenanceOrderResponse:
       type: object
-      required: [data]
+      required:
+      - data
       properties:
         data:
           type: object
-          required: [id, status, target_type, priority, title]
+          required:
+          - id
+          - status
+          - target_type
+          - priority
+          - title
           properties:
-            id: { type: string, maxLength: 40 }
-            status: { type: string, enum: [draft, requested, assigned, in_progress, waiting_parts, resolved, closed, cancelled] }
-            target_type: { type: string, enum: [production_machine, facility, other] }
-            priority: { type: string, enum: [low, medium, high, critical] }
-            title: { type: string }
-            assigned_worker_id: { type: [string, 'null'], maxLength: 40 }
-            integration_status: { type: string, enum: [not_required, processing, completed, needs_reconciliation] }
-            integration_operation: { type: [string, 'null'], enum: [block, release, null] }
+            id:
+              type: string
+              maxLength: 40
+            status:
+              type: string
+              enum:
+              - draft
+              - requested
+              - assigned
+              - in_progress
+              - waiting_parts
+              - resolved
+              - closed
+              - cancelled
+            target_type:
+              type: string
+              enum:
+              - production_machine
+              - facility
+              - other
+            priority:
+              type: string
+              enum:
+              - low
+              - medium
+              - high
+              - critical
+            title:
+              type: string
+            assigned_worker_id:
+              type:
+              - string
+              - 'null'
+              maxLength: 40
+            integration_status:
+              type: string
+              enum:
+              - not_required
+              - processing
+              - completed
+              - needs_reconciliation
+            integration_operation:
+              type:
+              - string
+              - 'null'
+              enum:
+              - block
+              - release
+              - null
+    ListResponse:
+      properties:
+        data:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Data
+      type: object
+      required:
+      - data
+      title: ListResponse
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    OrderCreate:
+      properties:
+        code:
+          type: string
+          maxLength: 60
+          minLength: 1
+          title: Code
+        target_type:
+          type: string
+          enum:
+          - production_machine
+          - facility
+          - other
+          title: Target Type
+        production_machine_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Production Machine Id
+        source_type:
+          type: string
+          enum:
+          - manual
+          - production_order
+          title: Source Type
+          default: manual
+        source_production_order_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Production Order Id
+        priority:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          - critical
+          title: Priority
+          default: medium
+        title:
+          type: string
+          maxLength: 180
+          minLength: 3
+          title: Title
+        description:
+          type: string
+          maxLength: 4000
+          minLength: 3
+          title: Description
+        location:
+          type: string
+          maxLength: 300
+          minLength: 2
+          title: Location
+        safety_notes:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Safety Notes
+      type: object
+      required:
+      - code
+      - target_type
+      - title
+      - description
+      - location
+      title: OrderCreate
+    DataResponse:
+      properties:
+        data:
+          additionalProperties: true
+          type: object
+          title: Data
+      type: object
+      required:
+      - data
+      title: DataResponse
+    OrderUpdate:
+      properties:
+        priority:
+          anyOf:
+          - type: string
+            enum:
+            - low
+            - medium
+            - high
+            - critical
+          - type: 'null'
+          title: Priority
+        title:
+          anyOf:
+          - type: string
+            maxLength: 180
+            minLength: 3
+          - type: 'null'
+          title: Title
+        description:
+          anyOf:
+          - type: string
+            maxLength: 4000
+            minLength: 3
+          - type: 'null'
+          title: Description
+        location:
+          anyOf:
+          - type: string
+            maxLength: 300
+            minLength: 2
+          - type: 'null'
+          title: Location
+        safety_notes:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Safety Notes
+        diagnosis:
+          anyOf:
+          - type: string
+            maxLength: 4000
+          - type: 'null'
+          title: Diagnosis
+        root_cause:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Root Cause
+        work_performed:
+          anyOf:
+          - type: string
+            maxLength: 4000
+          - type: 'null'
+          title: Work Performed
+        verification_notes:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Verification Notes
+      type: object
+      title: OrderUpdate
+    TransitionRequest:
+      properties:
+        transition:
+          type: string
+          enum:
+          - request
+          - assign
+          - start
+          - wait_for_parts
+          - resume
+          - resolve
+          - close
+          - reopen
+          - cancel
+          title: Transition
+        assigned_worker_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assigned Worker Id
+        reason:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Reason
+      type: object
+      required:
+      - transition
+      title: TransitionRequest
+    MaterialReturnValidation:
+      properties:
+        original_movement_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Original Movement Id
+        reservation_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Reservation Id
+        source_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Source Id
+        quantity:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Quantity
+      additionalProperties: false
+      type: object
+      required:
+      - original_movement_id
+      - reservation_id
+      - source_id
+      - quantity
+      title: MaterialReturnValidation
+    MaterialReturnReconcile:
+      properties:
+        return_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Return Id
+      additionalProperties: false
+      type: object
+      required:
+      - return_id
+      title: MaterialReturnReconcile

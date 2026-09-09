@@ -34,7 +34,8 @@ if (!errors.length) {
   }
 
   const skill = readText(requiredFiles[1]);
-  if (!skill.startsWith("---\nname: erclave-environment-boundaries\n")) {
+  const normalizedSkill = skill.replace(/\r\n/g, "\n");
+  if (!normalizedSkill.startsWith("---\nname: erclave-environment-boundaries\n")) {
     errors.push("Environment boundary skill has invalid frontmatter or name.");
   }
   if (skill.includes("TODO")) errors.push("Environment boundary skill contains TODO placeholders.");

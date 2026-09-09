@@ -4,40 +4,183 @@ info:
   version: 0.2.0
   summary: Product, recipe, production order and machine APIs; labor catalogs belong to hr-service.
 servers:
-  - url: https://api.eslaclave.com
+- url: https://api.eslaclave.com
 security:
-  - bearerAuth: []
+- bearerAuth: []
 tags:
-  - name: ProductServices
-  - name: Recipes
-  - name: Orders
-  - name: Machines
+- name: ProductServices
+- name: Recipes
+- name: Orders
+- name: Machines
 paths:
+  /v1/production/warehouse-material-requests:
+    get:
+      tags:
+      - Orders
+      operationId: listProductionWarehouseMaterials
+      summary: Pending production material issues, minimal tenant-scoped warehouse projection.
+      x-required-module: production
+      x-required-modules:
+      - production
+      - inventory
+      x-permissions: [inventory.movement.read]
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 25
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Pending issues with limit/offset pagination.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseMaterialListResponse'
+        '403':
+          description: Permission, tenant or module denied.
+        '409':
+          description: Invalid state, missing reservations or competing command.
+  /v1/production/orders/{order_id}/issue-materials:
+    post:
+      tags:
+      - Orders
+      operationId: issueProductionWarehouseMaterials
+      summary: Warehouse confirms complete material issue before product or service production starts.
+      x-required-module: production
+      x-required-modules:
+      - production
+      - inventory
+      x-permissions: [inventory.movement.create]
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Durable issue result; needs_reconciliation remains retryable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseMaterialResponse'
+        '403':
+          description: Permission, tenant or module denied.
+        '409':
+          description: Invalid state, missing reservations or competing command.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarehouseIssueRequest'
+      description: No business payload. Stable order/reservation keys recover crashes and repeated calls without duplicate movements. Starting/resuming
+        never consumes. Issuance does not change order status. Actor and designated order owner are audited.
+  /v1/production/reports/{report_code}/export:
+    get:
+      tags:
+      - Reports
+      operationId: exportProductionStandardReport
+      summary: Export a fixed Production report as UTF-8 CSV.
+      x-required-module: production
+      x-permissions: [production.product_service.read, production.recipe.read, production.order.read, production.machine.read]
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - name: report_code
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: lang
+        in: query
+        schema:
+          type: string
+          enum:
+          - es
+          - en
+          default: es
+      - name: date_from
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: date_to
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+      - name: priority
+        in: query
+        schema:
+          type: string
+      - name: type
+        in: query
+        schema:
+          type: string
+      - name: q
+        in: query
+        schema:
+          type: string
+          maxLength: 120
+      - name: product_id
+        in: query
+        schema:
+          type: string
+      - name: area_id
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: CSV export.
+        '204':
+          description: No rows matched the filters.
   /v1/production/product-services:
     get:
-      tags: [ProductServices]
+      tags:
+      - ProductServices
       operationId: listProductServices
       summary: Search product and service catalog.
       x-required-module: production
-      x-permissions: [production.product_service.read, sales.quote.create, sales.quote.update, sales.order.create, sales.order.fulfill]
+      x-permissions: [production.product_service.read, sales.order.create, sales.order.fulfill, sales.quote.create, sales.quote.update]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Search'
-        - $ref: '#/components/parameters/Status'
-        - name: type
-          in: query
-          schema:
-            type: string
-            enum: [product, service]
-        - name: inventory_mapping
-          in: query
-          description: Filter products by authoritative Inventory mapping state.
-          schema:
-            type: string
-            enum: [missing, linked]
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Search'
+      - $ref: '#/components/parameters/Status'
+      - name: type
+        in: query
+        schema:
+          type: string
+          enum:
+          - product
+          - service
+      - name: inventory_mapping
+        in: query
+        description: Filter products by authoritative Inventory mapping state.
+        schema:
+          type: string
+          enum:
+          - missing
+          - linked
       responses:
         '200':
           description: Product services.
@@ -46,15 +189,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductServiceListResponse'
     post:
-      tags: [ProductServices]
+      tags:
+      - ProductServices
       operationId: createProductService
       summary: Create product or service.
       x-required-module: production
       x-permissions: [production.product_service.create]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -72,15 +216,16 @@ paths:
           $ref: '#/components/responses/Conflict'
   /v1/production/product-services/{id}:
     get:
-      tags: [ProductServices]
+      tags:
+      - ProductServices
       operationId: getProductService
       summary: Get product or service detail.
       x-required-module: production
-      x-permissions: [production.product_service.read, sales.quote.create, sales.quote.update, sales.order.create, sales.order.fulfill]
+      x-permissions: [production.product_service.read, sales.order.create, sales.order.fulfill, sales.quote.create, sales.quote.update]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdPath'
       responses:
         '200':
           description: Product service detail.
@@ -89,15 +234,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductServiceResponse'
     patch:
-      tags: [ProductServices]
+      tags:
+      - ProductServices
       operationId: updateProductService
       summary: Update product or service.
       x-required-module: production
       x-permissions: [production.product_service.update]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdPath'
       requestBody:
         required: true
         content:
@@ -113,16 +259,17 @@ paths:
                 $ref: '#/components/schemas/ProductServiceResponse'
   /v1/production/product-services/{id}/status:
     patch:
-      tags: [ProductServices]
+      tags:
+      - ProductServices
       operationId: updateProductServiceStatus
       summary: Change product or service status.
       x-required-module: production
       x-permissions: [production.product_service.status.update]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
       requestBody:
         required: true
         content:
@@ -138,16 +285,17 @@ paths:
                 $ref: '#/components/schemas/ProductServiceResponse'
   /v1/production/product-services/{id}/finished-good-link:
     put:
-      tags: [ProductServices]
+      tags:
+      - ProductServices
       operationId: createAndLinkFinishedGood
       summary: Create an Inventory finished good and link it to an active Production product.
       x-required-module: production
-      x-permissions: [production.product_service.update, inventory.item.create]
+      x-permissions: [inventory.item.create, production.product_service.update]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
       requestBody:
         required: true
         content:
@@ -165,16 +313,17 @@ paths:
           $ref: '#/components/responses/Conflict'
   /v1/production/product-services/{id}/cost-summary:
     get:
-      tags: [ProductServices]
+      tags:
+      - ProductServices
       operationId: getProductServiceCostSummary
       summary: Get standard cost summary from approved recipe.
       x-required-module: production
       x-permissions: [production.product_service.read]
       x-implementation-status: planned
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdPath'
       responses:
         '200':
           description: Cost summary.
@@ -184,18 +333,19 @@ paths:
                 $ref: '#/components/schemas/CostSummaryResponse'
   /v1/production/recipes:
     get:
-      tags: [Recipes]
+      tags:
+      - Recipes
       operationId: listRecipes
       summary: Search recipes.
       x-required-module: production
       x-permissions: [production.recipe.read]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Search'
-        - $ref: '#/components/parameters/Status'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Search'
+      - $ref: '#/components/parameters/Status'
       responses:
         '200':
           description: Recipes.
@@ -204,15 +354,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/RecipeListResponse'
     post:
-      tags: [Recipes]
+      tags:
+      - Recipes
       operationId: createRecipe
       summary: Create recipe for existing product or service.
       x-required-module: production
       x-permissions: [production.recipe.create]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -227,22 +378,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/RecipeResponse'
         '422':
-          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery may be active or under maintenance but must exist and not be inactive.
+          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery may be active or under maintenance but
+            must exist and not be inactive.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /v1/production/recipes/{id}:
     get:
-      tags: [Recipes]
+      tags:
+      - Recipes
       operationId: getRecipe
       summary: Get recipe with versions.
       x-required-module: production
       x-permissions: [production.recipe.read]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdPath'
       responses:
         '200':
           description: Recipe detail.
@@ -252,16 +405,17 @@ paths:
                 $ref: '#/components/schemas/RecipeResponse'
   /v1/production/recipes/{id}/versions:
     post:
-      tags: [Recipes]
+      tags:
+      - Recipes
       operationId: createRecipeVersion
       summary: Create new recipe version.
       x-required-module: production
       x-permissions: [production.recipe.update]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
       requestBody:
         required: true
         content:
@@ -276,27 +430,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/RecipeVersionResponse'
         '422':
-          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery may be active or under maintenance but must exist and not be inactive.
+          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery may be active or under maintenance but
+            must exist and not be inactive.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /v1/production/recipe-versions/{version_id}:
     patch:
-      tags: [Recipes]
+      tags:
+      - Recipes
       operationId: updateRecipeVersion
       summary: Update draft recipe version.
       x-required-module: production
       x-permissions: [production.recipe.update]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - name: version_id
-          in: path
-          required: true
-          schema:
-            type: string
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
       requestBody:
         required: true
         content:
@@ -311,27 +467,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/RecipeVersionResponse'
         '422':
-          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery may be active or under maintenance but must exist and not be inactive.
+          description: Product, unit, stage, or authoritative recipe resource is not eligible; machinery may be active or under maintenance but
+            must exist and not be inactive.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /v1/production/recipe-versions/{version_id}/submit:
     post:
-      tags: [Recipes]
+      tags:
+      - Recipes
       operationId: submitRecipeVersion
       summary: Submit recipe version for approval.
       x-required-module: production
       x-permissions: [production.recipe.submit]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - name: version_id
-          in: path
-          required: true
-          schema:
-            type: string
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
         '200':
           description: Version submitted.
@@ -341,20 +499,21 @@ paths:
                 $ref: '#/components/schemas/RecipeVersionResponse'
   /v1/production/recipe-versions/{version_id}/approve:
     post:
-      tags: [Recipes]
+      tags:
+      - Recipes
       operationId: approveRecipeVersion
       summary: Approve recipe version as usable for new orders.
       x-required-module: production
       x-permissions: [production.recipe.approve]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - name: version_id
-          in: path
-          required: true
-          schema:
-            type: string
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
       requestBody:
         required: false
         content:
@@ -370,20 +529,21 @@ paths:
                 $ref: '#/components/schemas/RecipeVersionResponse'
   /v1/production/recipe-versions/{version_id}/obsolete:
     post:
-      tags: [Recipes]
+      tags:
+      - Recipes
       operationId: obsoleteRecipeVersion
       summary: Mark recipe version obsolete.
       x-required-module: production
       x-permissions: [production.recipe.obsolete]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - name: version_id
-          in: path
-          required: true
-          schema:
-            type: string
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
       requestBody:
         required: true
         content:
@@ -399,15 +559,16 @@ paths:
                 $ref: '#/components/schemas/RecipeVersionResponse'
   /v1/production/resource-validations:
     post:
-      tags: [Orders]
+      tags:
+      - Orders
       operationId: validateProductionResources
       summary: Validate resources before creating or releasing an order.
       x-required-module: production
       x-permissions: [production.order.validate]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -423,35 +584,114 @@ paths:
                 $ref: '#/components/schemas/ResourceValidationResponse'
   /v1/production/orders:
     get:
-      tags: [Orders]
+      tags:
+      - Orders
       operationId: listProductionOrders
-      summary: Search production orders.
+      summary: List Orders
       x-required-module: production
       x-permissions: [production.order.read]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Search'
-        - $ref: '#/components/parameters/Status'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Production orders.
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductionOrderListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
     post:
-      tags: [Orders]
+      tags:
+      - Orders
       operationId: createProductionOrder
-      summary: Validate, reserve and release a manual production order from an approved recipe.
+      summary: Create Order
       x-required-module: production
       x-permissions: [production.order.release]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
@@ -460,74 +700,106 @@ paths:
               $ref: '#/components/schemas/ProductionOrderCreateRequest'
       responses:
         '201':
-          description: Production order created.
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductionOrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      description: HR and resource validation precede creation. Failed creation records a recovery owned by its actor; rollback releases only
+        that failed source and prevents late reservation writes.
   /v1/production/finished-goods-candidates:
     get:
-      tags: [Orders]
+      tags:
+      - Orders
       operationId: listFinishedGoodsCandidates
       summary: List the minimum completed-order projection needed for Inventory receipt.
       x-required-module: production
       x-permissions: [inventory.finished_goods_receipt.read, inventory.finished_goods_receipt.receive]
       x-permission-mode: any
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/Limit'
       responses:
         '200':
           description: Minimal finished-goods receipt candidates.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/FinishedGoodsCandidateListResponse'}
+              schema:
+                $ref: '#/components/schemas/FinishedGoodsCandidateListResponse'
   /v1/production/finished-goods-candidates/{id}:
     get:
-      tags: [Orders]
+      tags:
+      - Orders
       operationId: getFinishedGoodsCandidate
       summary: Get one minimum completed-order projection for Inventory validation.
       x-required-module: production
       x-permissions: [inventory.finished_goods_receipt.read, inventory.finished_goods_receipt.receive]
       x-permission-mode: any
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdPath'
       responses:
         '200':
           description: Minimal finished-goods receipt candidate.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/FinishedGoodsCandidateResponse'}
-        '409': {$ref: '#/components/responses/Conflict'}
+              schema:
+                $ref: '#/components/schemas/FinishedGoodsCandidateResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /v1/production/order-requests:
     get:
-      tags: [Orders]
+      tags:
+      - Orders
       operationId: listProductionOrderRequests
       summary: List authoritative Sales requests awaiting Production planning.
       x-implementation-status: implemented
       x-required-module: production
       x-permissions: [production.order.read]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - name: status
-          in: query
-          schema: {type: string, enum: [pending_configuration, converted, cancelled]}
+      - $ref: '#/components/parameters/TenantHeader'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - pending_configuration
+          - converted
+          - cancelled
       responses:
-        '200': {description: Production requests., content: {application/json: {schema: {$ref: '#/components/schemas/ProductionSalesRequestListResponse'}}}}
+        '200':
+          description: Production requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionSalesRequestListResponse'
     post:
-      tags: [Orders]
+      tags:
+      - Orders
       operationId: createProductionOrderRequest
       summary: Register an authoritative Sales request without releasing a Production order.
       x-implementation-status: implemented
       x-required-module: production
       x-permissions: [sales.order.fulfill]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -541,67 +813,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductionSalesRequestResponse'
-  /v1/production/orders/{id}:
-    get:
-      tags: [Orders]
-      operationId: getProductionOrder
-      summary: Get production order detail.
-      x-required-module: production
-      x-permissions: [production.order.read]
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Production order.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductionOrderResponse'
-  /v1/production/orders/{id}/status:
-    patch:
-      tags: [Orders]
-      operationId: updateProductionOrderStatus
-      summary: Change production order status.
-      description: All local transition, stage, reservation-snapshot and actual-usage preconditions are checked before any external Inventory effect. Materials are reserved when an order is released. The first transition from released or waiting_resources to in_progress consumes each reservation through Inventory, which records one immutable outbound movement in the warehouse that owned the reservation. Resuming from paused or returning from validation does not consume again. Completion requires every stage to be completed or skipped and never duplicates the material issue. Cancelling before start releases reservations; cancelling after start preserves the recorded physical issues.
-      x-required-module: production
-      x-permissions: [production.order.release, production.order.wait_resources, production.order.start, production.order.pause, production.order.resume, production.order.send_to_validation, production.order.complete, production.order.cancel]
-      x-permission-mode: by-requested-transition
-      parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProductionOrderStatusRequest'
-      responses:
-        '200':
-          description: Status changed.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductionOrderResponse'
   /v1/production/orders/{id}/resources/{resource_id}:
     patch:
-      tags: [Orders]
+      tags:
+      - Orders
       operationId: updateProductionOrderResourceActual
       summary: Record actual labor or machine usage for operational costing.
       x-required-module: production
       x-permissions: [production.order.update]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/IdPath'
-        - name: resource_id
-          in: path
-          required: true
-          schema: {type: string}
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IdPath'
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
       requestBody:
         required: true
         content:
@@ -617,22 +846,24 @@ paths:
                 $ref: '#/components/schemas/ProductionOrderResourceResponse'
   /v1/production/order-stages/{stage_id}:
     patch:
-      tags: [Orders]
+      tags:
+      - Orders
       operationId: updateProductionOrderStage
       summary: Update order stage.
-      description: Starting a stage requires its production order to already be in_progress. The client must first change the order status so Inventory can confirm all material issues; this endpoint never bypasses that rule.
+      description: Starting a stage requires its production order to already be in_progress. The client must first change the order status so
+        Inventory can confirm all material issues; this endpoint never bypasses that rule.
       x-required-module: production
-      x-permissions: [production.order_stage.reset, production.order_stage.update, production.order_stage.complete, production.order_stage.block, production.order_stage.skip]
+      x-permissions: [production.order_stage.block, production.order_stage.complete, production.order_stage.reset, production.order_stage.skip, production.order_stage.update]
       x-permission-mode: by-requested-status
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - name: stage_id
-          in: path
-          required: true
-          schema:
-            type: string
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: stage_id
+        in: path
+        required: true
+        schema:
+          type: string
       requestBody:
         required: true
         content:
@@ -648,16 +879,17 @@ paths:
                 $ref: '#/components/schemas/OrderStageResponse'
   /v1/production/machines:
     get:
-      tags: [Machines]
+      tags:
+      - Machines
       operationId: listMachines
       summary: List machines.
       x-required-module: production
       x-permissions: [production.machine.read]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/Search'
-        - $ref: '#/components/parameters/Status'
-        - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/Search'
+      - $ref: '#/components/parameters/Status'
+      - $ref: '#/components/parameters/CorrelationId'
       responses:
         '200':
           description: Machines.
@@ -666,15 +898,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/MachineListResponse'
     post:
-      tags: [Machines]
+      tags:
+      - Machines
       operationId: createMachine
       summary: Create machine.
       x-required-module: production
       x-permissions: [production.machine.create]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -690,34 +923,110 @@ paths:
                 $ref: '#/components/schemas/MachineResponse'
   /v1/production/machines/{machine_id}:
     get:
-      tags: [Machines]
+      tags:
+      - Machines
       operationId: getMachine
-      summary: Get a tenant-owned machine for Production or Maintenance validation.
+      summary: Get Machine
       x-required-module: production
-      x-permissions: [production.machine.read, maintenance.order.create]
+      x-permissions: [maintenance.order.create, production.machine.read]
       x-permission-mode: any
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - name: machine_id
-          in: path
-          required: true
-          schema: { type: string }
+      - name: machine_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Machine Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
-        '200': { description: Machine, content: { application/json: { schema: { $ref: '#/components/schemas/MachineResponse' } } } }
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
     patch:
-      tags: [Machines]
+      tags:
+      - Machines
       operationId: updateMachine
-      summary: Update machine.
+      summary: Update Machine
       x-required-module: production
       x-permissions: [production.machine.update]
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/CorrelationId'
-        - name: machine_id
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: machine_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Machine Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
@@ -726,45 +1035,583 @@ paths:
               $ref: '#/components/schemas/MachineUpdateRequest'
       responses:
         '200':
-          description: Machine updated.
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MachineResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      description: A machine held by Maintenance cannot have its status changed manually; Maintenance must release the hold.
   /v1/production/machines/{machine_id}/maintenance-block:
     post:
-      tags: [Machines]
+      tags:
+      - Machines
       operationId: blockMachineForMaintenance
       summary: Mark a machine in maintenance and pause an eligible linked Production order.
       x-required-module: production
-      x-permissions: [maintenance.order.request, maintenance.order.reopen]
+      x-permissions: [maintenance.order.reopen, maintenance.order.request]
       x-permission-mode: any
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - name: machine_id
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MaintenanceMachineCommand' } } } }
-      responses: { '200': { description: Machine blocked and Production order left waiting or paused. } }
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: machine_id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaintenanceMachineCommand'
+      responses:
+        '200':
+          description: Machine blocked and Production order left waiting or paused.
   /v1/production/machines/{machine_id}/maintenance-release:
     post:
-      tags: [Machines]
+      tags:
+      - Machines
       operationId: releaseMachineFromMaintenance
       summary: Return a maintained machine to active without automatically resuming Production.
       x-required-module: production
-      x-permissions: [maintenance.order.resolve, maintenance.order.cancel]
+      x-permissions: [maintenance.order.cancel, maintenance.order.resolve]
       x-permission-mode: any
       parameters:
-        - $ref: '#/components/parameters/TenantHeader'
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - name: machine_id
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MaintenanceMachineCommand' } } } }
-      responses: { '200': { description: Machine released; Production remains paused or waiting. } }
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: machine_id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaintenanceMachineCommand'
+      responses:
+        '200':
+          description: Machine released; Production remains paused or waiting.
+  /v1/production/orders/{order_id}:
+    get:
+      tags:
+      - Orders
+      operationId: getProductionOrder
+      summary: Get Order
+      x-required-module: production
+      x-permissions: [production.order.read]
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+  /v1/production/orders/{order_id}/status:
+    patch:
+      tags:
+      - Orders
+      operationId: updateProductionOrderStatus
+      summary: Update Order Status
+      description: Starting/resuming requires issued materials, active machines without maintenance holds, and currently eligible HR assignees.
+        Workflow errors include stable codes and transition context.
+      x-required-module: production
+      x-permissions: [production.order.cancel, production.order.complete, production.order.pause, production.order.release, production.order.resume, production.order.send_to_validation, production.order.start, production.order.wait_resources]
+      x-permission-mode: by-requested-transition
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionOrderStatusRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+  /v1/production/returnable-materials:
+    get:
+      summary: Returnable Materials
+      operationId: returnable_materials_v1_production_returnable_materials_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: production
+      x-permissions: [inventory.movement.read, production.order.update]
+      x-required-modules:
+      - production
+      - inventory
+  /v1/production/material-returns/validate:
+    post:
+      summary: Validate Material Return
+      operationId: validate_material_return_v1_production_material_returns_validate_post
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaterialReturnValidation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: production
+      x-permissions: [inventory.movement.create, production.order.update]
+      x-required-modules:
+      - production
+      - inventory
+  /v1/production/material-returns/reconcile:
+    post:
+      summary: Reconcile Material Return
+      operationId: reconcile_material_return_v1_production_material_returns_reconcile_post
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaterialReturnReconcile'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: production
+      x-permissions: [inventory.movement.create]
+      x-required-modules:
+      - production
+      - inventory
+  /v1/production/failed-order-creations:
+    get:
+      summary: Failed Order Creations
+      operationId: failed_order_creations_v1_production_failed_order_creations_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: production
+      x-permissions: [production.order.release]
+  /v1/production/failed-order-creations/{order_id}:
+    get:
+      summary: Failed Order Creation
+      operationId: failed_order_creation_v1_production_failed_order_creations__order_id__get
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: production
+      x-permissions: [production.order.release]
+  /v1/production/failed-order-creations/{order_id}/recover:
+    post:
+      summary: Recover Order Creation
+      operationId: recover_order_creation_v1_production_failed_order_creations__order_id__recover_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '403':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '409':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+        '503':
+          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-implementation-status: implemented
+      x-required-module: production
+      x-permissions: [production.order.release]
 components:
   securitySchemes:
     bearerAuth:
@@ -826,6 +1673,122 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    WarehouseMaterialLine:
+      properties:
+        id:
+          title: Id
+          type: string
+        item_code:
+          title: Item Code
+          type: string
+        item_name:
+          title: Item Name
+          type: string
+        quantity:
+          title: Quantity
+          type: number
+        unit_code:
+          title: Unit Code
+          type: string
+        issued:
+          title: Issued
+          type: boolean
+        allocations:
+          items:
+            additionalProperties: true
+            type: object
+          title: Allocations
+          type: array
+      required:
+      - id
+      - item_code
+      - item_name
+      - quantity
+      - unit_code
+      - issued
+      title: WarehouseMaterialLine
+      type: object
+    WarehouseMaterialPage:
+      properties:
+        limit:
+          title: Limit
+          type: integer
+        offset:
+          title: Offset
+          type: integer
+        has_more:
+          title: Has More
+          type: boolean
+      required:
+      - limit
+      - offset
+      - has_more
+      title: WarehouseMaterialPage
+      type: object
+    WarehouseMaterialRead:
+      properties:
+        id:
+          title: Id
+          type: string
+        order_code:
+          title: Order Code
+          type: string
+        responsible_name:
+          title: Responsible Name
+          type: string
+        status:
+          enum:
+          - reserved
+          - processing
+          - needs_reconciliation
+          - issued
+          title: Status
+          type: string
+        created_at:
+          format: date-time
+          title: Created At
+          type: string
+        lines:
+          items:
+            $ref: '#/components/schemas/WarehouseMaterialLine'
+          title: Lines
+          type: array
+      required:
+      - id
+      - order_code
+      - responsible_name
+      - status
+      - created_at
+      - lines
+      title: WarehouseMaterialRead
+      type: object
+    WarehouseMaterialListResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/WarehouseMaterialRead'
+          title: Data
+          type: array
+        page:
+          $ref: '#/components/schemas/WarehouseMaterialPage'
+      required:
+      - data
+      - page
+      title: WarehouseMaterialListResponse
+      type: object
+    WarehouseMaterialResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/WarehouseMaterialRead'
+      required:
+      - data
+      title: WarehouseMaterialResponse
+      type: object
+    WarehouseIssueRequest:
+      additionalProperties: false
+      properties: {}
+      title: WarehouseIssueRequest
+      type: object
     ErrorResponse:
       type: object
       properties:
@@ -842,14 +1805,14 @@ components:
               type: object
               additionalProperties: true
     Page:
-      type: object
       properties:
-        limit:
-          type: integer
         next_cursor:
-          type: [string, 'null']
-        has_more:
-          type: boolean
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+      type: object
+      title: Page
     ProductService:
       type: object
       properties:
@@ -861,14 +1824,19 @@ components:
           type: string
         type:
           type: string
-          enum: [product, service]
+          enum:
+          - product
+          - service
         category:
           type: string
         base_unit:
           type: string
         status:
           type: string
-          enum: [active, inactive, pending_approval]
+          enum:
+          - active
+          - inactive
+          - pending_approval
         target_price:
           type: number
         standard_cost:
@@ -882,7 +1850,9 @@ components:
         description:
           type: string
         inventory_item_id:
-          type: [string, 'null']
+          type:
+          - string
+          - 'null'
           description: Authoritative Inventory item mapping; required for products and forbidden for services.
     ProductServiceResponse:
       type: object
@@ -900,37 +1870,11 @@ components:
           $ref: '#/components/schemas/Page'
     FinishedGoodItemCreate:
       type: object
-      required: [code, name, type, base_unit]
-      properties:
-        code: { type: string }
-        name: { type: string }
-        type: { type: string, enum: [finishedGood] }
-        category: { type: [string, 'null'] }
-        base_unit: { type: string }
-        inventory_policy: { type: string, enum: [standard, lot, serial, restricted], default: standard }
-        suggested_warehouse_id: { type: [string, 'null'] }
-        minimum_stock: { type: number, minimum: 0, default: 0 }
-        maximum_stock: { type: number, minimum: 0, default: 0 }
-        default_unit_cost: { type: number, minimum: 0, default: 0 }
-        use_in_recipe: { type: boolean, default: false }
-        description: { type: [string, 'null'] }
-    FinishedGoodLinkRequest:
-      type: object
-      required: [inventory_item]
-      properties:
-        inventory_item: { $ref: '#/components/schemas/FinishedGoodItemCreate' }
-    FinishedGoodLinkResponse:
-      type: object
-      properties:
-        data:
-          type: object
-          properties:
-            product_service: { $ref: '#/components/schemas/ProductService' }
-            inventory_item: { type: object, additionalProperties: true }
-            link_status: { type: string, enum: [linked] }
-    ProductServiceCreateRequest:
-      type: object
-      required: [code, name, type, base_unit]
+      required:
+      - code
+      - name
+      - type
+      - base_unit
       properties:
         code:
           type: string
@@ -938,7 +1882,84 @@ components:
           type: string
         type:
           type: string
-          enum: [product, service]
+          enum:
+          - finishedGood
+        category:
+          type:
+          - string
+          - 'null'
+        base_unit:
+          type: string
+        inventory_policy:
+          type: string
+          enum:
+          - standard
+          - lot
+          - serial
+          - restricted
+          default: standard
+        suggested_warehouse_id:
+          type:
+          - string
+          - 'null'
+        minimum_stock:
+          type: number
+          minimum: 0
+          default: 0
+        maximum_stock:
+          type: number
+          minimum: 0
+          default: 0
+        default_unit_cost:
+          type: number
+          minimum: 0
+          default: 0
+        use_in_recipe:
+          type: boolean
+          default: false
+        description:
+          type:
+          - string
+          - 'null'
+    FinishedGoodLinkRequest:
+      type: object
+      required:
+      - inventory_item
+      properties:
+        inventory_item:
+          $ref: '#/components/schemas/FinishedGoodItemCreate'
+    FinishedGoodLinkResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            product_service:
+              $ref: '#/components/schemas/ProductService'
+            inventory_item:
+              type: object
+              additionalProperties: true
+            link_status:
+              type: string
+              enum:
+              - linked
+    ProductServiceCreateRequest:
+      type: object
+      required:
+      - code
+      - name
+      - type
+      - base_unit
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+          - product
+          - service
         category:
           type: string
         base_unit:
@@ -954,7 +1975,9 @@ components:
         description:
           type: string
         inventory_item_id:
-          type: [string, 'null']
+          type:
+          - string
+          - 'null'
           description: Required when type is product and forbidden when type is service.
     ProductServiceUpdateRequest:
       type: object
@@ -976,10 +1999,13 @@ components:
         description:
           type: string
         inventory_item_id:
-          type: [string, 'null']
+          type:
+          - string
+          - 'null'
     StatusChangeRequest:
       type: object
-      required: [status]
+      required:
+      - status
       properties:
         status:
           type: string
@@ -1028,7 +2054,10 @@ components:
           $ref: '#/components/schemas/Page'
     RecipeCreateRequest:
       type: object
-      required: [product_service_id, code, name]
+      required:
+      - product_service_id
+      - code
+      - name
       properties:
         product_service_id:
           type: string
@@ -1036,7 +2065,11 @@ components:
           type: string
         name:
           type: string
-        suggested_duration_days: {type: integer, minimum: 1, maximum: 365, default: 1}
+        suggested_duration_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+          default: 1
     RecipeVersion:
       type: object
       properties:
@@ -1048,12 +2081,20 @@ components:
           type: integer
         status:
           type: string
-          enum: [draft, pending_approval, approved, obsolete]
+          enum:
+          - draft
+          - pending_approval
+          - approved
+          - obsolete
         base_quantity:
           type: number
         base_unit:
           type: string
-        suggested_duration_days: {type: integer, minimum: 1, maximum: 365, default: 1}
+        suggested_duration_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+          default: 1
         standard_cost:
           type: number
     RecipeVersionResponse:
@@ -1063,13 +2104,20 @@ components:
           $ref: '#/components/schemas/RecipeVersion'
     RecipeVersionCreateRequest:
       type: object
-      required: [base_quantity, base_unit, change_reason]
+      required:
+      - base_quantity
+      - base_unit
+      - change_reason
       properties:
         base_quantity:
           type: number
         base_unit:
           type: string
-        suggested_duration_days: {type: integer, minimum: 1, maximum: 365, default: 1}
+        suggested_duration_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+          default: 1
         change_reason:
           type: string
         resources:
@@ -1082,14 +2130,22 @@ components:
             $ref: '#/components/schemas/RecipeStageInput'
     RecipeVersionUpdateRequest:
       allOf:
-        - $ref: '#/components/schemas/RecipeVersionCreateRequest'
+      - $ref: '#/components/schemas/RecipeVersionCreateRequest'
     RecipeResourceInput:
       type: object
-      required: [resource_type, resource_ref_id, quantity, unit]
+      required:
+      - resource_type
+      - resource_ref_id
+      - quantity
+      - unit
       properties:
         resource_type:
           type: string
-          enum: [material, labor, machine, other]
+          enum:
+          - material
+          - labor
+          - machine
+          - other
         resource_ref_id:
           type: string
         resource_code:
@@ -1104,7 +2160,12 @@ components:
           type: number
     RecipeStageInput:
       type: object
-      required: [labor_area_ref_id, labor_area_name, name, sort_order, weight_percent]
+      required:
+      - labor_area_ref_id
+      - labor_area_name
+      - name
+      - sort_order
+      - weight_percent
       properties:
         labor_area_ref_id:
           type: string
@@ -1135,13 +2196,17 @@ components:
           format: date
     ReasonRequest:
       type: object
-      required: [reason]
+      required:
+      - reason
       properties:
         reason:
           type: string
     ResourceValidationRequest:
       type: object
-      required: [recipe_version_id, quantity, unit]
+      required:
+      - recipe_version_id
+      - quantity
+      - unit
       properties:
         recipe_version_id:
           type: string
@@ -1149,9 +2214,21 @@ components:
           type: number
         unit:
           type: string
-        planned_for: {type: [string, 'null'], format: date}
-        planned_start_date: {type: [string, 'null'], format: date}
-        planned_duration_days: {type: integer, minimum: 1, maximum: 365, default: 1}
+        planned_for:
+          type:
+          - string
+          - 'null'
+          format: date
+        planned_start_date:
+          type:
+          - string
+          - 'null'
+          format: date
+        planned_duration_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+          default: 1
     ResourceValidationResponse:
       type: object
       properties:
@@ -1164,12 +2241,25 @@ components:
               type: array
               items:
                 type: string
-            planned_cost: {type: number}
-            planned_start_date: {type: string, format: date}
-            planned_end_date: {type: string, format: date}
-            planned_duration_days: {type: integer, minimum: 1, maximum: 365}
-            minimum_duration_days: {type: integer, minimum: 1, maximum: 365}
-            validated_at: {type: string, format: date-time}
+            planned_cost:
+              type: number
+            planned_start_date:
+              type: string
+              format: date
+            planned_end_date:
+              type: string
+              format: date
+            planned_duration_days:
+              type: integer
+              minimum: 1
+              maximum: 365
+            minimum_duration_days:
+              type: integer
+              minimum: 1
+              maximum: 365
+            validated_at:
+              type: string
+              format: date-time
             rows:
               type: array
               items:
@@ -1192,170 +2282,449 @@ components:
           type: string
         status:
           type: string
-          enum: [released, waiting_resources, in_progress, paused, in_validation, completed, cancelled]
+          enum:
+          - released
+          - waiting_resources
+          - in_progress
+          - paused
+          - in_validation
+          - completed
+          - cancelled
         source_type:
           type: string
         source_id:
           type: string
-        recipe_id: {type: string}
-        priority: {type: string, enum: [low, medium, high]}
-        required_at: {type: string, format: date-time}
-        planned_start_at: {type: string, format: date-time}
-        planned_end_date: {type: string, format: date}
-        planned_duration_days: {type: integer, minimum: 1, maximum: 365}
-        responsible_name: {type: string}
-        responsible_worker_id: {type: string, description: External HR worker reference retained with the name snapshot.}
-        planned_cost: {type: number}
-        actual_cost: {type: number}
-        overall_progress_percent: {type: number, minimum: 0, maximum: 100}
-        recipe_snapshot: {type: object, additionalProperties: true}
-        resource_validation_snapshot: {type: object, additionalProperties: true}
+        recipe_id:
+          type: string
+        priority:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+        required_at:
+          type: string
+          format: date-time
+        planned_start_at:
+          type: string
+          format: date-time
+        planned_end_date:
+          type: string
+          format: date
+        planned_duration_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+        responsible_name:
+          type: string
+        responsible_worker_id:
+          type: string
+          description: External HR worker reference retained with the name snapshot.
+        planned_cost:
+          type: number
+        actual_cost:
+          type: number
+        overall_progress_percent:
+          type: number
+          minimum: 0
+          maximum: 100
+        recipe_snapshot:
+          type: object
+          additionalProperties: true
+        resource_validation_snapshot:
+          type: object
+          additionalProperties: true
         stages:
           type: array
-          items: {$ref: '#/components/schemas/ProductionOrderStage'}
+          items:
+            $ref: '#/components/schemas/ProductionOrderStage'
         resources:
           type: array
-          items: {$ref: '#/components/schemas/ProductionOrderResource'}
-    ProductionOrderResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/ProductionOrder'
-    ProductionOrderListResponse:
-      type: object
-      properties:
-        data:
-          type: array
           items:
-            $ref: '#/components/schemas/ProductionOrder'
+            $ref: '#/components/schemas/ProductionOrderResource'
+    ProductionOrderResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ProductionOrderRead'
+      type: object
+      required:
+      - data
+      title: ProductionOrderResponse
+    ProductionOrderListResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ProductionOrderRead'
+          type: array
+          title: Data
         page:
           $ref: '#/components/schemas/Page'
+      type: object
+      required:
+      - data
+      title: ProductionOrderListResponse
     FinishedGoodsOrderProjection:
       type: object
-      required: [id, code, product_service_id, quantity, unit, status, unit_cost]
+      required:
+      - id
+      - code
+      - product_service_id
+      - quantity
+      - unit
+      - status
+      - unit_cost
       properties:
-        id: {type: string}
-        code: {type: string}
-        product_service_id: {type: string}
-        quantity: {type: number}
-        unit: {type: string}
-        status: {type: string, const: completed}
-        unit_cost: {type: number, minimum: 0}
-    FinishedGoodsProductProjection:
-      type: object
-      required: [id, code, name, type, status, base_unit]
-      properties:
-        id: {type: string}
-        code: {type: string}
-        name: {type: string}
-        type: {type: string, const: product}
-        status: {type: string, enum: [active, inactive, pending_approval]}
-        base_unit: {type: string}
-        inventory_item_id: {type: [string, 'null']}
-    FinishedGoodsCandidate:
-      type: object
-      required: [order, product]
-      properties:
-        order: {$ref: '#/components/schemas/FinishedGoodsOrderProjection'}
-        product: {$ref: '#/components/schemas/FinishedGoodsProductProjection'}
-    FinishedGoodsCandidateResponse:
-      type: object
-      required: [data]
-      properties:
-        data: {$ref: '#/components/schemas/FinishedGoodsCandidate'}
-    FinishedGoodsCandidateListResponse:
-      type: object
-      required: [data]
-      properties:
-        data: {type: array, items: {$ref: '#/components/schemas/FinishedGoodsCandidate'}}
-        page: {$ref: '#/components/schemas/Page'}
-    ProductionOrderCreateRequest:
-      type: object
-      required: [recipe_version_id, quantity, unit, responsible_worker_id, stage_assignments]
-      properties:
+        id:
+          type: string
         code:
-          type: [string, 'null']
-          description: Optional tenant business code; production-service generates one when omitted.
-        recipe_version_id:
+          type: string
+        product_service_id:
           type: string
         quantity:
           type: number
         unit:
           type: string
-        planned_for: {type: [string, 'null'], format: date}
-        planned_start_date: {type: [string, 'null'], format: date}
-        planned_duration_days: {type: integer, minimum: 1, maximum: 365, default: 1}
-        planned_start_at:
+        status:
           type: string
-          format: date-time
-        required_at: {type: string, format: date-time}
-        priority: {type: string, enum: [low, medium, high]}
-        responsible_worker_id: {type: string}
-        stage_assignments:
+          const: completed
+        unit_cost:
+          type: number
+          minimum: 0
+    FinishedGoodsProductProjection:
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - type
+      - status
+      - base_unit
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          const: product
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          - pending_approval
+        base_unit:
+          type: string
+        inventory_item_id:
+          type:
+          - string
+          - 'null'
+    FinishedGoodsCandidate:
+      type: object
+      required:
+      - order
+      - product
+      properties:
+        order:
+          $ref: '#/components/schemas/FinishedGoodsOrderProjection'
+        product:
+          $ref: '#/components/schemas/FinishedGoodsProductProjection'
+    FinishedGoodsCandidateResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          $ref: '#/components/schemas/FinishedGoodsCandidate'
+    FinishedGoodsCandidateListResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
           type: array
           items:
-            type: object
-            required: [recipe_stage_id, responsible_worker_id]
-            properties: { recipe_stage_id: {type: string}, responsible_worker_id: {type: string} }
-    ProductionOrderStatusRequest:
+            $ref: '#/components/schemas/FinishedGoodsCandidate'
+        page:
+          $ref: '#/components/schemas/Page'
+    ProductionOrderCreateRequest:
+      properties:
+        recipe_version_id:
+          type: string
+          title: Recipe Version Id
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+        unit:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Unit
+        planned_for:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Planned For
+        planned_start_date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Planned Start Date
+        planned_duration_days:
+          type: integer
+          maximum: 365.0
+          minimum: 1.0
+          title: Planned Duration Days
+          default: 1
+        code:
+          anyOf:
+          - type: string
+            maxLength: 80
+            minLength: 1
+          - type: 'null'
+          title: Code
+        planned_start_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Planned Start At
+        required_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Required At
+        priority:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          title: Priority
+          default: medium
+        responsible_worker_id:
+          type: string
+          title: Responsible Worker Id
+        responsible_name:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Responsible Name
+        stage_assignments:
+          items:
+            $ref: '#/components/schemas/OrderStageAssignment'
+          type: array
+          title: Stage Assignments
+        source_type:
+          type: string
+          enum:
+          - manual
+          - sales_order
+          - integration
+          title: Source Type
+          default: manual
+        source_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Id
+        source_line_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Line Id
+      additionalProperties: false
       type: object
-      required: [status, reason]
+      required:
+      - recipe_version_id
+      - quantity
+      - unit
+      - responsible_worker_id
+      title: ProductionOrderCreateRequest
+    ProductionOrderStatusRequest:
       properties:
         status:
           type: string
-          enum: [released, waiting_resources, in_progress, paused, in_validation, completed, cancelled]
-          description: Entering in_validation requires every stage to have 100 percent progress and be completed or skipped. Completing additionally requires the material issues recorded at production start.
-        reason: {type: string}
+          enum:
+          - released
+          - waiting_resources
+          - in_progress
+          - paused
+          - in_validation
+          - completed
+          - cancelled
+          title: Status
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - status
+      - reason
+      title: ProductionOrderStatusRequest
     ProductionOrderResource:
       type: object
-      required: [id, resource_type, resource_ref_id, resource_code, resource_name, unit, planned_quantity, unit_cost, planned_cost]
+      required:
+      - id
+      - resource_type
+      - resource_ref_id
+      - resource_code
+      - resource_name
+      - unit
+      - planned_quantity
+      - unit_cost
+      - planned_cost
       properties:
-        id: {type: string}
-        resource_type: {type: string, enum: [material, labor, machine, other]}
-        resource_ref_id: {type: string}
-        resource_code: {type: string}
-        resource_name: {type: string}
-        unit: {type: string}
-        planned_quantity: {type: number}
-        actual_quantity: {type: [number, 'null']}
-        unit_cost: {type: number}
-        planned_cost: {type: number}
-        actual_cost: {type: [number, 'null']}
-        reservation_ref_id: {type: [string, 'null']}
-        reservation_ref_ids: {type: array, items: {type: string}}
+        id:
+          type: string
+        resource_type:
+          type: string
+          enum:
+          - material
+          - labor
+          - machine
+          - other
+        resource_ref_id:
+          type: string
+        resource_code:
+          type: string
+        resource_name:
+          type: string
+        unit:
+          type: string
+        planned_quantity:
+          type: number
+        actual_quantity:
+          type:
+          - number
+          - 'null'
+        unit_cost:
+          type: number
+        planned_cost:
+          type: number
+        actual_cost:
+          type:
+          - number
+          - 'null'
+        reservation_ref_id:
+          type:
+          - string
+          - 'null'
+        reservation_ref_ids:
+          type: array
+          items:
+            type: string
     ProductionOrderStage:
       type: object
-      required: [id, name, sort_order, weight_percent, status, progress_percent]
+      required:
+      - id
+      - name
+      - sort_order
+      - weight_percent
+      - status
+      - progress_percent
       properties:
-        id: {type: string}
-        recipe_stage_id: {type: [string, 'null']}
-        labor_area_ref_id: {type: [string, 'null'], description: External HR area reference captured from the approved recipe.}
-        labor_area_name: {type: [string, 'null'], description: Area name snapshot used by deliverables-by-area reads.}
-        name: {type: string}
-        sort_order: {type: integer, minimum: 1, description: Visible sequential phase number.}
-        weight_percent: {type: number, exclusiveMinimum: 0, maximum: 100}
-        status: {type: string, enum: [pending, in_progress, completed, skipped, blocked]}
-        planned_minutes: {type: [number, 'null']}
-        actual_minutes: {type: [number, 'null']}
-        responsible_name: {type: [string, 'null']}
-        responsible_worker_id: {type: [string, 'null']}
-        progress_percent: {type: number, minimum: 0, maximum: 100}
-        started_at: {type: [string, 'null'], format: date-time}
-        completed_at: {type: [string, 'null'], format: date-time}
-        notes: {type: [string, 'null']}
+        id:
+          type: string
+        recipe_stage_id:
+          type:
+          - string
+          - 'null'
+        labor_area_ref_id:
+          type:
+          - string
+          - 'null'
+          description: External HR area reference captured from the approved recipe.
+        labor_area_name:
+          type:
+          - string
+          - 'null'
+          description: Area name snapshot used by deliverables-by-area reads.
+        name:
+          type: string
+        sort_order:
+          type: integer
+          minimum: 1
+          description: Visible sequential phase number.
+        weight_percent:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 100
+        status:
+          type: string
+          enum:
+          - pending
+          - in_progress
+          - completed
+          - skipped
+          - blocked
+        planned_minutes:
+          type:
+          - number
+          - 'null'
+        actual_minutes:
+          type:
+          - number
+          - 'null'
+        responsible_name:
+          type:
+          - string
+          - 'null'
+        responsible_worker_id:
+          type:
+          - string
+          - 'null'
+        progress_percent:
+          type: number
+          minimum: 0
+          maximum: 100
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        notes:
+          type:
+          - string
+          - 'null'
     ProductionOrderResourceUpdateRequest:
       type: object
-      required: [actual_quantity]
+      required:
+      - actual_quantity
       properties:
-        actual_quantity: {type: number, minimum: 0}
+        actual_quantity:
+          type: number
+          minimum: 0
     ProductionOrderResourceResponse:
       type: object
-      required: [data]
+      required:
+      - data
       properties:
-        data: {$ref: '#/components/schemas/ProductionOrderResource'}
+        data:
+          $ref: '#/components/schemas/ProductionOrderResource'
     ProductionOrderRequest:
       type: object
-      required: [sales_order_id, sales_order_line_id, product_service_id, quantity, unit]
+      required:
+      - sales_order_id
+      - sales_order_line_id
+      - product_service_id
+      - quantity
+      - unit
       properties:
         sales_order_id:
           type: string
@@ -1372,31 +2741,87 @@ components:
           format: date
     ProductionSalesRequestRead:
       type: object
-      required: [id, sales_order_id, sales_order_line_id, product_service_id, product_code, product_name, recipe_id, recipe_version_id, recipe_version, quantity, unit, status, created_at]
+      required:
+      - id
+      - sales_order_id
+      - sales_order_line_id
+      - product_service_id
+      - product_code
+      - product_name
+      - recipe_id
+      - recipe_version_id
+      - recipe_version
+      - quantity
+      - unit
+      - status
+      - created_at
       properties:
-        id: {type: string}
-        sales_order_id: {type: string}
-        sales_order_line_id: {type: string}
-        product_service_id: {type: string}
-        product_code: {type: string}
-        product_name: {type: string}
-        recipe_id: {type: string}
-        recipe_version_id: {type: string}
-        recipe_version: {type: integer}
-        quantity: {type: number}
-        unit: {type: string}
-        requested_due_date: {type: [string, 'null'], format: date}
-        status: {type: string, enum: [requested, converted, cancelled]}
-        created_at: {type: string, format: date-time}
-    ProductionSalesRequestResponse: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/ProductionSalesRequestRead'}}}
-    ProductionSalesRequestListResponse: {type: object, required: [data], properties: {data: {type: array, items: {$ref: '#/components/schemas/ProductionSalesRequestRead'}}}}
+        id:
+          type: string
+        sales_order_id:
+          type: string
+        sales_order_line_id:
+          type: string
+        product_service_id:
+          type: string
+        product_code:
+          type: string
+        product_name:
+          type: string
+        recipe_id:
+          type: string
+        recipe_version_id:
+          type: string
+        recipe_version:
+          type: integer
+        quantity:
+          type: number
+        unit:
+          type: string
+        requested_due_date:
+          type:
+          - string
+          - 'null'
+          format: date
+        status:
+          type: string
+          enum:
+          - requested
+          - converted
+          - cancelled
+        created_at:
+          type: string
+          format: date-time
+    ProductionSalesRequestResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          $ref: '#/components/schemas/ProductionSalesRequestRead'
+    ProductionSalesRequestListResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductionSalesRequestRead'
     OrderStageUpdateRequest:
       type: object
-      required: [status, progress_percent]
+      required:
+      - status
+      - progress_percent
       properties:
         status:
           type: string
-          enum: [pending, in_progress, completed, skipped, blocked]
+          enum:
+          - pending
+          - in_progress
+          - completed
+          - skipped
+          - blocked
         progress_percent:
           type: number
           minimum: 0
@@ -1416,7 +2841,9 @@ components:
           additionalProperties: true
     LaborAreaCreateRequest:
       type: object
-      required: [code, name]
+      required:
+      - code
+      - name
       properties:
         code:
           type: string
@@ -1426,7 +2853,9 @@ components:
           type: string
         status:
           type: string
-          enum: [active, inactive]
+          enum:
+          - active
+          - inactive
     LaborAreaUpdateRequest:
       type: object
       minProperties: 1
@@ -1439,7 +2868,9 @@ components:
           type: string
         status:
           type: string
-          enum: [active, inactive]
+          enum:
+          - active
+          - inactive
     LaborAreaResponse:
       type: object
       properties:
@@ -1456,7 +2887,11 @@ components:
             additionalProperties: true
     LaborRoleCreateRequest:
       type: object
-      required: [code, name, resource_count, cost_per_minute]
+      required:
+      - code
+      - name
+      - resource_count
+      - cost_per_minute
       properties:
         code:
           type: string
@@ -1501,7 +2936,14 @@ components:
             additionalProperties: true
     MachineCreateRequest:
       type: object
-      required: [code, name, machine_type, area_ref_id, area_name, available_minutes_per_day, cost_per_minute]
+      required:
+      - code
+      - name
+      - machine_type
+      - area_ref_id
+      - area_name
+      - available_minutes_per_day
+      - cost_per_minute
       properties:
         code:
           type: string
@@ -1518,29 +2960,66 @@ components:
         cost_per_minute:
           type: number
     MachineUpdateRequest:
-      type: object
       properties:
         name:
-          type: string
-        area_name:
-          type: string
-        area_ref_id:
-          type: string
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Name
         machine_type:
-          type: string
+          anyOf:
+          - type: string
+            maxLength: 120
+            minLength: 1
+          - type: 'null'
+          title: Machine Type
+        area_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Area Ref Id
+        area_name:
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Area Name
         available_minutes_per_day:
-          type: number
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Available Minutes Per Day
         cost_per_minute:
-          type: number
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Cost Per Minute
         status:
-          type: string
-          enum: [active, inactive, maintenance]
-    MachineResponse:
+          anyOf:
+          - type: string
+            enum:
+            - active
+            - inactive
+            - maintenance
+          - type: 'null'
+          title: Status
       type: object
+      title: MachineUpdateRequest
+    MachineResponse:
       properties:
         data:
-          type: object
-          additionalProperties: true
+          $ref: '#/components/schemas/MachineRead'
+      type: object
+      required:
+      - data
+      title: MachineResponse
     MachineListResponse:
       type: object
       properties:
@@ -1551,7 +3030,459 @@ components:
             additionalProperties: true
     MaintenanceMachineCommand:
       type: object
-      required: [maintenance_order_id]
+      required:
+      - maintenance_order_id
       properties:
-        maintenance_order_id: { type: string }
-        production_order_id: { type: [string, 'null'] }
+        maintenance_order_id:
+          type: string
+        production_order_id:
+          type:
+          - string
+          - 'null'
+    MachineRead:
+      properties:
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        machine_type:
+          type: string
+          title: Machine Type
+        area_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Area Ref Id
+        area_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Area Name
+        available_minutes_per_day:
+          type: number
+          title: Available Minutes Per Day
+        cost_per_minute:
+          type: number
+          title: Cost Per Minute
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          - maintenance
+          title: Status
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - machine_type
+      - available_minutes_per_day
+      - cost_per_minute
+      - status
+      title: MachineRead
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    ProductionOrderRead:
+      properties:
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        product_service_id:
+          type: string
+          title: Product Service Id
+        recipe_id:
+          type: string
+          title: Recipe Id
+        recipe_version_id:
+          type: string
+          title: Recipe Version Id
+        quantity:
+          type: number
+          title: Quantity
+        unit:
+          type: string
+          title: Unit
+        status:
+          type: string
+          enum:
+          - released
+          - waiting_resources
+          - in_progress
+          - paused
+          - in_validation
+          - completed
+          - cancelled
+          title: Status
+        priority:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          title: Priority
+        required_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Required At
+        planned_start_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Planned Start At
+        planned_end_date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Planned End Date
+        planned_duration_days:
+          type: integer
+          title: Planned Duration Days
+          default: 1
+        actual_start_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Actual Start At
+        actual_end_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Actual End At
+        responsible_name:
+          type: string
+          title: Responsible Name
+        responsible_worker_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Responsible Worker Id
+        source_type:
+          type: string
+          title: Source Type
+        source_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Id
+        planned_cost:
+          type: number
+          title: Planned Cost
+        actual_cost:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Actual Cost
+        material_returns:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Material Returns
+        overall_progress_percent:
+          type: number
+          title: Overall Progress Percent
+          default: 0
+        recipe_snapshot:
+          additionalProperties: true
+          type: object
+          title: Recipe Snapshot
+        resource_validation_snapshot:
+          additionalProperties: true
+          type: object
+          title: Resource Validation Snapshot
+        stages:
+          items:
+            $ref: '#/components/schemas/ProductionOrderStageRead'
+          type: array
+          title: Stages
+        resources:
+          items:
+            $ref: '#/components/schemas/ProductionOrderResourceRead'
+          type: array
+          title: Resources
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - code
+      - product_service_id
+      - recipe_id
+      - recipe_version_id
+      - quantity
+      - unit
+      - status
+      - priority
+      - responsible_name
+      - source_type
+      - planned_cost
+      - recipe_snapshot
+      - resource_validation_snapshot
+      - created_at
+      title: ProductionOrderRead
+    ProductionOrderStageRead:
+      properties:
+        id:
+          type: string
+          title: Id
+        weight_percent:
+          type: number
+          title: Weight Percent
+        recipe_stage_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Recipe Stage Id
+        labor_area_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Labor Area Ref Id
+        labor_area_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Labor Area Name
+        name:
+          type: string
+          title: Name
+        sort_order:
+          type: integer
+          title: Sort Order
+        status:
+          type: string
+          enum:
+          - pending
+          - in_progress
+          - completed
+          - skipped
+          - blocked
+          title: Status
+        planned_minutes:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Planned Minutes
+        actual_minutes:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Actual Minutes
+        responsible_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Responsible Name
+        responsible_worker_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Responsible Worker Id
+        progress_percent:
+          type: number
+          title: Progress Percent
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Notes
+      type: object
+      required:
+      - id
+      - weight_percent
+      - name
+      - sort_order
+      - status
+      - progress_percent
+      title: ProductionOrderStageRead
+    ProductionOrderResourceRead:
+      properties:
+        id:
+          type: string
+          title: Id
+        resource_type:
+          type: string
+          enum:
+          - material
+          - labor
+          - machine
+          - other
+          title: Resource Type
+        resource_ref_id:
+          type: string
+          title: Resource Ref Id
+        resource_code:
+          type: string
+          title: Resource Code
+        resource_name:
+          type: string
+          title: Resource Name
+        unit:
+          type: string
+          title: Unit
+        planned_quantity:
+          type: number
+          title: Planned Quantity
+        actual_quantity:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Actual Quantity
+        unit_cost:
+          type: number
+          title: Unit Cost
+        planned_cost:
+          type: number
+          title: Planned Cost
+        actual_cost:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Actual Cost
+        reservation_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reservation Ref Id
+        reservation_ref_ids:
+          items:
+            type: string
+          type: array
+          title: Reservation Ref Ids
+      type: object
+      required:
+      - id
+      - resource_type
+      - resource_ref_id
+      - resource_code
+      - resource_name
+      - unit
+      - planned_quantity
+      - unit_cost
+      - planned_cost
+      title: ProductionOrderResourceRead
+    OrderStageAssignment:
+      properties:
+        recipe_stage_id:
+          type: string
+          title: Recipe Stage Id
+        responsible_worker_id:
+          type: string
+          title: Responsible Worker Id
+        responsible_name:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Responsible Name
+      type: object
+      required:
+      - recipe_stage_id
+      - responsible_worker_id
+      title: OrderStageAssignment
+    MaterialReturnValidation:
+      properties:
+        original_movement_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Original Movement Id
+        reservation_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Reservation Id
+        source_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Source Id
+        quantity:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Quantity
+      additionalProperties: false
+      type: object
+      required:
+      - original_movement_id
+      - reservation_id
+      - source_id
+      - quantity
+      title: MaterialReturnValidation
+    MaterialReturnReconcile:
+      properties:
+        return_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Return Id
+      additionalProperties: false
+      type: object
+      required:
+      - return_id
+      title: MaterialReturnReconcile

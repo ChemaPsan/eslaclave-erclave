@@ -76,3 +76,13 @@ def test_demo_seed_never_grants_internal_or_unentitled_permissions_to_owner():
     assert "permissions.classification = 'tenant'" in source
     assert "permissions.assignable_to_tenant_role = true" in source
     assert "tenant_modules.status = 'active'" in source
+
+
+def test_quote_lifecycle_actions_are_available_in_the_tenant_permission_catalog():
+    contracts_dir = Path(__file__).resolve().parents[4] / "contracts" / "api"
+    by_code = {p.code: p for p in extract_permission_seeds(contracts_dir)}
+    for action in ("submit", "approve", "expire", "cancel"):
+        permission = by_code[f"sales.quote.{action}"]
+        assert permission.module_code == "sales"
+        assert permission.classification == "tenant"
+        assert permission.assignable_to_tenant_role is True
