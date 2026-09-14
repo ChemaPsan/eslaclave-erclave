@@ -1,17 +1,14 @@
 # Pendientes priorizados de ERClave
 
-## Despliegue solicitado CHG-276 — bloqueado por acceso
+## Infraestructura de evidencia CHG-277 — promoción pendiente
 
-El usuario autorizó desplegar a QA el 2026-09-14. Rama del candidato `agent/chg-276-qa-release`. Rama publicada y PR #15 abierto en borrador con el delta completo CHG-271–276; no hay nuevo SHA de release ni promoción QA todavía.
+Acceso Cloud resuelto con la cuenta administradora autorizada. El 2026-09-14 se creó `erclave-qa-service-evidence` en erclave/us-central1: Standard, acceso uniforme y prevención pública enforced, sin versionado, soft delete ni retención bloqueada. Se verificó vacío y una única regla Delete con age 365. GitHub `QA_EVIDENCE_BUCKET=erclave-qa-service-evidence` creada y leída de vuelta.
 
-Seguridad: el bucket ahora exige exactamente una regla Delete age365 y rechaza reglas adicionales que pudieran borrar antes;24 pruebas focalizadas aprobadas. Fixtures:9 integraciones de Mantenimiento corregidas y aprobadas con IDs/actores propios; quedan20 históricas pendientes (Admin4, Sales5, Purchasing11). Compras usa tenants UUID y limpieza propia. Admin, Sales y Compras exigen ERCLAVE_TEST_ALLOW_TEMP_TENANTS=1 además de loopback5434/erclave_local: habilitar solo tras autorización explícita de tenants temporales, solicitada y pendiente. No se ejecutaron esas20.
+El usuario autorizó el rol mínimo para `erclave-production-qa@erclave.iam.gserviceaccount.com`: storage.buckets.get y storage.objects.create/get/delete, solo en ese bucket. Rol `projects/erclave/roles/erclaveQaServiceEvidence` creado en disponibilidad general con esos cuatro permisos; asignación directa exclusivamente al bucket guardada y confirmada en consola. No afirmar acceso funcional por health/ready.
 
-GitHub: acceso admin del repositorio comprobado; cinco gates QA conservan required_reviewers/ChemaPsan. Google Cloud: la sesión actual carece de storage.buckets.list en proyecto erclave; se solicitó al usuario iniciar con la cuenta administradora. No se concedió IAM, creó bucket, ejecutó migración ni cambió tráfico/Hosting. QA permanece en la base b63cdad previamente verificada. La revisión visual Word permanece pendiente; binarios no son edición final distribuible.
+Autorizadas las pruebas con tenants temporales UUID y limpieza exclusivamente en loopback5434/erclave_local. `npm run verify:postgres` terminó con **360 aprobadas, cero omitidas** (65.39s); validadores y compilación aprobados. Esto cierra las20 integraciones pendientes y las55 históricas omitidas en la ejecución sin DB. No demuestra UAT ni paridad autenticada QA.
 
-Rama publicada y PR en borrador creado: https://github.com/ChemaPsan/eslaclave-erclave/pull/15, commit funcional `8f4943fd2a0812e2450c6d5b68c3de8cf63006b5`. CI inicial `34816849209` en ejecución al registrar esta nota; verificar el resultado del último HEAD en el PR, no inferirlo de este registro. No se fusionó main ni ejecutó qa-candidate/qa-release. Despliegue detenido hasta acceso Cloud, autorización de pruebas multitenant y cierre de gates.
-
-
-
+PR #15 sigue en borrador; HEAD publicado dffe7642d57111b94b74d95ec62f252b017c0190, CI34816946232 aprobado. No merge, qa-candidate, qa-release, migración ni tráfico/Hosting. Base QA previamente verificada b63cdad. Pendientes: smoke de adjuntos, pipeline protegido, pruebas autenticadas QA y revisión visual Word. No se crearon datos funcionales QA.
 
 ## Preparación QA y manuales CHG-275
 

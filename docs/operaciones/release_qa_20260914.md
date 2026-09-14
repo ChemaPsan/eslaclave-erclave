@@ -1,21 +1,14 @@
 # Preparación de promoción QA — 14 septiembre 2026
 
-## Despliegue solicitado CHG-276 — bloqueado por acceso
+## Infraestructura de evidencia CHG-277 — promoción pendiente
 
-El usuario autorizó desplegar a QA el 2026-09-14. Rama del candidato `agent/chg-276-qa-release`. Rama publicada y PR #15 abierto en borrador con el delta completo CHG-271–276; no hay nuevo SHA de release ni promoción QA todavía.
+Acceso Cloud resuelto con la cuenta administradora autorizada. El 2026-09-14 se creó `erclave-qa-service-evidence` en erclave/us-central1: Standard, acceso uniforme y prevención pública enforced, sin versionado, soft delete ni retención bloqueada. Se verificó vacío y una única regla Delete con age 365. GitHub `QA_EVIDENCE_BUCKET=erclave-qa-service-evidence` creada y leída de vuelta.
 
-Seguridad: el bucket ahora exige exactamente una regla Delete age365 y rechaza reglas adicionales que pudieran borrar antes;24 pruebas focalizadas aprobadas. Verify CHG-276:302 backend aprobadas/58 omitidas sin URL DB; validadores/sintaxis/compilación aprobados. Se mantienen38 integraciones/validaciones seleccionadas comprobadas entre CHG-275 y276,20 históricas requieren autorización antes de ejecutarse.
+El usuario autorizó el rol mínimo para `erclave-production-qa@erclave.iam.gserviceaccount.com`: storage.buckets.get y storage.objects.create/get/delete, solo en ese bucket. Rol `projects/erclave/roles/erclaveQaServiceEvidence` creado en disponibilidad general con esos cuatro permisos; asignación directa exclusivamente al bucket guardada y confirmada en consola. No afirmar acceso funcional por health/ready.
 
-Fixtures:9 integraciones de Mantenimiento corregidas y aprobadas con IDs/actores propios; quedan20 históricas pendientes (Admin4, Sales5, Purchasing11). Compras usa tenants UUID y limpieza propia. Admin, Sales y Compras exigen ERCLAVE_TEST_ALLOW_TEMP_TENANTS=1 además de loopback5434/erclave_local: habilitar solo tras autorización explícita de tenants temporales, solicitada y pendiente. No se ejecutaron esas20.
+Autorizadas las pruebas con tenants temporales UUID y limpieza exclusivamente en loopback5434/erclave_local. `npm run verify:postgres` terminó con **360 aprobadas, cero omitidas** (65.39s); validadores y compilación aprobados. Esto cierra las20 integraciones pendientes y las55 históricas omitidas en la ejecución sin DB. No demuestra UAT ni paridad autenticada QA.
 
-GitHub: acceso admin del repositorio comprobado; cinco gates QA conservan required_reviewers/ChemaPsan. Google Cloud: la sesión actual carece de storage.buckets.list en proyecto erclave; se solicitó al usuario iniciar con la cuenta administradora. No se concedió IAM, creó bucket, ejecutó migración ni cambió tráfico/Hosting. QA permanece en la base b63cdad previamente verificada. La revisión visual Word permanece pendiente; binarios no son edición final distribuible.
-
-Rama publicada y PR en borrador creado: https://github.com/ChemaPsan/eslaclave-erclave/pull/15, commit funcional `8f4943fd2a0812e2450c6d5b68c3de8cf63006b5`. CI inicial `34816849209` en ejecución al registrar esta nota; verificar el resultado del último HEAD en el PR, no inferirlo de este registro. No se fusionó main ni ejecutó qa-candidate/qa-release. Despliegue detenido hasta acceso Cloud, autorización de pruebas multitenant y cierre de gates.
-
-
-
-
-Estado: paquete Local preparado; **no es una autorización ni una certificación completa de release**. No se ha publicado rama, abierto PR, ejecutado candidato, migrado QA ni desplegado. Cierre de bloqueos y aprobaciones antes de promover.
+PR #15 sigue en borrador; HEAD publicado dffe7642d57111b94b74d95ec62f252b017c0190, CI34816946232 aprobado. No merge, qa-candidate, qa-release, migración ni tráfico/Hosting. Base QA previamente verificada b63cdad. Pendientes: smoke de adjuntos, pipeline protegido, pruebas autenticadas QA y revisión visual Word. No se crearon datos funcionales QA.
 
 ## Base y alcance
 
@@ -25,7 +18,7 @@ Rama Local: `agent/chg-269-qa-promotion`, HEAD previo `f90efbdd1d65fc4f322b64334
 
 Agentes consultados: fichas de Arquitectura, Seguridad/IAM, QA/Release, APIs, Datos/Custodio DB, Producción negocio/técnico, módulos consumidores y Custodio de manuales en AGENTES.md; auditoría independiente `qa_db_audit` para fixtures históricos. Skills: erclave-environment-boundaries, erclave-qa-release, erclave-solution-manuals y documents.
 
-Ambiente de trabajo: Local aislado. Pruebas con escritura únicamente en loopback:5434/erclave_local, tenant `ten_739ee59d765d5e14818674800d`; fixtures UUID y limpieza por sus IDs. Sin seeds ni copia de datos. Mutaciones remotas realizadas: ninguna. La consulta pública /version es solo lectura.
+Ambiente de trabajo: Local aislado. Pruebas con escritura únicamente en loopback:5434/erclave_local, tenant `ten_739ee59d765d5e14818674800d`; fixtures UUID y limpieza por sus IDs. Sin seeds ni copia de datos. Mutaciones remotas actuales: bucket, lifecycle, rol mínimo y binding de bucket QA; variable GitHub. La consulta pública /version es solo lectura.
 
 ## Matriz del delta
 
@@ -36,14 +29,14 @@ Ambiente de trabajo: Local aislado. Pruebas con escritura únicamente en loopbac
 | Margen CHG-273 | Sin tope de 100%, finito/no negativo, sobre costo | Production API + migración 0035 + frontend |
 | Evidencia CHG-274 | Texto inicial/final en servicios, cierre en avance total, fotos optimizadas, adjuntos 365 días | Production API + migración 0036 + bucket privado + frontend |
 | Contratos | Production OpenAPI actualizado | Mismo SHA que API y consumidor |
-| Configuración CHG-275 | qa-release pasa QA_EVIDENCE_BUCKET a ERCLAVE_EVIDENCE_BUCKET solo en Production y rechaza nombre vacío/inválido | Variable e infraestructura aún por provisionar/verificar |
+| Configuración CHG-275 | qa-release pasa QA_EVIDENCE_BUCKET a ERCLAVE_EVIDENCE_BUCKET solo en Production y rechaza nombre vacío/inválido | Bucket, lifecycle, variable y rol mínimo configurados; smoke pendiente |
 | Datos existentes | 0035 conserva porcentajes; 0036 agrega tablas vacías | No backfill ni evidencia inventada; órdenes activas completan evidencia al continuar |
 | Servicios | Siete imágenes y dependencias, nuevas librerías de imagen/Storage en pyproject | qa-build, qa-services y qa-traffic |
 | Permisos / tenant | No nuevos permisos de evidencia | Pipeline sigue obligando reconciliación estructural y migración: autorizaciones explícitas de ambos |
 
 ## Almacenamiento previo a habilitar evidencia
 
-Nombre propuesto y por confirmar libre: `erclave-qa-service-evidence`. Variable de repositorio GitHub `QA_EVIDENCE_BUCKET`, nombre sin gs://. Bucket dedicado de QA en la región QA; no reutilizar Firebase Storage ni buckets de backups o Producción.
+Nombre creado y confirmado: `erclave-qa-service-evidence`. Variable de repositorio GitHub `QA_EVIDENCE_BUCKET`, nombre sin gs://. Bucket dedicado de QA en la región QA; no reutilizar Firebase Storage ni buckets de backups o Producción.
 
 Requisitos comprobables contra API Storage:
 
@@ -56,7 +49,7 @@ Requisitos comprobables contra API Storage:
 
 El backend valida la política al acceder al almacén. Un /health o /ready correcto no demuestra IAM ni que una carga funcione: antes de mover tráfico exigir carga, consulta y descarga con archivo desechable autorizado usando la revisión candidata. Confirmar nombre, CORS Content-Disposition, ausencia de URL pública y limpieza del fixture. Cloud Run puede escalar a cero: el lifecycle es el respaldo de eliminación física, mientras la API corta descarga en expires_at. La eliminación física GCS es asíncrona, no instantánea al segundo del vencimiento.
 
-Esta preparación no crea el bucket ni concede IAM. Es una actividad qa-write independiente, previa a qa-services; falta registrar nombre real, identidad, configuración efectiva y evidencia del smoke.
+CHG-277 creó el bucket y concedió el rol mínimo tras autorización específica; configuración real e identidad registradas arriba. Falta smoke mediante revisión candidata antes del tráfico.
 
 ## Migración y rollback
 

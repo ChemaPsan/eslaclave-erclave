@@ -4460,3 +4460,20 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | Ninguna modificada en CHG-276. Contratos del delta completo en matriz del plan de release. Lectura GitHub repositorio/environments/PRs/variable y consola Cloud Storage; ninguna mutación cloud. |
 | Validacion | 24 pruebas de archivos/retención aprobadas,9 Maintenance PostgreSQL aprobadas; verify aprobado:302 backend/58 skips sin DB; validadores, compilación y sintaxis80 correctos. Diff-check y compilación sin errores. |
 | Observaciones | 20 integraciones históricas por ejecutar tras autorización; bucket/IAM y revisión visual Word pendientes. PR #15 publicado en borrador sobre 8f4943f; CI inicial34816849209 en ejecución al registrar. No main merge, candidato ni release QA; detenido por accesoCloud y autorización de fixtures. |
+
+### CHG-277
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-14 12:16 America/Mexico_City |
+| Cambio | Aprovisionamiento del bucket QA y cierre de integraciones PostgreSQL |
+| Agentes consultados | Arquitectura, Seguridad, QA/Release y Datos/Custodio DB; revisiones evidence_release_review, safe_maintenance_tests y qa_db_audit del mismo corte. |
+| Autor | Codex |
+| Archivos | docs/contexto/ESTADO_ACTUAL.md, PENDIENTES.md, INICIO_SESION.md; docs/operaciones/release_qa_20260914.md; TRAZABILIDAD.md |
+| Secciones | Estado actual de promoción y prerrequisitos |
+| Descripcion | Registra bucket privado con lifecycle365 y variable GitHub verificada; autorización IAM mínima y pruebas multitenant Local. |
+| Motivo | Continuar despliegue QA solicitado con la cuenta Cloud habilitada. |
+| Impacto | Escritura infraestructura QA: bucket y lifecycle; variable repositorio. Sin cambios funcionales ni datos QA. Rol mínimo de cuatro permisos creado y asignado solo al bucket tras autorización específica. |
+| Validacion | verify:postgres:360 aprobadas/cero omitidas, validadores y compilación correctos. Consola confirma creación, privacidad, bucket vacío y regla365; API GitHub confirma variable. |
+| APIs afectadas | Ninguna API ERClave modificada. Configuración Cloud Storage y variable GitHub; sin deploy. |
+| Observaciones | Faltan smoke, candidato y release protegidos; revisión visual Word. No afirmar QA actualizado. |
