@@ -106,6 +106,7 @@ class FakeProductionRepository:
             base_unit=base_unit,
             status="active",
             target_price=target_price,
+            expected_margin=expected_margin,
             responsible_area=responsible_area,
             inventory_item_id=inventory_item_id,
         )
@@ -135,6 +136,7 @@ class FakeProductionRepository:
             base_unit=base_unit or "pza",
             status="active",
             target_price=target_price,
+            expected_margin=expected_margin,
             responsible_area=responsible_area,
             inventory_item_id=inventory_item_id,
         )
@@ -835,3 +837,62 @@ def test_recipe_version_can_be_submitted_and_approved():
     assert submitted.json()["data"]["status"] == "pending_approval"
     assert approved.status_code == 200
     assert approved.json()["data"]["status"] == "approved"
+
+
+@pytest.mark.parametrize("kind", ["product", "service"])
+@pytest.mark.parametrize("margin", [0, 100, 400, 22122.22, 1000000])
+def test_expected_margin_above_100_create_and_update(kind, margin):
+    client = client_with_fake_repo()
+    payload = {"code":"margin-test", "name":"Margin test", "type":kind, "base_unit":"pza", "expected_margin":margin}
+    if kind == "product": payload["inventory_item_id"] = "itm_demo"
+    response = client.post("/v1/production/product-services", headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"margin-test"}, json=payload)
+    assert response.status_code == 201, response.text
+    assert response.json()["data"]["expected_margin"] == margin
+    response = client.patch(f"/v1/production/product-services/{PRODUCT_SERVICE_ID}", headers={"X-Tenant-Id":TENANT_ID}, json={"expected_margin":margin})
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["expected_margin"] == margin
+
+
+@pytest.mark.parametrize("margin", [-1, float("inf"), float("nan")])
+def test_expected_margin_rejects_negative_and_nonfinite(margin):
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        schemas_module.ProductServiceUpdateRequest(expected_margin=margin)
+
+
+def test_service_evidence_api_permissions_and_product_rejection():
+    response=firebase_client(["production.order.read"]).post("/v1/production/orders/ord_demo/service-evidence/start",headers={"X-Tenant-Id":TENANT_ID,"Authorization":"Bearer token"},json={"description":"Received intact"})
+    assert response.status_code==403
+    response=client_with_fake_repo().post("/v1/production/orders/ord_demo/service-evidence/start",headers={"X-Tenant-Id":TENANT_ID},json={"description":"Received intact"})
+    assert response.status_code==409 and response.json()["error"]["code"]=="service_evidence_service_only"
+
+
+def test_service_evidence_body_limit_rejects_before_json_parsing():
+    response=client_with_fake_repo().post("/v1/production/orders/ord_demo/service-evidence/start",headers={"X-Tenant-Id":TENANT_ID,"Content-Type":"application/json"},content=b"x"*(21*1024*1024+1))
+    assert response.status_code==413
+    assert response.json()["error"]["code"]=="service_evidence_file_too_large"
+
+
+def test_service_evidence_api_records_and_downloads_without_exposing_storage_keys(monkeypatch):
+    original=FakeProductionRepository.get_order
+    def service_order(self,tenant,order):
+        value=original(self,tenant,order)
+        return value.model_copy(update={"is_service_order":True}) if value else None
+    def save(self,tenant,order,phase,payload,actor):
+        assert tenant==TENANT_ID and order=="ord_demo"
+        return [{"phase":phase,"description":payload.description,"files":[]}]
+    def download(self,tenant,order,file_id):
+        assert tenant==TENANT_ID and order=="ord_demo" and file_id=="file_demo"
+        return {"filename":"evidence.txt","media_type":"text/plain"},b"Written file"
+    monkeypatch.setattr(FakeProductionRepository,"get_order",service_order)
+    monkeypatch.setattr(FakeProductionRepository,"save_service_evidence",save,raising=False)
+    monkeypatch.setattr(FakeProductionRepository,"evidence_file",download,raising=False)
+    client=client_with_fake_repo()
+    for phase in ("start","finish"):
+        response=client.post(f"/v1/production/orders/ord_demo/service-evidence/{phase}",headers={"X-Tenant-Id":TENANT_ID},json={"description":"Condition recorded"})
+        assert response.status_code==200 and response.json()["data"][0]["phase"]==phase
+    response=client.get("/v1/production/orders/ord_demo/service-evidence/files/file_demo",headers={"X-Tenant-Id":TENANT_ID,"Origin":"http://127.0.0.1:4173"})
+    assert response.status_code==200 and response.content==b"Written file"
+    assert response.headers["cache-control"]=="private, no-store"
+    assert "attachment" in response.headers["content-disposition"]
+    assert "content-disposition" in response.headers["access-control-expose-headers"].lower()

@@ -1,5 +1,11 @@
 # ERClave — Módulo de Administración y Configuración
 
+## Feedback de formularios Local CHG-272
+
+Alta de rol conserva codigo, nombre y descripcion al fallar. Backoffice integra login, onboarding, editor y filtros; no persiste contrasenas para restaurar la captura. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+
+Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+
 ## Coherencia de consultas Local (CHG-262)
 
 El dashboard consulta solo los recursos permitidos por la sesion: una lectura de Roles no exige permisos de Usuarios, Tenant o Configuracion. Las colecciones omitidas por falta de permiso no conceden autoridad ni fabrican datos. Backoffice conserva el control allowlisted y se verifica en lectura con Firebase Emulator. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.

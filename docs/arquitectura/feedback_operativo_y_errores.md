@@ -25,6 +25,26 @@ Toda respuesta visible debe explicar qué ocurrió, si hubo un cambio real y qu�
 
 Los toasts informativos usan `role=status`/`aria-live=polite`; los errores usan `role=alert`/`aria-live=assertive`. El color complementa el texto y no es el único indicador.
 
+## Validación de formularios
+
+Este contrato es obligatorio para capturas de todos los módulos implementados y futuros, incluidas partidas, asistentes, formularios inline y Backoffice. La guía de ejecución es `.agents/skills/erclave-form-feedback/SKILL.md`. Estas exigencias describen el criterio de aceptación; no constituyen evidencia de que un formulario haya sido probado o desplegado.
+
+- Conservar la respuesta estructurada hasta el manejador del formulario. Resolver el mensaje por código estable, tipo de validación y metadatos permitidos; no derivar causas ni campos desde `error.message` o texto libre.
+- Vincular rutas exactas del payload con controles mediante su nombre o un mapa explícito del formulario. Normalizar prefijos conocidos del transporte conservando nombres e índices: un error en `items[1].quantity` corresponde a la segunda partida. Campos anidados, aliases y lookups con ID oculto requieren resolver el control visible correcto; no elegir por coincidencia parcial o por la primera fila.
+- Mostrar junto al control el requisito y su corrección en ES/EN. Usar indicador textual/visual, `aria-invalid` y `aria-describedby` preservando ayudas existentes. El resumen permite navegar a errores resolubles; el foco se dirige al primer control inválido visible y habilitado o, si no existe, al resumen accesible.
+- Limpiar las marcas propias al corregir o reiniciar el formulario sin eliminar ayudas ajenas. Un nuevo rechazo no duplica mensajes ni referencias ARIA.
+- Un error no asociado con certeza permanece en el resumen con una siguiente acción segura. Nunca afirmar que hay campos marcados si no los hay. Un fallo técnico, falta de permiso o conflicto no equivale a captura incorrecta; no atribuir culpa al usuario ni mostrar detalles internos.
+- Conservar captura, selecciones y partidas al rechazar. No cerrar ni resetear el formulario, anunciar éxito o duplicar envíos en el camino de error. Restaurar el estado operativo confirmado cuando la interacción haya sido optimista.
+- Respetar campos condicionales y `hidden` también en CSS computado. No enfocar ni exigir controles ocultos o deshabilitados; si el requisito se resuelve en otra pantalla, explicar la acción correspondiente.
+
+## Evidencia de formularios
+
+Cada cambio de formularios debe incluir pruebas negativas conductuales de sus recorridos afectados. Si cambia el mecanismo compartido, inventariar y comprobar los consumidores de Administración, Producción, Almacenes, Compras, Ventas, RH y Mantenimiento, más Backoffice y módulos futuros que lo consuman. La matriz registra formulario, escenario, idioma, entorno, tipo de respuesta (real o simulada), resultado y pendientes.
+
+Cubrir validación local y de servidor, varios campos, rutas anidadas y partidas distintas de la primera, código de negocio conocido, ruta/código desconocido, permiso y red/5xx. Comprobar campo señalado, instrucciones, foco, asociaciones ARIA, conservación de valores, limpieza tras corregir, estado condicional y ausencia de éxito o doble envío. Verificar paridad ES/EN y visibilidad computada en navegador.
+
+`npm run validate:error-feedback` y `npm run verify` son controles necesarios; un chequeo estático de cadenas o probar el helper aislado no demuestra que todos los formularios sean corregibles. Distinguir cobertura automatizada, integración con API y UAT. Registrar explícitamente recorridos no ejecutados; no declarar validación total con pendientes ni confundir evidencia Local con QA.
+
 ## Copy accionable
 
 El patrón recomendado es: **resultado + causa operativa + siguiente paso**.
@@ -51,3 +71,10 @@ CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confi
 ## Recuperación de refacciones Local CHG-268
 
 CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+
+
+## Formularios Local CHG-272
+
+El helper `frontend/features/form-feedback.js`, sus bindings y estilos compartidos resuelven errores de captura en los siete módulos implementados y Backoffice. Se conserva el objeto estructurado, la captura y el formulario propietario; se enlazan rutas explícitas a controles visibles y se evita marcar valores editados después de enviar. Las equivalencias literales de schemas legados se limitan a `VALIDATION_RULES`, verificadas contra el código; no se muestran diagnósticos libres.
+
+Aplicar `.agents/skills/erclave-form-feedback/SKILL.md` y ejecutar `validate:form-feedback` y `test:form-feedback` además de los controles anteriores. El workflow prepara esta suite sin DB; no se ha ejecutado CI remoto en este corte. Inventario, pruebas, límites y APIs consumidas: `docs/auditorias/formularios_feedback_2026-09-13.md`. Solo Local: los manuales CHG-271 y QA no se actualizan por esta implementación.

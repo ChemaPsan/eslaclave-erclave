@@ -59,3 +59,11 @@ ERCLAVE_FIREBASE_WEB_API_KEY=<firebase-web-api-key>
 ```
 
 Si esa key no existe, el endpoint devuelve `data.invitation.reset_link`.
+
+## Feedback de formularios
+
+Login, onboarding, editor de tenant y filtros de empresas/uso consumen `frontend/features/form-feedback.js` y su CSS compartido. Los rechazos muestran mensajes ES/EN vinculados a controles por nombre o `data-error-path`, con foco, `aria-invalid` y `aria-describedby`. Los errores generales permanecen en el resumen seguro sin inventar un campo afectado.
+
+Los submits de login, onboarding y editor conservan los controles vivos durante la espera y el rechazo, bloquean envios repetidos y reactivan los botones al fallar. Las credenciales solo permanecen en el DOM del login; no se guardan en storage ni estado persistente. Los filtros se reconstruyen desde su estado capturado antes de mostrar los errores de consulta. Recuperar contrasena valida solo el correo.
+
+Regresion: `tests/e2e/backoffice-form-feedback.spec.js` cubre los cinco formularios en ES/EN con autenticacion y respuestas HTTP simuladas, rechazo local y del servidor, ruta de owner anidada, foco/ARIA y conservacion de captura. No crea tenants ni modifica recursos reales; no sustituye UAT ni integracion backend.

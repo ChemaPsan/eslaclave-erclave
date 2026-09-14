@@ -1,5 +1,15 @@
 # Decisiones vigentes de ERClave
 
+## Evidencia de servicios CHG-274 — solo Local
+
+CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+
+
+## Margen esperado sin tope CHG-273
+
+CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración Local `20260913_0035` aplicada; QA conserva `20260908_0034` y release b63cdad. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
+
+
 ## Autoridad de salida antes del inicio CHG-264
 
 CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
@@ -204,3 +214,10 @@ CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–26
 ## Release QA verificado CHG-270
 
 CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
+
+
+## Errores de formulario corregibles CHG-272
+
+La respuesta estructurada de API debe llegar completa al resolvedor de formulario. La propiedad del request se captura antes de awaits; las rutas de payload se vinculan a controles exactos y a la identidad/orden realmente serializados, incluso al filtrar partidas. Los lookups se marcan en su control visible. Campos no editables o rutas desconocidas usan resumen seguro; ningun mensaje generico promete marcas inexistentes.
+
+El sistema conserva captura y distingue validacion, bloqueo de negocio, permisos y fallo tecnico. No muestra diagnosticos del servidor ni guarda contrasenas para restaurarlas. La skill `erclave-form-feedback`, exigida en AGENTS/AGENTES, obliga a evidencia conductual por consumidor presente o futuro. Registro de 54 variantes y 22 casos MAIN no equivale a certificacion funcional exhaustiva. Evidencia y alcance Local: `docs/auditorias/formularios_feedback_2026-09-13.md`. Sin cambio de ownership, contratos ni reglas backend; sin promocion QA.

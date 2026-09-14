@@ -71,3 +71,6 @@ export function getProductionReturnableMaterials(offset=0){return productionRequ
 
 export function getFailedProductionCreations(offset=0){return productionRequest(`/v1/production/failed-order-creations?limit=26&offset=${offset}`);}
 export async function recoverProductionCreation(id){return (await productionRequest(`/v1/production/failed-order-creations/${encodeURIComponent(id)}/recover`,{method:"POST",headers:commandHeaders()})).data;}
+
+export async function saveProductionServiceEvidence(orderId,phase,payload){return (await productionRequest(`/v1/production/orders/${encodeURIComponent(orderId)}/service-evidence/${phase}`,{method:"POST",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
+export function downloadProductionServiceEvidence(orderId,fileId){return apiDownloadAt(getProductionApiBaseUrl(),`/v1/production/orders/${encodeURIComponent(orderId)}/service-evidence/files/${encodeURIComponent(fileId)}`,{headers:{"X-Tenant-Id":getDemoTenantId()}},"Production API");}

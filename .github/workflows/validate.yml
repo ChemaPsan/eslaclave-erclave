@@ -16,6 +16,9 @@ on:
       - "frontend/**"
       - "modulos/**"
       - "package.json"
+      - "package-lock.json"
+      - "playwright.form-feedback.config.js"
+      - "tests/**"
       - "tools/**"
       - ".github/workflows/validate.yml"
       - ".github/workflows/pages.yml"
@@ -37,6 +40,9 @@ on:
       - "frontend/**"
       - "modulos/**"
       - "package.json"
+      - "package-lock.json"
+      - "playwright.form-feedback.config.js"
+      - "tests/**"
       - "tools/**"
       - ".github/workflows/validate.yml"
       - ".github/workflows/pages.yml"
@@ -71,6 +77,15 @@ jobs:
       - name: Install backend test dependencies
         working-directory: backend
         run: python -m pip install -e ".[dev]"
+
+      - name: Install frontend test dependencies
+        run: npm ci
+
+      - name: Install isolated test browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify form error experience without APIs or database
+        run: npm run test:form-feedback
 
       - name: Run complete verification
         run: npm run verify

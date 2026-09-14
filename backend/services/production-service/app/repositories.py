@@ -1,3 +1,4 @@
+from .evidence_repository import ServiceEvidenceRepository
 import json
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
@@ -32,7 +33,7 @@ from .material_returns import ProductionMaterialReturns
 
 from .creation_recovery import ProductionCreationRecovery
 
-class ProductionRepository(ProductionMaterialReturns,ProductionCreationRecovery):
+class ProductionRepository(ProductionMaterialReturns,ProductionCreationRecovery,ServiceEvidenceRepository):
     def __init__(self, engine: Engine):
         self.engine = engine
 
@@ -654,6 +655,8 @@ class ProductionRepository(ProductionMaterialReturns,ProductionCreationRecovery)
                 return None
             if target_status not in ORDER_STATUS_TRANSITIONS[before.status]:
                 raise ValueError("invalid_order_transition")
+            if target_status in {"waiting_resources","in_progress"}:self._require_service_evidence(connection,tenant_id,order_id,"start")
+            if target_status in {"in_validation","completed"}:self._require_service_evidence(connection,tenant_id,order_id,"finish")
             if target_status == "cancelled":
                 self._require_cancellable_materials(connection,tenant_id,order_id)
             if target_status == "in_progress":
@@ -765,6 +768,8 @@ class ProductionRepository(ProductionMaterialReturns,ProductionCreationRecovery)
                 self._release_idempotency(connection, tenant_id, "order.status", key); return None
             if payload.status not in allowed[before.status]:
                 self._release_idempotency(connection, tenant_id, "order.status", key); raise ValueError("invalid_order_transition")
+            if payload.status in {"waiting_resources","in_progress"}:self._require_service_evidence(connection,tenant_id,order_id,"start")
+            if payload.status in {"in_validation","completed"}:self._require_service_evidence(connection,tenant_id,order_id,"finish")
             if payload.status == "in_progress":
                 self._require_execution_machines(connection,tenant_id,order_id)
                 try:self._require_materials_issued(connection,tenant_id,order_id)
@@ -815,6 +820,11 @@ class ProductionRepository(ProductionMaterialReturns,ProductionCreationRecovery)
                 self._release_idempotency(connection, tenant_id, "order_stage.update", key); return None
             order_id = connection.execute(text("select production_order_id from production.production_order_stages where tenant_id=:tenant_id and id=:id"), {"tenant_id":tenant_id,"id":stage_id}).scalar_one()
             order_status = connection.execute(text("select status from production.production_orders where tenant_id=:tenant_id and id=:id for update"), {"tenant_id":tenant_id,"id":order_id}).scalar_one()
+            before = self._read_stage(connection, tenant_id, stage_id)
+            if payload.status in {"in_progress","completed","skipped"}:self._require_service_evidence(connection,tenant_id,order_id,"start")
+            if payload.status in {"completed","skipped"}:
+                remaining=connection.scalar(text("select count(*) from production.production_order_stages where tenant_id=:t and production_order_id=:o and id<>:s and status not in ('completed','skipped')"),{"t":tenant_id,"o":order_id,"s":stage_id})
+                if not remaining:self._require_service_evidence(connection,tenant_id,order_id,"finish")
             if payload.status in {"in_progress","completed"} and order_status != "in_progress":
                 self._release_idempotency(connection, tenant_id, "order_stage.update", key); raise ValueError("production_order_must_be_in_progress")
             if payload.status not in allowed[before.status]:
@@ -856,7 +866,7 @@ class ProductionRepository(ProductionMaterialReturns,ProductionCreationRecovery)
         resource_ids=connection.execute(text("select id from production.production_order_resources where tenant_id=:tenant_id and production_order_id=:id order by resource_type,resource_code"),{"tenant_id":tenant_id,"id":order_id}).scalars().all()
         stages=[self._read_stage(connection, tenant_id, item) for item in stage_ids]
         overall_progress=sum(float(item.weight_percent)*float(item.progress_percent)/100 for item in stages)
-        return ProductionOrderRead(**dict(row),material_returns=[dict(a) for a in connection.execute(text("select return_id,resource_id,quantity,unit_cost,created_at from production.material_return_adjustments where tenant_id=:t and order_id=:o order by created_at"),{"t":tenant_id,"o":order_id}).mappings()], overall_progress_percent=round(overall_progress,2), stages=stages,resources=[self._read_order_resource(connection,tenant_id,item,order_id) for item in resource_ids])
+        return ProductionOrderRead(**dict(row),is_service_order=self._is_service_order(connection,tenant_id,order_id),service_evidence=self._service_evidence(connection,tenant_id,order_id),material_returns=[dict(a) for a in connection.execute(text("select return_id,resource_id,quantity,unit_cost,created_at from production.material_return_adjustments where tenant_id=:t and order_id=:o order by created_at"),{"t":tenant_id,"o":order_id}).mappings()], overall_progress_percent=round(overall_progress,2), stages=stages,resources=[self._read_order_resource(connection,tenant_id,item,order_id) for item in resource_ids])
 
     def _read_sales_request(self, connection, tenant_id: str, request_id: str):
         row = connection.execute(text("""select id,sales_order_id,sales_order_line_id,product_service_ref_id product_service_id,

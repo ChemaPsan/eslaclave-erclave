@@ -25,11 +25,9 @@ if (movementFlow.indexOf("await createInventoryMovement(") > movementFlow.indexO
 if (recipeFlow.includes("createInventoryMovement")) {
   errors.push("Recipe persistence must not contain the inventory movement command.");
 }
-if (!itemFlow.includes('errorCode === "item_base_unit_locked_by_movements"')) {
-  errors.push("Inventory item editing must translate the protected base-unit conflict into an actionable message.");
-}
-if (!itemFlow.includes('t("itemBaseUnitLockedByHistory")')) {
-  errors.push("Inventory item editing must use the localized protected base-unit message.");
+const errorCatalog = fs.readFileSync(path.join(root, "frontend/i18n/api-errors.js"), "utf8");
+if (!itemFlow.includes("renderFormErrors([error])") || !errorCatalog.includes("item_base_unit_locked_by_movements:")) {
+  errors.push("Inventory item editing must retain structured errors and localize the protected base-unit conflict in the shared catalog.");
 }
 if (!inventoryRepository.includes("stored_quantity,next_status,remaining=reservation_consumption_state")) {
   errors.push("Full reservation consumption must preserve a positive quantity snapshot before setting status consumed.");

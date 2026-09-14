@@ -1,8 +1,9 @@
 # Manual funcional de Administración y Backoffice
 
 - Audiencia: administradores del tenant y operadores internos autorizados
-- Alcance por ambiente: Local y QA
-- Última revisión: 2026-09-02
+- Alcance por ambiente: Local actual y QA; las mejoras pendientes de promoción se indican expresamente
+- Última revisión: 2026-09-14
+- Versión funcional de referencia: QA b63cdad
 - Capacidades cubiertas: contexto de sesión, organización, usuarios, roles, permisos, módulos, unidades, folios, catálogos, plantilla documental y ciclo de tenants en Backoffice
 
 ## Propósito
@@ -10,6 +11,13 @@
 Administración gobierna quién puede entrar, qué módulos tiene contratados y qué configuración comparte cada tenant. Firebase autentica la identidad; Admin Service decide membresía, tenant activo, permisos, entitlements y alcance.
 
 Backoffice es una aplicación interna separada para alta, configuración, suspensión y eliminación de tenants. Ser owner de una empresa no concede acceso al Backoffice.
+
+## Corregir errores de captura
+
+**Disponible en Local; pendiente de promoción a QA.** Si un dato es inválido, el formulario muestra una explicación junto al campo y un resumen desde el que puede ir al control correspondiente. Corrija el dato indicado y vuelva a guardar; la captura se conserva mientras el formulario permanezca abierto. En partidas, revise la fila señalada y seleccione nuevamente el registro del catálogo si corresponde.
+
+Los errores de permisos, conexión o reglas generales se muestran como un aviso de la operación. Si no aparece un campo señalado, no cambie datos al azar: revise el aviso y conserve la referencia de correlación para soporte. Corregir un campo no elimina los avisos de los demás. Cerrar el formulario o recargar no garantiza conservar cambios sin guardar.
+
 
 ## Disponibilidad por ambiente
 
@@ -66,13 +74,13 @@ Backoffice y Administración muestran Admin, Producción, Inventario, RH, Ventas
 - Producción usa RH e Inventario para capacidad y materiales.
 - Ventas usa Producción, RH e Inventario según la partida.
 - Mantenimiento requiere RH e Inventario; Producción es integración opcional.
-- Compras puede activarse sin Inventario para servicios en el corte Local; las partidas físicas sí requieren Inventario.
+- Compras puede activarse sin Inventario cuando sólo se compran servicios; las partidas físicas sí requieren Inventario. Ambas modalidades están disponibles en Local y QA.
 
 No active una dependencia sólo para superar una pantalla: confirme el modelo operativo del tenant y asigne permisos coherentes.
 
 ## Unidades de medida
 
-Las unidades tienen código estable, nombre ES/EN, categoría, factor y estado. Los campos operativos guardan el código, no texto libre. La unidad `E48` representa **Unidad de servicio / Service unit** en el corte Local vigente.
+Las unidades tienen código estable, nombre ES/EN, categoría, factor y estado. Los campos operativos guardan el código, no texto libre. La unidad `E48` representa **Unidad de servicio / Service unit** en Local y QA.
 
 Cambiar o inactivar una unidad afecta nuevas capturas, no reescribe documentos históricos. Inventario protege la unidad de artículos con movimientos o reservas.
 
@@ -88,7 +96,18 @@ Cambiar o inactivar una unidad afecta nuevas capturas, no reescribe documentos h
 | Manual | El operador captura y el módulo valida formato/unicidad. |
 | Estado | Inactivo impide nuevas asignaciones. |
 
-Abra **Catálogos base > Folios y consecutivos**, edite y guarde. El cambio sólo afecta altas nuevas. El corte Local incluye folio `sales.service_order` para órdenes de servicio.
+Abra **Catálogos base > Folios y consecutivos**, edite y guarde. El cambio sólo afecta altas nuevas. Existe el folio `sales.service_order` para órdenes de servicio en Local y QA.
+
+## Permisos para completar los flujos entre áreas
+
+Revise las acciones necesarias en cada rol antes de comenzar las pruebas. El nombre del rol no sustituye los permisos efectivos de la sesión.
+
+- **Almacén:** consultar Movimientos requiere `inventory.movement.read`; confirmar entradas, salidas y tareas físicas requiere `inventory.movement.create`. La confirmación de entrega de refacciones es la autorización operativa de Almacén; no existe un paso adicional de aprobación independiente.
+- **Compras:** prepara recepciones con `purchasing.receipt.create`. Tener permiso de conciliación de Compras no autoriza registrar la entrada física. Para servicios comprados se comprueba además que quien acepta sea el solicitante original, o el comprador en una compra directa.
+- **Ventas:** prepara entregas con `sales.delivery.create`. El permiso comercial de confirmación por sí solo no sustituye la salida de Almacén. En Cotizaciones, enviar y aprobar requieren `sales.quote.submit` y `sales.quote.approve`, respectivamente.
+- **Producción y Mantenimiento:** conservan sus permisos de transición y solicitud; Almacén confirma el material antes del inicio productivo o de la resolución de mantenimiento, según corresponda.
+
+Si falta una acción, revise el permiso puntual en **Roles**, el módulo efectivo y la membresía. Renueve la sesión después del cambio. No conceda todos los permisos ni active módulos adicionales sólo para hacer desaparecer un bloqueo de flujo. Los permisos de Almacén de este corte son globales dentro del tenant; no hay asignación individual de almacenes por usuario.
 
 ## Alta de tenant desde Backoffice
 
@@ -99,7 +118,7 @@ Abra **Catálogos base > Folios y consecutivos**, edite y guarde. El cambio sól
 5. En QA, confirme que Firebase aceptó el correo para que el owner establezca su contraseña; revise spam y recuperación de contraseña.
 6. Acceda como owner y confirme tenant, módulos y permisos sin conservar tokens o contraseñas.
 
-## Suspender, reactivar o eliminar
+## Suspensión reactivación y eliminación
 
 - **Suspender:** bloquea el acceso y conserva configuración.
 - **Reactivar:** devuelve acceso cuando el estado y la suscripción lo permiten.

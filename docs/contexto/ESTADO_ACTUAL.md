@@ -1,5 +1,53 @@
 # Estado actual de ERClave
 
+## Despliegue solicitado CHG-276 — en curso
+
+El usuario autorizó desplegar a QA el 2026-09-14. Rama del candidato `agent/chg-276-qa-release`. Se prepara publicación/PR del delta completo CHG-271–276; no hay nuevo SHA de release ni promoción QA todavía.
+
+Seguridad: el bucket ahora exige exactamente una regla Delete age365 y rechaza reglas adicionales que pudieran borrar antes;24 pruebas focalizadas aprobadas. Fixtures:9 integraciones de Mantenimiento corregidas y aprobadas con IDs/actores propios; quedan20 históricas pendientes (Admin4, Sales5, Purchasing11). Compras usa tenants UUID y limpieza propia. Admin, Sales y Compras exigen ERCLAVE_TEST_ALLOW_TEMP_TENANTS=1 además de loopback5434/erclave_local: habilitar solo tras autorización explícita de tenants temporales, solicitada y pendiente. No se ejecutaron esas20.
+
+GitHub: acceso admin del repositorio comprobado; cinco gates QA conservan required_reviewers/ChemaPsan. Google Cloud: la sesión actual carece de storage.buckets.list en proyecto erclave; se solicitó al usuario iniciar con la cuenta administradora. No se concedió IAM, creó bucket, ejecutó migración ni cambió tráfico/Hosting. QA permanece en la base b63cdad previamente verificada. La revisión visual Word permanece pendiente; binarios no son edición final distribuible.
+
+
+
+## Preparación QA y manuales CHG-275
+
+Revisión 2026-09-14: siete manuales y guía actualizados para Local con capacidades pendientes de QA; 65 casos en guía/matriz (56 base +9 nuevos), sin aceptación inferida. Las siete APIs QA reportan b63cdad en /version. Se preparó QA_EVIDENCE_BUCKET en qa-release; bucket/IAM aún requieren aprovisionamiento autorizado y smoke. Local head `20260913_0036`; QA documentado `20260908_0034` sin cambios.
+
+Verify CHG-275 aprobado:292 backend,58 skips sin DB y validadores completos. Word regenerado/verificado estructuralmente; revisión visual pendiente de renderizador, no distribuir como final.
+
+Selección segura:29 aprobadas sin skips (23 DB históricas,3 schemas históricos,3 DB nuevas). De las55 históricas antes omitidas se verificaron26 y quedan29 bloqueadas por fixtures de otros tenants/limpieza amplia. No lanzar verify:postgres completo. Detalle, rollback, matriz API y gates en `docs/operaciones/release_qa_20260914.md`. Sin publicación de rama/PR, migración o deploy QA.
+
+
+## Evidencia de servicios CHG-274 — solo Local
+
+Validación CHG-274:185 browser aprobadas;19 focalizadas (14 archivo/optimización,3 API y2 PostgreSQL), verify292 aprobadas/58 omitidas en corrida sin DB. Las2 integraciones nuevas sí se ejecutaron por separado, al igual que la de margen del corte anterior;55 generales siguen pendientes. Reversa y expiración reales en fixtures, permisos y tamaños comprobados; revisión visual390/760/1280 y tema oscuro.
+
+CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+
+
+## Margen esperado sin tope CHG-273
+
+Validación CHG-273:14 pruebas focalizadas aprobadas, incluida PostgreSQL real;23 browser de contratos y98 feedback aprobadas; verify275 backend aprobado. En la corrida genérica se omiten56 integraciones;1 (margen) se ejecutó aparte contra DB real,55 generales previas siguen pendientes. API Local8002 reiniciada y esquema servido sin máximo100 comprobado.
+
+CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración Local `20260913_0035` aplicada; QA conserva `20260908_0034` y release b63cdad. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
+
+
+## Feedback de formularios solo Local CHG-272
+
+CHG-272 incorpora errores vinculados a controles, resumen accesible, foco y conservacion de captura en el frontend compartido y Backoffice. Registra 54 variantes de formulario y aliases/partidas; catalogo de 244 codigos ES/EN y 95 reglas schema. La skill `erclave-form-feedback` queda obligatoria para ajustes presentes y futuros. Wiring no equivale a cobertura exhaustiva del negocio.
+
+Evidencia final: 174 pruebas browser aprobadas sin duplicados (98 offline, incluidos 14 Backoffice; 22 MAIN sobre once formularios reales ES/EN; 54 de regresion general). Offline se ejecuto en grupos complementarios 94 + 4, ambos exit 0. `npm run verify` y validate aprobados (262 backend, 55 omitidas sin DB; sintaxis 79). Skill valida, diff limpio y revision visual claro/oscuro 390 px y CSS zoom2 aprobada; esta ultima no equivale a zoom real del navegador. Detalle reproducible y APIs: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+
+No cambia backend, contratos, DB, permisos ni datos operativos; sin deploy. QA permanece en CHG-270 `b63cdad`; la edición documental CHG-275 agrega las mejoras Local y conserva la distinción de ambiente. UAT y causa exacta del incidente original pendientes.
+
+## Manuales y guía del tester CHG-271
+
+CHG-271 sincroniza los siete manuales funcionales Markdown/Word y la guía de pruebas con QA `b63cdad`, revisión documental 2026-09-10. Entrega: `docs/qa/ENTREGA_TESTER.md`; generación reproducible de tablas y procedimientos mediante herramientas documentales. No cambia runtime, contratos, migraciones, datos, permisos ni despliegues. No publica documentos en GitHub.
+
+Incidencia identificada por revisión de código: la bandeja para solicitar sobrantes de Mantenimiento busca `.submodule-screen`, ausente en su render; confirmar/corregir acceso por el agente técnico de Mantenimiento y QA. No se declara disponible el recorrido completo desde pantalla. Compra directa soportada por API pero no expuesta en alta de órdenes de la UI. Ambos límites constan en manuales/guía. UAT autenticada continúa pendiente del tester.
+
+
 ## Estado vigente tras release QA CHG-270
 
 CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
@@ -275,7 +323,7 @@ Las entradas siguientes conservan el estado observado al cerrar cada CHG y no su
 En Local quedó implementada la vinculación guiada de producto terminado entre Almacenes, Producción y Ventas. Producción conserva la referencia autoritativa 1:1; el alta crea un artículo `finishedGood` con la misma unidad y admite identidad logística distinta de la comercial. No hubo migración ni promoción a QA/Producción.
 # Actualizacion CHG-207 (2026-08-20)
 
-En Local existe el Custodio de manuales funcionales de la solucion y la skill `$erclave-solution-manuals`. La biblioteca `docs/manuales_solucion/` separa fuentes Markdown revisables de documentos Word generados y registra cobertura, ambiente y dudas funcionales por modulo. Los manuales permanecen por elaborar progresivamente; esta capacidad no implica que ya exista un manual completo de cada modulo.
+En Local existe el Custodio de manuales funcionales de la solucion y la skill `$erclave-solution-manuals`. La biblioteca `docs/manuales_solucion/` separa fuentes Markdown revisables de documentos Word generados y registra cobertura, ambiente y dudas funcionales por modulo. CHG-271 mantiene siete manuales funcionales de módulos implementados, sus Word y la guía del tester para QA b63cdad. Los módulos planeados no reciben manual operativo; la cobertura y limitaciones vigentes están en REGISTRO.md.
 # Actualizacion CHG-208 (2026-08-20)
 
 En Local, Entregas de Ventas vuelve a mostrar la fecha programada requerida en modo API. Los vinculos Cotizacion -> Pedido y Pedido -> Entrega sustituyen listas extensas por busqueda acotada sobre folio, cliente, producto/servicio, importe o estado, conservando solo documentos elegibles. No cambia API ni persistencia; la paginacion server-side para volumen mayor a 200 permanece pendiente.

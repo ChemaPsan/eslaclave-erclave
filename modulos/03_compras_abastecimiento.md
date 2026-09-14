@@ -1,5 +1,11 @@
 # ERClave — Módulo de Compras y Abastecimiento
 
+## Feedback de formularios Local CHG-272
+
+Proveedor y Recepcion verifican mensajes junto al campo. Las recepciones vinculan el indice de payload a la linea de orden: la segunda fila visible puede ser lines.0 si se omiten cantidades cero. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+
+Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+
 ## Coherencia de formularios Local (CHG-262)
 
 Las lecturas del workspace se seleccionan por permisos de cada recurso. Alternar Servicio/Articulo restaura la unidad autoritativa del articulo y deshabilita Inventory para servicios. Cancelar exige un motivo de 3 a 500 caracteres. Editar proveedor conserva sus codigos estables aunque no aparezcan en las listas cortas de la UI y aplica el formato postal correspondiente al pais existente. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.

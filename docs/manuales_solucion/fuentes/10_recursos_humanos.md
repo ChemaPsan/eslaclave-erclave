@@ -1,13 +1,21 @@
 # Manual funcional de Recursos Humanos
 
 - Audiencia: responsables de RH, administradores de estructura y supervisores operativos
-- Alcance por ambiente: Local y QA
-- Última revisión: 2026-09-06
+- Alcance por ambiente: Local actual y QA; las mejoras pendientes de promoción se indican expresamente
+- Última revisión: 2026-09-14
+- Versión funcional de referencia: QA b63cdad
 - Capacidades cubiertas: áreas, puestos, trabajadores, capacidad productiva y elegibilidad para Producción, Mantenimiento y servicios de Ventas
 
 ## Propósito
 
 Recursos Humanos conserva la estructura organizacional y el expediente operativo mínimo de trabajadores. Otros módulos consultan proyecciones limitadas de elegibilidad y capacidad; no reciben datos personales innecesarios ni escriben las tablas de RH.
+
+## Corregir errores de captura
+
+**Disponible en Local; pendiente de promoción a QA.** Si un dato es inválido, el formulario muestra una explicación junto al campo y un resumen desde el que puede ir al control correspondiente. Corrija el dato indicado y vuelva a guardar; la captura se conserva mientras el formulario permanezca abierto. En partidas, revise la fila señalada y seleccione nuevamente el registro del catálogo si corresponde.
+
+Los errores de permisos, conexión o reglas generales se muestran como un aviso de la operación. Si no aparece un campo señalado, no cambie datos al azar: revise el aviso y conserve la referencia de correlación para soporte. Corregir un campo no elimina los avisos de los demás. Cerrar el formulario o recargar no garantiza conservar cambios sin guardar.
+
 
 ## Disponibilidad por ambiente
 
@@ -16,7 +24,8 @@ Recursos Humanos conserva la estructura organizacional y el expediente operativo
 | Áreas, puestos y trabajadores | Disponible | Disponible |
 | Elegibilidad y capacidad para Producción | Disponible | Disponible |
 | Elegibilidad para Mantenimiento | Disponible | Disponible |
-| Elegibilidad para órdenes de servicio de Ventas | Disponible | Servicio consumidor sólo Local |
+| Elegibilidad para órdenes de servicio de Ventas | Disponible | Disponible |
+| Reportes estándar descargables | Disponible | Disponible |
 | Nómina, reclutamiento, ausencias y documentos | No disponible | No disponible |
 
 ## Mapa del módulo
@@ -34,7 +43,7 @@ Recursos Humanos conserva la estructura organizacional y el expediente operativo
 | Puesto vigente | Única asignación operativa actual del trabajador. |
 | Interviene en producción | Hace elegible el puesto para recetas, responsables y capacidad. |
 | Interviene en mantenimiento | Hace elegible al trabajador para órdenes correctivas. |
-| Elegible para ventas | Proyección mínima usada por órdenes de servicio en el corte Local. |
+| Elegible para ventas | Consulta de trabajadores activos con puesto y área vigentes para asignar órdenes de servicio. |
 | Capacidad laboral | Trabajadores activos por minutos disponibles por trabajador y fecha. |
 
 ## Acceso y permisos
@@ -74,11 +83,13 @@ Ser responsable general de una orden no aporta capacidad a otro puesto. La recet
 1. Cree o active un área y puesto de mantenimiento.
 2. Marque **Interviene en mantenimiento**.
 3. Asigne trabajadores activos al puesto.
-4. Mantenimiento validará nuevamente la elegibilidad al asignar e iniciar.
+4. Mantenimiento validará nuevamente la elegibilidad al asignar, iniciar y reanudar.
 
 ## Preparar responsables de servicio
 
-En el corte Local, Ventas consulta una proyección mínima para asignar órdenes de servicio. El trabajador debe permanecer activo, con puesto y área vigentes. Sales conserva ID y nombre snapshot; no copia CURP, RFC, NSS ni contacto.
+Ventas consulta una proyección mínima para asignar órdenes de servicio, tanto en Local como en QA. El trabajador debe permanecer activo, con puesto y área vigentes. Ventas conserva una referencia y el nombre registrado al asignar; no copia CURP, RFC, NSS ni contacto.
+
+Producción, Mantenimiento y las órdenes de servicio de Ventas vuelven a comprobar la elegibilidad al iniciar o reanudar. Si RH inactiva al trabajador, su puesto o su área, el responsable operativo debe seleccionar a otra persona elegible o solicitar a RH la corrección correspondiente. Después debe reintentar la misma transición. Haber asignado al trabajador anteriormente no permite saltar esta revisión.
 
 ## Estados y efectos
 
@@ -103,11 +114,11 @@ Inactivar un maestro no borra snapshots históricos. Las operaciones nuevas debe
 
 Administración gobierna folios, permisos y entitlement. Producción consume capacidad y elegibilidad; Mantenimiento consume elegibilidad técnica; Ventas consume una proyección de responsables de servicio. Cada consumidor guarda sólo referencia y snapshot necesarios. Los listados de RH minimizan identificadores personales.
 
-## Reportes estándar de portada (Local)
+## Reportes estándar de portada
 
 La portada ofrece reportes descargables de áreas y puestos, trabajadores, capacidad productiva configurada y elegibilidad por propósito. La capacidad muestra recursos, minutos configurados y plantilla activa de RH; no representa fechas ni compromisos de Producción. Abra la tarjeta, escriba para encontrar estatus, elegibilidad o propósito cuando aplique y pulse **Generar**.
 
-Los archivos excluyen CURP, RFC, NSS, teléfono, correo y domicilio. Se requieren `hr.position.read` o `hr.worker.read`. La capacidad de descarga está disponible sólo en Local en este corte.
+Los archivos excluyen CURP, RFC, NSS, teléfono, correo y domicilio. Se requieren `hr.position.read` o `hr.worker.read`, según el reporte. La descarga está disponible en Local y QA; no crea ni modifica expedientes.
 
 ## Limitaciones vigentes
 

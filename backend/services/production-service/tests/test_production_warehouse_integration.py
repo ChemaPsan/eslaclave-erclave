@@ -29,7 +29,7 @@ def material_order():
     suffix=uuid4().hex[:12];oid=f"ord_issue_{suffix}";actor=f"usr_issue_{suffix}"
     try:
         with engine.begin() as c:
-            recipe=c.execute(text("select v.id version_id,r.id recipe_id,r.product_service_id from production.recipe_versions v join production.recipes r on r.tenant_id=v.tenant_id and r.id=v.recipe_id where r.tenant_id=:t limit 1"),{"t":tenant}).mappings().first()
+            recipe=c.execute(text("select v.id version_id,r.id recipe_id,r.product_service_id from production.recipe_versions v join production.recipes r on r.tenant_id=v.tenant_id and r.id=v.recipe_id join production.product_services p on p.tenant_id=r.tenant_id and p.id=r.product_service_id where r.tenant_id=:t and p.type='product' limit 1"),{"t":tenant}).mappings().first()
             assert recipe,"Local demo requires a recipe for read-only fixture references"
             c.execute(text("""insert into production.production_orders(id,tenant_id,code,product_service_id,recipe_id,recipe_version_id,quantity,unit,status,responsible_name_snapshot,planned_cost,recipe_snapshot,resource_validation_snapshot,validated_at,created_by)
                 values(:i,:t,:i,:p,:r,:v,1,'H87','released','Responsable sintético',12,'{}','{}',now(),:a)"""),{"i":oid,"t":tenant,"p":recipe["product_service_id"],"r":recipe["recipe_id"],"v":recipe["version_id"],"a":actor})

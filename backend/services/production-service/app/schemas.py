@@ -79,7 +79,7 @@ class ProductServiceCreateRequest(UnitCodeMixin, BaseModel):
     target_price: float | None = None
     responsible_area: str | None = None
     cost_center: str | None = None
-    expected_margin: float | None = Field(default=None, ge=0, le=100)
+    expected_margin: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     description: str | None = None
     inventory_item_id: str | None = Field(default=None, min_length=1, max_length=40)
 
@@ -107,7 +107,7 @@ class ProductServiceUpdateRequest(UnitCodeMixin, BaseModel):
     target_price: float | None = None
     responsible_area: str | None = None
     cost_center: str | None = None
-    expected_margin: float | None = Field(default=None, ge=0, le=100)
+    expected_margin: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     description: str | None = None
     inventory_item_id: str | None = Field(default=None, min_length=1, max_length=40)
 
@@ -418,6 +418,23 @@ class ProductionOrderCreateRequest(ResourceValidationRequest):
         return value.strip() if value is not None else None
 
 
+class ServiceEvidenceFileRequest(BaseModel):
+    model_config={"extra":"forbid"}
+    filename: str = Field(min_length=1,max_length=180)
+    content_base64: str = Field(min_length=1,max_length=6990508)
+
+
+class ServiceEvidenceRequest(BaseModel):
+    model_config={"extra":"forbid"}
+    description: str = Field(min_length=3,max_length=4000)
+    files: list[ServiceEvidenceFileRequest] = Field(default_factory=list,max_length=3)
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def strip_description(cls,value):
+        return value.strip() if isinstance(value,str) else value
+
+
 class ProductionOrderStatusRequest(BaseModel):
     model_config={"extra":"forbid"}
     status: OrderStatus
@@ -500,6 +517,8 @@ class ProductionOrderRead(BaseModel):
     planned_cost: float
     actual_cost: float | None = None
     material_returns: list[dict] = Field(default_factory=list)
+    is_service_order: bool = False
+    service_evidence: list[dict] = Field(default_factory=list)
     overall_progress_percent: float = 0
     recipe_snapshot: dict
     resource_validation_snapshot: dict

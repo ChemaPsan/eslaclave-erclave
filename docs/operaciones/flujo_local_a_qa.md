@@ -111,3 +111,7 @@ CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–26
 ## Release QA verificado CHG-270
 
 CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
+
+## Preparación CHG-275
+
+Candidato Local CHG-271–275: manuales/formularios, margen sin tope de 100% y evidencia de servicios. Plan vigente: `docs/operaciones/release_qa_20260914.md`. QA sigue en b63cdad; destino Alembic 0036. Configurar y verificar bucket privado dedicado y QA_EVIDENCE_BUCKET antes de promover Production. 29 integraciones históricas requieren corregir fixtures/autorización; no declarar certificación completa ni ejecutar la suite DB indiscriminadamente. Sin despliegue remoto en esta preparación.

@@ -1,5 +1,11 @@
 # ERClave - Ventas y Clientes
 
+## Feedback de formularios Local CHG-272
+
+Clientes resuelve rutas anidadas de contacto y Cotizaciones identifica la segunda partida sin marcar la primera; conserva los datos capturados en el rechazo. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+
+Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+
 ## Coherencia de formularios Local (CHG-262)
 
 La planeacion de una orden de servicio usa controles de fecha desde el primer render y conserva las fechas recuperadas del backend. El registro de tiempo respeta el limite contractual de 1440 minutos. Las pruebas nuevas usan respuestas mutantes interceptadas, sin crear ordenes ni registrar costos reales. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.

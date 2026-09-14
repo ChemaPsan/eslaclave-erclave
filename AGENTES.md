@@ -1,5 +1,8 @@
 # ERClave - Lista de agentes por modulo
 
+CHG-276 en curso: QA release requiere política única Delete age365 en bucket dedicado. Fixtures multitenant de Admin/Sales/Purchasing requieren autorización explícita y ERCLAVE_TEST_ALLOW_TEMP_TENANTS=1; no basta ERCLAVE_TEST_TENANT_ID. Maintenance ahora limpia solo sus IDs/actores. Estado/gates: docs/operaciones/release_qa_20260914.md.
+
+
 Este documento define los agentes especializados que acompanaran la evolucion funcional y tecnica de ERClave.
 
 La regla base es simple: cada modulo debe tener dos agentes.
@@ -24,6 +27,7 @@ Cada agente debe poder responder:
 
 Reglas transversales vigentes:
 
+- Formularios y errores: los agentes de negocio definen requisito y siguiente acción; los técnicos y UX aplican `$erclave-form-feedback` (`.agents/skills/erclave-form-feedback/SKILL.md`) y el contrato de feedback operativo. QA exige evidencia conductual de cada consumidor afectado, incluidos índices de partidas, controles condicionales, ES/EN, foco, ARIA y conservación de captura. No se atribuyen errores a campos por texto libre ni se declara cobertura de todos los módulos por probar únicamente el manejador compartido. Esta regla también aplica a formularios futuros.
 - Coherencia frontend/backend: revisar campos condicionales, propiedades admitidas en create/update, valores cero, identidad estable, permisos por consulta y permisos completos antes de comandos compuestos. No ofrecer como editables campos ignorados por el backend ni usar saldos parciales del navegador como autoridad en API. Cobertura Local de referencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
 
 - Todo agente funcional define bloqueos y siguiente acción; todo agente técnico conserva códigos estables y aplica `docs/arquitectura/feedback_operativo_y_errores.md`. El frontend localiza por código, no expone diagnósticos backend y restaura el estado confirmado cuando una mutación falla.
@@ -1200,6 +1204,8 @@ Entregables:
 
 ### Custodio de manuales funcionales de la solucion
 
+CHG-275: manuales/guía describen Local nuevo y QA base b63cdad por separado; plan `docs/operaciones/release_qa_20260914.md`. Revisar evidencia inicial/final, límites y caducidad, margen sobre costo y feedback transversal al promover. No convertir omisiones DB o revisión documental en aceptación funcional.
+
 **Rol principal:** crear y mantener manuales de uso de ERClave por modulo para usuarios operativos, supervisores y administradores, separados de la documentacion de desarrollo.
 
 **Mision:** traducir el comportamiento vigente de la solucion a explicaciones claras de conceptos, pantallas, campos, estados, transiciones, procedimientos, permisos, mensajes e integraciones, manteniendo una fuente Markdown versionable y un Word distribuible por modulo.
@@ -1825,3 +1831,17 @@ CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–26
 ## Release QA verificado CHG-270
 
 CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
+
+## Documentación funcional QA CHG-271
+
+El Custodio de manuales y los agentes de negocio/técnicos de los siete módulos revisan los manuales contra el release QA b63cdad. Se regeneran Word y guía del tester; APIs sin cambios. Incidencia por verificar: montaje de bandeja de sobrantes de Mantenimiento. Compras directas: API disponible, alta UI no expuesta. El estado desplegado no equivale a UAT aprobada. Registro en docs/manuales_solucion/REGISTRO.md y entrega en docs/qa/ENTREGA_TESTER.md.
+
+
+## Productos y servicios: margen esperado CHG-273
+
+CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración Local `20260913_0035` aplicada; QA conserva `20260908_0034` y release b63cdad. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
+
+
+## Evidencia de servicios CHG-274
+
+CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.

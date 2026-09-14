@@ -52,7 +52,7 @@ const requiredAppTokens = [
   'tone === "danger" ? "alert" : "status"',
   "function renderModuleLoadError(",
   "escapeHtml(String(error || \"\"))",
-  "box.setAttribute(\"role\", \"alert\")",
+
   "showApiError(error,messages[code]||t(\"orderInvalidTransition\"))"
 ];
 for (const token of requiredAppTokens) {
