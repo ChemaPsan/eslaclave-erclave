@@ -1,5 +1,11 @@
 # ERClave - Ventas y Clientes
 
+## Feedback de formularios Local CHG-272
+
+Clientes resuelve rutas anidadas de contacto y Cotizaciones identifica la segunda partida sin marcar la primera; conserva los datos capturados en el rechazo. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+
+Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+
 ## Coherencia de formularios Local (CHG-262)
 
 La planeacion de una orden de servicio usa controles de fecha desde el primer render y conserva las fechas recuperadas del backend. El registro de tiempo respeta el limite contractual de 1440 minutos. Las pruebas nuevas usan respuestas mutantes interceptadas, sin crear ordenes ni registrar costos reales. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
@@ -156,3 +162,8 @@ CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confi
 Las tarjetas indican Borrador → Emitir cotización → Cotizada → Aprobar cotización → Aprobada. Emitir requiere sales.quote.submit y aprobar sales.quote.approve. Cuando falte autoridad se orienta a solicitar intervención del usuario autorizado o administrador de roles. La reparación del catálogo/Owner de pruebas fue exclusiva de Local; contratos y ciclo backend no cambian.
 
 Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Disponibilidad QA CHG-270
+
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.

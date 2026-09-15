@@ -13,6 +13,100 @@ tags:
 - name: Orders
 - name: Machines
 paths:
+  /v1/production/orders/{order_id}/service-evidence/{phase}:
+    post:
+      x-required-module: production
+      x-permissions:
+      - production.order.start
+      - production.order.wait_resources
+      - production.order_stage.complete
+      operationId: saveProductionServiceEvidence
+      summary: Record immutable service start or finish evidence
+      description: Only service recipes. Start requires production.order.start or production.order.wait_resources;
+        finish requires production.order_stage.complete. Written description is required;
+        up to three optional attachments. Retry with identical content returns the recorded
+        evidence. All attachments expire 365 days after upload; written evidence remains.
+        Images are normalized to metadata-free WebP <=307200 bytes, documents <=2097152
+        bytes.
+      parameters:
+      - &id001
+        name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - &id002
+        name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: phase
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - start
+          - finish
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceEvidenceRequest'
+      responses:
+        '200':
+          description: Written evidence and metadata only; never attachment bytes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceEvidenceRead'
+        '403':
+          description: Permission denied
+        '409':
+          description: Product order, terminal order, missing start evidence or differing
+            immutable evidence
+        '413':
+          description: Request exceeds 21 MiB
+        '422':
+          description: Invalid description, file format or file limits
+  /v1/production/orders/{order_id}/service-evidence/files/{file_id}:
+    get:
+      x-required-module: production
+      x-permissions:
+      - production.order.read
+      operationId: downloadProductionServiceEvidence
+      summary: Download private unexpired evidence
+      description: Requires production.order.read and matching tenant. No public URL
+        or caching. Expired files are unavailable even before physical cleanup.
+      parameters:
+      - *id001
+      - *id002
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Attachment
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '403':
+          description: Permission denied
+        '404':
+          description: Not found for tenant/order
+        '410':
+          description: Retention expired
   /v1/production/warehouse-material-requests:
     get:
       tags:
@@ -1847,6 +1941,8 @@ components:
           type: string
         expected_margin:
           type: number
+          minimum: 0
+          description: Expected profit over cost percentage, finite and nonnegative with no business upper limit. For example, 400 means 400 percent profit over cost; not gross margin over revenue.
         description:
           type: string
         inventory_item_id:
@@ -1972,6 +2068,8 @@ components:
           type: string
         expected_margin:
           type: number
+          minimum: 0
+          description: Expected profit over cost percentage, finite and nonnegative with no business upper limit. For example, 400 means 400 percent profit over cost; not gross margin over revenue.
         description:
           type: string
         inventory_item_id:
@@ -1996,6 +2094,8 @@ components:
           type: string
         expected_margin:
           type: number
+          minimum: 0
+          description: Expected profit over cost percentage, finite and nonnegative with no business upper limit. For example, 400 means 400 percent profit over cost; not gross margin over revenue.
         description:
           type: string
         inventory_item_id:
@@ -2268,6 +2368,13 @@ components:
     ProductionOrder:
       type: object
       properties:
+        is_service_order:
+          type: boolean
+          description: Derived from the product/service belonging to the source recipe.
+        service_evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceEvidenceRead'
         id:
           type: string
         code:
@@ -3123,6 +3230,13 @@ components:
       title: ValidationError
     ProductionOrderRead:
       properties:
+        is_service_order:
+          type: boolean
+          description: Derived from the product/service belonging to the source recipe.
+        service_evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceEvidenceRead'
         id:
           type: string
           title: Id
@@ -3486,3 +3600,67 @@ components:
       required:
       - return_id
       title: MaterialReturnReconcile
+
+    ServiceEvidenceRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - description
+      properties:
+        description:
+          type: string
+          minLength: 3
+          maxLength: 4000
+        files:
+          type: array
+          maxItems: 3
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - filename
+            - content_base64
+            properties:
+              filename:
+                type: string
+                minLength: 1
+                maxLength: 180
+              content_base64:
+                type: string
+                minLength: 1
+                maxLength: 6990508
+    ServiceEvidenceRead:
+      type: object
+      properties:
+        id:
+          type: string
+        phase:
+          type: string
+          enum:
+          - start
+          - finish
+        description:
+          type: string
+        actor_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        files:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              filename:
+                type: string
+              media_type:
+                type: string
+              size_bytes:
+                type: integer
+              expires_at:
+                type: string
+                format: date-time
+              expired:
+                type: boolean

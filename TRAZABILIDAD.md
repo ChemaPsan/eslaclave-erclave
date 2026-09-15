@@ -4337,3 +4337,143 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | Ningún contrato funcional adicional; promueve contratos CHG-255–268. GET health/ready/version/openapi.json en siete APIs; workflows GitHub. Matriz y fronteras en docs/operaciones/release_qa_20260908.md. |
 | Validacion | 54 navegador, 262 backend (55 omitidas sin DB), validadores y dos pruebas sin cloud de promoción/rollback. CI y evidencia del despliegue pendientes de ejecución sobre candidato publicado. |
 | Observaciones | Preparación Local y preflight QA de lectura. No afirmar release completado hasta registrar SHA/runs/digests/revisiones/Hosting. Base requiere forward-fix/PITR; servicios tienen compensación y Hosting conserva release anterior. |
+
+
+### CHG-270
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-09 |
+| Cambio | Publicación completa, release QA verificado y handoff para otra computadora |
+| Autor | Codex |
+| Archivos | Documentos de estado/inicio/pendientes/decisiones y REANUDACION_CHG269; expediente release_qa_20260908, arquitectura/diagrama, infra/qa, siete módulos, AGENTES, validador de agentes con head QA vigente y trazabilidad. |
+| Secciones | Git main, SHA, gates, imágenes, revisiones, base, Hosting, UAT y continuidad |
+| Agentes consultados | Arquitectura, Seguridad, QA/Release, API, Datos/Custodio DB, Sinergia y siete módulos; consulta documental sin delegación. Skills qa-release/environment-boundaries/db-migration. |
+| Descripcion | Publica todos los cambios actualizados, fusiona PR #14 y promueve b63cdad mediante candidato 34389669031 y release 34390476667. Siete servicios 100%, migraciones 0030–0034/configuración exitosas y frontend servido validado. |
+| Motivo | Autorización explícita para subir el repo, abrirlo desde otra computadora y completar promoción QA para el tester. |
+| Impacto | QA head 20260908_0034, mismos digests aprobados; datos existentes preservados. Main recibe después este cierre documental, sin reconstrucción funcional. |
+| APIs afectadas | Sin cambios de contratos adicionales. GET /health, /ready, /version, /openapi.json de siete APIs; GET session/context, warehouse-material-requests de Production/Maintenance, material-returns de Inventory, workers de HR, service-orders de Sales y service-acceptances de Purchasing para rechazo sin token/token inválido. Rutas y alcance completos en expediente. |
+| Validacion | 262 backend (55 omitidas sin DB), 54 navegador y dos pruebas de tráfico Local; CI PR/candidato y release exitosos. Siete smokes candidatos/estables, rechazo 401/403 y cuatro hashes Hosting idénticos al artefacto. Documentación y diff verificados. |
+| Observaciones | Sin copia de base Local, datos funcionales nuevos, IAM ni Producción. UAT autenticada y aislamiento con identidades reales pendientes del tester. Rollback exacto registrado; no se ejecutó compensación. |
+
+### CHG-271
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-10 |
+| Cambio | Sincroniza manuales funcionales y guía del tester con QA b63cdad |
+| Autor | Codex |
+| Archivos | Siete fuentes/Word de manuales, README/REGISTRO, guía QA Markdown/Word, ENTREGA_TESTER, matriz de ejecución, generadores documentales, contexto, AGENTES y trazabilidad. |
+| Secciones | Uso por rol, estados, confirmaciones físicas, servicios, permisos, errores, casos, alcance y límites conocidos |
+| Agentes consultados | Custodio de manuales; negocio/técnicos de Producción, Inventory y Mantenimiento mediante agente manuales_operativos, Compras/Ventas mediante manuales_comerciales; Administración/RH y QA/Seguridad/Sinergia mediante consulta documental local. Skills solution-manuals y documents. |
+| Descripcion | Reemplaza instrucciones obsoletas de consumo automático y capacidades solo Local; explica Almacén, aceptación por solicitante, cotizaciones y UX vigente. Regenera documentos desde fuentes y prepara paquete local distribuible con guía y matriz sin ejecutar. |
+| Motivo | Entregar al tester documentación de la versión realmente desplegada en QA. |
+| Impacto | Documentación y herramientas de generación; ningún cambio funcional ni operación de ambiente. No se publica en GitHub. |
+| APIs afectadas | Ninguna. Contratos y código consultados en lectura; no hay endpoints modificados ni llamados de negocio. |
+| Validacion | Revisión semántica cruzada; ocho Word y 47 páginas finales renderizadas/revisadas; 1257 fragmentos de fuentes verificados sin omisiones. Guía/matriz de 56 casos sin ejecutar. npm run verify aprobado: 262 pruebas backend, 55 omitidas sin base; validadores/compilación aprobados. ZIP y hashes de todos sus archivos comprobados. |
+| Observaciones | UAT autenticada pendiente. Bandeja origen de sobrantes de Mantenimiento pendiente de verificación por discrepancia de selector; compra directa no expuesta en formulario UI. No se sustituyen flujos con movimientos manuales. |
+
+
+### CHG-272
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-13 |
+| Cambio | Feedback corregible transversal en formularios y guardrail para ajustes futuros |
+| Autor | Codex |
+| Archivos | frontend/app.js, api/client.js, features/form-feedback.js y CSS, form-bindings.js, i18n/api-errors/translations/form-business-errors, Backoffice; tests/e2e/form-feedback, backoffice-form-feedback y module-form-feedback; config Playwright, package, CI, validadores, skill erclave-form-feedback, AGENTS/AGENTES, arquitectura, siete modulos, contexto e informe formularios_feedback_2026-09-13. |
+| Secciones | Errores estructurados, bindings, conservacion de captura, ES/EN, ARIA/foco, campos condicionales y regresion |
+| Agentes consultados | Reglas AGENTS/AGENTES, arquitectura de feedback/gobierno documental/fronteras y skill form-feedback; revision complementaria delegada de Backoffice y pruebas MAIN de siete modulos. Se preservan ownership y autoridades existentes. |
+| Descripcion | Captura formulario propietario antes del request; enlaza errores por rutas exactas y orden/identidad enviados, conserva captura y renderiza resumen seguro. Registra 54 variantes, catalogo ES/EN de 244 codigos y 95 reglas schema; obliga skill y regresion futura mediante validadores/CI. |
+| Motivo | El tester encontro un mensaje que pedia revisar campos marcados sin identificar ni marcar el error en entrada de Almacen. Se corrige el mecanismo sin inventar la causa exacta de la captura. |
+| Impacto | Frontend compartido de siete modulos y Backoffice, solo Local. Sin cambios backend, contratos, migraciones, permisos, datos operativos o releases. |
+| APIs afectadas | Contratos modificados: ninguno. Consumo frontend sin cambio de POST inventory/movements, production/recipes, hr/workers, maintenance/orders y orders/{id}/time-entries, purchasing/suppliers y receipts, roles y catalogs/code-sequences/{document_type}/next; PATCH production/product-services/{id}, sales/customers/{id} y quotes/{id}; Backoffice POST provisioning/tenant-onboarding, PATCH backoffice/tenants/{tenant_id}, GET backoffice/tenants y usage. Prefijo /v1; matriz completa en informe. Backend/OpenAPI no tocados. |
+| Validacion | 174 browser aprobadas sin duplicados: 98 offline (94 + 4, ambos exit 0; incluyen 14 Backoffice), 22 MAIN y 54 regresion general de ocho archivos previos. Rechazos nuevos simulados sin persistir comandos. Verify/validate aprobados: validadores/compilacion, 262 backend, 55 omitidas sin DB y sintaxis 79. Skill valida y diff limpio. Revision visual claro/oscuro 390 px y CSS zoom2 sin overflow; no equivale a zoom real del navegador. Registro de wiring no acredita cobertura exhaustiva de negocio. |
+| Observaciones | Preserva CHG-271/manuales de QA b63cdad. UAT y causa exacta de la peticion original pendientes. Sin deploy, migracion, seed ni mutaciones operativas reales. Informe docs/auditorias/formularios_feedback_2026-09-13.md. |
+
+
+### CHG-273
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-13 |
+| Cambio | Margen esperado sin tope porcentual en productos y servicios |
+| Autor | Codex |
+| Archivos | frontend/app.js e i18n/translations.js; production-service schemas y pruebas; migración20260913_0035; OpenAPI Production; prueba frontend-contracts; skill form-feedback; AGENTES, módulo Producción, modelo/API/diagrama, contexto e informe margen_esperado_2026-09-13.md. |
+| Secciones | Captura y lectura expected_margin, límites de API y almacenamiento, rollback y regresión |
+| Agentes consultados | Fichas AGENTES de Producción y reglas transversales Arquitectura/Datos/QA; skills erclave-feature, erclave-form-feedback, erclave-environment-boundaries y erclave-db-migration. |
+| Descripcion | Elimina máximo100 y Numeric(9,4); acepta valores finitos no negativos sin tope porcentual de negocio. Ayuda ES/EN aclara utilidad sobre costo. La tarjeta conserva el valor guardado. |
+| Motivo | Usuario requiere400% o más, por ejemplo servicio de costo900 y venta200000. |
+| Impacto | Solo Local, migración0035 aplicada preservando datos; sin QA, seeds ni cambios de permisos. |
+| APIs afectadas | production-service POST /v1/production/product-services (production.product_service.create) y PATCH /v1/production/product-services/{product_service_id} (production.product_service.update): expected_margin acepta valores finitos >=0 superiores100; estructura preservada. GET colección y detalle mantienen estructura y describen la semántica. Otros servicios no tocados. |
+| Validacion | 14 pruebas focalizadas aprobadas: API create/update ambos tipos, valores0/100/400/22122.22/1000000 y rechazo negativos/no finitos; PostgreSQL real prueba upgrade/downgrade, preservación de datos y bloqueo de reversa incompatible. Navegador23+98 aprobadas. Verify275 aprobadas/56 omitidas sin DB; de ellas1 margen probada aparte,55 generales previas pendientes. API Local reiniciada, head0035 y esquema servido verificados. |
+| Observaciones | Preserva CHG271/272. Reversa no recorta ni redondea; requiere resolver valores incompatibles explícitamente. Sin deploy ni cambios QA. |
+
+
+### CHG-274
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-13 |
+| Cambio | Evidencia inicial/final de servicios con fotos optimizadas y adjuntos por365 días |
+| Autor | Codex |
+| Archivos | Production schemas/API/repos/evidence_files/evidence_repository/evidence_lifecycle/main; migración0036; pyproject; Production OpenAPI; frontend app/API/client/features/form-bindings/service-evidence/CSS/i18n; pruebas backend/browser; .gitignore; política GCS; contexto/modelo/ownership/API/diagrama/módulo/AGENTES e informe. |
+| Secciones | Transiciones de servicio, avance100%, captura y consulta, almacenamiento privado, optimización/caducidad, permisos y regresión |
+| Agentes consultados | Fichas de Producción y transversales Arquitectura/Datos/Seguridad/QA en AGENTES; skills feature/form-feedback/environment-boundaries/db-migration y normas de ownership/feedback. |
+| Descripcion | Exige texto inicial antes de espera/inicio y texto final antes de completar todas las etapas. Hasta3 adjuntos opcionales por momento, fotos <=300KiB optimizadas, documentos <=2MiB; elimina adjuntos a365 días y conserva texto/orden. |
+| Motivo | Usuario requiere evidencia de cómo se recibe y termina un servicio, límites de almacenamiento y retención anual de todos los adjuntos. |
+| Impacto | Solo Local; migración0036 aplicada. Productos sin cambio de reglas. Sin edición de órdenes reales, seeds ni QA. |
+| APIs afectadas | Production POST /v1/production/orders/{order_id}/service-evidence/{phase}, GET /v1/production/orders/{order_id}/service-evidence/files/{file_id}; GET órdenes agrega metadata; PATCH /orders/{order_id}/status y /order-stages/{stage_id} agrega precondiciones de servicio. Permisos y matriz completa en informe. |
+| Validacion |19 focalizadas aprobadas (14 archivo/optimización,3 API,2 PostgreSQL);185 browser aprobadas. Verify292 aprobadas/58 omitidas sin DB,3 de estas últimas probadas aparte entre margen/evidencia,55 generales pendientes. Capturas390/760/1280 y oscuro revisadas, reversa0036 y vencimiento probados. Informe evidencia_servicios_2026-09-13.md. |
+| Observaciones | No despliegue remoto. QA requiere bucket privado/lifecycle365d sin retención adicional y variable ERCLAVE_EVIDENCE_BUCKET. Adjunto vencido devuelve410; limpieza Local al inicio/cada hora. No se sobrescribe evidencia guardada. |
+
+### CHG-275
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-14 |
+| Cambio | Manuales y preparación de QA para formularios, margen y evidencia de servicios |
+| Autor | Codex |
+| Archivos | Manuales fuentes/Word/README/REGISTRO, guía Word/Markdown, matriz/entrega tester, tools/build-functional-document.py, qa-release.yml, fixture production warehouse, plan release_qa_20260914.md, flujo Local QA, infra README, contexto, AGENTES y TRAZABILIDAD. |
+| Secciones | Uso operativo, alcance por ambiente, regresión, bucket/IAM, migraciones, gates y rollback |
+| Agentes consultados | Fichas Arquitectura, Seguridad, QA/Release, Datos/Custodio DB, APIs, Producción negocio/técnico, consumidores y Custodio manuales; auditor independiente qa_db_audit. Skills environment-boundaries, qa-release, solution-manuals y documents. |
+| Descripcion | Actualiza siete manuales y guía; agrega nueve casos (65 totales). Prepara variable de bucket en pipeline, plan de promoción y distingue base QA de cambios Local. Audita 55 integraciones históricas y ejecuta selección segura sin tenants ajenos. |
+| Motivo | Usuario solicita documentación/manuales y preparar promoción QA del corte de formularios, margen y evidencia. |
+| Impacto | Cambios Local; no publicación/PR ni mutaciones QA. QA /version confirmado b63cdad en siete APIs. Migraciones 0035/0036 y bucket privado pendientes de gates remotos. |
+| APIs afectadas | Ninguna modificada por CHG-275. Consumidos sin cambio: GET /version de siete servicios. Matriz completa Production del candidato en release_qa_20260914.md. |
+| Validacion | 29 pruebas seleccionadas aprobadas sin skips (26 históricas y3 nuevas). Verify aprobado:292 backend/58 skips sin DB, validadores/sintaxis80/compilación. Ocho DOCX reabiertos y fragmentos completos; revisión visual bloqueada por renderizador/Word, documentada en REGISTRO. |
+| Observaciones | 29 integraciones históricas bloqueadas por fixtures de otros tenants/cleanup amplio; UAT QA, bucket/IAM, revisión visual final y candidato inmutable pendientes. Preparación no equivale a certificación ni autorización de despliegue. |
+
+### CHG-276
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-14 |
+| Cambio | Candidato QA solicitado: seguridad de retención y fixtures de integración aislados |
+| Autor | Codex |
+| Archivos | Production evidence_files/test_service_evidence; fixtures Maintenance/Purchasing/Sales/Admin; contexto; AGENTES; plan release_qa_20260914.md; TRAZABILIDAD. |
+| Secciones | Certificación Local, lifecycle exacto, pruebas multitenant y estado del despliegue |
+| Agentes consultados | Arquitectura, Seguridad, QA/Release, Datos/Custodio DB, APIs y Producción según fichas; agentes evidence_release_review y safe_maintenance_tests. Skills qa-release/environment-boundaries; navegador computer-use para consulta Cloud. |
+| Descripcion | Exige una única regla de borrado a365 días, evitando caducidad prematura por reglas adicionales. Elimina cleanup de Maintenance basado en baseline; usa IDs propios. Purchasing usa tenants UUID y cleanup exacto. Guards explícitos para pruebas multitenant Local. |
+| Motivo | Cerrar riesgos detectados al ejecutar la promoción QA solicitada por el usuario. |
+| Impacto | Local; nueva rama candidata. Sin cambios de contratos, datos operativos o estados de producto. Acceso GitHub comprobado; falta acceso Cloud de la sesión actual y autorización de fixtures multitenant. |
+| APIs afectadas | Ninguna modificada en CHG-276. Contratos del delta completo en matriz del plan de release. Lectura GitHub repositorio/environments/PRs/variable y consola Cloud Storage; ninguna mutación cloud. |
+| Validacion | 24 pruebas de archivos/retención aprobadas,9 Maintenance PostgreSQL aprobadas; verify aprobado:302 backend/58 skips sin DB; validadores, compilación y sintaxis80 correctos. Diff-check y compilación sin errores. |
+| Observaciones | 20 integraciones históricas por ejecutar tras autorización; bucket/IAM y revisión visual Word pendientes. PR #15 publicado en borrador sobre 8f4943f; CI inicial34816849209 en ejecución al registrar. No main merge, candidato ni release QA; detenido por accesoCloud y autorización de fixtures. |
+
+### CHG-277
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-14 12:16 America/Mexico_City |
+| Cambio | Aprovisionamiento del bucket QA y cierre de integraciones PostgreSQL |
+| Agentes consultados | Arquitectura, Seguridad, QA/Release y Datos/Custodio DB; revisiones evidence_release_review, safe_maintenance_tests y qa_db_audit del mismo corte. |
+| Autor | Codex |
+| Archivos | docs/contexto/ESTADO_ACTUAL.md, PENDIENTES.md, INICIO_SESION.md; docs/operaciones/release_qa_20260914.md; TRAZABILIDAD.md |
+| Secciones | Estado actual de promoción y prerrequisitos |
+| Descripcion | Registra bucket privado con lifecycle365 y variable GitHub verificada; autorización IAM mínima y pruebas multitenant Local. |
+| Motivo | Continuar despliegue QA solicitado con la cuenta Cloud habilitada. |
+| Impacto | Escritura infraestructura QA: bucket y lifecycle; variable repositorio. Sin cambios funcionales ni datos QA. Rol mínimo de cuatro permisos creado y asignado solo al bucket tras autorización específica. |
+| Validacion | verify:postgres:360 aprobadas/cero omitidas, validadores y compilación correctos. Consola confirma creación, privacidad, bucket vacío y regla365; API GitHub confirma variable. |
+| APIs afectadas | Ninguna API ERClave modificada. Configuración Cloud Storage y variable GitHub; sin deploy. |
+| Observaciones | Faltan smoke, candidato y release protegidos; revisión visual Word. No afirmar QA actualizado. |

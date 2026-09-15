@@ -1,3 +1,4 @@
+import { hasServiceEvidence, serviceEvidenceFields, toggleServiceEvidence, saveServiceEvidenceFromForm, serviceEvidenceHistory, downloadServiceEvidence } from "./features/service-evidence.js";
 import { modules, erpSubmoduleCatalog } from "./data/modules.js";
 import { defaultRecipes } from "./data/resources.js";
 import { mockDb } from "./data/mockDb.js";
@@ -9,6 +10,7 @@ import { getWarehousePurchaseReceipts, getPurchasedServiceAcceptances, acceptPur
 import { getWarehouseSalesDeliveries } from "./api/sales.js";
 import { getInventoryTransfers, transitionInventoryTransfer } from "./api/inventory.js";
 import { createErrorFeedback } from "./features/error-feedback.js";
+import { installFormFeedback, renderFormFeedback, showFormApiError, getActiveFeedbackForm } from "./features/form-feedback.js";
 import { installListPagination } from "./features/list-pagination.js";
 import {
   createTenantBranch,
@@ -211,6 +213,7 @@ function getNavigationModules() {
   });
 }
 
+installFormFeedback({ getLanguage: () => state.lang });
 installMutationFeedback({ getMessage: () => t("operationInProgress") });
 
 function enhanceEntitySelect(select) {
@@ -608,7 +611,7 @@ function openStandardReportModal(module,report){
     if(values.date_from&&values.date_to&&values.date_from>values.date_to){renderFormErrors([en?"The start date cannot be after the end date.":"La fecha inicial no puede ser posterior a la final."]);return;}
     const submit=form.querySelector('[type="submit"]');submit.disabled=true;submit.textContent=en?"Generating…":"Generando…";
     try{const result=await reportDownloaders[module.id](report.code,{...values,lang:state.lang});if(result.empty){showToast(en?"No data matched the selected filters.":"No hay datos para los filtros seleccionados.","warning");}else{if(!result.filename||result.filename==="report.csv")result.filename=`${module.id}-${report.code}-${new Date().toISOString().slice(0,10)}.csv`;saveReportBlob(result);showToast(en?"Report generated.":"Reporte generado.","success");closeModal();}}
-    catch(error){renderFormErrors([userFacingError(error,en?"The report could not be generated.":"No se pudo generar el reporte.")]);}
+    catch(error){renderFormErrors([error]);}
     finally{submit.disabled=false;submit.textContent=en?"Generate":"Generar";}
   });
 }
@@ -618,6 +621,7 @@ function userFacingError(error, fallback = "") {
 }
 
 function showApiError(error, fallback = "") {
+  if (showFormApiError(error)) return;
   errorFeedback.show(error, fallback);
 }
 
@@ -1117,7 +1121,7 @@ function inviteAdminUser(form) {
   const roleId = String(formData.get("role_id") || "");
   const email = String(formData.get("email") || "").trim();
   state.adminApi = { ...state.adminApi, status: "loading", error: "" };
-  render();
+  renderFormFeedback(form, [], { lang: state.lang });
   inviteTenantUser({
     display_name: String(formData.get("display_name") || "").trim(),
     email,
@@ -1130,8 +1134,8 @@ function inviteAdminUser(form) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
-      render();
+      state.adminApi = { status: "ready", data: state.adminApi.data, error: "" };
+      renderFormFeedback(form, [error], { lang: state.lang });
     });
 }
 
@@ -1443,7 +1447,7 @@ function createAdminRole(form) {
   if (getApiMode() !== "api" || state.adminApi.status === "loading") return;
   const formData = new FormData(form);
   state.adminApi = { ...state.adminApi, status: "loading", error: "" };
-  render();
+  renderFormFeedback(form, [], { lang: state.lang });
   createTenantRole({
     code: String(formData.get("code") || "").trim(),
     name: String(formData.get("name") || "").trim(),
@@ -1455,8 +1459,8 @@ function createAdminRole(form) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
-      render();
+      state.adminApi = { status: "ready", data: state.adminApi.data, error: "" };
+      renderFormFeedback(form, [error], { lang: state.lang });
     });
 }
 
@@ -1660,7 +1664,7 @@ function getOrganizationContact(payload) {
   };
 }
 
-function saveAdminOrganization(organization, message) {
+function saveAdminOrganization(organization, message, form = null) {
   if (getApiMode() !== "api") {
     mockDb.saveAdminOrganization(organization);
     showToast(message);
@@ -1669,7 +1673,7 @@ function saveAdminOrganization(organization, message) {
   }
   if (state.adminApi.status === "loading") return;
   state.adminApi = { ...state.adminApi, status: "loading", error: "" };
-  render();
+  if (form) renderFormFeedback(form, [], { lang: state.lang });
   updateTenantSetting("organization.profile", { module_code: "admin", value: organization })
     .then(() => {
       showToast(message);
@@ -1677,8 +1681,9 @@ function saveAdminOrganization(organization, message) {
       loadAdminApiDashboard();
     })
     .catch((error) => {
-      state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
-      render();
+      state.adminApi = { status: "ready", data: state.adminApi.data, error: "" };
+      if (form) renderFormFeedback(form, [error], { lang: state.lang });
+      else showApiError(error);
     });
 }
 
@@ -1692,7 +1697,7 @@ function updateAdminCorporate(form) {
     phone: String(formData.get("phone") || "").trim(),
     ...getOrganizationContact(formData)
   };
-  saveAdminOrganization({ ...organization, corporate }, "Corporativo actualizado.");
+  saveAdminOrganization({ ...organization, corporate }, "Corporativo actualizado.", form);
 }
 
 function createAdminLegalEntity(form) {
@@ -1709,7 +1714,7 @@ function createAdminLegalEntity(form) {
   if (getApiMode() === "api") {
     if (state.adminApi.status === "loading") return;
     state.adminApi = { ...state.adminApi, status: "loading", error: "" };
-    render();
+    renderFormFeedback(form, [], { lang: state.lang });
     createTenantLegalEntity(legalEntity)
       .then((created) => {
         showToast(`Razon social ${created.legal_name} registrada.`);
@@ -1717,8 +1722,8 @@ function createAdminLegalEntity(form) {
         loadAdminApiDashboard();
       })
       .catch((error) => {
-        state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
-        render();
+        state.adminApi = { status: "ready", data: state.adminApi.data, error: "" };
+        renderFormFeedback(form, [error], { lang: state.lang });
       });
     return;
   }
@@ -1741,7 +1746,7 @@ function createAdminBranch(form) {
   if (getApiMode() === "api") {
     if (state.adminApi.status === "loading") return;
     state.adminApi = { ...state.adminApi, status: "loading", error: "" };
-    render();
+    renderFormFeedback(form, [], { lang: state.lang });
     createTenantBranch(branch)
       .then((created) => {
         showToast(`Sucursal ${created.name} registrada.`);
@@ -1749,8 +1754,8 @@ function createAdminBranch(form) {
         loadAdminApiDashboard();
       })
       .catch((error) => {
-        state.adminApi = { status: "error", data: state.adminApi.data, error: userFacingError(error, "API unavailable") };
-        render();
+        state.adminApi = { status: "ready", data: state.adminApi.data, error: "" };
+        renderFormFeedback(form, [error], { lang: state.lang });
       });
     return;
   }
@@ -2682,7 +2687,7 @@ function mapApiOrderRecipeSnapshot(item, fallbackRecipe) {
     steps: (version.stages || []).filter((stage) => stage.status === "active").map((stage) => stage.name)
   };
 }
-function mapApiOrder(item, recipes){const recipe=recipes.find((entry)=>entry.id===item.recipe_id);const recipeSnapshot=mapApiOrderRecipeSnapshot(item,recipe);return {id:item.id,code:item.code,productServiceId:item.product_service_id,recipeId:item.recipe_id,recipeVersion:recipeSnapshot.version||1,recipeSnapshot,recipeName:recipeSnapshot.product||item.product_service_id,quantity:Number(item.quantity),unit:item.unit,status:mapApiOrderStatus(item.status),priority:({high:"Alta",medium:"Media",low:"Baja"})[item.priority]||item.priority,plannedStartDate:item.planned_start_at?.slice(0,10)||"",plannedEndDate:item.planned_end_date||"",plannedDurationDays:Number(item.planned_duration_days||1),dueDate:item.required_at?.slice(0,10)||"",center:recipeSnapshot.center||"Produccion",responsibleWorkerId:item.responsible_worker_id,responsible:item.responsible_name,materialReturns:item.material_returns||[],plannedCost:Number(item.planned_cost||0),actualCost:item.actual_cost==null?null:Number(item.actual_cost),overallProgress:Number(item.overall_progress_percent||0),resources:(item.resources||[]).map((resource)=>({id:resource.id,type:resource.resource_type,refId:resource.resource_ref_id,code:resource.resource_code,name:resource.resource_name,unit:resource.unit,plannedQuantity:Number(resource.planned_quantity),actualQuantity:resource.actual_quantity==null?null:Number(resource.actual_quantity),unitCost:Number(resource.unit_cost),plannedCost:Number(resource.planned_cost),actualCost:resource.actual_cost==null?null:Number(resource.actual_cost),returnedQuantity:(item.material_returns||[]).filter(r=>r.resource_id===resource.id).reduce((sum,r)=>sum+Number(r.quantity),0),reservationIds:resource.reservation_ref_ids||[]})),releaseStatus:"Liberada",areas:(item.stages||[]).map((stage)=>({id:stage.id,recipeStageId:stage.recipe_stage_id,area:stage.name,phaseNumber:Number(stage.sort_order||0),weightPercent:Number(stage.weight_percent||0),responsibleWorkerId:stage.responsible_worker_id,responsible:stage.responsible_name||"",status:mapApiStageStatus(stage.status),progress:Number(stage.progress_percent||0),plannedMinutes:stage.planned_minutes,actualMinutes:stage.actual_minutes,actualCostFactor:1})),createdAt:item.created_at?.slice(0,10)||""};}
+function mapApiOrder(item, recipes){const recipe=recipes.find((entry)=>entry.id===item.recipe_id);const recipeSnapshot=mapApiOrderRecipeSnapshot(item,recipe);return {id:item.id,code:item.code,productServiceId:item.product_service_id,recipeId:item.recipe_id,recipeVersion:recipeSnapshot.version||1,recipeSnapshot,recipeName:recipeSnapshot.product||item.product_service_id,quantity:Number(item.quantity),unit:item.unit,status:mapApiOrderStatus(item.status),priority:({high:"Alta",medium:"Media",low:"Baja"})[item.priority]||item.priority,plannedStartDate:item.planned_start_at?.slice(0,10)||"",plannedEndDate:item.planned_end_date||"",plannedDurationDays:Number(item.planned_duration_days||1),dueDate:item.required_at?.slice(0,10)||"",center:recipeSnapshot.center||"Produccion",responsibleWorkerId:item.responsible_worker_id,responsible:item.responsible_name,isService: Boolean(item.is_service_order),serviceEvidence:item.service_evidence||[],materialReturns:item.material_returns||[],plannedCost:Number(item.planned_cost||0),actualCost:item.actual_cost==null?null:Number(item.actual_cost),overallProgress:Number(item.overall_progress_percent||0),resources:(item.resources||[]).map((resource)=>({id:resource.id,type:resource.resource_type,refId:resource.resource_ref_id,code:resource.resource_code,name:resource.resource_name,unit:resource.unit,plannedQuantity:Number(resource.planned_quantity),actualQuantity:resource.actual_quantity==null?null:Number(resource.actual_quantity),unitCost:Number(resource.unit_cost),plannedCost:Number(resource.planned_cost),actualCost:resource.actual_cost==null?null:Number(resource.actual_cost),returnedQuantity:(item.material_returns||[]).filter(r=>r.resource_id===resource.id).reduce((sum,r)=>sum+Number(r.quantity),0),reservationIds:resource.reservation_ref_ids||[]})),releaseStatus:"Liberada",areas:(item.stages||[]).map((stage)=>({id:stage.id,recipeStageId:stage.recipe_stage_id,area:stage.name,phaseNumber:Number(stage.sort_order||0),weightPercent:Number(stage.weight_percent||0),responsibleWorkerId:stage.responsible_worker_id,responsible:stage.responsible_name||"",status:mapApiStageStatus(stage.status),progress:Number(stage.progress_percent||0),plannedMinutes:stage.planned_minutes,actualMinutes:stage.actual_minutes,actualCostFactor:1})),createdAt:item.created_at?.slice(0,10)||""};}
 
 function loadProductionApiData() {
   state.warehouseProductionRequests={status:"idle",data:[],page:{offset:0,has_more:false},error:""};
@@ -2933,7 +2938,7 @@ function maintenanceTimeFields(order,en){
 
 function openMaintenanceTimeModal(order,en){
   modalContent.innerHTML=`<form class="recipe-form" id="maintenanceTimeModalForm"><div class="modal-head"><div><p class="eyebrow">${en?"Maintenance order":"Orden de mantenimiento"}</p><h2 id="modalTitle">${en?"Log time":"Registrar tiempo"}</h2><p class="helper-copy">${escapeHtml(order.code)} &middot; ${escapeHtml(order.title)}</p></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div>${maintenanceTimeFields(order,en)}<div class="form-errors" id="formErrors" hidden></div><div class="modal-actions"><button class="secondary-action" type="button" data-action="close-maintenance-time">${t("cancel")}</button><button class="primary-action" type="submit">${en?"Save time":"Guardar tiempo"}</button></div></form>`;
-  modalBackdrop.hidden=false;modalContent.querySelector(".modal-close").addEventListener("click",closeModal);modalContent.querySelector("[data-action='close-maintenance-time']").addEventListener("click",closeModal);modalContent.querySelector("#maintenanceTimeModalForm").addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget)),start=new Date(data.time_started_at),end=new Date(data.time_ended_at),errors=[];if(!order.assigned_worker_id)errors.push(en?"Assign a technician before logging time.":"Asigna un tecnico antes de registrar tiempo.");if(!data.time_started_at||!data.time_ended_at||end<=start)errors.push(en?"End must be after start.":"El fin debe ser posterior al inicio.");if(end>new Date())errors.push(en?"End cannot be in the future.":"El fin no puede estar en el futuro.");renderFormErrors(errors);if(errors.length)return;try{await createMaintenanceTime(order.id,{worker_id:order.assigned_worker_id,started_at:start.toISOString(),ended_at:end.toISOString(),notes:data.time_notes.trim()||null});closeModal();await loadMaintenanceApiData();render();showToast(en?"Maintenance time saved.":"Tiempo de mantenimiento guardado.");}catch(error){renderFormErrors([userFacingError(error,en?"The time could not be saved.":"No se pudo guardar el tiempo.")]);}});
+  modalBackdrop.hidden=false;modalContent.querySelector(".modal-close").addEventListener("click",closeModal);modalContent.querySelector("[data-action='close-maintenance-time']").addEventListener("click",closeModal);modalContent.querySelector("#maintenanceTimeModalForm").addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget)),start=new Date(data.time_started_at),end=new Date(data.time_ended_at),errors=[];if(!order.assigned_worker_id)errors.push(en?"Assign a technician before logging time.":"Asigna un tecnico antes de registrar tiempo.");if(!data.time_started_at||!data.time_ended_at||end<=start)errors.push(en?"End must be after start.":"El fin debe ser posterior al inicio.");if(end>new Date())errors.push(en?"End cannot be in the future.":"El fin no puede estar en el futuro.");renderFormErrors(errors);if(errors.length)return;try{await createMaintenanceTime(order.id,{worker_id:order.assigned_worker_id,started_at:start.toISOString(),ended_at:end.toISOString(),notes:data.time_notes.trim()||null});closeModal();await loadMaintenanceApiData();render();showToast(en?"Maintenance time saved.":"Tiempo de mantenimiento guardado.");}catch(error){renderFormErrors([error]);}});
 }
 
 function openMaintenanceActionModal(order,action,en){
@@ -2967,7 +2972,7 @@ function openMaintenanceActionModal(order,action,en){
       if(resolving){if(canUpdateResolution)await updateMaintenanceOrder(order.id,{diagnosis:data.diagnosis.trim(),root_cause:data.root_cause.trim()||null,work_performed:data.work_performed.trim(),verification_notes:data.verification_notes.trim()});if(needsTime&&canCreateTime&&!timeCreated){await createMaintenanceTime(order.id,{worker_id:order.assigned_worker_id,started_at:new Date(data.time_started_at).toISOString(),ended_at:new Date(data.time_ended_at).toISOString(),notes:data.time_notes.trim()||null});timeCreated=true;}result=await transitionMaintenanceOrder(order.id,"resolve",{});}
       else result=await transitionMaintenanceOrder(order.id,"cancel",{reason:data.reason.trim()});
       closeModal();await loadMaintenanceApiData();render();showToast(result.integration_status==="needs_reconciliation"?(en?"The operation still requires reconciliation.":"La operacion aun requiere conciliacion."):(resolving?(en?"Maintenance order resolved.":"Orden de mantenimiento resuelta."):(en?"Maintenance order cancelled.":"Orden de mantenimiento cancelada.")));
-    }catch(error){renderFormErrors([...(timeCreated?[en?"Time was saved. Complete the remaining correction and try resolving again.":"El tiempo ya fue guardado. Corrige lo pendiente e intenta resolver nuevamente."]:[]),userFacingError(error,en?"The order could not be resolved.":"No se pudo resolver la orden.")]);}
+    }catch(error){renderFormErrors([...(timeCreated?[en?"Time was saved. Complete the remaining correction and try resolving again.":"El tiempo ya fue guardado. Corrige lo pendiente e intenta resolver nuevamente."]:[]),error]);}
   });
 }
 function maintenanceLineMarkup(items,en){return `<div class="purchasing-requisition-line" data-maintenance-material-line><label class="preview-field purchasing-line-item"><span>${en?"Spare part":"Refaccion"}</span><select name="item_id" data-entity-selector required><option value="">${en?"Choose an item":"Selecciona un articulo"}</option>${items.map(item=>`<option value="${escapeAttribute(item.id)}" data-unit="${escapeAttribute(item.base_unit)}">${escapeHtml(item.code)} · ${escapeHtml(item.name)}</option>`).join("")}</select></label><label class="preview-field"><span>${en?"Quantity":"Cantidad"}</span><input name="quantity" type="number" min="0.000001" step="any" required></label><label class="preview-field"><span>${en?"Unit":"Unidad"}</span><input name="unit_code" readonly required></label><button class="secondary-action small-action" type="button" data-remove-maintenance-line>${en?"Remove":"Quitar"}</button></div>`;}
@@ -3056,7 +3061,7 @@ function openPurchasingCancellationModal(documentType, documentId) {
       await loadPurchasingApiData();
       showToast(t(isRequisition ? "requisitionCancelled" : "purchaseOrderCancelled"));
     } catch (error) {
-      renderFormErrors([userFacingError(error, t("purchasingCancellationFailed"))]);
+      renderFormErrors([error]);
     }
   });
 }
@@ -3137,7 +3142,7 @@ function openPurchasingSupplierModal(id=null){
   const postalCode=modalContent.querySelector('#purchasingSupplierForm [name="fiscal_postal_code"]');
   if(postalCode&&editing?.fiscal_country&&editing.fiscal_country!=="MX"){postalCode.removeAttribute("pattern");postalCode.maxLength=12;}
   modalContent.querySelector("[data-cancel-supplier-edit]")?.addEventListener("click",closeModal);
-  modalContent.querySelector("#purchasingSupplierForm")?.addEventListener("submit",async event=>{event.preventDefault();const submit=event.currentTarget.querySelector("button[type=submit]");submit.disabled=true;const data=Object.fromEntries(new FormData(event.currentTarget));const payload={...data,tax_id:data.tax_id.toUpperCase().replaceAll("-","").replaceAll(" ",""),lead_time_days:Number(data.lead_time_days)};try{if(editing){delete payload.code;await updatePurchasingSupplier(editing.id,payload);}else await createPurchasingSupplier(payload);state.purchasingSupplierEditId="";closeModal();await loadPurchasingApiData();showToast(editing?(en?"Supplier updated.":"Proveedor actualizado."):(en?"Supplier saved.":"Proveedor guardado."));}catch(error){renderFormErrors([userFacingError(error,t("supplierSaveFailed"))]);submit.disabled=false;}});
+  modalContent.querySelector("#purchasingSupplierForm")?.addEventListener("submit",async event=>{event.preventDefault();const submit=event.currentTarget.querySelector("button[type=submit]");submit.disabled=true;const data=Object.fromEntries(new FormData(event.currentTarget));const payload={...data,tax_id:data.tax_id.toUpperCase().replaceAll("-","").replaceAll(" ",""),lead_time_days:Number(data.lead_time_days)};try{if(editing){delete payload.code;await updatePurchasingSupplier(editing.id,payload);}else await createPurchasingSupplier(payload);state.purchasingSupplierEditId="";closeModal();await loadPurchasingApiData();showToast(editing?(en?"Supplier updated.":"Proveedor actualizado."):(en?"Supplier saved.":"Proveedor guardado."));}catch(error){renderFormErrors([error]);submit.disabled=false;}});
 }
 
 function purchasingRequisitionLineMarkup(items,en,line={}){
@@ -3171,7 +3176,7 @@ function renderPurchasingSubmodulePanel(module){
     modulePanel.querySelector("[data-add-requisition-line]")?.addEventListener("click",()=>lineContainer.insertAdjacentHTML("beforeend",purchasingRequisitionLineMarkup(api.items,en)));
     lineContainer?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-requisition-line]");if(!button)return;const rows=lineContainer.querySelectorAll("[data-requisition-line]");if(rows.length===1){showToast(en?"A requisition needs at least one line.":"La requisicion necesita al menos una partida.");return;}button.closest("[data-requisition-line]")?.remove();});
     lineContainer?.addEventListener("change",event=>{const row=event.target.closest("[data-requisition-line]");if(!row)return;if(event.target.matches('[name="line_type"]')){const current={line_type:event.target.value,inventory_item_id:row.querySelector('[name="inventory_item_id"]')?.value||"",description:row.querySelector('[name="description"]')?.value||"",quantity:row.querySelector('[name="quantity"]')?.value||"",unit_code:row.querySelector('[name="unit_code"]')?.value||""};row.outerHTML=purchasingRequisitionLineMarkup(api.items,en,current);return;}const select=event.target.closest('select[name="inventory_item_id"]');if(!select)return;const item=api.items.find(value=>value.id===select.value);if(!item)return;row.querySelector('[name="unit_code"]').value=item.base_unit;const description=row.querySelector('[name="description"]');if(!description.value.trim())description.value=item.name;});
-    requisitionForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f));const lines=[...f.querySelectorAll("[data-requisition-line]")].map(row=>{const lineType=row.querySelector('[name="line_type"]').value;return {line_type:lineType,inventory_item_id:lineType==="inventory_item"?(row.querySelector('[name="inventory_item_id"]')?.value||null):null,description:row.querySelector('[name="description"]').value.trim(),quantity:Number(row.querySelector('[name="quantity"]').value),unit_code:row.querySelector('[name="unit_code"]').value};});const inventoryIds=lines.filter(line=>line.line_type==="inventory_item").map(line=>line.inventory_item_id);if(new Set(inventoryIds).size!==inventoryIds.length){showToast(en?"The same item cannot be repeated; adjust its quantity in one line.":"No se puede repetir el mismo articulo; ajusta su cantidad en una sola partida.");return;}try{const payload={code:d.code,required_date:d.required_date,priority:d.priority,source_type:"manual",lines};if(editing)await updatePurchasingRequisition(editing.id,payload);else await createPurchasingRequisition(payload);state.purchasingRequisitionEditId="";await loadPurchasingApiData();showToast(editing?(en?"Requisition updated.":"Requisicion actualizada."):(en?`${lines.length} requisition lines created.`:`Requisicion creada con ${lines.length} partidas.`));}catch(error){showApiError(error,en?"The requisition could not be saved.":"No se pudo guardar la requisicion.");}});
+    requisitionForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f));const lines=[...f.querySelectorAll("[data-requisition-line]")].map(row=>{const lineType=row.querySelector('[name="line_type"]').value;return {line_type:lineType,inventory_item_id:lineType==="inventory_item"?(row.querySelector('[name="inventory_item_id"]')?.value||null):null,description:row.querySelector('[name="description"]').value.trim(),quantity:Number(row.querySelector('[name="quantity"]').value),unit_code:row.querySelector('[name="unit_code"]').value};});const inventoryIds=lines.filter(line=>line.line_type==="inventory_item").map(line=>line.inventory_item_id);if(new Set(inventoryIds).size!==inventoryIds.length){renderFormFeedback(f,[...f.querySelectorAll("[data-requisition-line]")].filter(row=>{const control=row.querySelector('[name="inventory_item_id"]');return control&&!control.disabled&&inventoryIds.filter(id=>id===control.value).length>1;}).map(row=>({control:row.querySelector('[name="inventory_item_id"]'),message:en?"This item is repeated. Keep one line and combine its quantity.":"Este artículo está repetido. Conserva una sola partida y reúne su cantidad."})),{lang:state.lang});return;}try{const payload={code:d.code,required_date:d.required_date,priority:d.priority,source_type:"manual",lines};if(editing)await updatePurchasingRequisition(editing.id,payload);else await createPurchasingRequisition(payload);state.purchasingRequisitionEditId="";await loadPurchasingApiData();showToast(editing?(en?"Requisition updated.":"Requisicion actualizada."):(en?`${lines.length} requisition lines created.`:`Requisicion creada con ${lines.length} partidas.`));}catch(error){showApiError(error,en?"The requisition could not be saved.":"No se pudo guardar la requisicion.");}});
     modulePanel.querySelectorAll("[data-edit-requisition]").forEach(button=>button.addEventListener("click",()=>{state.purchasingRequisitionEditId=button.dataset.editRequisition;render();}));
     modulePanel.querySelector("[data-cancel-requisition-edit]")?.addEventListener("click",()=>{state.purchasingRequisitionEditId="";render();});
     modulePanel.querySelectorAll("[data-cancel-requisition]").forEach(button=>button.addEventListener("click",()=>openPurchasingCancellationModal("requisition",button.dataset.cancelRequisition)));
@@ -3208,7 +3213,7 @@ function renderPurchasingSubmodulePanel(module){
     const renderReceiptLines=orderId=>{const order=openOrders.find(value=>value.id===orderId);receiptLines.innerHTML=(order?.lines||[]).filter(line=>Number(line.received_quantity)<Number(line.quantity)).map(line=>{const remaining=Number(line.quantity)-Number(line.received_quantity),inventory=line.line_type==="inventory_item";return `<div class="purchasing-requisition-line" data-receipt-line data-line-id="${escapeAttribute(line.id)}" data-remaining="${remaining}"><div class="purchasing-line-item"><strong>${escapeHtml(line.description)}</strong><small>${en?"Remaining":"Pendiente"}: ${formatNumber(remaining)} ${escapeHtml(line.unit_code)}</small></div><label class="preview-field"><span>${en?"Received quantity":"Cantidad recibida"}</span><input name="quantity" type="number" min="0" max="${remaining}" step="any" value="0"></label>${inventory?`<label class="preview-field"><span>${en?"Warehouse":"Almacen"}</span><select name="warehouse_id"><option value="">${en?"Choose a warehouse":"Selecciona un almacen"}</option>${warehouses}</select></label>`:`<input name="warehouse_id" type="hidden" value="">`}</div>`;}).join("")||`<p class="helper-copy">${en?"This order has no pending lines.":"Esta orden no tiene partidas pendientes."}</p>`;};
     receiptForm?.elements.purchase_order_id.addEventListener("change",event=>renderReceiptLines(event.target.value));
     if(sourceOrderId&&receiptForm)renderReceiptLines(sourceOrderId);
-    receiptForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f)),lines=[...f.querySelectorAll("[data-receipt-line]")].map(row=>({order_line_id:row.dataset.lineId,quantity:Number(row.querySelector('[name="quantity"]').value),warehouse_id:row.querySelector('[name="warehouse_id"]').value||null,remaining:Number(row.dataset.remaining)})).filter(line=>line.quantity>0);if(!lines.length){showToast(en?"Capture at least one received quantity.":"Captura al menos una cantidad recibida.");return;}if(lines.some(line=>line.quantity>line.remaining)){showToast(en?"A quantity exceeds its remaining balance.":"Una cantidad excede su saldo pendiente.");return;}const order=openOrders.find(value=>value.id===d.purchase_order_id);if(lines.some(line=>order?.lines.find(value=>value.id===line.order_line_id)?.line_type==="inventory_item"&&!line.warehouse_id)){showToast(en?"Select a warehouse for every inventory line.":"Selecciona un almacen para cada partida inventariable.");return;}try{await createPurchasingReceipt({code:d.code,purchase_order_id:d.purchase_order_id,received_at:new Date().toISOString(),supplier_document_reference:d.supplier_document_reference||null,lines:lines.map(({remaining,...line})=>line)});state.purchasingReceiptSourceOrderId="";await loadPurchasingApiData();showToast(t("handoffPrepared"),"success");state.operationalHandoffs={};}catch(error){showApiError(error,en?"The receipt could not be saved.":"No se pudo guardar la recepcion.");}});
+    receiptForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f)),lines=[...f.querySelectorAll("[data-receipt-line]")].map(row=>({order_line_id:row.dataset.lineId,quantity:Number(row.querySelector('[name="quantity"]').value),warehouse_id:row.querySelector('[name="warehouse_id"]').value||null,remaining:Number(row.dataset.remaining)})).filter(line=>line.quantity>0);if(!lines.length){renderFormFeedback(f,[...f.querySelectorAll('[data-receipt-line] [name="quantity"]')].map(control=>({control,message:en?"Enter a received quantity on at least one line.":"Captura una cantidad recibida en al menos una partida."})),{lang:state.lang});return;}if(lines.some(line=>line.quantity>line.remaining)){renderFormFeedback(f,[...f.querySelectorAll("[data-receipt-line]")].filter(row=>Number(row.querySelector('[name="quantity"]').value)>Number(row.dataset.remaining)).map(row=>({control:row.querySelector('[name="quantity"]'),message:en?"The quantity exceeds this line’s remaining balance.":"La cantidad supera el saldo pendiente de esta partida."})),{lang:state.lang});return;}const order=openOrders.find(value=>value.id===d.purchase_order_id);if(lines.some(line=>order?.lines.find(value=>value.id===line.order_line_id)?.line_type==="inventory_item"&&!line.warehouse_id)){renderFormFeedback(f,[...f.querySelectorAll("[data-receipt-line]")].filter(row=>Number(row.querySelector('[name="quantity"]').value)>0&&!row.querySelector('[name="warehouse_id"]').value&&row.querySelector('[name="warehouse_id"]').type!=="hidden").map(row=>({control:row.querySelector('[name="warehouse_id"]'),message:en?"Select the warehouse receiving this line.":"Selecciona el almacén que recibe esta partida."})),{lang:state.lang});return;}try{await createPurchasingReceipt({code:d.code,purchase_order_id:d.purchase_order_id,received_at:new Date().toISOString(),supplier_document_reference:d.supplier_document_reference||null,lines:lines.map(({remaining,...line})=>line)});state.purchasingReceiptSourceOrderId="";await loadPurchasingApiData();showToast(t("handoffPrepared"),"success");state.operationalHandoffs={};}catch(error){showApiError(error,en?"The receipt could not be saved.":"No se pudo guardar la recepcion.");}});
     modulePanel.querySelectorAll("[data-reconcile-receipt]").forEach(button=>button.addEventListener("click",async()=>{try{await reconcilePurchasingReceipt(button.dataset.reconcileReceipt);await loadPurchasingApiData();showToast(en?"Receipt reconciled.":"Recepcion conciliada.");}catch(error){showApiError(error,en?"The receipt could not be reconciled.":"No se pudo conciliar la recepcion.");}}));return;
   }
   if(id==="reabastecimiento"){
@@ -4715,13 +4720,13 @@ function renderSalesServiceOrderModal(record){
   modalContent.querySelectorAll("[data-service-transition]").forEach(button=>button.addEventListener("click",()=>openSalesServiceTransitionModal(record,button.dataset.serviceTransition)));
 }
 
-async function runServiceOrderMutation(event,record,operation,success){event.preventDefault();const confirmed=record.status;try{await operation(Object.fromEntries(new FormData(event.currentTarget)));closeModal();await loadSalesApiData();showToast(success,"success");}catch(error){record.status=confirmed;renderFormErrors([userFacingError(error,t("serviceOrderMutationFailed"))]);}}
+async function runServiceOrderMutation(event,record,operation,success){event.preventDefault();const confirmed=record.status;try{await operation(Object.fromEntries(new FormData(event.currentTarget)));closeModal();await loadSalesApiData();showToast(success,"success");}catch(error){record.status=confirmed;renderFormErrors([error]);}}
 
 function openSalesServiceTransitionModal(record,action){
   const needsReason=["wait","cancel","accept"].includes(action), needsAcceptance=false, needsEvidence=false, needsWorker=action==="assign", workers=(state.salesApi.workers||[]).filter(worker=>worker.status==="active"||worker.status==="Activo");
   modalContent.innerHTML=`<form class="recipe-form" id="serviceTransitionForm"><div class="modal-head"><div><p class="eyebrow">${t("serviceOrder")}</p><h2>${escapeHtml(salesServiceOrderStatus(record.status))} &rarr; ${escapeHtml(t(`serviceOrderAction_${action}`))}</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div><div class="form-grid">${needsWorker?`<label class="preview-field wide-field"><span>${t("serviceOrderAssignee")}</span><select name="responsible_worker_id" data-entity-selector required><option value="">${t("choose")}</option>${workers.map(worker=>`<option value="${escapeAttribute(worker.id)}">${escapeHtml(worker.employee_number||worker.code||"")} &middot; ${escapeHtml(worker.full_name||worker.name||"")} &middot; ${escapeHtml(worker.position_name||"")}</option>`).join("")}</select></label>`:""}${needsReason?`<label class="preview-field wide-field"><span>${t("reason")}</span><textarea name="reason" minlength="3" maxlength="500" required></textarea></label>`:""}${needsEvidence?`<label class="preview-field wide-field"><span>${t("serviceOrderEvidence")}</span><input name="evidence_reference" maxlength="300" required></label>`:""}${needsAcceptance?`<label class="preview-field wide-field"><span>${t("serviceOrderAcceptedBy")}</span><input name="accepted_by_name" maxlength="200" required></label>`:""}</div><div class="form-errors" id="formErrors" hidden></div><div class="modal-actions"><button class="secondary-action" type="button" data-close-transition>${t("cancel")}</button><button class="primary-action" type="submit">${t("confirm")}</button></div></form>`;
   modalContent.querySelector(".modal-close")?.addEventListener("click",()=>renderSalesServiceOrderModal(record));modalContent.querySelector("[data-close-transition]")?.addEventListener("click",()=>renderSalesServiceOrderModal(record));
-  modalContent.querySelector("#serviceTransitionForm")?.addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget)),confirmed=record.status,payload=action==="assign"?{responsible_worker_id:data.responsible_worker_id}:{...(needsReason?{reason:data.reason.trim()}:{})};try{await transitionSalesServiceOrder(record.id,action,payload);closeModal();await loadSalesApiData();showToast(t("serviceOrderTransitionSaved"),"success");}catch(error){record.status=confirmed;renderFormErrors([userFacingError(error,t("serviceOrderMutationFailed"))]);}});
+  modalContent.querySelector("#serviceTransitionForm")?.addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget)),confirmed=record.status,payload=action==="assign"?{responsible_worker_id:data.responsible_worker_id}:{...(needsReason?{reason:data.reason.trim()}:{})};try{await transitionSalesServiceOrder(record.id,action,payload);closeModal();await loadSalesApiData();showToast(t("serviceOrderTransitionSaved"),"success");}catch(error){record.status=confirmed;renderFormErrors([error]);}});
 }
 
 function renderSalesDeliveriesPanel(module, submodule) {
@@ -4885,7 +4890,7 @@ function openWarehouseProductionIssueModal(id){
       state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]};
       closeModal();await Promise.all([loadWarehouseProductionRequests(),loadInventoryMovementData()]);
       showToast(t(result.status==="issued"?"warehouseProductionSaved":"warehouseProductionPending"),result.status==="issued"?"success":"warning");
-    }catch(error){renderFormErrors([userFacingError(error,t("warehousePartsSaveError"))]);button.disabled=false;}
+    }catch(error){renderFormErrors([error]);button.disabled=false;}
   });
 }
 
@@ -4923,7 +4928,7 @@ function openWarehousePartsIssueModal(id,reject=false){
       closeModal();await Promise.all([loadWarehouseMaterialRequests(),loadInventoryMovementData()]);
       const complete=reject?result.status==="cancelled":result.status==="issued";
       showToast(complete?(reject?t("warehousePartsRejected"):t("warehousePartsSaved")):(reject?t("warehousePartsRejectPending"):t("warehousePartsPending")),complete?"success":"warning");
-    }catch(error){renderFormErrors([userFacingError(error,t("warehousePartsSaveError"))]);button.disabled=false;}
+    }catch(error){renderFormErrors([error]);button.disabled=false;}
   });
 }
 
@@ -5693,7 +5698,7 @@ function renderProductsServicesCatalogScreen() {
           const currentRecipe = getProductServiceCurrentRecipe(item);
           const standardCost = currentRecipe ? getRecipeStandardCost(currentRecipe) : Number(item.standardCost || 0);
           const targetPrice = Number(item.targetPrice || 0);
-          const margin = targetPrice && standardCost ? ((targetPrice - standardCost) / targetPrice) * 100 : Number(item.expectedMargin || 0);
+          const margin = Number(item.expectedMargin || 0);
           return `
         <article class="product-catalog-card">
           <div class="product-catalog-card-head">
@@ -6319,6 +6324,7 @@ function bindProductionPanelActions() {
   modulePanel.querySelectorAll("[data-action='delete-recipe']").forEach((button) => {
     button.addEventListener("click", () => deleteRecipe(button.dataset.recipeId));
   });
+  modulePanel.querySelectorAll("[data-action='service-evidence-history']").forEach(button=>button.addEventListener("click",()=>openServiceEvidenceHistory(button.dataset.orderId)));
   modulePanel.querySelectorAll("[data-action='print-order']").forEach((button) => {
     button.addEventListener("click", () => openOrderPrintModal(button.dataset.orderId));
   });
@@ -6471,6 +6477,7 @@ function renderOrderList(orders, emptyMessage = "") {
                     `).join("")}
                   </select>
                 </label>
+                ${order.isService?`<button class="secondary-action small-action" type="button" data-action="service-evidence-history" data-order-id="${order.id}">${t("serviceEvidenceTitle")}</button>`:""}
                 <button class="secondary-action small-action" type="button" data-action="print-order" data-order-id="${order.id}">PDF/Imprimir</button>
                 ${["En espera de recursos","En produccion"].includes(order.status)?`<button class="secondary-action small-action" type="button" data-action="create-maintenance-from-order" data-order-id="${escapeAttribute(order.id)}">${state.lang==="en"?"Maintenance":"Mantenimiento"}</button>`:""}
                 ${closeHelp?`<small class="helper-copy">${escapeHtml(closeHelp)}</small>`:""}
@@ -6872,8 +6879,8 @@ function saveGenericRecordForm(event, module, submodule) {
   const values = [...form.querySelectorAll("input[name^='field-']")].map((input) => input.value.trim());
   const errors = [];
 
-  if (!values[0]) errors.push(t("firstFieldRequired"));
-  if (!values[1]) errors.push(t("secondFieldRequired"));
+  if (!values[0]) errors.push({field:"field-0",message:t("firstFieldRequired")});
+  if (!values[1]) errors.push({field:"field-1",message:t("secondFieldRequired")});
 
   if (errors.length) {
     renderFormErrors(errors);
@@ -7036,11 +7043,11 @@ async function saveWarehouseForm(event, module, submodule) {
   const data = Object.fromEntries(new FormData(form).entries());
   const errors = [];
 
-  if (!data.code?.trim() && getApiMode() !== "api") errors.push(t("warehouseCodeRequired"));
-  if (!data.name?.trim()) errors.push(t("warehouseNameRequired"));
-  if (!data.businessCenter?.trim()) errors.push(t("businessCenterRequired"));
-  if (!data.location?.trim()) errors.push(t("warehouseLocationRequired"));
-  if (!data.owner?.trim()) errors.push(t("warehouseOwnerRequired"));
+  if (!data.code?.trim() && getApiMode() !== "api") errors.push({ field: "code", message: t("warehouseCodeRequired") });
+  if (!data.name?.trim()) errors.push({ field: "name", message: t("warehouseNameRequired") });
+  if (!data.businessCenter?.trim()) errors.push({ field: "businessCenter", message: t("businessCenterRequired") });
+  if (!data.location?.trim()) errors.push({ field: "location", message: t("warehouseLocationRequired") });
+  if (!data.owner?.trim()) errors.push({ field: "owner", message: t("warehouseOwnerRequired") });
 
   if (errors.length) {
     renderFormErrors(errors);
@@ -7055,7 +7062,7 @@ async function saveWarehouseForm(event, module, submodule) {
       if (existingRecord) await updateInventoryWarehouse(existingRecord.id,payload);
       else {code=await resolveBusinessCode("inventory.warehouse",code,data.codeRequestKey);await createInventoryWarehouse({code,...payload});}
       closeModal(); await loadInventoryApiData(); showToast(t(existingRecord ? "warehouseUpdated" : "warehouseSaved", { code }));
-    } catch (error) { renderFormErrors([userFacingError(error)]); }
+    } catch (error) { renderFormErrors([error]); }
     return;
   }
   const record = {
@@ -7241,9 +7248,9 @@ async function saveInventoryItemForm(event, module, submodule) {
   const data = Object.fromEntries(new FormData(form).entries());
   const errors = [];
 
-  if (!data.code?.trim() && getApiMode() !== "api") errors.push(t("itemCodeRequired"));
-  if (!data.name?.trim()) errors.push(t("itemNameRequired"));
-  if (!(form.querySelector('[name="unit"]')?.value || data.unit || "").trim()) errors.push(t("unitRequired"));
+  if (!data.code?.trim() && getApiMode() !== "api") errors.push({ field: "code", message: t("itemCodeRequired") });
+  if (!data.name?.trim()) errors.push({ field: "name", message: t("itemNameRequired") });
+  if (!(form.querySelector('[name="unit"]')?.value || data.unit || "").trim()) errors.push({ field: "unit", message: t("unitRequired") });
   if (data.productionProductId && data.status !== "Activo") errors.push(t("productionProductLinkRequiresActive"));
 
   if (errors.length) {
@@ -7274,8 +7281,7 @@ async function saveInventoryItemForm(event, module, submodule) {
       if(selectedProduct) await loadProductionApiData();
       showToast(t(existingRecord ? "inventoryItemUpdated" : "inventoryItemSaved", { code }));
     } catch (error) {
-      const errorCode = error?.payload?.error?.code;
-      renderFormErrors([errorCode === "item_base_unit_locked_by_movements" ? t("itemBaseUnitLockedByHistory") : userFacingError(error)]);
+      renderFormErrors([error]);
     }
     return;
   }
@@ -7374,9 +7380,9 @@ function openInventoryMovementModal(module, submodule) {
           ` : `<input name="warehouseName" type="text" placeholder="${t("warehouseNamePlaceholder")}" required />`}
         </label>
         <label class="preview-field">
-          <span>Almacen destino (solo transferencia)</span>
+          <span>${t("movementDestinationLabel")}</span>
           <select name="destinationWarehouseId" data-entity-selector>
-            <option value="">No aplica</option>
+            <option value="">${t("movementNotApplicable")}</option>
             ${warehouses.map((warehouse) => `<option value="${warehouse.id}">${warehouse.code} - ${warehouse.title}</option>`).join("")}
           </select>
         </label>
@@ -7390,7 +7396,7 @@ function openInventoryMovementModal(module, submodule) {
         </label>
         <label class="preview-field wide-field">
           <span>${t("reason")}</span>
-          <textarea name="reason" rows="3" placeholder="${t("movementReasonPlaceholder")}"></textarea>
+          <textarea name="reason" rows="3" minlength="3" placeholder="${t("movementReasonPlaceholder")}"></textarea>
         </label>
       </div>
 
@@ -7502,11 +7508,11 @@ async function saveInventoryMovementForm(event, module, submodule) {
   const data = Object.fromEntries(new FormData(form).entries());
   const errors = [];
 
-  if (!data.sourceDocument?.trim()) errors.push(t("sourceDocumentRequired"));
-  if (!data.itemId && !data.item?.trim()) errors.push(t("itemRequired"));
-  if (!Number(data.quantity || 0)) errors.push(t("quantityRequired"));
-  if (!data.unit?.trim()) errors.push(t("unitRequired"));
-  if (!data.warehouseId && !data.warehouseName?.trim()) errors.push(t("warehouseRequired"));
+  if (!data.sourceDocument?.trim()) errors.push({ field: "sourceDocument", message: t("sourceDocumentRequired") });
+  if (!data.itemId && !data.item?.trim()) errors.push({ field: "itemId", message: t("itemRequired") });
+  if (!Number(data.quantity || 0)) errors.push({ field: "quantity", message: t("quantityRequired") });
+  if (!data.unit?.trim()) errors.push({ field: "unit", message: t("unitRequired") });
+  if (!data.warehouseId && !data.warehouseName?.trim()) errors.push({ field: "warehouseId", message: t("warehouseRequired") });
 
   if (errors.length) {
     renderFormErrors(errors);
@@ -7553,7 +7559,7 @@ async function saveInventoryMovementForm(event, module, submodule) {
       state.operationalHandoffs={};
       showToast(t(data.movementType==="transfer"?"handoffTransferDispatched":"movementSaved", { code: savedMovement.movement_code }));
     } catch (error) {
-      renderFormErrors([userFacingError(error, t("inventoryLoadError"))]);
+      renderFormErrors([error]);
     }
     return;
   }
@@ -7765,16 +7771,16 @@ async function saveSalesCustomerForm(event, module, submodule) {
   const data = Object.fromEntries(new FormData(form).entries());
   const errors = [];
 
-  if (!data.code?.trim() && getApiMode() !== "api") errors.push(t("customerCodeRequired"));
-  if (!data.commercialName?.trim()) errors.push(t("commercialNameRequired"));
-  if (!data.contactName?.trim()) errors.push(t("contactRequired"));
-  if (!data.contactEmail?.trim()) errors.push(t("commercialEmailRequired"));
-  if (!data.contactPhone?.trim()) errors.push(t("phoneRequired"));
+  if (!data.code?.trim() && getApiMode() !== "api") errors.push({ field: "code", message: t("customerCodeRequired") });
+  if (!data.commercialName?.trim()) errors.push({ field: "commercialName", message: t("commercialNameRequired") });
+  if (!data.contactName?.trim()) errors.push({ field: "contactName", message: t("contactRequired") });
+  if (!data.contactEmail?.trim()) errors.push({ field: "commercialEmail", message: t("commercialEmailRequired") });
+  if (!data.contactPhone?.trim()) errors.push({ field: "phone", message: t("phoneRequired") });
   if (!data.responsibleWorkerId) errors.push("Selecciona una persona responsable activa de RH.");
   const fiscalStarted=[data.billingLegalName,data.taxId,data.taxRegime,data.cfdiUse,data.billingEmail,data.billingStreet,data.billingCity,data.billingState,data.billingZipCode].some(value=>value?.trim());
-  if(fiscalStarted&&!data.billingLegalName?.trim()) errors.push(t("billingLegalNameRequired"));
-  if(fiscalStarted&&!data.taxId?.trim()) errors.push(t("taxIdRequired"));
-  if(fiscalStarted&&!data.billingEmail?.trim()) errors.push(t("billingEmailRequired"));
+  if(fiscalStarted&&!data.billingLegalName?.trim()) errors.push({ field: "billingLegalName", message: t("billingLegalNameRequired") });
+  if(fiscalStarted&&!data.taxId?.trim()) errors.push({ field: "taxId", message: t("taxIdRequired") });
+  if(fiscalStarted&&!data.billingEmail?.trim()) errors.push({ field: "billingEmail", message: t("billingEmailRequired") });
 
   if (errors.length) {
     renderFormErrors(errors);
@@ -7785,7 +7791,7 @@ async function saveSalesCustomerForm(event, module, submodule) {
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
   if(getApiMode()==="api"){
     const payload={commercial_name:data.commercialName.trim(),customer_type:data.customerType,status:salesCustomerStatusToApi[data.status]||"prospect",responsible_worker_id:data.responsibleWorkerId,primary_contact:{name:data.contactName.trim(),email:data.contactEmail.trim(),phone:data.contactPhone.trim()},payment_terms:data.paymentTerms,currency:data.currency,credit_limit:Number(data.creditLimit||0),legal_name:data.billingLegalName?.trim()||null,tax_id:data.taxId?.trim().toUpperCase()||null,tax_regime:data.taxRegime?.trim()||null,cfdi_use:data.cfdiUse?.trim()||null,billing_email:data.billingEmail?.trim()||null,billing_phone:data.billingPhone?.trim()||null,billing_address:fiscalStarted?{street:data.billingStreet?.trim()||null,exterior_number:data.billingExterior?.trim()||null,interior_number:data.billingInterior?.trim()||null,neighborhood:data.billingNeighborhood?.trim()||null,city:data.billingCity?.trim()||null,state:data.billingState?.trim()||null,postal_code:data.billingZipCode?.trim()||null,country:data.billingCountry?.trim()||null}:null,notes:data.commercialNotes?.trim()||null};
-    try{if(existingRecord)await updateSalesCustomer(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.customer",code,data.codeRequestKey);await createSalesCustomer({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"customerUpdated":"customerSaved",{code}));}catch(error){renderFormErrors([userFacingError(error,"No se pudo guardar el cliente.")]);}return;
+    try{if(existingRecord)await updateSalesCustomer(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.customer",code,data.codeRequestKey);await createSalesCustomer({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"customerUpdated":"customerSaved",{code}));}catch(error){renderFormErrors([error]);}return;
   }
   const fields = {
     customerType: data.customerType,
@@ -8058,7 +8064,7 @@ function openFinishedGoodsReceiptModal(orderId){
 async function saveFinishedGoodsReceiptForm(event){
   event.preventDefault();const form=event.currentTarget;const data=Object.fromEntries(new FormData(form).entries());const quantity=Number(data.quantity||0);
   if(!data.warehouseId||quantity<=0||!data.receivedAt){renderFormErrors([t("finishedGoodsReceiptRequired")]);return;}
-  try{const receipt=await createFinishedGoodsReceipt({production_order_id:data.productionOrderId,warehouse_id:data.warehouseId,quantity,received_at:`${data.receivedAt}T12:00:00Z`,notes:data.notes?.trim()||null});state.finishedGoodsReceipts={status:"idle",orders:[],products:[],summaries:[],error:""};state.inventoryMovements={status:"idle",error:""};state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]};closeModal();await Promise.all([loadInventoryMovementData(),loadFinishedGoodsReceiptData()]);showToast(t("finishedGoodsReceiptSaved",{code:receipt.movement.movement_code}));}catch(error){renderFormErrors([userFacingError(error,t("finishedGoodsReceiptSaveError"))]);}
+  try{const receipt=await createFinishedGoodsReceipt({production_order_id:data.productionOrderId,warehouse_id:data.warehouseId,quantity,received_at:`${data.receivedAt}T12:00:00Z`,notes:data.notes?.trim()||null});state.finishedGoodsReceipts={status:"idle",orders:[],products:[],summaries:[],error:""};state.inventoryMovements={status:"idle",error:""};state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]};closeModal();await Promise.all([loadInventoryMovementData(),loadFinishedGoodsReceiptData()]);showToast(t("finishedGoodsReceiptSaved",{code:receipt.movement.movement_code}));}catch(error){renderFormErrors([error]);}
 }
 
 function isSalesProductServiceEligible(item) {
@@ -8173,12 +8179,12 @@ async function saveSalesQuoteForm(event, module, submodule) {
   const data = Object.fromEntries(new FormData(form).entries());
   const errors = [];
 
-  if (!data.code?.trim() && getApiMode() !== "api") errors.push(t("quoteCodeRequired"));
-  if (!data.customerId) errors.push(t("quoteCustomerRequired"));
-  if (!data.validUntil) errors.push(t("validUntilRequired"));
+  if (!data.code?.trim() && getApiMode() !== "api") errors.push({ field: "code", message: t("quoteCodeRequired") });
+  if (!data.customerId) errors.push({ field: "customerId", message: t("quoteCustomerRequired") });
+  if (!data.validUntil) errors.push({ field: "validUntil", message: t("validUntilRequired") });
 
   const customer = mockDb.findModuleRecord(module.id, data.customerId);
-  if (!customer) errors.push(t("quoteCustomerRequired"));
+  if (!customer) errors.push({ field: "customerId", message: t("quoteCustomerRequired") });
   const lines = buildQuoteLinesFromForm(form, errors);
   if (errors.length) {
     renderFormErrors(errors);
@@ -8191,7 +8197,7 @@ async function saveSalesQuoteForm(event, module, submodule) {
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
   if(getApiMode()==="api"){
     const payload={customer_id:customer.id,currency:data.currency,payment_terms:data.paymentTerms,valid_until:data.validUntil,promised_delivery_date:data.deliveryPromise||null,notes:data.notes?.trim()||null,lines:lines.map(line=>({product_service_id:line.productServiceId,quantity:line.quantity,unit:line.unit,unit_price:line.unitPrice,discount_percentage:line.discount}))};
-    try{if(existingRecord)await updateSalesQuote(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.quote",code,data.codeRequestKey);await createSalesQuote({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"quoteUpdated":"quoteSaved",{code}));}catch(error){renderFormErrors([userFacingError(error,"No se pudo guardar la cotización.")]);}return;
+    try{if(existingRecord)await updateSalesQuote(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.quote",code,data.codeRequestKey);await createSalesQuote({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"quoteUpdated":"quoteSaved",{code}));}catch(error){renderFormErrors([error]);}return;
   }
   const fields = {
     customerId: customer.id,
@@ -8250,8 +8256,8 @@ function buildQuoteLinesFromForm(form, errors) {
     const unitPrice = Number(row.querySelector("[name='lineUnitPrice']").value || 0);
     const discount = Number(row.querySelector("[name='lineDiscount']").value || 0);
     if (!productService) errors.push(t("quoteProductRequired"));
-    if (!quantity) errors.push(t("quantityRequired"));
-    if (!unit) errors.push(t("unitRequired"));
+    if (!quantity) errors.push({ field: "quantity", message: t("quantityRequired") });
+    if (!unit) errors.push({ field: "unit", message: t("unitRequired") });
     if (unitPrice < 0) errors.push(t("unitPriceRequired"));
     const subtotal = quantity * unitPrice;
     const total = subtotal * (1 - Math.min(Math.max(discount, 0), 100) / 100);
@@ -8374,7 +8380,7 @@ async function saveSalesOrderForm(event, module, submodule) {
   const existingOrder = mockDb.loadModuleRecords(module.id, submodule.id)
     .find((record) => record.recordType === "salesOrder" && record.fields?.quoteId === data.quoteId);
 
-  if (!data.code?.trim() && getApiMode() !== "api") errors.push(t("salesOrderCodeRequired"));
+  if (!data.code?.trim() && getApiMode() !== "api") errors.push({ field: "code", message: t("salesOrderCodeRequired") });
   if (!quote || quote.status !== "Aprobado") errors.push(t("salesOrderRequiresApprovedQuote"));
   if (existingOrder) errors.push(t("salesOrderQuoteAlreadyUsed"));
 
@@ -8388,7 +8394,7 @@ async function saveSalesOrderForm(event, module, submodule) {
       const businessCode=await resolveBusinessCode("sales.order",data.code,data.codeRequestKey);
       await createSalesOrder({code:businessCode,quote_id:data.quoteId,promised_delivery_date:data.deliveryPromise||null,notes:data.notes?.trim()||null});
       closeModal(); await loadSalesApiData(); navigateTo({active:"ventas",activeSubmodule:"pedidos",laborArea:""}); showToast(t("salesOrderSaved",{code:businessCode}));
-    } catch (error) { renderFormErrors([userFacingError(error,"No se pudo crear el pedido.")]); }
+    } catch (error) { renderFormErrors([error]); }
     return;
   }
 
@@ -8558,8 +8564,8 @@ function saveSalesOrderEditForm(event, module, submodule) {
   const data = Object.fromEntries(new FormData(form).entries());
   const errors = [];
   const order = mockDb.findModuleRecord(module.id, data.orderId);
-  if (!order || order.recordType !== "salesOrder") errors.push(t("salesOrderRequired"));
-  if (!data.code?.trim()) errors.push(t("salesOrderCodeRequired"));
+  if (!order || order.recordType !== "salesOrder") errors.push({ field: "salesOrder", message: t("salesOrderRequired") });
+  if (!data.code?.trim()) errors.push({ field: "code", message: t("salesOrderCodeRequired") });
   if (!data.adjustmentReason?.trim()) errors.push(t("adjustmentReasonRequired"));
 
   if (errors.length) {
@@ -8786,8 +8792,8 @@ async function saveSalesDeliveryForm(event, module, submodule) {
   const order = mockDb.findModuleRecord(module.id, data.orderId);
 
   if (!order || order.recordType !== "salesOrder") errors.push(t("deliveryRequiresSalesOrder"));
-  if (!data.deliveryDate) errors.push(t("deliveryDateRequired"));
-  if (getApiMode() !== "api" && !getDeliveryStatusOptions().includes(data.deliveryStatus)) errors.push(t("deliveryStatusRequired"));
+  if (!data.deliveryDate) errors.push({ field: "deliveryDate", message: t("deliveryDateRequired") });
+  if (getApiMode() !== "api" && !getDeliveryStatusOptions().includes(data.deliveryStatus)) errors.push({ field: "status", message: t("deliveryStatusRequired") });
   if (getApiMode() !== "api" && data.deliveryStatus === "Entrega parcial" && !data.notes?.trim()) errors.push(t("partialDeliveryNotesRequired"));
   if (getApiMode() !== "api" && data.deliveryStatus === "No entregado" && !data.notes?.trim()) errors.push(t("failedDeliveryNotesRequired"));
   if (getApiMode() !== "api" && data.deliveryStatus === "Reprogramado" && !data.nextDeliveryDate) errors.push(t("nextDeliveryDateRequired"));
@@ -8802,7 +8808,7 @@ async function saveSalesDeliveryForm(event, module, submodule) {
     if(!lines.length){renderFormErrors(["El pedido no tiene partidas listas o reservadas para entregar."]);return;}
     const invalidLine=lines.find(line=>{const source=(order.fields?.lines||[]).find(item=>item.id===line.order_line_id);return !Number.isFinite(line.quantity)||line.quantity<=0||line.quantity>(Number(source?.quantity||0)-Number(source?.deliveredQuantity||0))||(source?.productServiceType==="service"&&(!Number.isFinite(line.actual_unit_cost)||line.actual_unit_cost<0));});
     if(invalidLine){renderFormErrors(["La cantidad a entregar debe ser mayor a cero y no exceder el pendiente de la partida."]);return;}
-    try{const businessCode=await resolveBusinessCode("sales.delivery",data.code,data.codeRequestKey);await createSalesDelivery({code:businessCode,order_id:order.id,scheduled_date:data.deliveryDate,recipient_name:data.recipient?.trim()||null,evidence_reference:data.deliveryReference?.trim()||null,notes:data.notes?.trim()||null,lines});closeModal();await loadSalesApiData();navigateTo({active:"ventas",activeSubmodule:"entregas",laborArea:""});showToast("Entrega registrada como borrador. Confírmala para consumir las reservas.");}catch(error){renderFormErrors([userFacingError(error,"No se pudo registrar la entrega.")]);}return;
+    try{const businessCode=await resolveBusinessCode("sales.delivery",data.code,data.codeRequestKey);await createSalesDelivery({code:businessCode,order_id:order.id,scheduled_date:data.deliveryDate,recipient_name:data.recipient?.trim()||null,evidence_reference:data.deliveryReference?.trim()||null,notes:data.notes?.trim()||null,lines});closeModal();await loadSalesApiData();navigateTo({active:"ventas",activeSubmodule:"entregas",laborArea:""});showToast("Entrega registrada como borrador. Confírmala para consumir las reservas.");}catch(error){renderFormErrors([error]);}return;
   }
 
   const code = `ENT-${String(Date.now()).slice(-5)}`;
@@ -8932,8 +8938,9 @@ function openProductServiceModal(productServiceId = null) {
           <input name="targetPrice" type="number" min="0" step="0.01" value="${escapeAttribute(existingItem?.targetPrice || 0)}" required />
         </label>
         <label class="preview-field">
-          <span>Margen esperado %</span>
-          <input name="expectedMargin" type="number" min="0" max="100" step="0.01" value="${escapeAttribute(existingItem?.expectedMargin || 0)}" required />
+          <span>${t("expectedMargin")} %</span>
+          <input name="expectedMargin" type="number" min="0" step="0.01" aria-describedby="expectedMarginHelp" value="${escapeAttribute(existingItem?.expectedMargin || 0)}" required />
+          <small id="expectedMarginHelp">${t("expectedMarginHelp")}</small>
         </label>
         <label class="preview-field">
           <span>Estatus</span>
@@ -9061,7 +9068,7 @@ async function saveProductServiceForm(event) {
       navigateTo({ active: "produccion", activeSubmodule: "productos-servicios", laborArea: "" });
       showToast(t(exists?"productServiceUpdated":"productServiceSaved",{type:item.kind==="Servicio"?t("productServiceService"):t("productServiceProduct"),code:saved.code}));
     } catch (error) {
-      renderFormErrors([userFacingError(error,t("productServiceSaveFailed"))]);
+      renderFormErrors([error]);
     }
     return;
   }
@@ -9139,8 +9146,8 @@ function openSalesOrderFulfillmentModal(module, orderId) {
   modalContent.innerHTML=`<form class="recipe-form" id="salesOrderFulfillmentForm"><input type="hidden" name="orderId" value="${escapeAttribute(order.id)}"><div class="modal-head"><div><p class="eyebrow">${t("salesOrder")}</p><h2>${escapeHtml(order.code)} · Surtido</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div><p class="helper-copy">Cada producto usa exclusivamente el artículo de Inventario vinculado en su ficha. Una partida configurada ya no puede reasignarse.</p><div class="records">${lines.map(line=>{const product=mockDb.findProductService(line.productServiceId);const mappedId=product?.inventoryItemId||"";const mappedItem=inventoryItems.find(item=>item.id===mappedId);return `<article class="record-row fulfillment-line" data-line-id="${escapeAttribute(line.id)}"><div class="record-main"><strong>${escapeHtml(line.productServiceName)}</strong><span>${formatNumber(line.quantity-line.deliveredQuantity)} ${escapeHtml(line.unit)} pendientes</span></div><label class="preview-field"><span>Modo</span><select name="mode-${escapeAttribute(line.id)}">${line.productServiceType==="service"?`<option value="service">Servicio</option>`:`<option value="stock">Existencia</option><option value="production">Producción</option>`}</select></label>${line.productServiceType==="product"?`<label class="preview-field"><span>Artículo vinculado</span><select name="item-${escapeAttribute(line.id)}" required><option value="${escapeAttribute(mappedId)}">${mappedItem?`${escapeHtml(mappedItem.code)} - ${escapeHtml(mappedItem.title)}`:"Producto sin mapeo vigente"}</option></select></label><label class="preview-field"><span>Almacén</span><select name="warehouse-${escapeAttribute(line.id)}"><option value="">Seleccionar</option>${warehouses.map(item=>`<option value="${escapeAttribute(item.id)}">${escapeHtml(item.code)} - ${escapeHtml(item.title)}</option>`).join("")}</select></label>`:""}</article>`;}).join("")}</div><label class="preview-field wide-field"><span>Motivo de cancelación</span><textarea name="cancelReason" rows="2" placeholder="Solo se usa al cancelar"></textarea></label><div class="form-errors" id="formErrors" hidden></div><div class="modal-actions">${hasPermission("sales.order.cancel")?`<button class="secondary-action" type="button" data-action="cancel-api-order">Cancelar pedido</button>`:""}<button class="secondary-action" type="button" data-action="close-api-order">${t("cancel")}</button>${hasPermission("sales.order.fulfill")?`<button class="primary-action" type="submit">Configurar surtido</button>`:""}</div></form>`;
   modalContent.querySelectorAll('select[name^="warehouse-"]').forEach(select=>{select.dataset.entitySelector="";select.dataset.searchPlaceholder="Buscar almacén por código o nombre";enhanceEntitySelect(select);});
   modalBackdrop.hidden=false; modalContent.querySelector(".modal-close").addEventListener("click",closeModal); modalContent.querySelector("[data-action='close-api-order']").addEventListener("click",closeModal);
-  modalContent.querySelector("#salesOrderFulfillmentForm").addEventListener("submit",async event=>{event.preventDefault();const form=new FormData(event.currentTarget);const payload={lines:lines.map(line=>{const mode=form.get(`mode-${line.id}`);const remaining=line.quantity-line.deliveredQuantity;return {order_line_id:line.id,mode,allocations:mode==="stock"?[{inventory_item_id:form.get(`item-${line.id}`),warehouse_id:form.get(`warehouse-${line.id}`),quantity:remaining}]:[]};})};if(payload.lines.some(line=>line.mode==="stock"&&(!line.allocations[0].inventory_item_id||!line.allocations[0].warehouse_id))){renderFormErrors(["Selecciona artículo y almacén para cada partida surtida desde existencia."]);return;}try{await configureSalesOrderFulfillment(order.id,payload);closeModal();await loadSalesApiData();showToast("Surtido configurado.");}catch(error){renderFormErrors([userFacingError(error,"No se pudo configurar el surtido.")]);}});
-  modalContent.querySelector("[data-action='cancel-api-order']")?.addEventListener("click",async()=>{const reason=modalContent.querySelector("[name='cancelReason']").value.trim();if(reason.length<3){renderFormErrors(["Captura el motivo de cancelación."]);return;}try{await cancelSalesOrder(order.id,reason);closeModal();await loadSalesApiData();showToast("Pedido cancelado.");}catch(error){renderFormErrors([userFacingError(error,"No se pudo cancelar el pedido.")]);}});
+  modalContent.querySelector("#salesOrderFulfillmentForm").addEventListener("submit",async event=>{event.preventDefault();const form=new FormData(event.currentTarget);const payload={lines:lines.map(line=>{const mode=form.get(`mode-${line.id}`);const remaining=line.quantity-line.deliveredQuantity;return {order_line_id:line.id,mode,allocations:mode==="stock"?[{inventory_item_id:form.get(`item-${line.id}`),warehouse_id:form.get(`warehouse-${line.id}`),quantity:remaining}]:[]};})};if(payload.lines.some(line=>line.mode==="stock"&&(!line.allocations[0].inventory_item_id||!line.allocations[0].warehouse_id))){renderFormErrors(["Selecciona artículo y almacén para cada partida surtida desde existencia."]);return;}try{await configureSalesOrderFulfillment(order.id,payload);closeModal();await loadSalesApiData();showToast("Surtido configurado.");}catch(error){renderFormErrors([error]);}});
+  modalContent.querySelector("[data-action='cancel-api-order']")?.addEventListener("click",async()=>{const reason=modalContent.querySelector("[name='cancelReason']").value.trim();if(reason.length<3){renderFormErrors(["Captura el motivo de cancelación."]);return;}try{await cancelSalesOrder(order.id,reason);closeModal();await loadSalesApiData();showToast("Pedido cancelado.");}catch(error){renderFormErrors([error]);}});
 }
 
 function openAdminUnitModal(unitId) {
@@ -9189,7 +9196,7 @@ async function saveLaborAreaForm(event) {
   const errors = [];
   if (!code && getApiMode() !== "api") errors.push("Captura el codigo del area.");
   if (!name) errors.push("Captura el nombre del area.");
-  if (duplicate) errors.push(t("laborAreaDuplicate"));
+  if (duplicate) errors.push({ field: "name", message: t("laborAreaDuplicate") });
   renderFormErrors(errors);
   if (errors.length) return;
 
@@ -9206,7 +9213,7 @@ async function saveLaborAreaForm(event) {
       if (areaId) await updateHrArea(areaId,payload);
       else {code=await resolveBusinessCode("hr.area",code,String(data.get("codeRequestKey")||""));item.code=code;await createHrArea({code:item.code,name:item.name,description:item.description||null});}
       closeModal();await loadHrApiData();navigateTo({active:"recursos-humanos",activeSubmodule:"areas-puestos",laborArea:areaId||""});showToast(`Area ${item.name} ${areaId?"actualizada":"guardada"}.`);
-    } catch(error) { renderFormErrors([userFacingError(error)]); }
+    } catch(error) { renderFormErrors([error]); }
     return;
   }
   if (areaId) mockDb.updateLaborArea(item);
@@ -9288,10 +9295,10 @@ async function saveLaborRoleForm(event) {
     )
   );
   const errors = [];
-  if (!area) errors.push(t("laborAreaInvalid"));
+  if (!area) errors.push({ field: "areaId", message: t("laborAreaInvalid") });
   if (!position) errors.push("Captura el puesto o rol.");
   if (!name) errors.push("Captura el nombre para receta.");
-  if (duplicateRole) errors.push(t("laborRoleDuplicate"));
+  if (duplicateRole) errors.push({ field: "name", message: t("laborRoleDuplicate") });
   renderFormErrors(errors);
   if (errors.length) return;
 
@@ -9319,7 +9326,7 @@ async function saveLaborRoleForm(event) {
       if (roleId) await updateHrPosition(roleId,payload);
       else { const {status,...createPayload}=payload;await createHrPosition(createPayload); }
       closeModal();await loadHrApiData();navigateTo({active:"recursos-humanos",activeSubmodule:"areas-puestos",laborArea:item.areaId});showToast(`Puesto ${item.name} ${roleId?"actualizado":"guardado"}.`);
-    } catch(error) { renderFormErrors([userFacingError(error)]); }
+    } catch(error) { renderFormErrors([error]); }
     return;
   }
   if (roleId) {
@@ -9355,7 +9362,7 @@ function openWorkerModal(workerId=null){
 }
 async function saveWorkerForm(event){event.preventDefault();const data=new FormData(event.currentTarget);const workerId=String(data.get("workerId")||"");const value=name=>String(data.get(name)||"").trim();
   const common={first_names:value("first_names"),first_last_name:value("first_last_name"),second_last_name:value("second_last_name")||null,labor_position_id:value("labor_position_id"),personal_email:value("personal_email")||null,phone:value("phone")||null,nationality:value("nationality")||null,marital_status:value("marital_status")||null,address:value("address")||null,emergency_contact_name:value("emergency_contact_name")||null,emergency_contact_phone:value("emergency_contact_phone")||null};
-  try{if(workerId)await updateHrWorker(workerId,{...common,status:value("status")});else {const employeeNumber=await resolveBusinessCode("hr.worker",value("employee_number"),event.currentTarget.dataset.codeRequestKey);await createHrWorker({...common,employee_number:employeeNumber,curp:value("curp"),rfc:value("rfc"),nss:value("nss"),hire_date:value("hire_date"),birth_date:value("birth_date")||null});}closeModal();await loadHrApiData();showToast(t(workerId?"workerUpdated":"workerSaved"));}catch(error){renderFormErrors([userFacingError(error)]);}}
+  try{if(workerId)await updateHrWorker(workerId,{...common,status:value("status")});else {const employeeNumber=await resolveBusinessCode("hr.worker",value("employee_number"),event.currentTarget.dataset.codeRequestKey);await createHrWorker({...common,employee_number:employeeNumber,curp:value("curp"),rfc:value("rfc"),nss:value("nss"),hire_date:value("hire_date"),birth_date:value("birth_date")||null});}closeModal();await loadHrApiData();showToast(t(workerId?"workerUpdated":"workerSaved"));}catch(error){renderFormErrors([error]);}}
 
 async function openMachineModal(machineId = null) {
   const existingMachine = machineId ? mockDb.findMachine(machineId) : null;
@@ -9423,7 +9430,7 @@ async function saveMachineForm(event) {
   const areaId = selectedAreaOption?.dataset.areaId || "";
   const machineType = String(data.get("machineType") || "").trim();
   const errors = [];
-  if (!area || !areaId) errors.push(t("machineAreaInvalid"));
+  if (!area || !areaId) errors.push({ field: "area", message: t("machineAreaInvalid") });
   if (!machineType) errors.push("Captura el tipo de maquina.");
   if (!name) errors.push("Captura el nombre de maquina.");
   renderFormErrors(errors);
@@ -9449,7 +9456,7 @@ async function saveMachineForm(event) {
       if (machineId) await updateProductionMachine(machineId,payload);
       else { const {status:ignored,...createPayload}=payload;const code=await resolveBusinessCode("production.machine",String(data.get("code")||""),String(data.get("codeRequestKey")||""));await createProductionMachine({...createPayload,code}); }
       closeModal();await loadProductionApiData();navigateTo({active:"produccion",activeSubmodule:"maquinaria",laborArea:""});showToast(`Maquina ${item.name} ${machineId?"actualizada":"guardada"} en Production API.`);
-    } catch(error) { renderFormErrors([userFacingError(error,"No se pudo guardar la maquina.")]); }
+    } catch(error) { renderFormErrors([error]); }
     return;
   }
   if (machineId) {
@@ -9943,20 +9950,10 @@ function validateRecipe(recipe) {
 }
 
 function renderFormErrors(errors) {
-  const box = modalContent.querySelector("#formErrors");
-  if (!box) return;
-  box.setAttribute("role", "alert");
-  box.setAttribute("aria-live", "assertive");
-  box.setAttribute("tabindex", "-1");
-  if (!errors.length) {
-    box.hidden = true;
-    box.innerHTML = "";
-    return;
-  }
-  box.hidden = false;
-  box.innerHTML = errors.map((error) => `<p>${escapeHtml(String(error))}</p>`).join("");
-  box.focus({ preventScroll: false });
+  const form = errors.find(error => error?.formContext?.form)?.formContext.form || getActiveFeedbackForm() || modalContent.querySelector("form");
+  renderFormFeedback(form, errors, { lang: state.lang });
 }
+
 
 function previewRecipeForm() {
   const form = modalContent.querySelector("#recipeForm");
@@ -10046,7 +10043,7 @@ async function saveRecipeForm(event) {
       navigateTo({ active: "produccion", activeSubmodule: "recetas", laborArea: "" });
       showToast(`${formatRecipeDisplayLabel(recipe)}: receta ${exists ? "actualizada" : "guardada"} en Production API.`);
     } catch (error) {
-      renderFormErrors([error?.payload?.error?.code === "machine_resource_invalid" ? t("recipeMachineAreaMissingError") : userFacingError(error,"No se pudo guardar la receta en Production API.")]);
+      renderFormErrors([error]);
     }
     return;
   }
@@ -10364,7 +10361,7 @@ async function previewOrderForm() {
       const remote=await validateProductionResources({recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_start_date:order.plannedStartDate,planned_duration_days:order.plannedDurationDays});
       renderRemoteOrderValidation(order,remote);
       renderFormErrors(productionValidationErrors(remote));
-    } catch(error) { renderFormErrors([userFacingError(error,"No se pudo validar recursos.")]); }
+    } catch(error) { renderFormErrors([error]); }
     return;
   }
   const release = getReleaseReview(recipe, order.quantity);
@@ -10419,7 +10416,7 @@ async function saveOrderForm(event) {
       const businessCode=await resolveBusinessCode("production.order",order.code,order.codeRequestKey);
       const saved=await createProductionOrder({code:businessCode,recipe_version_id:recipe.currentVersionId,quantity:order.quantity,unit:recipe.currentVersionData?.base_unit||order.unit,planned_start_date:order.plannedStartDate,planned_duration_days:order.plannedDurationDays,planned_start_at:new Date(`${order.plannedStartDate}T08:00:00`).toISOString(),required_at:order.dueDate?new Date(`${order.dueDate}T23:59:59`).toISOString():null,priority:({Alta:"high",Media:"medium",Baja:"low"})[order.priority]||"medium",responsible_worker_id:order.responsibleWorkerId,stage_assignments:currentStages.map((stage,index)=>({recipe_stage_id:stage.id,responsible_worker_id:order.areas[index]?.responsibleWorkerId})),source_type:"manual"});
       localStorage.setItem("erclave-selected-recipe",order.recipeId);localStorage.setItem("erclave-validation-qty",order.quantity);closeModal();await loadProductionApiData();showToast(`Orden ${saved.code} generada en Production API.`);openOrderPrintModal(saved.id);
-    } catch(error) { renderFormErrors([error?.payload?.error?.code==="resources_unavailable"?t("orderResourcesChanged"):userFacingError(error,"No se pudo generar la orden.")]); }
+    } catch(error) { renderFormErrors([error]); }
     return;
   }
   mockDb.addOrder(order);
@@ -10434,6 +10431,9 @@ async function saveOrderForm(event) {
 async function changeOrderStatus(orderId, status) {
   const order = mockDb.findOrder(orderId);
   if (!order || !orderStatusCatalog.includes(status)) return;
+  if(order.isService&&["En espera de recursos","En produccion"].includes(status)&&!hasServiceEvidence(order,"start")){
+    render();openServiceStartEvidence(order,status);return;
+  }
   if (getApiMode() === "api") {
     if(!hasPermission(productionOrderTransitionPermission(order.status,status)))return;
     try { await updateProductionOrderStatus(orderId,{status:toApiOrderStatus(status),reason:"Cambio operativo desde la orden"});await loadProductionApiData();showToast(status==="En produccion"?t("orderMaterialIssueRegistered",{code:order.code||order.id}):`Orden ${order.id} ahora esta en ${status}.`); }
@@ -10456,17 +10456,25 @@ function advanceOrderStage(orderId, stageIndex) {
   const stage=order.areas[stageIndex];
   if(["Terminada","Omitida"].includes(stage.status)){showToast(t("orderStageTerminal"));return;}
   modalContent.innerHTML=`
-    <form class="recipe-form" data-form="order-stage-progress" data-order-id="${escapeAttribute(orderId)}" data-stage-index="${stageIndex}">
+    <form class="recipe-form ${order.isService?"service-evidence-progress":""}" data-form="order-stage-progress" data-order-id="${escapeAttribute(orderId)}" data-stage-index="${stageIndex}">
       <div class="modal-head"><div><p class="eyebrow">${t("production")}</p><h2>${t("orderStageProgressTitle")}</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div>
       <p class="helper-copy"><strong>${escapeHtml(stage.area)}</strong> · ${t("orderStageProgressHelp")}</p>
-      <label class="full-field"><span>${t("orderStageProgressLabel")}</span><input name="progressPercent" type="number" min="0" max="100" step="1" value="${escapeAttribute(String(Number(stage.progress||0)))}" required><small>${t("orderStageProgressScale")}</small></label>
+      <label class="${order.isService?"preview-field full-field":"full-field"}"><span>${t("orderStageProgressLabel")}</span><input name="progressPercent" type="number" min="0" max="100" step="1" value="${escapeAttribute(String(Number(stage.progress||0)))}" required><small>${t("orderStageProgressScale")}</small></label>
+      ${order.isService?serviceEvidenceFields("start",t)+serviceEvidenceFields("finish",t):""}
       <div class="modal-actions"><button class="secondary-action" type="button" data-action="cancel-stage-progress">${t("cancel")}</button><button class="primary-action" type="submit">${t("orderStageProgressSave")}</button></div>
     </form>`;
   modalBackdrop.hidden=false;
   modalContent.querySelector(".modal-close").addEventListener("click",closeModal);
   modalContent.querySelector("[data-action='cancel-stage-progress']").addEventListener("click",closeModal);
   modalContent.querySelector("[data-form='order-stage-progress']").addEventListener("submit",saveOrderStageProgressForm);
-  modalContent.querySelector("[name='progressPercent']").focus();
+  const progressInput=modalContent.querySelector("[name='progressPercent']");
+  if(order.isService){
+    const sync=()=>{
+      toggleServiceEvidence(progressInput.form,"start",Number(progressInput.value)>0&&!hasServiceEvidence(order,"start"));
+      toggleServiceEvidence(progressInput.form,"finish",Number(progressInput.value)===100&&order.areas.every((item,index)=>index===stageIndex||["Terminada","Omitida"].includes(item.status))&&!hasServiceEvidence(order,"finish"));
+    };progressInput.addEventListener("input",sync);sync();
+  }
+  progressInput.focus();
 }
 
 async function saveOrderStageProgressForm(event){
@@ -10478,14 +10486,21 @@ async function saveOrderStageProgressForm(event){
   const status=progress===100?"completed":progress===0?"pending":"in_progress";
   if(getApiMode()==="api"){
     if(!hasPermission(productionStagePermission(status)))return;
+    if(form.dataset.evidenceSaving==="true")return;
+    form.dataset.evidenceSaving="true";
+    const saveButton=form.querySelector("[type=submit]");saveButton.disabled=true;
     try{
+      if(order.isService&&progress>0){
+        await saveServiceEvidenceFromForm(form,order,"start",t);
+        if(progress===100&&order.areas.every((item,index)=>index===stageIndex||["Terminada","Omitida"].includes(item.status)))await saveServiceEvidenceFromForm(form,order,"finish",t);
+      }
       if(progress>0&&order.status!=="En produccion"){
         if(!hasPermission(productionOrderTransitionPermission(order.status,"En produccion")))return;
         await updateProductionOrderStatus(order.id,{status:"in_progress",reason:"Actualizacion de avance por etapa"});
       }
       await updateProductionOrderStage(stage.id,{status,progress_percent:progress,notes:"Porcentaje de avance registrado desde Produccion"});
       closeModal();await loadProductionApiData();showToast(t("orderStageProgressUpdated",{stage:stage.area,progress:formatNumber(progress)}));
-    }catch(error){if(error?.payload?.error?.code==="material_consumption_required")showToast(t("orderMaterialIssueFailed"),"danger");else showApiError(error,t("orderStageProgressSaveError"));}
+    }catch(error){if(error?.payload?.error?.code==="material_consumption_required")showToast(t("orderMaterialIssueFailed"),"danger");else renderFormFeedback(form,[error]);}finally{form.dataset.evidenceSaving="false";saveButton.disabled=false;}
     return;
   }
   const stages=order.areas.map((item,index)=>index===stageIndex?{...item,status:progress===100?"Terminada":progress===0?"Pendiente":"En proceso",progress}:item);
@@ -11022,6 +11037,29 @@ function openOperationalHandoff(kind,id,action){
       if(kind==="transfer")result=await transitionInventoryTransfer(id,action,{warehouse_id:action==="receive-return"?row.origin_warehouse_id:row.destination_warehouse_id,quantity:data.quantity?Number(data.quantity):null,reason:data.reason},`handoff-${id}-${action}-${row.received_quantity}-${row.returned_quantity}-${data.quantity||0}`);
       closeModal();state.inventoryMovements={status:"idle",error:""};state.inventoryBalances={status:"idle",data:[],page:{},error:"",queryKey:"",cursor:"",previousCursors:[]};state.purchasingApi.status="idle";state.salesApi.status="idle";state.productionApi.status="idle";state.maintenanceApi.status="idle";
       await loadOperationalHandoff(kind);render();showToast(t(requestingReturn?"handoffReturnRequested":["needs_reconciliation","received_pending_reconciliation"].includes(result?.status)?"handoffPartial":"handoffDone"),["needs_reconciliation","received_pending_reconciliation"].includes(result?.status)?"warning":"success");
-    }catch(error){renderFormErrors([userFacingError(error,t("handoffFailed"))]);button.disabled=false;}
+    }catch(error){renderFormErrors([error]);button.disabled=false;}
   });
+}
+
+
+function openServiceStartEvidence(order,targetStatus){
+  modalContent.innerHTML=`<form class="recipe-form" id="productionServiceEvidenceForm"><div class="modal-head"><h2>${t("serviceEvidenceStart")}</h2><button type="button" class="icon-button" data-evidence-close aria-label="${t("close")}">x</button></div>${serviceEvidenceFields("start",t)}<div class="modal-actions"><button type="button" class="secondary-action" data-evidence-close>${t("cancel")}</button><button type="submit" class="primary-action">${t("serviceEvidenceSaveContinue")}</button></div></form>`;
+  modalBackdrop.hidden=false;
+  const form=modalContent.querySelector('form');toggleServiceEvidence(form,"start",true);
+  form.querySelectorAll('[data-evidence-close]').forEach(button=>button.addEventListener('click',closeModal));
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();const button=form.querySelector('[type=submit]');if(button.disabled)return;button.disabled=true;
+    try{
+      await saveServiceEvidenceFromForm(form,order,"start",t);
+      await updateProductionOrderStatus(order.id,{status:toApiOrderStatus(targetStatus),reason:"Service reception evidence recorded"});
+      closeModal();await loadProductionApiData();showToast(t("serviceEvidenceSaved"));
+    }catch(error){renderFormFeedback(form,[error]);}finally{button.disabled=false;}
+  });
+  form.querySelector('textarea').focus();
+}
+function openServiceEvidenceHistory(orderId){
+  const order=mockDb.findOrder(orderId);if(!order?.isService)return;
+  modalContent.innerHTML=`<div class="modal-head"><h2>${t("serviceEvidenceTitle")}</h2><button class="icon-button" type="button" data-evidence-close aria-label="${t("close")}">x</button></div>${serviceEvidenceHistory(order,t,escapeHtml)}<p>${t("serviceEvidenceRetention")}</p>`;
+  modalBackdrop.hidden=false;modalContent.querySelector('[data-evidence-close]').addEventListener('click',closeModal);modalContent.querySelector('[data-evidence-close]').focus();
+  modalContent.querySelectorAll('[data-evidence-download]').forEach(button=>button.addEventListener('click',async()=>{try{await downloadServiceEvidence(order.id,button.dataset.evidenceDownload);}catch(error){showApiError(error);}}));
 }

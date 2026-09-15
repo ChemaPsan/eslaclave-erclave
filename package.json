@@ -35,7 +35,9 @@
     "session:context": "node tools/session-context.js",
     "build:frontend:qa": "node tools/build-qa-frontend.js",
     "qa:document": "python tools/generate-qa-document.py",
-    "smoke:maintenance:local": "backend\\.venv\\Scripts\\python.exe backend\\scripts\\smoke_maintenance_local.py"
+    "smoke:maintenance:local": "backend\\.venv\\Scripts\\python.exe backend\\scripts\\smoke_maintenance_local.py",
+    "validate:form-feedback": "node tools/validators/validate-form-feedback.js",
+    "test:form-feedback": "playwright test --config playwright.form-feedback.config.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0"

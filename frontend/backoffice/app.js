@@ -2,11 +2,12 @@ import { getApiBaseUrl } from "../api/config.js";
 import { deleteBackofficeTenant, listBackofficeModules, listBackofficeTenants, listBackofficeUsage, onboardTenant, setBackofficeTenantEntitlement, setBackofficeTenantStatus, updateBackofficeTenant } from "../api/backoffice.js";
 import { isFirebaseAuthConfigured, onAuthChanged, sendPasswordReset, signInWithEmail, signOutUser } from "../auth.js";
 import { installMutationFeedback } from "../utils/mutation-feedback.js";
+import { installFormFeedback, renderFormFeedback } from "../features/form-feedback.js";
 import { getLocalizedErrorMessage } from "../i18n/api-errors.js";
 
 
 const app = document.getElementById("backofficeApp");
-const backofficeLanguage = navigator.language?.toLowerCase().startsWith("en") ? "en" : "es";
+const backofficeLanguage = localStorage.getItem("erclave-lang") === "en" ? "en" : localStorage.getItem("erclave-lang") === "es" ? "es" : navigator.language?.toLowerCase().startsWith("en") ? "en" : "es";
 document.documentElement.lang = backofficeLanguage;
 const backofficeCopy = {
   es: {
@@ -84,6 +85,7 @@ function backofficeError(error, esFallback, enFallback) {
   });
 }
 const bt = (key) => backofficeCopy[backofficeLanguage][key] || key;
+installFormFeedback({ getLanguage: () => backofficeLanguage });
 installMutationFeedback({ getMessage: () => bt("operationInProgress") });
 const moduleOptions = [
   { code: "admin", label: "Administracion", required: true },
@@ -334,7 +336,7 @@ function renderBackoffice() {
         <div class="form-grid">
           <label>
             <span>Nombre comercial</span>
-            <input name="commercial_name" required placeholder="Cliente Nuevo">
+            <input name="commercial_name" data-error-path="commercial_name organization_profile.corporate.commercial_name" required placeholder="Cliente Nuevo">
           </label>
           <label>
             <span>Slug</span>
@@ -342,11 +344,11 @@ function renderBackoffice() {
           </label>
           <label>
             <span>Razon social principal</span>
-            <input name="legal_name" placeholder="Cliente Nuevo S.A. de C.V.">
+            <input name="legal_name" data-error-path="legal_name organization_profile.corporate.legal_name" placeholder="Cliente Nuevo S.A. de C.V.">
           </label>
           <label>
             <span>RFC</span>
-            <input name="tax_id" placeholder="XAXX010101000">
+            <input name="tax_id" data-error-path="tax_id organization_profile.corporate.tax_id organization_profile.legal_entities.0.tax_id" placeholder="XAXX010101000">
           </label>
           <label>
             <span>Plan</span>
@@ -354,7 +356,7 @@ function renderBackoffice() {
           </label>
           <label>
             <span>Telefono corporativo</span>
-            <input name="corporate_phone" placeholder="+52 55 0000 0000">
+            <input name="corporate_phone" data-error-path="corporate_phone organization_profile.corporate.phone" placeholder="+52 55 0000 0000">
           </label>
         </div>
 
@@ -363,19 +365,19 @@ function renderBackoffice() {
           <div class="form-grid">
             <label>
               <span>Nombre</span>
-              <input name="owner_name" required placeholder="Admin Cliente">
+              <input name="owner_name" data-error-path="owner_name owner.display_name organization_profile.corporate.contact_name organization_profile.legal_entities.0.contact_name" required placeholder="Admin Cliente">
             </label>
             <label>
               <span>Email</span>
-              <input name="owner_email" type="email" required placeholder="admin@cliente.com">
+              <input name="owner_email" data-error-path="owner_email owner.email organization_profile.corporate.contact_email organization_profile.legal_entities.0.contact_email" type="email" required placeholder="admin@cliente.com">
             </label>
             <label>
               <span>Telefono</span>
-              <input name="owner_phone" placeholder="+52 55 0000 0000">
+              <input name="owner_phone" data-error-path="owner_phone organization_profile.corporate.contact_phone organization_profile.legal_entities.0.contact_phone" placeholder="+52 55 0000 0000">
             </label>
             <label>
               <span>Puesto</span>
-              <input name="owner_position" placeholder="Direccion administrativa">
+              <input name="owner_position" data-error-path="owner_position organization_profile.corporate.contact_position organization_profile.legal_entities.0.contact_position" placeholder="Direccion administrativa">
             </label>
           </div>
         </div>
@@ -385,35 +387,35 @@ function renderBackoffice() {
           <div class="form-grid">
             <label>
               <span>Entidad fiscal</span>
-              <input name="legal_entity_name" placeholder="Cliente Nuevo S.A. de C.V.">
+              <input name="legal_entity_name" data-error-path="legal_entity_name organization_profile.legal_entities.0.legal_name" placeholder="Cliente Nuevo S.A. de C.V.">
             </label>
             <label>
               <span>Regimen fiscal</span>
-              <input name="fiscal_regime" placeholder="601 General de Ley Personas Morales">
+              <input name="fiscal_regime" data-error-path="fiscal_regime organization_profile.legal_entities.0.fiscal_regime" placeholder="601 General de Ley Personas Morales">
             </label>
             <label>
               <span>Uso CFDI default</span>
-              <input name="cfdi_usage" placeholder="G03 Gastos en general">
+              <input name="cfdi_usage" data-error-path="cfdi_usage organization_profile.legal_entities.0.cfdi_usage" placeholder="G03 Gastos en general">
             </label>
             <label>
               <span>Direccion fiscal</span>
-              <input name="fiscal_address" placeholder="Direccion fiscal">
+              <input name="fiscal_address" data-error-path="fiscal_address organization_profile.legal_entities.0.fiscal_address" placeholder="Direccion fiscal">
             </label>
             <label>
               <span>Sucursal inicial</span>
-              <input name="branch_name" placeholder="Matriz">
+              <input name="branch_name" data-error-path="branch_name organization_profile.branches.0.name" placeholder="Matriz">
             </label>
             <label>
               <span>Codigo sucursal</span>
-              <input name="branch_code" placeholder="MTZ">
+              <input name="branch_code" data-error-path="branch_code organization_profile.branches.0.code" placeholder="MTZ">
             </label>
             <label>
               <span>Telefono sucursal</span>
-              <input name="branch_phone" placeholder="+52 55 0000 0000">
+              <input name="branch_phone" data-error-path="branch_phone organization_profile.branches.0.phone" placeholder="+52 55 0000 0000">
             </label>
             <label>
               <span>Direccion sucursal</span>
-              <input name="branch_address" placeholder="Direccion operativa">
+              <input name="branch_address" data-error-path="branch_address organization_profile.branches.0.address" placeholder="Direccion operativa">
             </label>
           </div>
         </div>
@@ -779,39 +781,62 @@ function render() {
 }
 
 
+// Retain the live controls on rejection; passwords never leave the form for storage.
+function beginFormSubmission(form) {
+  if (form.getAttribute("aria-busy") === "true") return null;
+  const buttons = [...form.querySelectorAll("button:not(:disabled)")];
+  form.setAttribute("aria-busy", "true");
+  buttons.forEach((button) => { button.disabled = true; });
+  return () => {
+    form.removeAttribute("aria-busy");
+    buttons.forEach((button) => { button.disabled = false; });
+  };
+}
+
 function handleLogin(event) {
   event.preventDefault();
-  const formData = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  const finish = beginFormSubmission(form);
+  if (!finish) return;
+  const formData = new FormData(form);
   const email = readFormValue(formData, "email");
   const password = readFormValue(formData, "password");
   state.auth = { ...state.auth, status: "loading", email, error: "", notice: "" };
-  render();
   signInWithEmail(email, password).catch((error) => {
     state.auth = { ...state.auth, status: "signed_out", user: null, email, error: backofficeError(error, "No se pudo iniciar sesión.", "Sign-in failed."), notice: "" };
-    render();
+    finish();
+    renderFormFeedback(form, [error], { lang: backofficeLanguage });
   });
 }
 
 
 function handleReset() {
-  const emailInput = app.querySelector("[name='email']");
-  const email = String(emailInput?.value || state.auth.email || "").trim();
-  if (!email) {
-    state.auth = { ...state.auth, error: "Escribe el correo interno para enviar recuperacion.", notice: "" };
-    render();
+  const form = app.querySelector("[data-form=login]");
+  const emailInput = form?.querySelector("[name=email]");
+  const email = String(emailInput?.value || "").trim();
+  if (!email || !emailInput.validity.valid) {
+    renderFormFeedback(form, [{ code: "validation_failed", details: { issues: [{ loc: ["body", "email"], type: email ? "value_error" : "missing" }] } }], { lang: backofficeLanguage });
     return;
   }
+  const finish = beginFormSubmission(form);
+  if (!finish) return;
   state.auth = { ...state.auth, status: "loading", email, error: "", notice: "" };
-  render();
   sendPasswordReset(email)
     .then(() => {
-      state.auth = { ...state.auth, status: "signed_out", notice: `Se envio recuperacion a ${email}.`, error: "" };
-      render();
+      state.auth = { ...state.auth, status: "signed_out", error: "", notice: "" };
+      form.querySelectorAll(".notice-box").forEach((notice) => notice.remove());
+      const notice = document.createElement("p");
+      notice.className = "notice-box";
+      notice.setAttribute("role", "status");
+      notice.textContent = backofficeLanguage === "en" ? "Password reset requested. Check your email." : "Recuperación solicitada. Revisa tu correo.";
+      form.append(notice);
     })
     .catch((error) => {
-      state.auth = { ...state.auth, status: "signed_out", error: backofficeError(error, "No se pudo enviar la recuperación.", "The password reset email could not be sent."), notice: "" };
-      render();
-    });
+      state.auth = { ...state.auth, status: "signed_out", error: "", notice: "" };
+      finish();
+      renderFormFeedback(form, [error], { lang: backofficeLanguage });
+    })
+    .finally(finish);
 }
 
 
@@ -863,6 +888,7 @@ function loadTenantAdmin(search = state.tenantAdmin.search) {
     .catch((error) => {
       state.tenantAdmin = { ...state.tenantAdmin, status: "error", error: backofficeError(error, "No se pudieron cargar las empresas.", "Organizations could not be loaded."), actionTenantId: "" };
       render();
+      renderFormFeedback(app.querySelector("[data-form=tenant-search]"), [error], { lang: backofficeLanguage });
     });
 }
 
@@ -899,7 +925,10 @@ function bindTenantAdminActions() {
 
 function handleTenantEditorSubmit(event) {
   event.preventDefault();
-  const formData = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  const finish = beginFormSubmission(form);
+  if (!finish) return;
+  const formData = new FormData(form);
   const tenantId = event.currentTarget.dataset.tenantId;
   const payload = {
     commercial_name: readFormValue(formData, "commercial_name"),
@@ -909,7 +938,6 @@ function handleTenantEditorSubmit(event) {
     locale: readFormValue(formData, "locale")
   };
   state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: tenantId, notice: "", error: "" };
-  render();
   updateBackofficeTenant(tenantId, payload)
     .then(() => {
       state.tenantAdmin = { ...state.tenantAdmin, notice: bt("tenantUpdated") };
@@ -917,7 +945,8 @@ function handleTenantEditorSubmit(event) {
     })
     .catch((error) => {
       state.tenantAdmin = { ...state.tenantAdmin, actionTenantId: "", error: backofficeError(error, "No se pudo actualizar la empresa.", "The organization could not be updated.") };
-      render();
+      finish();
+      renderFormFeedback(form, [error], { lang: backofficeLanguage });
     });
 }
 
@@ -975,6 +1004,7 @@ function loadUsage(filters = {}) {
     .catch((error) => {
       state.usage = { ...state.usage, status: "error", error: backofficeError(error, "No se pudieron cargar las métricas de uso.", "Usage metrics could not be loaded.") };
       render();
+      renderFormFeedback(app.querySelector("[data-form=usage-search]"), [error], { lang: backofficeLanguage });
     });
 }
 
@@ -1013,9 +1043,11 @@ function handleCommercialNameInput(event) {
 
 function handleOnboardingSubmit(event) {
   event.preventDefault();
-  const payload = buildOnboardingPayload(event.currentTarget);
+  const form = event.currentTarget;
+  const finish = beginFormSubmission(form);
+  if (!finish) return;
+  const payload = buildOnboardingPayload(form);
   state.onboarding = { status: "loading", error: "", result: state.onboarding.result };
-  render();
   onboardTenant(payload)
     .then((result) => {
       state.onboarding = { status: "idle", error: "", result };
@@ -1023,7 +1055,8 @@ function handleOnboardingSubmit(event) {
     })
     .catch((error) => {
       state.onboarding = { status: "error", error: backofficeError(error, "No se pudo crear la empresa.", "The organization could not be created."), result: state.onboarding.result };
-      render();
+      finish();
+      renderFormFeedback(form, [error], { lang: backofficeLanguage });
     });
 }
 

@@ -23,7 +23,7 @@
         <mxCell id="local_services" value="7 servicios FastAPI&lt;br&gt;Admin 8000 · Producción 8002 · Inventory 8004&lt;br&gt;RH 8006 · Sales 8008 · Purchasing 8010 · Maintenance 8012" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#D9EAF7;strokeColor=#8A6AA3;fontColor=#17365D;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="80" y="360" width="570" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="local_db" value="PostgreSQL local&lt;br&gt;Local head 20260908_0034&lt;br&gt;aplicada y certificada · 127.0.0.1:5434 / erclave_local" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+        <mxCell id="local_db" value="PostgreSQL local&lt;br&gt;Local head 20260913_0036&lt;br&gt;aplicada y certificada · 127.0.0.1:5434 / erclave_local" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="80" y="560" width="570" height="125" as="geometry" />
         </mxCell>
         <mxCell id="local_chg" value="Extensiones sólo Local&lt;br&gt;Ventas: órdenes de servicio&lt;br&gt;Compras: servicios sin Inventory" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFF1CC;strokeColor=#8A6AA3;fontColor=#6A4A00;fontSize=13;spacing=8;" vertex="1" parent="1">
@@ -44,7 +44,7 @@
         <mxCell id="qa_services" value="Cloud Run - 7 servicios&lt;br&gt;Admin · Producción · Inventory · RH&lt;br&gt;Sales · Purchasing · Maintenance&lt;br&gt;SHA a119ddf" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#D9EAF7;strokeColor=#8A6AA3;fontColor=#17365D;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="775" y="530" width="570" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="qa_db" value="Cloud SQL QA&lt;br&gt;QA head 20260825_0029&lt;br&gt;schemas propietarios por servicio" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+        <mxCell id="qa_db" value="Cloud SQL QA&lt;br&gt;QA head 20260908_0034&lt;br&gt;schemas propietarios por servicio" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="775" y="730" width="570" height="120" as="geometry" />
         </mxCell>
         <mxCell id="qa_uat" value="Pendiente de salida&lt;br&gt;UAT funcional, aislamiento, permisos,&lt;br&gt;concurrencia e idempotencia" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFF1CC;strokeColor=#8A6AA3;fontColor=#6A4A00;fontSize=13;spacing=8;" vertex="1" parent="1">

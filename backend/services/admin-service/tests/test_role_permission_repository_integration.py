@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
+from sqlalchemy.engine import make_url
 
 from app.repositories import (
     AdminRepository,
@@ -13,6 +14,16 @@ from app.repositories import (
     RolePermissionForbiddenError,
 )
 from app.schemas import UnitOfMeasureCreateRequest, UnitOfMeasureUpdateRequest
+
+
+
+def authorized_local_url():
+    assert os.getenv("ERCLAVE_TEST_ALLOW_TEMP_TENANTS") == "1", "Temporary Local tenants require explicit authorization"
+    url = os.environ["ERCLAVE_TEST_DATABASE_URL"]
+    parsed = make_url(url)
+    assert parsed.host in {"127.0.0.1", "localhost", "::1"}
+    assert parsed.port == 5434 and parsed.database == "erclave_local"
+    return url
 
 
 class TransactionEngine:
@@ -30,7 +41,7 @@ class TransactionEngine:
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_role_permission_replace_is_tenant_safe_idempotent_and_revision_guarded():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
+    engine = create_engine(authorized_local_url(), poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:
@@ -210,7 +221,7 @@ def test_role_permission_replace_is_tenant_safe_idempotent_and_revision_guarded(
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_unit_commands_are_tenant_safe_idempotent_and_audited():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
+    engine = create_engine(authorized_local_url(), poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:
@@ -243,7 +254,7 @@ def test_unit_commands_are_tenant_safe_idempotent_and_audited():
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_backoffice_entitlement_and_tenant_preference_are_separate_tenant_safe_commands():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
+    engine = create_engine(authorized_local_url(), poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:
@@ -360,7 +371,7 @@ def test_backoffice_entitlement_and_tenant_preference_are_separate_tenant_safe_c
 
 @pytest.mark.skipif(not os.getenv("ERCLAVE_TEST_DATABASE_URL"), reason="local PostgreSQL integration URL not configured")
 def test_onboarding_assigns_owner_permissions_after_modules_are_created():
-    engine = create_engine(os.environ["ERCLAVE_TEST_DATABASE_URL"], poolclass=NullPool)
+    engine = create_engine(authorized_local_url(), poolclass=NullPool)
     with engine.connect() as connection:
         transaction = connection.begin()
         try:

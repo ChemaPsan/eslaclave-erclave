@@ -53,6 +53,8 @@ export async function apiRequest(path, options = {}) {
 export async function apiRequestAt(baseUrl, path, options = {}, apiLabel = "API") {
   const method = String(options.method || "GET").toUpperCase();
   const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
+  const formRequest = { path, method, body: options.body, context: null };
+  if (isMutation) window.dispatchEvent(new CustomEvent("erclave:form-request", { detail: formRequest }));
   if (isMutation) window.dispatchEvent(new CustomEvent(MUTATION_STARTED_EVENT));
   try {
   const url = `${baseUrl}${path}`;
@@ -122,11 +124,20 @@ export async function apiRequestAt(baseUrl, path, options = {}, apiLabel = "API"
   if (expectsBlob) {
     if (response.status === 204) return { empty: true, blob: null, filename: "" };
     const disposition = response.headers.get("Content-Disposition") || "";
-    const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || "report.csv";
+    const encodedFilename = disposition.match(/filename\*=UTF-8\'\'([^;]+)/i)?.[1];
+    let filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || "report.csv";
+    if(encodedFilename){try{filename=decodeURIComponent(encodedFilename);}catch{filename="attachment";}}
     return { empty: false, blob: await response.blob(), filename };
   }
   return payload;
+  } catch (error) {
+    if (formRequest.context && error && typeof error === "object") {
+      error.formContext = formRequest.context;
+      window.dispatchEvent(new CustomEvent("erclave:form-error", { detail: error }));
+    }
+    throw error;
   } finally {
+    if (formRequest.context) window.dispatchEvent(new CustomEvent("erclave:form-complete", { detail: formRequest.context }));
     if (isMutation) window.dispatchEvent(new CustomEvent(MUTATION_FINISHED_EVENT));
   }
 }

@@ -11,6 +11,7 @@ const validators = [
   "validate-documentation-freshness.js",
   "validate-i18n.js",
   "validate-error-feedback.js",
+  "validate-form-feedback.js",
   "validate-active-module-localization.js",
   "validate-responsive-ui.js",
   "validate-scalable-selectors.js",

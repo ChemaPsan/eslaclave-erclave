@@ -49,7 +49,7 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 
 ## 4. Inventario actual confirmado
 
-### 4.1 QA verificado al 1 de septiembre de 2026
+### 4.1 QA verificado al 9 de septiembre de 2026
 
 | Componente o capacidad | Estado confirmado | Evidencia o limite |
 |---|---|---|
@@ -57,7 +57,7 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 | `admin-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | `production-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | Firebase Auth | Integrado | Login y sesion QA documentados |
-| Cloud SQL `erclave_qa` | Migrado | Revision documentada `20260825_0029` |
+| Cloud SQL `erclave_qa` | Migrado | Revision documentada `20260908_0034` |
 | Administracion | Real QA | Tenant, sesion, permisos, roles, entitlements y organizacion |
 | Productos y servicios | Real QA | API de Produccion desplegada |
 | Recetas y versiones | Real QA | Integracion publicada y documentada |
@@ -485,3 +485,8 @@ Toda modificacion de ambientes debe actualizar este documento, agentes, skills, 
 ## Candidato de continuidad CHG-269
 
 CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
+
+
+## Release QA verificado CHG-270
+
+CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.

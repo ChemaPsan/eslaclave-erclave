@@ -1,5 +1,58 @@
 # Pendientes priorizados de ERClave
 
+## Infraestructura de evidencia CHG-277 — promoción pendiente
+
+Acceso Cloud resuelto con la cuenta administradora autorizada. El 2026-09-14 se creó `erclave-qa-service-evidence` en erclave/us-central1: Standard, acceso uniforme y prevención pública enforced, sin versionado, soft delete ni retención bloqueada. Se verificó vacío y una única regla Delete con age 365. GitHub `QA_EVIDENCE_BUCKET=erclave-qa-service-evidence` creada y leída de vuelta.
+
+El usuario autorizó el rol mínimo para `erclave-production-qa@erclave.iam.gserviceaccount.com`: storage.buckets.get y storage.objects.create/get/delete, solo en ese bucket. Rol `projects/erclave/roles/erclaveQaServiceEvidence` creado en disponibilidad general con esos cuatro permisos; asignación directa exclusivamente al bucket guardada y confirmada en consola. No afirmar acceso funcional por health/ready.
+
+Autorizadas las pruebas con tenants temporales UUID y limpieza exclusivamente en loopback5434/erclave_local. `npm run verify:postgres` terminó con **360 aprobadas, cero omitidas** (65.39s); validadores y compilación aprobados. Esto cierra las20 integraciones pendientes y las55 históricas omitidas en la ejecución sin DB. No demuestra UAT ni paridad autenticada QA.
+
+PR #15 sigue en borrador; HEAD publicado dffe7642d57111b94b74d95ec62f252b017c0190, CI34816946232 aprobado. No merge, qa-candidate, qa-release, migración ni tráfico/Hosting. Base QA previamente verificada b63cdad. Pendientes: smoke de adjuntos, pipeline protegido, pruebas autenticadas QA y revisión visual Word. No se crearon datos funcionales QA.
+
+## Preparación QA y manuales CHG-275
+
+Revisión 2026-09-14: siete manuales y guía actualizados para Local con capacidades pendientes de QA; 65 casos en guía/matriz (56 base +9 nuevos), sin aceptación inferida. Las siete APIs QA reportan b63cdad en /version. Se preparó QA_EVIDENCE_BUCKET en qa-release; bucket/IAM aún requieren aprovisionamiento autorizado y smoke. Local head `20260913_0036`; QA documentado `20260908_0034` sin cambios.
+
+Selección segura:29 aprobadas sin skips (23 DB históricas,3 schemas históricos,3 DB nuevas). De las55 históricas antes omitidas se verificaron26 y quedan29 bloqueadas por fixtures de otros tenants/limpieza amplia. No lanzar verify:postgres completo. Detalle, rollback, matriz API y gates en `docs/operaciones/release_qa_20260914.md`. Sin publicación de rama/PR, migración o deploy QA.
+
+
+## Evidencia de servicios CHG-274 — solo Local
+
+CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+
+Pendientes de release: UAT del tester, bucket privado dedicado con lifecycle365d/versionado y soft-delete desactivados, política de no respaldar adjuntos más allá de su retención y promoción gobernada. No hay escrituras QA. Las55 integraciones generales previas siguen pendientes; este corte prueba DB/archivos de evidencia de forma focalizada.
+
+
+## Margen esperado sin tope CHG-273
+
+CHG-273 implementado y migrado solo Local. Pendientes: aceptación del tester y promoción QA autorizada, incluyendo migración0035 antes de exponer la captura sin tope. Las 55 integraciones generales omitidas en CHG-272 no se dan por ejecutadas: este corte sí verifica PostgreSQL real específicamente para margen y reversa. CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración Local `20260913_0035` aplicada; QA conserva `20260908_0034` y release b63cdad. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
+
+
+## Cierre y aceptacion de formularios CHG-272
+
+Cierre tecnico completado: 174 pruebas browser aprobadas (98 offline, incluidos 14 Backoffice; 22 MAIN y 54 regresion), documentacion/trazabilidad, skill, validate y `verify` (262 backend, 55 omitidas sin DB; sintaxis 79). Las integraciones omitidas no se declaran ejecutadas. No quedan gates pendientes de ejecucion de CHG-272.
+
+- Ejecutar UAT del tester y capturar respuesta estructurada/correlacion para identificar la causa exacta del incidente original de Movimientos; no asumirla por la captura.
+- Ampliar evidencia negativa de negocio por cada consumidor que se ajuste. Las 54 variantes registradas demuestran wiring, no prueba exhaustiva de todas sus reglas/transiciones.
+- Promocion QA y actualizacion de manuales tras release, exclusivamente bajo autorizacion y pipeline; CHG-272 esta solo Local y CHG-271 se preserva como manual de QA vigente.
+
+Detalle, comandos y limites: `docs/auditorias/formularios_feedback_2026-09-13.md`. Los pendientes anteriores no se cierran por este cambio de feedback.
+
+## Manuales y guía del tester CHG-271
+
+CHG-271 sincroniza los siete manuales funcionales Markdown/Word y la guía de pruebas con QA `b63cdad`, revisión documental 2026-09-10. Entrega: `docs/qa/ENTREGA_TESTER.md`; generación reproducible de tablas y procedimientos mediante herramientas documentales. No cambia runtime, contratos, migraciones, datos, permisos ni despliegues. No publica documentos en GitHub.
+
+Incidencia identificada por revisión de código: la bandeja para solicitar sobrantes de Mantenimiento busca `.submodule-screen`, ausente en su render; confirmar/corregir acceso por el agente técnico de Mantenimiento y QA. No se declara disponible el recorrido completo desde pantalla. Compra directa soportada por API pero no expuesta en alta de órdenes de la UI. Ambos límites constan en manuales/guía. UAT autenticada continúa pendiente del tester.
+
+
+## Estado vigente tras release QA CHG-270
+
+CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
+
+Las notas de preparación y cortes anteriores que siguen son evidencia histórica; no deben disparar un release duplicado.
+
+
 ## Promoción QA en preparación CHG-269
 
 CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
@@ -7,7 +60,7 @@ CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–26
 
 ## Cierre Local CHG-268
 
-Reserva MTO-000001 recuperada y fallo Decimal corregido. Pendientes: confirmación física por Almacén cuando entregue, aceptación manual y promoción gobernada a QA. Reintentos automáticos siguen fuera de alcance; las fallas de existencia/dependencia conservan recuperaci?n manual. Informe: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+Reserva MTO-000001 recuperada y fallo Decimal corregido. Pendientes: confirmación física por Almacén cuando entregue, aceptación manual y promoción gobernada a QA. Reintentos automáticos siguen fuera de alcance; las fallas de existencia/dependencia conservan recuperación manual. Informe: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
 
 
 ## Alcance posterior a CHG-264

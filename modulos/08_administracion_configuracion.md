@@ -1,5 +1,11 @@
 # ERClave — Módulo de Administración y Configuración
 
+## Feedback de formularios Local CHG-272
+
+Alta de rol conserva codigo, nombre y descripcion al fallar. Backoffice integra login, onboarding, editor y filtros; no persiste contrasenas para restaurar la captura. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+
+Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+
 ## Coherencia de consultas Local (CHG-262)
 
 El dashboard consulta solo los recursos permitidos por la sesion: una lectura de Roles no exige permisos de Usuarios, Tenant o Configuracion. Las colecciones omitidas por falta de permiso no conceden autoridad ni fabrican datos. Backoffice conserva el control allowlisted y se verifica en lectura con Firebase Emulator. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
@@ -281,3 +287,8 @@ Administración conserva en su primera vista el centro de configuración de orga
 Se repusieron en el catálogo Local los cuatro permisos existentes sales.quote.submit/approve/expire/cancel y se asignaron al Owner del tenant permitido mediante API auditada, preservando sus asignaciones y alcances. No se ejecutó el seed completo ni se concedieron a otros roles/tenants; no existe bypass por nombre Owner.
 
 Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+
+
+## Disponibilidad QA CHG-270
+
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.

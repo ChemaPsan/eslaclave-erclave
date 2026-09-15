@@ -1,5 +1,11 @@
 # Modulo 11 - Mantenimiento
 
+## Feedback de formularios Local CHG-272
+
+Alta de orden y registro de tiempo conservan descripcion/notas y resuelven titulo y ended_at al campo visible correspondiente. No altera el flujo de sobrantes ni cierra sus pendientes de UAT. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+
+Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+
 ## Entrega por Almacen ? Local CHG-263
 
 Las solicitudes reservadas aparecen en **Almacenes > Movimientos > Solicitudes de refacciones**. El almacenista confirma la entrega completa o rechaza con motivo; Maintenance conserva solicitud, estado y auditoria, mientras Inventory escribe exclusivamente sus reservas y salidas. `issued` ahora significa entrega confirmada por el actor de Almacen. Resolver y conciliar la orden nunca consumen refacciones; se requiere que las solicitudes esten `issued|cancelled`.
@@ -217,3 +223,8 @@ CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confi
 ## Recuperación de refacciones Local CHG-268
 
 CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+
+
+## Disponibilidad QA CHG-270
+
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.

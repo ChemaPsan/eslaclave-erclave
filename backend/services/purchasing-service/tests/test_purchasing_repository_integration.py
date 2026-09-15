@@ -3,11 +3,13 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from datetime import date,datetime,timezone
 from pathlib import Path
+from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from sqlalchemy.engine import make_url
 
 DATABASE_URL=os.getenv("ERCLAVE_TEST_DATABASE_URL")
 pytestmark=pytest.mark.skipif(not DATABASE_URL,reason="ERCLAVE_TEST_DATABASE_URL is required")
@@ -18,16 +20,28 @@ repo_module=importlib.import_module("app.repositories"); schemas=importlib.impor
 
 @pytest.fixture
 def repository():
-    value=repo_module.PurchasingRepository(DATABASE_URL);tenant="ten_purchasing_test"
-    value.engine.dispose();value.engine=create_engine(DATABASE_URL,pool_pre_ping=True,poolclass=NullPool)
-    with value.engine.begin() as connection:
-        for table in ["audit_events","idempotency_records","purchase_receipt_lines","purchase_receipts","purchase_order_lines","purchase_orders","requisition_lines","requisitions","suppliers"]:
-            connection.execute(text(f"delete from purchasing.{table} where tenant_id=:tenant"),{"tenant":tenant})
-    yield value,tenant
-    with value.engine.begin() as connection:
-        for table in ["audit_events","idempotency_records","purchase_receipt_lines","purchase_receipts","purchase_order_lines","purchase_orders","requisition_lines","requisitions","suppliers"]:
-            connection.execute(text(f"delete from purchasing.{table} where tenant_id=:tenant"),{"tenant":tenant})
+    url = make_url(DATABASE_URL)
+    assert url.host in {"localhost", "127.0.0.1", "::1"}
+    assert url.port == 5434 and url.database == "erclave_local"
+    assert os.getenv("ERCLAVE_TEST_ALLOW_TEMP_TENANTS") == "1", (
+        "Temporary test tenants require explicit authorization and ERCLAVE_TEST_ALLOW_TEMP_TENANTS=1"
+    )
+    # Keep both this tenant and its isolation peer within VARCHAR(40).
+    tenant = "ten_purchasing_test_" + uuid4().hex[:14]
+    owned_tenants = [tenant, tenant + "_other"]
+    value = repo_module.PurchasingRepository(DATABASE_URL)
     value.engine.dispose()
+    value.engine = create_engine(DATABASE_URL, pool_pre_ping=True, poolclass=NullPool)
+    try:
+        yield value, tenant
+    finally:
+        try:
+            with value.engine.begin() as connection:
+                # Exact, per-fixture identities; never clear a shared tenant on setup.
+                for table in ["audit_events", "idempotency_records", "purchase_receipt_lines", "purchase_receipts", "purchase_order_lines", "purchase_orders", "requisition_lines", "requisitions", "suppliers"]:
+                    connection.execute(text(f"delete from purchasing.{table} where tenant_id=any(:tenants)"), {"tenants": owned_tenants})
+        finally:
+            value.engine.dispose()
 
 def line(quantity="10",price=None):return schemas.PurchaseLineInput(line_type="inventory_item",inventory_item_id="itm_test",description="Material de prueba",quantity=quantity,unit_code="H87",unit_price=price)
 def service_line(quantity="1",price=None,description="Servicio especializado",unit="E48"):return schemas.PurchaseLineInput(line_type="service",description=description,quantity=quantity,unit_code=unit,unit_price=price)

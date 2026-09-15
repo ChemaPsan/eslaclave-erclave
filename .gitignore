@@ -21,3 +21,6 @@ build/
 .pytest-tmp-*/
 playwright-report/
 test-results/
+
+# Private local service evidence; never publish user attachments.
+.local/

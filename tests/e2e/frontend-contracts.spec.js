@@ -8,7 +8,7 @@ const TENANT = "ten_739ee59d765d5e14818674800d";
 const hook = `
 window.frontendAudit = {
   state, mockDb, modules, closeModal, renderSalesServiceOrderModal,
-  openProductServiceModal, openWarehouseModal, openInventoryItemModal,
+  openProductServiceModal, renderProductsServicesCatalogScreen, openWarehouseModal, openInventoryItemModal,
   openInventoryMovementModal, openLaborAreaModal, openLaborRoleModal,
   openWorkerModal, openMachineModal, openPurchasingCancellationModal,
   renderPurchasingSubmodulePanel, enhanceEntitySelectors, renderMaintenanceSubmodulePanel,
@@ -312,4 +312,38 @@ test("recuperacion de refacciones bloquea doble clic y restaura accion ante conc
   await expect(page.locator("body")).not.toContainText("internal diagnostic must stay hidden");
   await expect(button).toHaveText("Reintentar reserva");
   expect(calls).toBe(1);
+});
+
+for (const lang of ['es','en']) {
+  test(`${lang}: expected margin accepts values above 100 without losing rejected input`, async ({page}) => {
+    await page.evaluate(lang=>{window.frontendAudit.state.lang=lang;window.frontendAudit.openProductServiceModal('prs_audit');},lang);
+    const input=page.locator('#productServiceForm [name=expectedMargin]');
+    await expect(input).not.toHaveAttribute('max');
+    await expect(page.locator('#expectedMarginHelp')).toContainText('400%');
+    let body;
+    await page.route('**/v1/production/product-services/prs_audit',async route=>{
+      body=route.request().postDataJSON();
+      await route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({detail:[{loc:['body','expected_margin'],type:'greater_than_equal',ctx:{ge:0}}]})});
+    });
+    for (const value of ['400','22122.22','1000000']) {
+      await input.fill(value);
+      await page.locator('#productServiceForm button[type=submit]').click();
+      await expect.poll(()=>body?.expected_margin).toBe(Number(value));
+      await expect(input).toHaveValue(value);
+      await expect(input).toHaveAttribute('aria-invalid','true');
+      await expect(input).toBeFocused();
+    }
+  });
+}
+
+test('expected margin remains the saved percentage in the card and reopened form', async ({page}) => {
+  const markup=await page.evaluate(()=>{
+    const audit=window.frontendAudit;
+    const item=audit.mockDb.findProductService('prs_audit');
+    audit.mockDb.updateProductService({...item,expectedMargin:400,standardCost:900,targetPrice:200000});
+    audit.openProductServiceModal('prs_audit');
+    return audit.renderProductsServicesCatalogScreen();
+  });
+  await expect(page.locator('#productServiceForm [name=expectedMargin]')).toHaveValue('400');
+  expect(markup).toMatch(/400(?:[.,]0+)?%/);
 });

@@ -1,5 +1,11 @@
 # ERClave — Recursos Humanos
 
+## Feedback de formularios Local CHG-272
+
+Alta de trabajador verifica RFC con mensaje junto al campo, foco y datos conservados. Los campos inmutables de edicion permanecen inmutables; su rechazo requiere resumen y no habilitarlos. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+
+Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+
 ## Coherencia de formularios Local (CHG-262)
 
 Consultar Areas o Puestos no requiere leer expedientes de trabajadores. Areas y puestos nuevos muestran el estatus activo que admite el alta; la edicion conserva su cambio de estatus. Fecha de nacimiento es capturable en el alta y solo lectura al editar, conforme a WorkerUpdate. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
@@ -65,3 +71,8 @@ El schema base de RH nacio en `20260730_0010`; expedientes de trabajadores se ag
 Consultas de elegibilidad admiten los permisos puntuales de inicio/reanudación de Producción, Mantenimiento y servicios comerciales. Se revalida el trabajador al ejecutar/reanudar; un snapshot histórico no sustituye elegibilidad actual. RH conserva propiedad de personas/puestos/áreas y no escribe órdenes de otros schemas.
 
 CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+
+
+## Disponibilidad QA CHG-270
+
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.

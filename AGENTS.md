@@ -13,6 +13,7 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 
 ## Reglas obligatorias
 
+- Al crear o modificar formularios, validaciones, serialización de sus payloads o feedback compartido, aplicar `$erclave-form-feedback` en `.agents/skills/erclave-form-feedback/SKILL.md`. Exigir errores vinculados por rutas estructuradas a controles, fallback seguro, conservación de captura y pruebas conductuales negativas por consumidor afectado; la presencia del helper no prueba cobertura transversal.
 - Antes de levantar servicios, conectar recursos, probar en QA, migrar, ejecutar seeds o desplegar, usar `$erclave-environment-boundaries` y leer `docs/arquitectura/fronteras_ambientes_local_qa_produccion.md`.
 - Para preparar, desplegar o verificar un candidato Local→QA, usar además `$erclave-qa-release` y `docs/operaciones/flujo_local_a_qa.md`.
 - "Levantar en local" significa Local aislado: PostgreSQL local, APIs locales y Firebase Emulator. No permite Cloud SQL, APIs, Firebase, secretos ni integraciones QA/Produccion.

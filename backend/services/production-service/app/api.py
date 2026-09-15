@@ -6,6 +6,9 @@ from typing import Literal
 from urllib import error,request
 
 from fastapi import APIRouter, Depends, Header, Query, status
+from fastapi.responses import Response
+from urllib.parse import quote
+from .schemas import ServiceEvidenceRequest
 
 from erclave_common.csv_reports import csv_report_response, validate_date_range
 from erclave_common.errors import ErclaveError
@@ -818,3 +821,21 @@ def recover_order_creation(order_id:str,x_tenant_id:str=Header(alias="X-Tenant-I
         if value['status']=='recovered':return {"data":value}
         authorities.rollback_creation(x_tenant_id,order_id,authorization)
         return {"data":repository.recover_failed_creation(x_tenant_id,order_id,access.actor_id)}
+
+
+@router.post("/orders/{order_id}/service-evidence/{phase}")
+def save_service_evidence(order_id:str,phase:Literal["start","finish"],payload:ServiceEvidenceRequest,x_tenant_id:str=Header(alias="X-Tenant-Id"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access(("production.order.start","production.order.wait_resources","production.order_stage.complete")))):
+    if phase=="finish":access.require("production.order_stage.complete")
+    elif not ({"production.order.start","production.order.wait_resources"}&set(access.permissions)):
+        access.require("production.order.start")
+    current=repository.get_order(x_tenant_id,order_id)
+    if current is None:raise ErclaveError("production_order_not_found","Order not found.",status_code=404)
+    if not current.is_service_order:raise ErclaveError("service_evidence_service_only","Only service recipes support evidence.",status_code=409)
+    try:return {"data":repository.save_service_evidence(x_tenant_id,order_id,phase,payload,access.actor_id)}
+    except ValueError as exc:raise ErclaveError(str(exc),"Service evidence precondition failed.",status_code=409) from exc
+
+
+@router.get("/orders/{order_id}/service-evidence/files/{file_id}")
+def download_service_evidence(order_id:str,file_id:str,x_tenant_id:str=Header(alias="X-Tenant-Id"),repository:ProductionRepository=Depends(get_production_repository),access:AuthorizedContext=Depends(require_production_access("production.order.read"))):
+    row,data=repository.evidence_file(x_tenant_id,order_id,file_id)
+    return Response(data,media_type=row["media_type"],headers={"Content-Disposition":"attachment; filename*=UTF-8''"+quote(row["filename"]),"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"})

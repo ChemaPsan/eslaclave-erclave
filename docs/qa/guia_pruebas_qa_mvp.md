@@ -1,98 +1,87 @@
 # Guía de pruebas QA del MVP de ERClave
 
-**Ambiente:** QA
-**Aplicación cliente:** `https://erclave.web.app`
-**Backoffice interno:** `https://erclave.web.app/backoffice/`
-**Última actualización:** 2026-08-12
+**Ambiente:** QA base publicada y candidato Local pendiente de promoción
+**Aplicación cliente:** https://erclave.web.app
+**Backoffice interno:** https://erclave.web.app/backoffice/
+**Última actualización:** 2026-09-14
+**Versión de referencia:** b63cdad2fbac423c24460e55582ccfc0003e9924
 
-## 1. Objetivo
+**Candidato:** CHG-272–275; SHA de release y run por asignar después de publicar y fusionar. Los casos QA-FORM-*, QA-MARGIN-* y QA-EVID-* requieren la promoción de este candidato. No certificarlos contra la base anterior.
 
-Esta guía ayuda a una persona de QA a comprobar lo que ERClave puede hacer hoy, entender por qué cada flujo importa para el negocio y evitar confundir una maqueta con una integración terminada.
+## 1 Objetivo y alcance de la ejecución
 
-ERClave es un ERP SaaS modular y multitenant. Cada empresa cliente es un tenant aislado. Firebase comprueba la identidad del usuario; ERClave decide a qué tenant pertenece, qué módulos tiene contratados y qué permisos puede ejercer.
+Esta guía permite al tester validar la versión desplegada en QA y registrar evidencia reproducible. Los siete servicios y el frontend fueron publicados; eso no significa que estos casos funcionales ya hayan pasado con usuarios reales. Todos los casos comienzan **Sin ejecutar**.
 
-## 2. Cómo interpretar el alcance
+La regla central es separar la preparación del documento de la confirmación física. Compras prepara una recepción, Ventas prepara una entrega y las áreas operativas solicitan materiales. Almacén confirma los bienes que realmente entran o salen. El solicitante acepta los servicios comprados, que no mueven inventario.
 
-Cada caso usa una de estas etiquetas:
+## 2 Funciones disponibles
 
-| Etiqueta | Significado para QA |
-|---|---|
-| **REAL QA** | Usa API y base PostgreSQL de QA. Debe persistir entre sesiones, navegadores y dispositivos. |
-| **PROTOTIPO LOCAL** | Funciona principalmente en `localStorage`/datos simulados. Evaluar UX, reglas visibles y cálculos; no certificar persistencia multiusuario. |
-| **NO DISPONIBLE** | Funcionalidad futura o deshabilitada. Verificar sólo que la interfaz no la presente como terminada. |
-
-### Mapa actual
-
-| Área | Estado | Alcance comprobable |
+| Área | Estado en QA | Alcance |
 |---|---|---|
-| Autenticación y sesión | REAL QA | Login Firebase, invitación, recuperación, tenant, permisos y módulos contratados. |
-| Backoffice | REAL QA | Alta, búsqueda, suspensión, reactivación y eliminación de tenants; uso estimado. |
-| Administración | REAL QA | Organización, razones sociales, sucursales, usuarios, roles y permisos. |
-| Producción | REAL QA | Productos/servicios, recetas/versiones, maquinaria, órdenes, etapas y validación observada persisten en Production API; no reserva/consume Inventario. |
-| Almacenes | REAL QA | Almacenes, artículos, movimientos, existencias y Kardex usan Inventory API/Cloud SQL; Reservas no disponible. |
-| Recursos Humanos | REAL QA | Áreas y puestos usan HR API/Cloud SQL; catálogos inicialmente vacíos. |
-| Ventas | PROTOTIPO LOCAL | UX de clientes, cotizaciones, pedidos, ajustes, entregas y PDF. |
-| Compras, Gastos, Costos, Reportes y Contabilidad | NO DISPONIBLE/DEMO | Navegación y comunicación visual; no certificar operación ni cifras. |
+| Administración y Backoffice | Desplegado | Sesión, organización, usuarios, roles, permisos, módulos, catálogos y ciclo de tenants. |
+| Producción | Desplegado | Productos y servicios con receta, recursos, órdenes, salida previa de materiales, etapas y producto terminado. |
+| Almacenes | Desplegado | Artículos, reservas, movimientos, confirmaciones, transferencias, devoluciones de materiales y Kardex. |
+| Recursos Humanos | Desplegado | Áreas, puestos, trabajadores, capacidad y elegibilidad operativa. |
+| Ventas | Desplegado | Clientes, cotizaciones, pedidos, preparación de entregas y órdenes comerciales de servicio. |
+| Compras | Desplegado | Proveedores, requisiciones, órdenes, preparación de recepciones y aceptación de servicios. |
+| Mantenimiento | Desplegado | Correctivos, técnicos, tiempo, refacciones, recuperación y sobrantes. |
+| Reportes estándar por módulo | Desplegado | Descargas de consulta desde las portadas operativas, según permisos. |
+| Gastos, Costos, Contabilidad y Reportes avanzados | No operativo | No certificar transacciones de estos módulos futuros. |
 
-## 3. Prioridades
+No están incluidos lotes, series, merma, nómina, devoluciones comerciales a cliente/proveedor, factura ni cobranza. Tampoco existe conexión automática completa entre cumplimiento productivo de Ventas y entrega, ni consumo de materiales en las órdenes comerciales de servicio de Ventas. Estas últimas son distintas de los servicios con receta de Producción.
 
-- **P0:** bloquea onboarding, login, aislamiento, acceso contratado o puede exponer/perder datos.
-- **P1:** rompe una función principal del módulo o una regla de negocio importante.
-- **P2:** problema visual, responsive, texto, filtro o experiencia con alternativa disponible.
+## 3 Preparación y responsabilidades
 
-Estados de ejecución: `Pasa`, `Falla`, `Bloqueado`, `No aplica`.
+Use datos ficticios identificados con un prefijo de prueba y las cuentas entregadas por el responsable de QA. El tenant autorizado para datos de desarrollo es **ERClave Demo QA**, ID `ten_739ee59d765d5e14818674800d`; confirme el tenant efectivo antes de capturar. Este documento no autoriza crear otros tenants, modificar datos de clientes, ejecutar semillas, migrar ni desplegar.
 
-## 4. Preparación
+Los casos de invitaciones, suspensión, eliminación o aislamiento con dos tenants requieren los recursos y el alcance expresamente autorizados. Si faltan, registre **Bloqueado** y el requisito faltante. No copie la base Local a QA ni use la solicitud histórica de refacciones de Local como dato que deba existir en QA.
 
-No guardar contraseñas, tokens ni ligas vigentes de invitación en Git, documentos o tickets.
+Prepare un proveedor, cliente, artículos y almacenes de prueba con saldo conocido; un almacén de tipo Refacciones; unidades activas; personal elegible; una receta aprobada con material; y cuentas con los permisos siguientes. Los nombres de responsabilidad no implican que existan roles predefinidos con todos esos permisos.
 
-### Tenant autorizado para desarrollo y datos dummy
-
-En desarrollo local y pruebas con información ficticia se debe trabajar exclusivamente con:
-
-| Campo | Valor autorizado |
+| Responsabilidad | Acciones necesarias |
 |---|---|
-| Nombre | `ERClave Demo QA` |
-| Tenant ID | `ten_739ee59d765d5e14818674800d` |
-| Sucursal de referencia | `Matriz · ERClave Demo QA` |
+| Administrador | Preparar cuentas, módulos y permisos puntuales; no usar privilegios totales para todas las pruebas. |
+| Solicitante de Compras | Crear requisición y aceptar sus servicios comprados. |
+| Aprobador y comprador | Aprobar requisición, emitir compra y preparar recepción, según permiso. |
+| Almacén | Leer Movimientos y confirmar entradas/salidas con permisos de lectura y creación de movimientos. |
+| Producción | Liberar, iniciar, pausar, reanudar, validar y terminar con sus permisos propios. |
+| Mantenimiento | Solicitar, asignar, registrar tiempo/refacciones, reintentar y resolver según permiso. |
+| Ventas y responsable de servicio | Emitir/aprobar cotización, crear pedido, preparar entrega y ejecutar/aceptar servicio según acción. |
+| Usuario de lectura | Consultar sin facultad para confirmar movimientos o cambiar estados. |
 
-Antes de capturar, modificar, eliminar, importar o generar datos de prueba, confirmar en la sesión y en la petición que el tenant activo coincide con ese ID. Si aparece cualquier otro tenant, detener la prueba. Los tenants creados para el equipo de QA no deben recibir datos dummy, seeds ni mutaciones de desarrollo salvo autorización explícita.
+Para recibir producto terminado también se necesitan `inventory.finished_goods_receipt.read` y `inventory.finished_goods_receipt.receive`; lectura y creación de movimientos no sustituyen estos permisos especializados.
 
-Preparar:
+La aceptación de servicios comprados comprueba la identidad del solicitante original; en compras directas corresponde al comprador. Los permisos de almacén son globales dentro del tenant en este corte; la responsabilidad del almacén destino no implica un alcance técnico individual por almacén.
 
-- `<EMAIL_BACKOFFICE_ADMIN>` y su contraseña.
-- Dos tenants desechables: `<TENANT_A>` y `<TENANT_B>`.
-- Owners con buzones accesibles: `<OWNER_A>` y `<OWNER_B>`.
-- Un usuario invitado desechable.
-- Una razón social y una sucursal ficticias.
-- Datos de producto, recurso y receta que no sean información sensible.
-- Chrome/Edge de escritorio y Safari iPhone; Android Chrome cuando esté disponible.
-- Commit/build probado y fecha de ejecución.
+## 4 Prioridad y registro
 
-Usar ventanas privadas o perfiles separados para probar dos tenants. No eliminar el tenant principal ni usuarios reales.
+- **P0:** pérdida o exposición de datos, duplicación de movimientos, acceso indebido o bloqueo de un flujo principal.
+- **P1:** comportamiento funcional incorrecto o una operación inaccesible.
+- **P2:** defecto visual o de texto con alternativa operativa.
 
-## 5. Smoke diario (15–20 minutos)
+Registre **Sin ejecutar**, **Pasa**, **Falla**, **Bloqueado** o **No aplica** por caso. No marque Pasa sólo porque la pantalla carga. Para mutaciones, recargue y compare documentos, cantidades y Kardex. Cuando se solicite un reintento, use la misma tarea y su acción; no cree un documento sustituto.
 
-Ejecutar al inicio de una jornada de QA o después de un despliegue:
+## 5 Recorrido inicial
 
-1. Abrir la aplicación y autenticarse como owner.
-2. Confirmar nombre del tenant y módulos contratados.
-3. Abrir Administración y cargar Organización, Usuarios y Roles.
-4. Abrir Producción > Productos y servicios.
-5. Abrir Producción > Recetas y consultar una receta.
-6. Refrescar el navegador y comprobar que la sesión/pantalla no quedan rotas.
-7. Cerrar sesión y confirmar que no se puede regresar a datos protegidos con “Atrás”.
+1. Abra QA y haga recarga forzada. Inicie sesión y confirme empresa, sucursal, módulos y permisos.
+2. Consulte una pantalla de cada uno de los siete módulos y abra una portada de reportes.
+3. Entre a **Almacenes > Movimientos**. Las solicitudes deben aparecer resumidas y cerradas; abra el panel para consultar las tareas.
+4. Abra Proveedores y confirme que entra al listado; **Nuevo proveedor** abre el formulario separado.
+5. Consulte una cotización en borrador y las acciones disponibles según su permiso.
+6. Recargue, cierre sesión y verifique que no queda acceso operativo a datos protegidos.
 
-**Por qué:** detecta rápidamente si identidad, autorización, Admin API, Production API o frontend dejaron de comunicarse.
+Este recorrido comprueba acceso básico. Continúe con los casos siguientes para validar los efectos de negocio.
 
-## 6. Backoffice, onboarding y acceso
+## 6 Backoffice y acceso inicial
 
-### QA-BO-01 — Alta e invitación de tenant
+### QA-BO-01 Alta e invitación de tenant
 
 **Prioridad/tipo:** P0 · REAL QA
 **Contexto:** convierte un cliente vendido en un espacio aislado y operable.
 
 **Pasos**
+
+Precondición: caso condicionado a autorización explícita para crear un tenant desechable y enviar una invitación al buzón acordado. Sin esa autorización, registrar Bloqueado.
 
 1. Entrar a `/backoffice/` con `<EMAIL_BACKOFFICE_ADMIN>`.
 2. Crear un tenant con nombre y slug únicos.
@@ -103,13 +92,13 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 **Esperado**
 
 - Tenant activo y owner invitado.
-- Correo recibido una sola vez.
+- Invitación creada sin duplicar la membresía; si el correo falla, se comunica el pendiente y se sigue el procedimiento de recuperación.
 - La liga es HTTPS y nunca contiene `localhost`.
 - Repetir accidentalmente la acción no duplica el tenant.
 
 **Por qué se prueba:** un alta incompleta impide comenzar; una duplicada afecta cobro, identidad y aislamiento.
 
-### QA-AUTH-01 — Activación del owner
+### QA-AUTH-01 Activación del owner
 
 **Prioridad/tipo:** P0 · REAL QA
 
@@ -128,9 +117,9 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué se prueba:** es el primer momento de verdad del cliente.
 
-> Las ligas emitidas antes de CHG-139 conservan la redirección antigua; usar siempre un correo nuevo.
+Use una invitación nueva; no reutilice enlaces vencidos ni los adjunte como evidencia.
 
-### QA-AUTH-02 — Recuperación de contraseña
+### QA-AUTH-02 Recuperación de contraseña
 
 **Prioridad/tipo:** P0 · REAL QA
 
@@ -143,7 +132,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** evita que el cliente dependa de soporte para recuperar acceso.
 
-### QA-BO-02 — Backoffice restringido
+### QA-BO-02 Backoffice restringido
 
 **Prioridad/tipo:** P0 · REAL QA
 
@@ -154,11 +143,13 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** ser owner de un tenant no convierte al usuario en administrador de EsLaClave.
 
-### QA-SEC-01 — Suspensión y reactivación
+### QA-SEC-01 Suspensión y reactivación
 
 **Prioridad/tipo:** P0 · REAL QA
 
-1. Con un tenant desechable, iniciar sesión como owner.
+Precondición: tenant desechable expresamente autorizado para suspensión; no usar el tenant de operación compartida.
+
+1. Con ese tenant, iniciar sesión como owner.
 2. Desde Backoffice, suspender el tenant.
 3. Refrescar la sesión del owner e intentar operar.
 4. Reactivar desde Backoffice y volver a ingresar.
@@ -167,9 +158,11 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** permite controlar el servicio sin borrar información.
 
-### QA-SEC-02 — Aislamiento entre tenants
+### QA-SEC-02 Aislamiento entre tenants
 
 **Prioridad/tipo:** P0 · REAL QA
+
+Precondición: dos tenants y sus identidades autorizados expresamente para esta prueba. Sin ellos, registrar Bloqueado; no crearlos ni escribir en otra empresa por iniciativa propia.
 
 1. Abrir `<TENANT_A>` y `<TENANT_B>` en perfiles separados.
 2. Crear una razón social y un producto con nombres claramente distintos en cada tenant.
@@ -179,7 +172,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** una fuga entre clientes es un incidente crítico de seguridad SaaS.
 
-### QA-BO-03 — Ciclo de vida del tenant
+### QA-BO-03 Ciclo de vida del tenant
 
 **Prioridad/tipo:** P1 · REAL QA
 
@@ -192,11 +185,11 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** el equipo interno necesita operar clientes sin afectar al tenant equivocado.
 
-## 7. Administración
+## 7 Administración
 
 **Contexto del módulo:** configura la estructura legal y operativa del cliente y controla quién puede entrar y qué puede hacer. Es transversal a todos los módulos.
 
-### QA-ADM-01 — Perfil corporativo
+### QA-ADM-01 Perfil corporativo
 
 **Prioridad/tipo:** P0 · REAL QA
 
@@ -208,7 +201,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** es la identidad administrativa de la empresa.
 
-### QA-ADM-02 — Razón social
+### QA-ADM-02 Razón social
 
 **Prioridad/tipo:** P1 · REAL QA
 
@@ -220,7 +213,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** una empresa puede operar con varias entidades fiscales y conservar historia.
 
-### QA-ADM-03 — Sucursal
+### QA-ADM-03 Sucursal
 
 **Prioridad/tipo:** P1 · REAL QA
 
@@ -232,7 +225,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** sucursales determinan alcance físico y operativo.
 
-### QA-ADM-04 — Invitar y activar usuario
+### QA-ADM-04 Invitar y activar usuario
 
 **Prioridad/tipo:** P0 · REAL QA
 
@@ -245,7 +238,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** permite delegar operación con mínimo privilegio.
 
-### QA-ADM-05 — Deshabilitar usuario
+### QA-ADM-05 Deshabilitar usuario
 
 **Prioridad/tipo:** P0 · REAL QA
 
@@ -257,7 +250,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** el offboarding rápido protege información del cliente.
 
-### QA-ADM-06 — Roles y permisos
+### QA-ADM-06 Roles y permisos
 
 **Prioridad/tipo:** P0 · REAL QA
 
@@ -270,9 +263,9 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** la UI ayuda, pero el backend debe impedir acciones sin permiso.
 
-### QA-ADM-07 — Editor matricial de permisos
+### QA-ADM-07 Editor matricial de permisos
 
-**Prioridad/tipo:** P0 · LOCAL antes de promover a QA
+**Prioridad/tipo:** P0 · REAL QA
 
 1. Abrir un rol personalizado y entrar a **Editar permisos**.
 2. Buscar por nombre humano y codigo tecnico en ES y EN.
@@ -283,7 +276,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Esperado:** sin plantillas ni autoasignaciones; scopes no modificados se conservan; filtros no borran permisos ocultos; conflicto no pierde el draft.
 
-### QA-SEC-03 — Seguridad al delegar permisos
+### QA-SEC-03 Seguridad al delegar permisos
 
 **Prioridad/tipo:** P0 · AUTOMATICA y REAL QA autorizado
 
@@ -294,11 +287,11 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 - `admin.role.update` sin `admin.role.permissions.manage` no permite modificar grants.
 - Reintento con misma clave/payload reproduce resultado; misma clave con otro payload devuelve conflicto.
 
-## 8. Producción
+## 8 Producción
 
-**Contexto del módulo:** define productos/servicios, recetas versionadas, maquinaria y órdenes persistidas. La validación de disponibilidad es una fotografía observada; no reserva ni consume Inventario.
+**Contexto del módulo:** define productos/servicios, recetas versionadas, maquinaria y órdenes persistidas. Consultar disponibilidad no reserva. Liberar una orden compromete recursos y reserva materiales; Almacén debe confirmar su salida antes de iniciar la ejecución.
 
-### QA-PROD-01 — Crear producto o servicio
+### QA-PROD-01 Crear producto o servicio
 
 **Prioridad/tipo:** P0 · REAL QA
 
@@ -311,7 +304,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** el catálogo es la base de recetas y futuras ventas/órdenes.
 
-### QA-PROD-02 — Validaciones del catálogo
+### QA-PROD-02 Validaciones del catálogo
 
 **Prioridad/tipo:** P1 · REAL QA
 
@@ -323,7 +316,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** datos maestros inconsistentes contaminan todos los flujos posteriores.
 
-### QA-PROD-03 — Crear y editar receta
+### QA-PROD-03 Crear y editar receta
 
 **Prioridad/tipo:** P0 · REAL QA
 
@@ -337,7 +330,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** la receta estandariza qué se necesita y cómo se produce.
 
-### QA-PROD-04 — Aprobación y versionado
+### QA-PROD-04 Aprobación y versionado
 
 **Prioridad/tipo:** P0 · REAL QA
 
@@ -350,7 +343,7 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** cambiar una receta histórica alteraría costos y explicaciones de futuras operaciones.
 
-### QA-PROD-05 — Reglas negativas de receta
+### QA-PROD-05 Reglas negativas de receta
 
 **Prioridad/tipo:** P1 · REAL QA
 
@@ -364,235 +357,306 @@ Ejecutar al inicio de una jornada de QA o después de un despliegue:
 
 **Por qué:** protege integridad, autorización e idempotencia.
 
-### QA-PROD-06 — Órdenes, etapas, maquinaria e integración de catálogos
+### QA-PROD-06 Materiales antes de iniciar
 
-**Prioridad/tipo:** P0 · REAL QA
+**P0.** Con receta aprobada, responsable elegible, almacén con saldo y material de prueba, libere una orden. Registre existencia física, reserva y disponible antes/después. Intente iniciar sin entrega.
 
-Crear una orden desde una receta aprobada vigente, recargar, ejecutar transiciones válidas de etapas y cerrar explícitamente. Validar maquinaria contra áreas RH y recursos de receta contra artículos Inventory/RH reales.
+**Esperado:** se reserva material, pero no se registra salida al liberar. El inicio se bloquea con indicación de que Almacén debe entregar en Movimientos. El selector conserva el estado confirmado.
 
-Para **Áreas y puestos** validar además:
+Abra **Almacenes > Movimientos > Ver solicitudes > Solicitudes de materiales para producción**, localice la orden y confirme su entrega completa. Vuelva a Producción e inicie, pause y reanude.
 
-- [ ] Nueva área solicita únicamente código, nombre, descripción y estatus; no crea puestos.
-- [ ] Nuevo puesto muestra un selector y no permite escribir un área libremente.
-- [ ] No puede guardarse un puesto si su `area_id` no existe o pertenece a otro tenant.
-- [ ] Código y nombre de área no se duplican ignorando mayúsculas/minúsculas.
-- [ ] Renombrar un área conserva sus puestos vinculados por ID.
-- [ ] Editar un puesto actualiza cantidad de recursos, minutos, capacidad total, costo y estatus sin crear otra área.
-- [ ] Un rol con `hr.area.update` puede editar áreas sin obtener `hr.position.update`, y viceversa.
-- [ ] Areas y puestos aparece dentro de Recursos Humanos y ya no en la navegacion de Produccion.
-- [ ] Sin entitlement `hr` activo, la navegacion se oculta y `hr-service` rechaza la llamada directa.
-- [ ] Un puesto no puede vincularse a un area inexistente, inactiva o de otro tenant.
-- [ ] Repetir una mutacion con la misma `Idempotency-Key` no duplica datos; cambiar el payload con esa clave devuelve conflicto.
-- [ ] El catalogo de Permisos muestra una seccion Recursos Humanos con exactamente seis permisos `hr.area.*` y `hr.position.*`.
-- [ ] El selector de permisos de cada rol agrupa RH por separado y no ofrece codigos heredados con prefijo `production.labor`.
-- [ ] Tras ejecutar el seed autorizado, `production.labor.*`, `production.labor_area.*` y `production.labor_role.*` quedan inactivos y no forman parte de permisos efectivos.
-- [ ] El puesto captura costo por hora e indica si interviene en produccion.
-- [ ] Solo puestos activos marcados para produccion aparecen como recursos de receta.
-- [ ] Un articulo sin movimientos y con almacen sugerido aparece en Inventario con saldo cero.
-- [ ] Solo articulos activos con Usar en receta aparecen en el selector de recursos; su disponibilidad suma almacenes del tenant.
-- [ ] Alta de área, alta de puesto, edición de área y edición de puesto producen auditoría e idempotencia backend.
+**Esperado:** una salida por partida, costo vinculado y reserva consumida; iniciar o reanudar no crea otra salida. Repita también con un servicio con receta de Producción. La entrega parcial de estas solicitudes no está implementada.
 
-**Esperado:** persistencia PostgreSQL entre recargas/sesiones, transiciones backend válidas y ningún fallback a datos simulados.
+### QA-PROD-07 Responsable y máquina vigentes
 
-**Por qué:** certifica el flujo real promovido sin confundir disponibilidad observada con reservas.
+**P0.** Con una orden lista para iniciar o reanudar, use un expediente de prueba y haga que RH lo inhabilite, o genere un bloqueo real de mantenimiento sobre la máquina de prueba. Intente la transición.
 
-## 9. Almacenes
-
-**Contexto del módulo:** representa qué existe, dónde se encuentra y cuánto está disponible. Un error puede detener producción o provocar promesas de venta imposibles.
+**Esperado:** se bloquea con causa, responsable y paso para resolver; conserva el estado anterior. Restablezca la elegibilidad por RH o resuelva el mantenimiento por su flujo, y reintente. No se puede quitar manualmente el bloqueo de mantenimiento desde Maquinaria. Liberar la máquina no reanuda automáticamente Producción.
 
-**Estado:** REAL QA, excepto Reservas.
+### QA-PROD-08 Terminar y recibir producto terminado
 
-| ID | Prioridad | Qué probar | Esperado |
-|---|---|---|---|
-| QA-INV-01 | P0 | Crear, buscar y editar almacén; recargar/abrir otra sesión. | Persiste en Inventory API sin datos simulados. |
-| QA-INV-02 | P0 | Crear artículo con SKU, tipo y unidad; recargar. | Registro persistido, seleccionable y sin duplicados. |
-| QA-INV-03 | P0 | Entrada, salida, transferencia, ajuste y devolución. | Movimiento PostgreSQL, existencia y Kardex coherentes tras recarga. |
-| QA-INV-04 | P1 | Salida mayor a existencia. | Se bloquea o se comunica claramente el faltante. |
-| QA-INV-05 | P2 | Filtros de existencias y kardex. | Resultados y estados vacíos comprensibles. |
-| QA-INV-06 | P2 | Reservas. | Debe mostrarse deshabilitado/no disponible, no simular una reserva real. |
+**P0.** Registre avances y consumos reales permitidos; intente terminar antes de completar los requisitos de fases. Complete el flujo de validación y termine la orden con un producto terminado vinculado.
 
-No certificar todavía lotes, series, reservas reales ni consumo automático desde Producción.
+**Esperado:** terminar prematuramente informa el requisito pendiente. La orden terminada aparece en **Entradas de producción terminada** de Movimientos. Reciba una cantidad parcial válida y luego el saldo. No puede recibirse más de lo producido. El producto terminado sólo aumenta al confirmar la recepción de Almacén.
 
-## 9.1 Recursos Humanos
+### QA-PROD-09 Cancelación y recuperación
 
-**Estado:** REAL QA.
+**P0.** Cancele una orden de prueba antes de la entrega y otra después de una entrega válida. Si una creación muestra recuperación pendiente, continúe desde esa recuperación sin repetir el alta.
 
-- Crear área y puesto con permisos separados; recargar y verificar persistencia.
-- Rechazar área inexistente/inactiva/de otro tenant e idempotencia conflictiva.
-- Confirmar que puestos productivos alimentan Recetas y que Maquinaria selecciona áreas activas.
-- Un catálogo vacío debe mostrarse vacío, sin ejemplos ni conteos simulados.
+**Esperado:** las reservas activas se liberan; las salidas ya realizadas se conservan. Los materiales físicamente sobrantes se devuelven por el caso QA-INV-09. Una recuperación libera sólo el intento fallido sin duplicar órdenes ni reservas. Para fallos inducidos, use exclusivamente un entorno de pruebas controlado; no interrumpa servicios compartidos de QA.
 
-## 10. Ventas
+## 9 Almacenes y confirmaciones físicas
 
-**Contexto del módulo:** convierte la necesidad de un cliente en cotización, pedido y entrega, conservando precio y margen.
+### QA-INV-01 Maestros y saldos
 
-**Estado:** PROTOTIPO LOCAL.
+**P0.** Cree o use un almacén y artículo de prueba con unidad activa. Busque por código/nombre y recargue. Registre una entrada manual justificada y una salida válida; intente superar el disponible.
 
-| ID | Prioridad | Qué probar | Esperado |
-|---|---|---|---|
-| QA-SALES-01 | P1 | Crear, buscar y editar cliente. | Validaciones comerciales/fiscales claras. |
-| QA-SALES-02 | P1 | Cotización con varias líneas, precios y descuentos. | Totales y margen visibles coherentes. |
-| QA-SALES-03 | P1 | Aprobar cotización y crear pedido. | Conserva cliente, líneas, origen y promesa. |
-| QA-SALES-04 | P1 | Editar pedido y revisar ajustes. | Bitácora/estado comprensibles. |
-| QA-SALES-05 | P2 | Imprimir/generar PDF. | Documento legible y consistente con pantalla. |
-| QA-SALES-06 | P2 | Entregas no habilitadas. | No debe aparentar una entrega real ni afectar inventario. |
+**Esperado:** maestros y movimientos persisten; existencia, reserva y disponible se distinguen. El faltante se bloquea sin saldo negativo ni movimiento parcial oculto. No modifique una unidad con historia para corregir una captura.
 
-No certificar todavía reservas, producción automática, facturación, cobranza o integración backend.
+### QA-INV-02 Solicitudes compactas
 
-## 11. Módulos futuros
+**P1.** Abra Movimientos con tareas pendientes y sin ellas; expanda/contraiga el resumen con mouse y teclado. Recargue una bandeja y navegue por sus páginas.
 
-Compras, Gastos, Costos, Reportes y Contabilidad deben revisarse sólo como comunicación de producto:
+**Esperado:** panel inicialmente cerrado antes del historial, aviso cuando hay pendientes y detalle accesible al abrir. No se presenta el número de una página como total global. Carga o error no deben decir que no hay pendientes. Un fallo de actualización conserva la posibilidad de reintentar.
 
-- navegación y etiqueta “Próximamente”;
-- ausencia de acciones engañosas;
-- datos demo claramente distinguibles;
-- estados vacíos para tenants nuevos;
-- textos y diseño responsive.
+### QA-INV-03 Recepción de bienes comprados
 
-No reportar como defecto la falta de operación que ya esté documentada como futura. Sí reportar si la pantalla hace creer que una transacción se guardó realmente.
+**P0.** Use la recepción preparada en QA-BUY-03. Confirme desde **Recepciones de compras pendientes** en Movimientos. Recargue Compras, Inventario y Kardex y repita la misma tarea si queda conciliación pendiente.
 
-## 12. Regresión transversal
+**Esperado:** la preparación no suma stock; la confirmación de Almacén registra una entrada por partida física y actualiza la recepción comercial. Un reintento no duplica las entradas ya confirmadas. Servicios de una recepción mixta permanecen pendientes de su solicitante.
 
-| ID | Prioridad | Prueba |
-|---|---|---|
-| QA-NAV-01 | P1 | Refrescar, navegar atrás/adelante, cerrar sesión y volver a entrar. |
-| QA-I18N-01 | P2 | Alternar español/inglés; no debe haber claves crudas, variables perdidas ni textos cortados. |
-| QA-RESP-01 | P1 | Login, menús, tablas, formularios y modales en iPhone Safari, Android Chrome y escritorio. |
-| QA-ERR-01 | P1 | Desconectar red durante una acción; debe haber error claro, sin spinner infinito ni duplicado al reintentar. |
-| QA-IDEM-01 | P0 | Doble clic en alta, invitación y comandos de receta; no debe duplicar. |
-| QA-EMPTY-01 | P2 | Tenant nuevo sin datos; mostrar estado vacío, no datos de otra empresa. |
-| QA-PERM-01 | P0 | Ocultar acciones no autorizadas y confirmar que la API también las rechaza. |
+### QA-INV-04 Salida de un pedido de venta
 
-## 13. Evidencia mínima
+**P0.** Use una entrega preparada en QA-SALES-04. Desde **Salidas de pedidos de venta**, confirme la salida y vuelva al pedido.
 
-Para cada ejecución registrar:
+**Esperado:** Ventas no consumió stock al preparar. Almacén registra la salida física y la entrega queda reflejada comercialmente. Repetir una confirmación no duplica la salida ni la cantidad entregada.
 
-| Campo | Ejemplo |
-|---|---|
-| Caso | QA-PROD-04 |
-| Resultado | Pasa/Falla/Bloqueado/No aplica |
-| Ambiente | QA |
-| Build/commit | `<BUILD_COMMIT>` |
-| Fecha y tester | `<FECHA> / <NOMBRE>` |
-| Tenant | ID o slug de prueba, sin secretos |
-| Navegador/dispositivo | Safari iPhone 15 / iOS X |
-| Evidencia | Captura o video sin contraseña, token ni liga vigente |
-| Defecto | URL o ID del ticket |
+### QA-INV-05 Consulta de reservas y Kardex
 
-## 14. Cómo reportar un defecto
+**P1.** Consulte las reservas de una orden liberada; compare saldo antes de entrega, después de entrega y después de una devolución. Filtre por artículo/almacén y recargue.
 
-**Título**
+**Esperado:** reservar reduce disponible sin reducir existencia; entregar convierte lo reservado en salida; devolver conserva la salida y añade una entrada trazable. El historial no se reemplaza por el último saldo.
 
-```text
-[QA][Módulo][P0/P1/P2] Resultado observable
-```
+### QA-INV-06 Permiso de consulta
 
-**Contenido**
+**P0.** Con una cuenta de lectura, abra las bandejas y trate de confirmar una tarea. Con apoyo técnico autorizado, compruebe el rechazo del comando sin permiso.
 
-1. Ambiente, build/commit, navegador y dispositivo.
-2. Tenant de prueba y rol, sin credenciales.
-3. Precondición.
-4. Pasos mínimos para reproducir.
-5. Resultado esperado.
-6. Resultado actual.
-7. Frecuencia: siempre/intermitente/una vez.
-8. Impacto de negocio.
-9. Captura, video y mensaje/correlation ID disponible.
+**Esperado:** puede consultar lo autorizado, pero no dar entrada/salida. El backend rechaza aunque se invoque directamente. Tener permisos comerciales de confirmación o conciliación no sustituye `inventory.movement.create`.
 
-Nunca adjuntar contraseña, token Firebase, secreto, datos fiscales reales o enlace de invitación todavía válido.
+### QA-INV-07 Transferencia parcial
 
-## 15. Criterio de salida de una liberación
+**P0.** Transfiera 5 unidades entre dos almacenes de prueba del mismo tenant. Anote ambos saldos. En **Transferencias en tránsito**, el responsable de destino confirma primero 2 y después 3.
 
-Una liberación candidata puede avanzar cuando:
+**Esperado:** al enviar, origen baja 5 y destino aún no aumenta; al recibir 2, destino aumenta 2 y quedan 3 en tránsito; al completar, aumenta sólo el saldo. No puede confirmarse más del pendiente ni duplicarse una recepción al reintentar.
 
-- todos los P0 del alcance ejecutado pasan;
-- no hay fuga entre tenants;
-- login, Administración y Producción real pasan el smoke;
-- fallos P1 tienen decisión explícita;
-- P2 están registrados y priorizados;
-- lo local/demo está identificado y no se comunica como persistencia real;
-- se guardó evidencia de ambiente, build y dispositivo.
+### QA-INV-08 Rechazo y retorno de transferencia
 
-## 16. Validacion local previa de volumen de Inventario
+**P0.** En otra transferencia de 5, reciba 2 y rechace las 3 restantes con motivo. Después, el origen confirma la recepción física de esas 3 devueltas.
 
-El nombre visible objetivo del modulo es **Inventario**, conservando `existencias` como identificador tecnico de la consulta. Esta decision documental no cambia por si sola el alcance desplegado ni autoriza pruebas sobre QA.
+**Esperado:** el rechazo no devuelve existencia automáticamente a origen. La entrada de retorno se registra cuando éste recibe. Destino conserva únicamente las 2 recibidas y el historial permite seguir salida, recepción y retorno.
 
-Antes de conectar busqueda, filtros y paginacion server-side, ejecutar localmente:
+### QA-INV-09 Devolución de sobrantes
 
-```powershell
-node tools/benchmarks/inventory-volume.js
-```
+**Incidencia conocida por revisión de código:** la bandeja para iniciar devoluciones desde Mantenimiento apunta a un contenedor ausente en su render. Verifique ese acceso primero. Si no aparece, registre la incidencia y marque la variante Mantenimiento Bloqueado; continúe la variante Producción. La API implementada no demuestra que el acceso desde pantalla esté disponible.
 
-El guardrail usa 10,000 articulos sinteticos por tenant y no requiere red ni credenciales. Debe pasar busqueda parcial, filtros combinados, aislamiento, paginacion sin duplicados y la regla temporal `available_quantity = on_hand_quantity` mientras Reservas no exista.
+**P0.** Con una orden de Producción terminada/cancelada o de Mantenimiento en estado final admitido y material ya emitido, solicite devolver una cantidad menor o igual al saldo retornable. Abra **Devoluciones de materiales por recibir** y confirme en Almacén.
 
-No ejecutar nuevas cargas de volumen, seeds, migraciones ni benchmarks en Cloud SQL QA sin autorizacion explicita. Cada promocion autorizada debe agregar casos QA separados para el API real y actualizar el mapa de alcance; el benchmark sintetico de 10,000 articulos permanece exclusivamente local.
+**Esperado:** solicitar no aumenta existencia. Recibir crea la entrada y ajusta una sola vez el costo en el módulo dueño. La salida original permanece. Si queda conciliación, continúe la misma tarea. Rechace exceso sobre lo emitido menos devoluciones vigentes; cancelar una solicitud antes de recibir no mueve stock. Este caso no corresponde a devoluciones comerciales a proveedores o clientes.
 
-### Promocion autorizada del 2026-07-31
+### QA-INV-10 Reversa y documentos vinculados
 
-La autorizacion cubrio las migraciones acumuladas hasta `20260730_0011`, el seed administrativo idempotente y el reinicio de la Admin API local conectada a QA. Antes de migrar se genero el respaldo `C:\tmp\erclave_qa_pre_permission_20260731_093634.dump` y se valido su indice con `pg_restore --list`.
+**P0.** Revierta un movimiento manual reversible de prueba y trate de revertir genéricamente una salida vinculada a un flujo operativo.
 
-Las postcondiciones obligatorias quedaron aprobadas: tenant ERClave Demo QA y modulo admin activos, 99 permisos activos sin codigos duplicados, el owner objetivo con `admin.role.permissions.manage`, ningun owner del sistema por debajo del piso administrativo y cero registros en almacenes, articulos, movimientos, areas y puestos. No se autorizo ni ejecuto carga dummy, benchmark remoto, despliegue o activacion adicional de modulos.
+**Esperado:** el manual conserva original y compensación con saldo correcto. El vinculado exige su flujo propio y no permite ocultar la historia. La recepción de producto terminado conserva su reversa controlada cuando existe saldo disponible.
 
-Para la prueba funcional del editor, renovar primero la sesion del navegador con recarga forzada o `Actualizar`; despues verificar que `Ver permisos` cambie a `Editar permisos`, que el guardado requiera cambios pendientes y que una recarga conserve las asignaciones.
+## 10 Compras y abastecimiento
 
-## 17. Checklist responsive transversal
+### QA-BUY-01 Proveedores y requisición legible
 
-Aplicar este checklist a toda pantalla nueva o modificada. La fuente tecnica es `docs/arquitectura/estandar_responsive_transversal.md`.
+**P1.** Abra Proveedores, busque uno existente y pulse **Nuevo proveedor**; cancele y vuelva a abrir. Cree una requisición con varias partidas y busque artículos de nombre largo en pantalla amplia y estrecha.
 
-### Matriz minima
+**Esperado:** la entrada es un listado, la captura ocurre en modal y cancelar no crea registro. El buscador muestra identidad/unidad sin dividir palabras letra por letra ni desbordar. Las partidas físicas obtienen la unidad del artículo; las de servicio usan descripción y unidad activa pertinente; no admiten artículo ni almacén.
 
-Probar 1,440 x 900, 1,280 x 720, 1,024 x 768, 768 x 1,024, 390 x 844 y 320 x 568. En escritorio repetir a zoom 200%. Si hay tabla operativa movil, probar tambien orientacion horizontal.
+### QA-BUY-02 Envío y autorización
 
-No basta cambiar el viewport: reducir el ancho real del panel abriendo sidebar, guia de flujo, alertas u otro panel lateral. Repetir estados amplio, intermedio y estrecho con Espanol e Ingles.
+**P0.** Cree un borrador, envíelo, apruébelo con permiso y conviértalo a orden de compra. Intente convertir un borrador sin aprobar y repita la conversión de la requisición aprobada.
 
-### QA-RESP-02 - Contenedor y estructura
+**Esperado:** se exige el paso de autorización; convertir conserva el origen sin duplicar la compra. Rechazar/cancelar exige la acción y el estado permitidos. Emitir la orden requiere sus datos y permiso; el solicitante no adquiere autorización por haber creado la requisición.
 
-- [ ] El componente cambia por su ancho de contenedor, no solamente por el viewport.
-- [ ] No hay scroll horizontal de pagina, superposiciones ni regiones fuera de pantalla.
-- [ ] Sidebar, flujo y alertas pueden coexistir sin comprimir el area operativa hasta hacerla inutilizable.
-- [ ] Carga, vacio, error, sin permisos y resultados reales conservan la misma calidad responsive.
+### QA-BUY-03 Preparar recepción mixta
 
-### QA-RESP-03 - Tablas y colecciones
+**P0.** Emita una compra con una partida física y otra de servicio. En Recepciones prepare cantidades válidas; asigne almacén sólo al bien. Anote cantidades pendientes y stock.
 
-- [ ] La tabla usa tarjeta, scroll interno o vista reducida de acuerdo con la estrategia documentada.
-- [ ] En tarjetas cada valor conserva etiqueta, unidad, estado y accion; no depende de encabezados ocultos.
-- [ ] Si existe scroll, queda dentro de la tabla, es perceptible y no oculta acciones esenciales.
-- [ ] Identificadores, cantidades y acciones no se cortan ni se solapan.
-- [ ] El orden de lectura y tabulacion sigue siendo logico.
+**Esperado:** la recepción queda pendiente de confirmación, sin entrada física ni servicio aceptado. Cantidades en recepciones pendientes cuentan para evitar sobre-recepción. Continúe el bien en QA-INV-03 y el servicio en QA-BUY-04.
 
-### QA-RESP-04 - Texto y localizacion
+### QA-BUY-04 Aceptación por solicitante
 
-- [ ] Titulos, breadcrumbs, chips, botones, alertas y ayudas soportan textos ES/EN largos.
-- [ ] Correos, URLs, IDs y correlation IDs envuelven o permiten consultar/copiar el valor completo.
-- [ ] No hay alturas fijas que corten traducciones o mensajes de validacion.
-- [ ] La elipsis, si existe, ofrece acceso al contenido completo.
+**P0.** Con un usuario distinto al solicitante original, intente aceptar el servicio preparado. Después entre como solicitante y abra **Servicios comprados por aceptar** en Compras; acepte tras verificar que el servicio fue recibido satisfactoriamente.
 
-### QA-RESP-05 - Formularios y acciones
+**Esperado:** otro usuario no puede aceptar sólo por tener permiso de compras. El solicitante original con permiso completa la partida sin entrada a Inventario. Para la variante de compra directa use una orden ya preparada por un medio autorizado: acepta el comprador que la creó. El alta directa no está expuesta en el formulario actual; si falta la orden de prueba, marque esa variante Bloqueado. La recepción mixta se completa cuando bienes y servicios están confirmados por sus responsables.
 
-- [ ] Campos pasan a una columna sin perder label, ayuda, error o contexto.
-- [ ] Lookups, calendarios, selects y textareas no desbordan.
-- [ ] Acciones primaria, secundaria y destructiva conservan orden y significado al apilarse.
-- [ ] Modal/drawer permite alcanzar encabezado, cierre, errores y acciones con teclado y tacto.
-- [ ] Targets tactiles tienen al menos 44 x 44 CSS px o superficie equivalente.
+### QA-BUY-05 Servicios sin Inventario
 
-### QA-RESP-06 - Flujos, filtros y alertas
+**P1.** En un contexto expresamente preparado para sólo servicios, cree requisición y compra de servicio con unidad vigente. No cambie módulos de un tenant compartido para improvisar esta precondición.
 
-- [ ] En escritorio e intermedio la guia descriptiva conserva el riel vertical izquierdo y su compresion; no cambia globalmente a barra horizontal.
-- [ ] Una excepcion responsive de un modulo no altera el formato de la guia ni otros componentes compartidos en las demas secciones.
-- [ ] La guia abierta, cerrada y en transicion no cubre contenido ni deja un control ambiguo.
-- [ ] Filtros hacen wrap; filtros secundarios y chips no expulsan acciones del panel.
-- [ ] Alertas y banners conservan titulo, mensaje, accion y cierre sin tapar la operacion.
-- [ ] El foco es visible y no queda detras de contenido sticky, modal o panel lateral.
+**Esperado:** se permite el ciclo de servicio sin artículo ni almacén y sin movimientos físicos. Si no existe contexto autorizado, marque Bloqueado. Las partidas físicas siguen requiriendo Inventario.
 
-### QA-RESP-07 - Regresiones operativas CHG-244
+## 11 Ventas y servicios comerciales
 
-- [ ] Los cuatro indicadores aparecen dentro del panel lateral, inmediatamente antes de **Alertas operativas**, en 2x2, 4x1 o 1x4 segun el ancho real disponible.
-- [ ] El titulo del modulo no queda precedido por “Centro operativo” ni se duplica con un badge tecnico de API/persistencia.
-- [ ] La vista previa de Receta con seis recursos y nombres largos no produce scroll horizontal del modal; el resultado y la unidad envuelven sin dividir palabras letra por letra.
-- [ ] Una orden de Mantenimiento con tecnico, conciliacion, varias refacciones y todas sus acciones conserva lectura y targets de al menos 44 px.
-- [ ] Proveedores, Requisiciones, Ordenes de compra y Recepciones apilan sus tarjetas antes de comprimir identidad, partidas, estados o acciones.
-- [ ] En consola, `document.documentElement.scrollWidth === document.documentElement.clientWidth`; cualquier scroll horizontal justificado permanece dentro de su tabla.
+### QA-SALES-01 Cliente y cotización
 
-### Evidencia
+**P1.** Cree o use un cliente de prueba, genere cotización de varias líneas con descuentos y vigencia, guarde y recargue.
 
-Adjuntar capturas de al menos un estado amplio, uno intermedio y uno estrecho, indicando viewport, ancho aproximado del panel, zoom, idioma, navegador y paneles laterales activos. Registrar como P1 cualquier bloqueo operativo, contenido esencial inaccesible o accion fuera de pantalla; defectos cosmeticos con alternativa pueden clasificarse P2.
+**Esperado:** cliente, líneas, condiciones y totales persisten; la cotización comienza en borrador. El PDF disponible debe coincidir con esos datos sin considerarse factura fiscal.
+
+### QA-SALES-02 Emitir y aprobar cotización
+
+**P0.** En Cotizaciones, con permisos puntuales, abra las acciones del borrador y use **Emitir cotización**; después **Aprobar**. Pruebe con una cuenta sin permiso de emisión/aprobación.
+
+**Esperado:** Borrador pasa a Cotizada y luego Aprobada. Los botones o la ayuda indican el siguiente paso y el permiso que falta; editar no aprueba implícitamente. Una cotización aprobada se convierte una sola vez a pedido. Expirar o cancelar sólo debe permitirse según estado y permiso.
+
+### QA-SALES-03 Estrategia de cumplimiento
+
+**P0.** Convierta la cotización aprobada a pedido y configure una partida física para surtir desde existencia con saldo suficiente. Consulte su reserva y recargue.
+
+**Esperado:** conserva origen, cliente, cantidades y estrategia; no registra salida hasta Almacén. Si una partida se manda a Producción, no suponga una conexión automática completa con entrega: documente el alcance mostrado y siga el manual de Ventas.
+
+### QA-SALES-04 Preparar entrega
+
+**P0.** Prepare una entrega válida sobre el pedido reservado. Con un usuario comercial sin permiso de movimiento revise que no se ofrece la confirmación física y que se indica continuar con Almacén. Con apoyo técnico autorizado, compruebe además el rechazo del comando comercial sin ese permiso.
+
+**Esperado:** la preparación conserva el stock físico; la confirmación comercial sola informa continuar con Almacén. Complete QA-INV-04. No exceda el saldo entregable ni cancele una entrega confirmada para simular devolución.
+
+### QA-SALES-05 Orden comercial de servicio
+
+**P0.** Desde una partida de servicio genere su orden comercial, planifique, asigne responsable RH elegible e inicie. Envíe a aceptación e intente aceptar sin evidencia y sin registros de tiempo o costo: debe rechazarse. Registre después la evidencia requerida y al menos un registro de tiempo o de costo permitido, y acepte con permiso.
+
+**Esperado:** los pasos válidos llevan de borrador a planeada, asignada, en curso, pendiente de aceptación y aceptada. Iniciar/reanudar revalida al responsable. Un salto inválido muestra el requisito y conserva estado. El servicio no genera movimientos ni solicita materiales de receta; la aceptación registra su cumplimiento comercial.
+
+## 12 Mantenimiento
+
+### QA-MTO-01 Correctivo y máquina
+
+**P0.** Cree una orden correctiva de prueba, solicítela, asigne técnico elegible e inicie. Si se vincula a máquina, revise el efecto sobre su disponibilidad y la orden productiva relacionada.
+
+**Esperado:** permisos y transiciones se respetan; el bloqueo pertenece al mantenimiento y no puede quitarse desde edición manual de máquina. El técnico no elegible bloquea inicio/reanudación.
+
+### QA-MTO-02 Solicitar y entregar refacciones
+
+**P0.** Desde Mantenimiento solicite varias refacciones de un almacén de ese tipo y con saldo. Abra **Solicitudes de refacciones** en Movimientos; confirme la entrega completa como Almacén. Registre tiempo y resolución técnica antes de resolver la orden.
+
+**Esperado:** solicitar reserva; Almacén autoriza la entrega y registra las salidas. Resolver no vuelve a consumir. Una solicitud sin entregar impide resolver con explicación de quién debe actuar. Una orden sin refacciones puede resolverse si cumple los demás requisitos, incluido tiempo válido.
+
+### QA-MTO-03 Rechazo y cancelación de solicitud
+
+**P1.** Rechace desde Almacén una solicitud pendiente con motivo y pruebe cancelación de otra desde Mantenimiento con permiso.
+
+**Esperado:** libera las reservas que sigan activas y conserva motivo/historia; no genera salida. No se permite cancelar como si no se hubiera entregado una solicitud ya emitida. Use devolución de sobrantes cuando corresponda.
+
+### QA-MTO-04 Recuperación de reserva interrumpida
+
+**P0.** Si hay una solicitud de prueba fallida o Procesando con reserva pendiente, consulte sus partidas en Mantenimiento y use el reintento permitido después de resolver el faltante o la disponibilidad de la dependencia. Use una interrupción inducida sólo en entorno controlado, nunca apagando QA compartido.
+
+**Esperado:** conserva la solicitud y sus claves; no duplica reservas ni crea una salida. Una vez reservada, Almacén puede entregar. Si lo pendiente es la emisión física, la conciliación corresponde a Almacén en Movimientos. Registre Bloqueado si no hay una precondición controlada para este caso; no use datos de otros usuarios.
+
+### QA-MTO-05 Resolver cerrar y devolver
+
+La parte de devolución desde Mantenimiento depende de la verificación de acceso indicada en QA-INV-09; no use una entrada manual como sustituto.
+
+**P0.** Con tiempo válido, refacciones entregadas y solución técnica, resuelva y cierre con los permisos correspondientes. Intente cerrar mientras haya una conciliación pendiente. Si hay sobrantes en una orden final admitida, ejecute QA-INV-09.
+
+**Esperado:** no cierra con dependencias pendientes; resolver libera la máquina cuando la integración se confirma, sin reanudar automáticamente Producción. La devolución conserva la salida y reduce el costo neto una sola vez.
+
+## 13 Recursos Humanos
+
+### QA-HR-01 Estructura y expediente
+
+**P0.** Cree área, puesto y trabajador ficticios con datos de prueba válidos y permisos separados. Busque por identidad visible, edite y recargue. Pruebe un identificador duplicado o un puesto inactivo.
+
+**Esperado:** el área no se captura como texto libre al crear puesto; el trabajador conserva un puesto vigente. Se validan formato y unicidad sin repetir datos personales en errores. La capacidad usa trabajadores activos y minutos configurados, no una cantidad manual de plazas.
+
+### QA-HR-02 Elegibilidad y capacidad
+
+**P0.** Active las banderas del puesto que correspondan, verifique sus trabajadores en Producción y Mantenimiento y consulte responsables de servicio en Ventas. Inactive sólo un expediente de prueba previamente acordado e intente reanudar su orden.
+
+**Esperado:** trabajador, puesto y área deben estar activos y cumplir la elegibilidad del propósito. La reanudación vuelve a comprobarla; los nombres históricos no sustituyen esa validación. RH no reescribe órdenes al cambiar un maestro.
+
+## 14 Regresión transversal
+
+### QA-REPORT-01 Reportes por módulo
+
+**P1.** En las seis portadas operativas abra reportes, filtre y descargue con permiso; pruebe un filtro sin coincidencias y un usuario sin lectura.
+
+**Esperado:** filtros y columnas corresponden al módulo, datos del tenant y resultados de consulta. No se genera un archivo vacío como si tuviera información. RH excluye identificadores personales; Administración mantiene su centro de configuración. Reportes avanzados sigue fuera del alcance operativo.
+
+### QA-RESP-01 Checklist responsive transversal
+
+**P1.** Pruebe escritorio, ancho intermedio y móvil de 390 px, además de zoom 200%, en español e inglés. Abra/cierre menú y panel lateral; use teclado para modales y buscadores.
+
+**Esperado:** sin scroll horizontal de página ni texto partido letra por letra; el ancho real del panel manda. Revise especialmente riel de Órdenes, listado/modal de Proveedores, partidas y buscador de Requisiciones, acciones de Cotizaciones, solicitudes colapsadas y reportes. Foco visible, etiquetas completas, cierre y acciones alcanzables; objetivos táctiles al menos 44 px o área equivalente. Una tabla con scroll debe conservarlo dentro de su contenedor.
+
+### QA-ERR-01 Mensajes y estados confirmados
+
+**P1.** Intente iniciar sin materiales, resolver sin entrega, aprobar sin permiso, recibir de más y reanudar con responsable inválido. Simule pérdida de conexión en el navegador de prueba y recupérela.
+
+**Esperado:** mensaje claro sobre requisito, responsable y pantalla, sin claves crudas ni error técnico del backend. Mantiene/restaura el estado confirmado, no pierde el formulario innecesariamente y permite reintentar cuando procede. No hay spinner infinito ni aviso de éxito ante fallo.
+
+### QA-IDEM-01 Reintentos y concurrencia
+
+**P0.** En documentos de prueba haga doble clic, recargue después de confirmar y consulte el mismo documento desde dos sesiones autorizadas. Si el equipo técnico prueba claves de idempotencia, debe reutilizar la misma clave sólo para la misma operación/payload.
+
+**Esperado:** una operación efectiva y un historial coherente; los conflictos de revisión o clave se comunican sin sobrescribir silenciosamente ni duplicar reserva, entrada, salida, devolución o costo.
+
+### QA-NAV-01 Sesión idioma y navegación
+
+**P1.** Navegue atrás/adelante, cambie idioma, recargue, cambie contexto autorizado y cierre sesión.
+
+**Esperado:** etiquetas y estados ES/EN completos, datos capturados sin traducción automática, permisos y datos del contexto vigente, ningún acceso operativo después de cerrar sesión.
+
+## 15 Validación del candidato pendiente de promoción
+
+Los casos siguientes comienzan **Sin ejecutar**. Primero confirmar SHA candidato, migraciones y almacenamiento mediante el plan de release.
+
+### QA-FORM-01 Campos y filas en conflicto
+
+**P0.** En cada módulo y Backoffice intente guardar con un campo requerido vacío y un valor inválido. Incluya un buscador de catálogo y una partida.
+
+**Esperado:** Mensaje específico junto al control visible, resumen que lleva al campo, captura conservada y foco accesible. Corregir un campo no borra los demás errores. Registrar módulo y formulario por variante.
+
+### QA-FORM-02 Errores generales y respuesta tardía
+
+**P1.** Pruebe permiso faltante, pérdida de conexión y un rechazo sin campo reconocido. Con apoyo técnico simule una respuesta tardía después de editar la captura.
+
+**Esperado:** Aviso útil sin texto técnico crudo; no promete campos marcados si no existen. Una respuesta anterior no marca campos de la captura nueva. Revise español, inglés, teclado, móvil y tema oscuro.
+
+### QA-MARGIN-01 Margen mayor a 100%
+
+**P0.** Cree o edite producto y servicio de prueba con 400 y 22122.22; guarde, recargue y vuelva a editar. Intente un negativo.
+
+**Esperado:** Persiste el porcentaje sobre costo sin límite de 100; rechaza negativos y valores no finitos. Los pesos de la receta siguen sujetos a sumar 100%.
+
+### QA-EVID-01 Recepción antes de espera o inicio
+
+**P0.** Con una receta de servicio y orden liberada, intente esperar recursos o iniciar sin descripción. Capture luego condiciones iniciales y guarde.
+
+**Esperado:** Bloqueo sin texto de 3–4000 caracteres. Evidencia guardada antes de la transición; las reglas de materiales y recursos siguen vigentes. Reintentar no duplica ni sobrescribe evidencia.
+
+### QA-EVID-02 Cierre en el formulario de avance
+
+**P0.** Avance una etapa intermedia y después la última pendiente al 100%. Pruebe también una orden de servicio activa anterior sin evidencia.
+
+**Esperado:** El cierre se solicita en el mismo formulario al completar el total. Exige recepción y cierre antes de 100% total, validación y terminación. La etapa intermedia no exige cierre si quedan otras pendientes.
+
+### QA-EVID-03 Optimización y límites
+
+**P0.** Suba una foto de cada formato permitido, con orientación y metadatos, y documentos PDF/TXT/DOCX/XLSX. Pruebe más de tres adjuntos por momento, foto mayor de 5 MiB/20 MP, documento mayor de 2 MiB y formato no admitido.
+
+**Esperado:** Fotos guardadas como WebP de hasta 300 KiB y lado máximo 1600, orientadas y sin ubicación; no se almacena original. Rechazo claro por selección inválida, captura conservada. Puede guardar solo texto. Verificación de bytes requiere apoyo técnico.
+
+### QA-EVID-04 Consulta privada y permisos
+
+**P0.** Consulte evidencia después de recargar y descargue con usuario lector autorizado. Pruebe sin sesión, sin permiso y con un ID ajeno a la orden; aislamiento entre tenants solo con recursos autorizados.
+
+**Esperado:** Texto y archivos persistidos, nombre de descarga correcto, permisos efectivos; ninguna descarga pública. Rechazo no revela evidencia de otra orden o tenant.
+
+### QA-EVID-05 Caducidad de todos los adjuntos
+
+**P0.** Equipo técnico: en fixtures Local con reloj/fecha controlados verifique antes y al vencer 365 días. En QA inspeccione política del bucket y smoke con adjuntos desechables autorizados; no envejezca evidencia operativa.
+
+**Esperado:** Desde vencimiento la descarga devuelve 410. Limpieza elimina bytes de fotos y documentos y conserva orden/texto/metadatos. Bucket sin versiones, soft delete, holds o retención adicional; lifecycle Delete age 365. No marcar el borrado anual real QA como observado por una simulación Local.
+
+### QA-EVID-06 Productos y reintentos
+
+**P0.** Complete una orden de producto y una de servicio. En el servicio simule fallo después de guardar recepción y antes de la transición; vuelva a intentar.
+
+**Esperado:** Producto no solicita evidencia. Servicio conserva evidencia aceptada y evita duplicados; un fallo de almacenamiento o transición no se muestra como éxito. Las órdenes comerciales de Ventas no cambian.
+
+## 16 Evidencia y reporte de defectos
+
+Por caso registre ID, resultado, fecha, tester, versión QA, tenant autorizado, rol efectivo, navegador/dispositivo, precondiciones, pasos, esperado y observado. En movimientos incluya folios y cantidades de existencia/reservado/disponible antes y después, además de referencia de Kardex. Adjunte captura o video con el mensaje y correlación cuando exista.
+
+Use títulos como **[QA][Almacenes][P0] Confirmar entrega duplica la salida**. Indique frecuencia e impacto; distinga defecto, dato de prueba faltante y permiso faltante. No adjunte contraseñas, tokens, enlaces vigentes de invitación ni datos personales reales.
+
+## 17 Criterio de salida
+
+La aceptación funcional requiere evidencia de los flujos completos y sus pruebas negativas, sin P0 abiertos ni P1 que bloqueen la operación acordada. Los casos Bloqueado o Sin ejecutar no equivalen a Pasa. Registre qué perfiles, dispositivos y aislamiento entre tenants se probaron realmente. El responsable de QA decide la aceptación con esa evidencia; este paquete no constituye una aprobación automática para Producción.

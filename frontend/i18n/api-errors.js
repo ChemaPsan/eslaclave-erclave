@@ -1,3 +1,4 @@
+import { FORM_BUSINESS_ERRORS } from "./form-business-errors.js";
 const TRANSITION_GUIDANCE = {
   "production_order": {
     "in_progress": {
@@ -115,6 +116,7 @@ const TRANSITION_GUIDANCE = {
   }
 };
 const ERROR_MESSAGES = Object.freeze({
+  ...FORM_BUSINESS_ERRORS,
   material_return_not_cancellable: {"es": "La devolución ya fue recibida físicamente y no puede cancelarse. Almacén debe finalizar su conciliación en Movimientos si sigue pendiente.", "en": "The return has already been physically received and cannot be cancelled. Warehouse must finish reconciliation in Movements if it is still pending."},
   material_return_not_receivable: {"es": "La solicitud de devolución está cancelada. Revisa el sobrante real y solicita una nueva devolución desde la orden si todavía corresponde.", "en": "The return request is cancelled. Review the actual unused materials and request a new return from the order if still needed."},
   material_return_not_found: {"es": "Esta devolución ya no está disponible en la empresa activa. Actualiza las devoluciones pendientes en Almacenes → Movimientos.", "en": "This return is unavailable in the active company. Refresh pending returns in Inventory → Movements."},
@@ -429,9 +431,21 @@ const ERROR_MESSAGES = Object.freeze({
   report_filter_invalid: { es: "Uno de los filtros del reporte no es válido. Revisa los filtros e intenta nuevamente.", en: "One of the report filters is invalid. Review the filters and try again." },
   report_not_found: { es: "El reporte solicitado no está disponible en este módulo.", en: "The requested report is not available in this module." },
   report_row_limit_exceeded: { es: "El reporte supera 50,000 filas. Reduce el periodo o agrega filtros para descargarlo.", en: "The report exceeds 50,000 rows. Shorten the date range or add filters before downloading it." },
+  movement_unit_must_match_item_base_unit: {
+    es: "La unidad debe coincidir con la unidad base del artículo. Selecciona su unidad base.",
+    en: "The unit must match the item's base unit. Select its base unit."
+  },
+  movement_reference_inactive: {
+    es: "El artículo o el almacén está inactivo. Selecciona registros activos; si necesitas habilitarlos, solicita apoyo al responsable del catálogo.",
+    en: "The item or warehouse is inactive. Select active records; ask the catalog manager if they need to be enabled."
+  },
+  movement_reference_invalid: {
+    es: "No se encontró el artículo o el almacén seleccionado. Actualiza los catálogos y selecciona ambos nuevamente.",
+    en: "The selected item or warehouse was not found. Refresh the catalogs and select both again."
+  },
   validation_failed: {
-    es: "Hay información inválida o incompleta. Revisa los campos marcados y vuelve a intentar.",
-    en: "Some information is invalid or incomplete. Review the marked fields and try again."
+    es: "No se pudo validar la solicitud. Revisa los requisitos indicados; si no hay un campo que corregir, contacta a soporte.",
+    en: "The request could not be validated. Review the indicated requirements; if no field can be corrected, contact support."
   },
   service_unavailable: {
     es: "El servicio no está disponible temporalmente. No pudimos confirmar el resultado; recarga antes de volver a intentar.",
@@ -508,7 +522,7 @@ export function getLocalizedErrorMessage(error, options = {}) {
   const code = getApiErrorCode(error);
   const status = Number(error?.status || 0);
   const firebaseMessage = FIREBASE_MESSAGES[error?.code]?.[lang];
-  const definition = ERROR_MESSAGES[code];
+  const definition = Object.hasOwn(ERROR_MESSAGES, code) ? ERROR_MESSAGES[code] : null;
   const service = error?.details?.service || error?.payload?.error?.details?.service || options.service || (lang === "en" ? "the service" : "el servicio");
   let message = firebaseMessage || (definition ? interpolate(definition[lang], { service }) : "");
   const details=error?.details||error?.payload?.error?.details||{};

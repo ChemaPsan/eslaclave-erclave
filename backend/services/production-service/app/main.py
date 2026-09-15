@@ -1,3 +1,4 @@
+from .evidence_lifecycle import EvidenceBodyLimit, evidence_lifespan
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,6 +17,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
         title="ERClave Production Service",
+        lifespan=evidence_lifespan,
         version=settings.version,
         docs_url="/docs",
         redoc_url="/redoc",
@@ -26,9 +28,11 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origin_list,
         allow_origin_regex=QA_FIREBASE_ORIGIN_REGEX if settings.environment == "qa" else None,
         allow_credentials=False,
+        expose_headers=["Content-Disposition", "X-Correlation-Id"],
         allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
         allow_headers=["Content-Type", "X-Tenant-Id", "X-Correlation-Id", "Idempotency-Key", "Authorization"],
     )
+    app.add_middleware(EvidenceBodyLimit)
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(TenantContextMiddleware)
     app.add_exception_handler(ErclaveError, erclave_error_handler)
