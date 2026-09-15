@@ -132,3 +132,11 @@ SALES_IMAGE=us-central1-docker.pkg.dev/erclave/erclave-qa/sales-service@sha256:c
 PURCHASING_IMAGE=us-central1-docker.pkg.dev/erclave/erclave-qa/purchasing-service@sha256:d8432e298de1c526e2eff460fdba23dcf841c066c8b46e61ade95fc6224eb0c5
 MAINTENANCE_IMAGE=us-central1-docker.pkg.dev/erclave/erclave-qa/maintenance-service@sha256:c3ac45f712ccda851a3c8c63cbce34c44985493e08937fd6d4e0b876e95415aa
 ```
+
+## Datos de prueba autorizados CHG-279
+
+El usuario autorizó crear servicio y orden en la sesión QA activa. Consola funcional confirmada como API QA, empresa Es La Clave y sucursal Edo. Mex56495. Se creó servicio `prd-000002` (QA Evidencia servicio e57237f), receta aprobada `rec-000002` / `rec_790f962694ee48cbafca788366` y orden `OP-000003` / `ord_5965211f77a37f8e3220fa8025`. Cantidad1E48, prioridad baja, una etapa Producción, recurso existente Empacador A por6MIN y costo planeado3. No materiales ni movimientos de almacén creados.
+
+Alta mediante formularios/API QA de la sesión autorizada; validación de recursos correcta y persistencia de la orden comprobada tras recarga. Estado Liberada/0%. El identificador técnico del tenant no se mostró en UI; se verificaron empresa, sucursal y cuenta de sesión, sin extraer tokens. Registros quedan disponibles para el smoke, no cancelados ni inactivados todavía. Cierre previsto: conservar referencia de auditoría y cancelar/inactivar los registros de prueba cuando termine la validación.
+
+La página publicada aún sirve el formulario anterior de avance sin campos de evidencia; se abrió y canceló sin guardar. No se cargaron adjuntos ni se comprobó descarga autenticada. El release34932659212 sigue esperando en qa-traffic. La sesión autenticada y fixtures están resueltos; falta habilitar la vía de prueba del candidato sin afirmar que el frontend viejo valida el cambio. No repetir la solicitud de cuenta u orden al usuario.

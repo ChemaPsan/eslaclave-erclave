@@ -4491,3 +4491,17 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | APIs afectadas | Ninguna modificada en este registro. Smoke GET health/ready/version de siete candidatos aprobado; publicación funcional del delta pendiente de tráfico/frontend. |
 | Validacion | CI34931780981 aprobado, manifiesto con7 digests verificado, jobs DB/config completados y siete candidatos health/ready/version correctos al0%. Local360 aprobadas/cero omitidas. |
 | Observaciones | qa-traffic pendiente por smoke autenticado de evidencia; se solicitó cuenta/orden de prueba autorizada. No Hosting ni datos funcionales QA creados. Revisión visual Word pendiente. |
+
+### CHG-279
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-14 23:49 America/Mexico_City |
+| Cambio | Servicio, receta y orden de prueba QA autorizados |
+| Autor | Codex |
+| Archivos | Contexto ESTADO_ACTUAL/PENDIENTES/INICIO_SESION; plan release_qa_20260914; TRAZABILIDAD |
+| Agentes consultados | Fichas Producción, Arquitectura, Seguridad, QA/Release y Datos/Custodio DB del corte; skills qa-release, environment-boundaries y computer-use. |
+| Descripcion | Alta por UI QA de prd-000002, rec-000002 y OP-000003 exclusivamente para smoke autorizado. Una unidad de servicio, una etapa y6MIN de mano de obra existente. |
+| APIs afectadas | Ningún contrato modificado. Consumidas por frontend: altas de product-services, recipes y orders en Production; validación de recursos y lecturas de catálogos/sesión. |
+| Validacion | Servicio y receta guardados; validación autoritativa de orden lista para liberar; OP-000003 Liberada/0% persistida tras recarga. No prueba de evidencia ni avance100 realizados. |
+| Observaciones | Datos funcionales QA creados por autorización explícita; sin materiales. El frontend publicado carece de formulario nuevo; qa-traffic pendiente. No solicitar nuevamente cuenta/orden. |
