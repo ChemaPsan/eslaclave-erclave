@@ -4477,3 +4477,17 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | Validacion | verify:postgres:360 aprobadas/cero omitidas, validadores y compilación correctos. Consola confirma creación, privacidad, bucket vacío y regla365; API GitHub confirma variable. |
 | APIs afectadas | Ninguna API ERClave modificada. Configuración Cloud Storage y variable GitHub; sin deploy. |
 | Observaciones | Faltan smoke, candidato y release protegidos; revisión visual Word. No afirmar QA actualizado. |
+
+### CHG-278
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-14 23:36 America/Mexico_City |
+| Cambio | Candidato QA fusionado, construido y desplegado sin tráfico |
+| Autor | Codex |
+| Archivos | Contexto ESTADO_ACTUAL/PENDIENTES/INICIO_SESION; plan release_qa_20260914; fronteras de ambientes; diagrama backend; TRAZABILIDAD |
+| Agentes consultados | Arquitectura, Seguridad, QA/Release, Datos/Custodio DB y Producción; revisiones del corte evidence_release_review, qa_db_audit y safe_maintenance_tests. Skills qa-release y environment-boundaries. |
+| Descripcion | Publicación autorizada de documentación, merge PR15, build34932158226 y release34932659212 hasta servicios sin tráfico. Registra migración0036, configuración y siete revisiones. |
+| APIs afectadas | Ninguna modificada en este registro. Smoke GET health/ready/version de siete candidatos aprobado; publicación funcional del delta pendiente de tráfico/frontend. |
+| Validacion | CI34931780981 aprobado, manifiesto con7 digests verificado, jobs DB/config completados y siete candidatos health/ready/version correctos al0%. Local360 aprobadas/cero omitidas. |
+| Observaciones | qa-traffic pendiente por smoke autenticado de evidencia; se solicitó cuenta/orden de prueba autorizada. No Hosting ni datos funcionales QA creados. Revisión visual Word pendiente. |

@@ -1,14 +1,16 @@
 # Pendientes priorizados de ERClave
 
-## Infraestructura de evidencia CHG-277 — promoción pendiente
+## Promoción CHG-278 — candidatos verificados, tráfico pendiente
 
-Acceso Cloud resuelto con la cuenta administradora autorizada. El 2026-09-14 se creó `erclave-qa-service-evidence` en erclave/us-central1: Standard, acceso uniforme y prevención pública enforced, sin versionado, soft delete ni retención bloqueada. Se verificó vacío y una única regla Delete con age 365. GitHub `QA_EVIDENCE_BUCKET=erclave-qa-service-evidence` creada y leída de vuelta.
+PR #15 fusionado tras CI34931780981 aprobado. SHA inmutable: `e57237fe90319f88e1db8ed8d2e686604d2d9c54`. Candidato34932158226 aprobado, siete imágenes verificadas; archivo del manifiesto SHA256 `50f6df93bd59f09ce3198cf43f1a64cbbb782888bb23a483c28bc7fb256c8cde`.
 
-El usuario autorizó el rol mínimo para `erclave-production-qa@erclave.iam.gserviceaccount.com`: storage.buckets.get y storage.objects.create/get/delete, solo en ese bucket. Rol `projects/erclave/roles/erclaveQaServiceEvidence` creado en disponibilidad general con esos cuatro permisos; asignación directa exclusivamente al bucket guardada y confirmada en consola. No afirmar acceso funcional por health/ready.
+Release34932659212: preflight, migración/configuración y servicios aprobados. Jobs Cloud Run `erclave-migrate-qa-f8hkh` y `erclave-configure-tenant-qa-cj7hz` completados. Migración aprobada hasta `20260913_0036`. Copia automática de erclave-qa-postgres del14 septiembre completada y PITR habilitado con7 días verificados en consola; no se restauró ni copió DB Local.
 
-Autorizadas las pruebas con tenants temporales UUID y limpieza exclusivamente en loopback5434/erclave_local. `npm run verify:postgres` terminó con **360 aprobadas, cero omitidas** (65.39s); validadores y compilación aprobados. Esto cierra las20 integraciones pendientes y las55 históricas omitidas en la ejecución sin DB. No demuestra UAT ni paridad autenticada QA.
+Siete revisiones candidatas al0% de tráfico y smoke health/ready/version aprobado. `qa-traffic` pendiente; frontend no ejecutado. El tráfico público conserva b63cdad, verificado antes de crear candidatos. Falta prueba autenticada de carga/descarga de evidencia con cuenta y orden de prueba autorizadas; solicitadas al usuario, no crear fixtures funcionales QA por inferencia. No declarar paridad/UAT completa. Revisión visual Word pendiente.
 
-PR #15 sigue en borrador; HEAD publicado dffe7642d57111b94b74d95ec62f252b017c0190, CI34816946232 aprobado. No merge, qa-candidate, qa-release, migración ni tráfico/Hosting. Base QA previamente verificada b63cdad. Pendientes: smoke de adjuntos, pipeline protegido, pruebas autenticadas QA y revisión visual Word. No se crearon datos funcionales QA.
+Local:360 pruebas aprobadas/cero omitidas con PostgreSQL, incluidas las55 históricas. Bucket privado/lifecycle365/IAM mínimo y variable GitHub ya configurados en CHG-277. El usuario autorizó explícitamente publicar identificadores técnicos en el PR público; no se publicaron credenciales.
+
+Evidencia y digests en `docs/operaciones/release_qa_20260914.md`. No aprobar tráfico hasta cerrar el smoke autenticado previsto en el plan. Continuar el mismo run/candidato, sin reconstruir ni ejecutar deploys locales.
 
 ## Preparación QA y manuales CHG-275
 

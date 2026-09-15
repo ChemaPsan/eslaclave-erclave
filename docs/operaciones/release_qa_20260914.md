@@ -1,14 +1,16 @@
 # Preparación de promoción QA — 14 septiembre 2026
 
-## Infraestructura de evidencia CHG-277 — promoción pendiente
+## Promoción CHG-278 — candidatos verificados, tráfico pendiente
 
-Acceso Cloud resuelto con la cuenta administradora autorizada. El 2026-09-14 se creó `erclave-qa-service-evidence` en erclave/us-central1: Standard, acceso uniforme y prevención pública enforced, sin versionado, soft delete ni retención bloqueada. Se verificó vacío y una única regla Delete con age 365. GitHub `QA_EVIDENCE_BUCKET=erclave-qa-service-evidence` creada y leída de vuelta.
+PR #15 fusionado tras CI34931780981 aprobado. SHA inmutable: `e57237fe90319f88e1db8ed8d2e686604d2d9c54`. Candidato34932158226 aprobado, siete imágenes verificadas; archivo del manifiesto SHA256 `50f6df93bd59f09ce3198cf43f1a64cbbb782888bb23a483c28bc7fb256c8cde`.
 
-El usuario autorizó el rol mínimo para `erclave-production-qa@erclave.iam.gserviceaccount.com`: storage.buckets.get y storage.objects.create/get/delete, solo en ese bucket. Rol `projects/erclave/roles/erclaveQaServiceEvidence` creado en disponibilidad general con esos cuatro permisos; asignación directa exclusivamente al bucket guardada y confirmada en consola. No afirmar acceso funcional por health/ready.
+Release34932659212: preflight, migración/configuración y servicios aprobados. Jobs Cloud Run `erclave-migrate-qa-f8hkh` y `erclave-configure-tenant-qa-cj7hz` completados. Migración aprobada hasta `20260913_0036`. Copia automática de erclave-qa-postgres del14 septiembre completada y PITR habilitado con7 días verificados en consola; no se restauró ni copió DB Local.
 
-Autorizadas las pruebas con tenants temporales UUID y limpieza exclusivamente en loopback5434/erclave_local. `npm run verify:postgres` terminó con **360 aprobadas, cero omitidas** (65.39s); validadores y compilación aprobados. Esto cierra las20 integraciones pendientes y las55 históricas omitidas en la ejecución sin DB. No demuestra UAT ni paridad autenticada QA.
+Siete revisiones candidatas al0% de tráfico y smoke health/ready/version aprobado. `qa-traffic` pendiente; frontend no ejecutado. El tráfico público conserva b63cdad, verificado antes de crear candidatos. Falta prueba autenticada de carga/descarga de evidencia con cuenta y orden de prueba autorizadas; solicitadas al usuario, no crear fixtures funcionales QA por inferencia. No declarar paridad/UAT completa. Revisión visual Word pendiente.
 
-PR #15 sigue en borrador; HEAD publicado dffe7642d57111b94b74d95ec62f252b017c0190, CI34816946232 aprobado. No merge, qa-candidate, qa-release, migración ni tráfico/Hosting. Base QA previamente verificada b63cdad. Pendientes: smoke de adjuntos, pipeline protegido, pruebas autenticadas QA y revisión visual Word. No se crearon datos funcionales QA.
+Local:360 pruebas aprobadas/cero omitidas con PostgreSQL, incluidas las55 históricas. Bucket privado/lifecycle365/IAM mínimo y variable GitHub ya configurados en CHG-277. El usuario autorizó explícitamente publicar identificadores técnicos en el PR público; no se publicaron credenciales.
+
+Evidencia y digests en `docs/operaciones/release_qa_20260914.md`. No aprobar tráfico hasta cerrar el smoke autenticado previsto en el plan. Continuar el mismo run/candidato, sin reconstruir ni ejecutar deploys locales.
 
 ## Base y alcance
 
@@ -71,7 +73,7 @@ CHG-275 ejecutó una selección segura de **29 pruebas aprobadas, cero omitidas*
 
 Quedan **29 pruebas históricas bloqueadas**: Admin 4 (crean tenants aunque hagan rollback), Ventas repositorio 5 (tenant UUID distinto), Compras repositorio 11 (tenant distinto y borrado completo; prueba adicional de otro tenant), Mantenimiento repositorio 9 (cleanup por diferencia del baseline, puede borrar órdenes concurrentes). No ejecutar verify:postgres completo ni cambiar solo el tenant de esas fixtures: podría borrar información. Corregirlas con IDs/actor/keys únicos y limpieza acotada; los casos de onboarding/multitenant requieren recursos expresamente autorizados o cobertura rediseñada sin afirmar equivalencia. Inventario 9, Production warehouse 6, Compras handoff 2, Ventas handoff 1 y Maintenance recovery/return 5 sí se ejecutaron.
 
-UAT autenticada QA, aislamiento con dos tenants autorizados, smoke de almacenamiento real GCS, nueva revisión visual Word y certificación de las 29 pendientes son gates aún por cerrar. Las pruebas no autorizan escrituras QA adicionales. Ver `docs/qa/MATRIZ_EJECUCION_QA.md`: 56 casos base y 9 del candidato, todos con resultado por registrar.
+UAT autenticada QA, aislamiento con dos tenants autorizados, smoke de almacenamiento real GCS y revisión visual Word siguen pendientes. Las integraciones Local quedaron cerradas:360 aprobadas/cero omitidas. Las pruebas no autorizan escrituras QA adicionales. Ver `docs/qa/MATRIZ_EJECUCION_QA.md`: 56 casos base y 9 del candidato, todos con resultado por registrar.
 
 ## Secuencia de promoción preparada
 
@@ -101,3 +103,32 @@ Esta preparación CHG-275 no agrega endpoints; documenta el contrato del candida
 | PATCH /v1/production/order-stages/{stage_id} | Permiso de actualización/terminación de etapa existente; recepción y cierre antes del 100% total |
 
 Consumidos sin cambio en preparación: GET /version de los siete servicios. Los otros contratos de Admin, Inventory, RH, Sales, Purchasing y Maintenance no cambian por este corte. Feedback de formularios consume endpoints existentes.
+
+## Registro de ejecución CHG-278 — 14 septiembre 2026 23:36 GMT-6
+
+- PR: https://github.com/ChemaPsan/eslaclave-erclave/pull/15
+- Candidato aprobado: https://github.com/ChemaPsan/eslaclave-erclave/actions/runs/34932158226
+- Promoción en qa-traffic: https://github.com/ChemaPsan/eslaclave-erclave/actions/runs/34932659212
+- No hay promoción de tráfico ni Hosting; mantener esquema aditivo y bucket si se abandona candidato.
+
+| Servicio | Revisión candidata al0% |
+|---|---|
+| Admin | admin-service-qa-00034-sig |
+| Inventory | inventory-service-qa-00015-suv |
+| HR | hr-service-qa-00015-map |
+| Production | production-service-qa-00020-gip |
+| Sales | sales-service-qa-00010-roz |
+| Purchasing | purchasing-service-qa-00005-gaf |
+| Maintenance | maintenance-service-qa-00005-yij |
+
+Manifiesto verificado:
+
+```text
+ADMIN_IMAGE=us-central1-docker.pkg.dev/erclave/erclave-qa/admin-service@sha256:4c047c5824e26f4b1132ce87b5eea8abf1844050fa2cb5b4f327bb23159f95fe
+PRODUCTION_IMAGE=us-central1-docker.pkg.dev/erclave/erclave-qa/production-service@sha256:6c04d07d6e8dc4558edef288028481d7aef2ad87e7fd2e18310db126d0f109ba
+INVENTORY_IMAGE=us-central1-docker.pkg.dev/erclave/erclave-qa/inventory-service@sha256:1c779015dafecc4d56040f236e6640432eba31189f2388623ba045d5eb305a8f
+HR_IMAGE=us-central1-docker.pkg.dev/erclave/erclave-qa/hr-service@sha256:d548f8f837c7668d37abfabe64838ba0d665e289428ebdee6650cefbab390bfd
+SALES_IMAGE=us-central1-docker.pkg.dev/erclave/erclave-qa/sales-service@sha256:c212af511cd443cafc20d5694aee336e13402197eff6eac3ef1776b58e60ad1f
+PURCHASING_IMAGE=us-central1-docker.pkg.dev/erclave/erclave-qa/purchasing-service@sha256:d8432e298de1c526e2eff460fdba23dcf841c066c8b46e61ade95fc6224eb0c5
+MAINTENANCE_IMAGE=us-central1-docker.pkg.dev/erclave/erclave-qa/maintenance-service@sha256:c3ac45f712ccda851a3c8c63cbce34c44985493e08937fd6d4e0b876e95415aa
+```

@@ -57,7 +57,7 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 | `admin-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | `production-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | Firebase Auth | Integrado | Login y sesion QA documentados |
-| Cloud SQL `erclave_qa` | Migrado | Revision documentada `20260908_0034` |
+| Cloud SQL `erclave_qa` | Migrado | Revision documentada `20260913_0036` |
 | Administracion | Real QA | Tenant, sesion, permisos, roles, entitlements y organizacion |
 | Productos y servicios | Real QA | API de Produccion desplegada |
 | Recetas y versiones | Real QA | Integracion publicada y documentada |
