@@ -8,6 +8,8 @@ from erclave_common.health import router as health_router
 from erclave_common.middleware import CorrelationIdMiddleware, TenantContextMiddleware
 
 from .api import router as production_router
+from .organization_api import router as organization_router
+from .sales_conversion_api import router as sales_conversion_router
 
 
 QA_FIREBASE_ORIGIN_REGEX = r"https://erclave(--[a-z0-9-]+)?\.web\.app|https://erclave\.firebaseapp\.com"
@@ -30,7 +32,7 @@ def create_app() -> FastAPI:
         allow_credentials=False,
         expose_headers=["Content-Disposition", "X-Correlation-Id"],
         allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
-        allow_headers=["Content-Type", "X-Tenant-Id", "X-Correlation-Id", "Idempotency-Key", "Authorization"],
+        allow_headers=["Content-Type", "X-Tenant-Id", "X-Actor-Id", "X-Correlation-Id", "Idempotency-Key", "Authorization"],
     )
     app.add_middleware(EvidenceBodyLimit)
     app.add_middleware(CorrelationIdMiddleware)
@@ -38,6 +40,8 @@ def create_app() -> FastAPI:
     app.add_exception_handler(ErclaveError, erclave_error_handler)
     app.include_router(health_router)
     app.include_router(production_router)
+    app.include_router(organization_router)
+    app.include_router(sales_conversion_router)
     return app
 
 

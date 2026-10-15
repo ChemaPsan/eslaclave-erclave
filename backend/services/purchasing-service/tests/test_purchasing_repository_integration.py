@@ -17,6 +17,14 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 for name in list(sys.modules):
     if name=="app" or name.startswith("app."):del sys.modules[name]
 repo_module=importlib.import_module("app.repositories"); schemas=importlib.import_module("app.schemas")
+receipt_context=importlib.import_module("app.receipt_context")
+from erclave_common.operational_context import OperationalContext
+
+def physical_snapshots(repo,tenant,order):
+    context=OperationalContext(division_ref_id='division-test',society_ref_id='society-test',division_code='TEST',division_name='Test',cost_currency='MXN')
+    with repo.engine.begin() as connection:
+        connection.execute(text("insert into purchasing.supplier_division_assignments(tenant_id,supplier_id,division_ref_id,society_ref_id,status,revision) values(:t,:id,'division-test','society-test','active',1) on conflict do nothing"),{'t':tenant,'id':order['supplier_id']})
+    return {line['id']:receipt_context.cost_snapshot(context,order['currency'],line['unit_price'],None) for line in order['lines'] if line['line_type']=='inventory_item'}
 
 @pytest.fixture
 def repository():
@@ -38,7 +46,7 @@ def repository():
         try:
             with value.engine.begin() as connection:
                 # Exact, per-fixture identities; never clear a shared tenant on setup.
-                for table in ["audit_events", "idempotency_records", "purchase_receipt_lines", "purchase_receipts", "purchase_order_lines", "purchase_orders", "requisition_lines", "requisitions", "suppliers"]:
+                for table in ["audit_events", "idempotency_records", "purchase_receipt_lines", "purchase_receipts", "purchase_order_lines", "purchase_orders", "requisition_lines", "requisitions", "supplier_division_assignments", "suppliers"]:
                     connection.execute(text(f"delete from purchasing.{table} where tenant_id=any(:tenants)"), {"tenants": owned_tenants})
         finally:
             value.engine.dispose()
@@ -58,7 +66,7 @@ def test_supplier_to_partial_receipt_cycle_and_over_receipt(repository):
     order=repo.create_order(tenant,schemas.PurchaseOrderWrite(code="OC-1",requisition_id=requisition["id"],supplier_id=supplier["id"],currency="MXN",payment_terms="cash",lines=[line(price="25")]),"order-key-001","e",actor)
     order=repo.issue_order(tenant,order["id"],"issue-key-001","f",actor)
     payload=schemas.ReceiptWrite(code="REC-1",purchase_order_id=order["id"],received_at=datetime.now(timezone.utc),lines=[schemas.ReceiptLineInput(order_line_id=order["lines"][0]["id"],quantity="4",warehouse_id="wh_test")])
-    receipt,plan=repo.prepare_receipt(tenant,payload,"receipt-key-001","g",actor)
+    receipt,plan=repo.prepare_receipt(tenant,payload,"receipt-key-001","g",actor,physical_snapshots(repo,tenant,order))
     result=repo.complete_receipt(tenant,receipt,plan,[{"id":"mov_test"}],"receipt-key-001",actor)
     assert result["status"]=="completed"
     assert repo.get_order(tenant,order["id"])["status"]=="partially_received"
@@ -157,7 +165,7 @@ def test_partial_dependency_failure_is_reconciled_without_duplicate_quantities(r
     lines=[line("2",price="10"),schemas.PurchaseLineInput(line_type="inventory_item",inventory_item_id="itm_two",description="Segundo material",quantity="3",unit_code="H87",unit_price="20")]
     _,order=ready_order(repo,tenant,"RECON",lines)
     payload=schemas.ReceiptWrite(code="REC-RECON",purchase_order_id=order["id"],received_at=datetime.now(timezone.utc),lines=[schemas.ReceiptLineInput(order_line_id=item["id"],quantity=item["quantity"],warehouse_id="wh_test") for item in order["lines"]])
-    receipt,plan=repo.prepare_receipt(tenant,payload,"receipt-recon-key","receipt-recon","usr_test")
+    receipt,plan=repo.prepare_receipt(tenant,payload,"receipt-recon-key","receipt-recon","usr_test",physical_snapshots(repo,tenant,order))
     failed=repo.complete_receipt(tenant,receipt,plan,[{"id":"mov_first"}],"receipt-recon-key","usr_test","inventory_unavailable")
     assert failed["status"]=="needs_reconciliation"
     assert [item["reconciliation_status"] for item in failed["lines"]]==["completed","failed"]
@@ -171,13 +179,14 @@ def test_partial_dependency_failure_is_reconciled_without_duplicate_quantities(r
 def test_pending_receipt_claim_prevents_concurrent_over_receipt(repository):
     repo,tenant=repository
     _,order=ready_order(repo,tenant,"RACE",[line("5",price="10")])
+    frozen=physical_snapshots(repo,tenant,order)
     barrier=Barrier(2)
     def claim(suffix):
         competing=repo_module.PurchasingRepository(DATABASE_URL)
         competing.engine.dispose();competing.engine=create_engine(DATABASE_URL,pool_pre_ping=True,poolclass=NullPool)
         payload=schemas.ReceiptWrite(code=f"REC-{suffix}",purchase_order_id=order["id"],received_at=datetime.now(timezone.utc),lines=[schemas.ReceiptLineInput(order_line_id=order["lines"][0]["id"],quantity="5",warehouse_id="wh_test")])
         barrier.wait()
-        try:return competing.prepare_receipt(tenant,payload,f"race-{suffix}-key",f"race-{suffix}","usr_test")[0]["id"]
+        try:return competing.prepare_receipt(tenant,payload,f"race-{suffix}-key",f"race-{suffix}","usr_test",frozen)[0]["id"]
         except ValueError as exc:return str(exc)
         finally:competing.engine.dispose()
     with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(claim,["A","B"]))
@@ -246,7 +255,7 @@ def test_mixed_receipt_completes_service_even_when_inventory_fails_first(reposit
     lines=[line("1",price="10"),service_line("1",price="200")]
     _,order=ready_order(repo,tenant,"MIXED",lines)
     payload=schemas.ReceiptWrite(code="REC-MIXED",purchase_order_id=order["id"],received_at=datetime.now(timezone.utc),lines=[schemas.ReceiptLineInput(order_line_id=order["lines"][0]["id"],quantity="1",warehouse_id="wh_test"),schemas.ReceiptLineInput(order_line_id=order["lines"][1]["id"],quantity="1")])
-    receipt,plan=repo.prepare_receipt(tenant,payload,"receipt-mixed","receipt-mixed","usr_test")
+    receipt,plan=repo.prepare_receipt(tenant,payload,"receipt-mixed","receipt-mixed","usr_test",physical_snapshots(repo,tenant,order))
     failed=repo.complete_receipt(tenant,receipt,plan,[None,{"id":None}],"receipt-mixed","usr_test","inventory_unavailable")
     assert failed["status"]=="needs_reconciliation"
     assert [item["reconciliation_status"] for item in failed["lines"]]==["failed","completed"]

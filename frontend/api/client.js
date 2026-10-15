@@ -3,7 +3,7 @@ import { getAuthToken } from "../auth.js";
 import { MUTATION_FINISHED_EVENT, MUTATION_STARTED_EVENT } from "../utils/mutation-feedback.js";
 import { getLocalizedErrorMessage } from "../i18n/api-errors.js";
 
-const API_REQUEST_TIMEOUT_MS = 15000;
+const API_REQUEST_TIMEOUT_MS = 35000;
 
 export class ErclaveApiError extends Error {
   constructor(serverMessage, status, payload = null, metadata = {}) {
@@ -22,30 +22,6 @@ export class ErclaveApiError extends Error {
   }
 }
 
-function getLocalFallbackUrl(url) {
-  if (url.includes("://localhost:")) return url.replace("://localhost:", "://127.0.0.1:");
-  if (url.includes("://127.0.0.1:")) return url.replace("://127.0.0.1:", "://localhost:");
-  return "";
-}
-
-async function fetchApi(url, token, options) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
-  try {
-    return await fetch(url, {
-      ...options,
-      signal: options.signal || controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options.headers || {})
-      }
-    });
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
 export async function apiRequest(path, options = {}) {
   return apiRequestAt(getApiBaseUrl(), path, options, "Admin API");
 }
@@ -56,41 +32,34 @@ export async function apiRequestAt(baseUrl, path, options = {}, apiLabel = "API"
   const formRequest = { path, method, body: options.body, context: null };
   if (isMutation) window.dispatchEvent(new CustomEvent("erclave:form-request", { detail: formRequest }));
   if (isMutation) window.dispatchEvent(new CustomEvent(MUTATION_STARTED_EVENT));
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = setTimeout(() => { timedOut = true; controller.abort(); }, API_REQUEST_TIMEOUT_MS);
+  const cancel = () => controller.abort();
+  options.signal?.addEventListener("abort", cancel, { once: true });
+  if (options.signal?.aborted) cancel();
+  const bounded = async (operation) => {
+    if (controller.signal.aborted) throw new DOMException("Request aborted", "AbortError");
+    let rejectAbort;
+    const aborted = new Promise((_, reject) => { rejectAbort = () => reject(new DOMException("Request aborted", "AbortError")); });
+    controller.signal.addEventListener("abort", rejectAbort, { once: true });
+    try { return await Promise.race([operation(), aborted]); }
+    finally { controller.signal.removeEventListener("abort", rejectAbort); }
+  };
   try {
-  const url = `${baseUrl}${path}`;
-  const token = await getAuthToken();
-  let response;
-  try {
-    response = await fetchApi(url, token, options);
-  } catch (error) {
-    const fallbackUrl = getLocalFallbackUrl(url);
-    if (fallbackUrl) {
-      try {
-        response = await fetchApi(fallbackUrl, token, options);
-      } catch (fallbackError) {
-        throw new ErclaveApiError("Network request and local fallback failed.", 0, {
-          error: {
-            code: error?.name === "AbortError" || fallbackError?.name === "AbortError" ? "request_timeout" : "network_unavailable",
-            message: "The API could not be reached.",
-            correlation_id: "",
-            details: { service: apiLabel, cause: error?.message || "fetch_failed", fallback_cause: fallbackError?.message || "fallback_fetch_failed", url, fallback_url: fallbackUrl }
-          }
-        });
-      }
-    } else {
-      throw new ErclaveApiError("Network request failed.", 0, {
-        error: {
-          code: error?.name === "AbortError" ? "request_timeout" : "network_unavailable",
-          message: "The API could not be reached.",
-          correlation_id: "",
-          details: { service: apiLabel, cause: error?.message || "fetch_failed", url }
-        }
-      });
+  const token = await bounded(() => getAuthToken());
+  const response = await bounded(() => fetch(`${baseUrl}${path}`, {
+    ...options,
+    signal: controller.signal,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {})
     }
-  }
+  }));
 
   const expectsBlob = options.responseType === "blob";
-  const payload = expectsBlob && response.ok ? null : await response.json().catch(() => null);
+  const payload = expectsBlob && response.ok ? null : await bounded(() => response.json().catch(error => { if (error?.name === "AbortError") throw error; return null; }));
   if (!response.ok) {
     const responseCorrelationId = response.headers.get("X-Correlation-Id") || "";
     const fallbackCode = ({
@@ -107,7 +76,7 @@ export async function apiRequestAt(baseUrl, path, options = {}, apiLabel = "API"
           error: {
             ...payload.error,
             correlation_id: payload.error.correlation_id || responseCorrelationId,
-            details: { ...(payload.error.details || {}), service: apiLabel }
+            details: { service: apiLabel, ...(payload.error.details || {}), api_service: apiLabel }
           }
         }
       : {
@@ -127,16 +96,24 @@ export async function apiRequestAt(baseUrl, path, options = {}, apiLabel = "API"
     const encodedFilename = disposition.match(/filename\*=UTF-8\'\'([^;]+)/i)?.[1];
     let filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || "report.csv";
     if(encodedFilename){try{filename=decodeURIComponent(encodedFilename);}catch{filename="attachment";}}
-    return { empty: false, blob: await response.blob(), filename };
+    return { empty: false, blob: await bounded(() => response.blob()), filename };
   }
   return payload;
   } catch (error) {
+    if (!(error instanceof ErclaveApiError)) {
+      error = new ErclaveApiError("Request could not be completed.", 0, null, {
+        code: timedOut ? "request_timeout" : controller.signal.aborted ? "request_cancelled" : "network_unavailable",
+        details: { service: apiLabel }
+      });
+    }
     if (formRequest.context && error && typeof error === "object") {
       error.formContext = formRequest.context;
       window.dispatchEvent(new CustomEvent("erclave:form-error", { detail: error }));
     }
     throw error;
   } finally {
+    clearTimeout(timeoutId);
+    options.signal?.removeEventListener("abort", cancel);
     if (formRequest.context) window.dispatchEvent(new CustomEvent("erclave:form-complete", { detail: formRequest.context }));
     if (isMutation) window.dispatchEvent(new CustomEvent(MUTATION_FINISHED_EVENT));
   }

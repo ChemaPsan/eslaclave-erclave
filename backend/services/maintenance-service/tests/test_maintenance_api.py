@@ -9,6 +9,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 from erclave_common.errors import ErclaveError
+from erclave_common.organization_client import OrganizationAccess
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -20,22 +21,44 @@ main = importlib.import_module("app.main")
 repositories = importlib.import_module("app.repositories")
 authorities = importlib.import_module("app.authorities")
 authorization = importlib.import_module("app.authorization")
+inventory_context = importlib.import_module("app.inventory_context")
 from erclave_common.config import Settings
 
-TENANT = "ten_demo"
+TENANT = "ten_739ee59d765d5e14818674800d"
+CONTEXT = {"division_ref_id": "div_test", "society_ref_id": "soc_test", "division_code": "TEST", "division_name": "Test", "cost_currency": "MXN"}
+
+
+def organization_access(tenant, permission, token=None, actor=None, *, all_divisions=False):
+    assert tenant == TENANT
+    return OrganizationAccess(tenant, actor or "usr_demo", (permission,) if isinstance(permission,str) else permission,
+        ({"id":"div_test","society_id":"soc_test","code":"TEST","name":"Test"},), all_divisions, False,
+        token, ({"id":"soc_test","base_currency":"MXN"},))
+
+
+@pytest.fixture(autouse=True)
+def material_authority(monkeypatch):
+    # Historical materials remain recoverable only with explicit full scope.
+    monkeypatch.setattr(inventory_context, "organization_access", lambda tenant, token, permission, actor=None:
+        organization_access(tenant, permission, token, actor, all_divisions=True))
 
 
 class FakeRepository:
     def __init__(self):
         self.order = None
 
-    def list_orders(self, tenant, q=None, status=None, limit=100):
+    def list_orders(self, tenant, q=None, status=None, limit=100, divisions=None):
         return [self.order] if tenant == TENANT and self.order else []
 
     def get_order(self, tenant, order_id):
         return self.order if tenant == TENANT and self.order and self.order["id"] == order_id else None
 
-    def create_order(self, tenant, payload, snapshots, key, request_hash, actor):
+    def document_replay(self, tenant, operation, key, request_hash, scope, *, legacy=False):
+        assert scope.tenant_id == tenant == TENANT
+        return None
+
+    def create_order(self, tenant, payload, snapshots, key, request_hash, actor, *, organization_access):
+        assert snapshots["organization_context"] == CONTEXT
+        assert organization_access.division("div_test")["society_id"] == "soc_test"
         self.order = {
             "id": "mwo_1", "code": payload.code, "status": "draft",
             "production_machine_id": payload.production_machine_id,
@@ -46,7 +69,8 @@ class FakeRepository:
         }
         return self.order
 
-    def transition(self, tenant, order_id, payload, worker, key, request_hash, actor):
+    def transition(self, tenant, order_id, payload, worker, key, request_hash, actor, *, organization_access):
+        assert organization_access.division("div_test")["society_id"] == "soc_test"
         targets = {"request": "requested", "assign": "assigned", "start": "in_progress", "resolve": "resolved", "reopen": "in_progress", "cancel": "cancelled"}
         self.order["status"] = targets[payload.transition]
         if payload.transition in {"request", "reopen"}:
@@ -72,7 +96,10 @@ class FakeRepository:
     def material_creation_lock(self, tenant, order_id):
         return nullcontext()
 
-    def list_warehouse_material_requests(self, tenant, limit=50, offset=0):
+    def has_scoped_material_requests(self,tenant):
+        return False
+
+    def list_warehouse_material_requests(self, tenant, limit=50, offset=0,divisions=None):
         return ([self.material] if tenant == TENANT and self.material else []), False
 
     def get_material_request(self,tenant,request_id):
@@ -105,7 +132,9 @@ class FakeRepository:
         self.material.update(status="needs_reconciliation" if error else "issued", pending_operation="issue" if error else None)
         return self.material
 
-    def prepare_material_request(self, tenant, order_id, payload, snapshots, key, request_hash, actor):
+    def prepare_material_request(self, tenant, order_id, payload, snapshots, key, request_hash, actor, *, organization_access):
+        assert snapshots['organization_context'] == CONTEXT
+        assert organization_access.division('div_test')['society_id'] == 'soc_test'
         return {"id": "mmr_1", "order_id": order_id}, [
             {"line_id": f"line_{index}", "item_id": line.item_id, "quantity": line.quantity, "unit_code": line.unit_code}
             for index, line in enumerate(payload.lines, 1)
@@ -121,12 +150,29 @@ class FakeAuthority:
         self.consumed = []
         self.reserved = []
         self.fail_block_once = False
+        self.allocations = []
+
+    def allocate_order_code(self, tenant, manual_code, authorization, key):
+        assert tenant == TENANT
+        self.allocations.append((manual_code, key))
+        return {'code':manual_code or 'MT-000001','mode':'manual' if manual_code else 'managed'}
 
     def machine(self, tenant, machine_id, authorization):
-        return {"id": machine_id, "code": "M-01", "name": "Torno"}
+        return {"id": machine_id, "code": "M-01", "name": "Torno", "division_ref_id": "div_test"}
+
+    def organization_access(self, tenant, permission, token, actor):
+        return organization_access(tenant, permission, token, actor)
+
+    def division_workers(self, tenant, division, token, *, worker_id=None, limit=20):
+        assert tenant == TENANT and division == "div_test"
+        worker = {"id":"hrw_1","full_name":"Ana Garcia","labor_position_id":"pos_test","position_name":"Técnico",
+                  "division_ref_id":"div_test","society_ref_id":"soc_test","hourly_cost":"120.123456",
+                  "hourly_cost_currency_code":"MXN","hourly_cost_confirmed_at":"2026-01-01T00:00:00Z",
+                  "minutes_per_worker":480,"worker_assignment_revision":1,"position_assignment_revision":1}
+        return [worker] if worker_id in (None,worker["id"]) else []
 
     def production_order(self, tenant, order_id, authorization):
-        return {"id": order_id, "code": "OP-01", "status": "in_progress", "resources": [{"resource_type": "machine", "resource_ref_id": "maq_1"}]}
+        return {"id": order_id, "code": "OP-01", "status": "in_progress", "organization_context": CONTEXT, "resources": [{"resource_type": "machine", "resource_ref_id": "maq_1"}]}
 
     def workers(self, tenant, authorization):
         return [{"id": "hrw_1", "full_name": "Ana Garcia"}]
@@ -142,7 +188,7 @@ class FakeAuthority:
         return {"status": "active"}
 
     def warehouse(self, tenant, warehouse_id, authorization):
-        return {"id": warehouse_id, "name": "Refacciones", "type": "spare_parts", "status": "active"}
+        return {"id": warehouse_id, "name": "Refacciones", "type": "spare_parts", "status": "active", "division_ref_id": "div_test"}
 
     def item(self, tenant, item_id, authorization):
         return {"id": item_id, "code": item_id.upper(), "name": item_id, "base_unit": "PZA", "status": "active"}
@@ -183,6 +229,7 @@ def setup_function():
     authority.consumed.clear()
     authority.reserved.clear()
     authority.fail_block_once = False
+    authority.allocations.clear()
 
 
 def teardown_function():
@@ -195,6 +242,40 @@ def production_payload():
 
 def test_create_requires_idempotency_key():
     assert client().post("/v1/maintenance/orders", headers=headers(), json=production_payload()).status_code == 400
+
+
+def test_managed_maintenance_code_is_allocated_after_context_validation():
+    payload = {"division_ref_id": "div_test", "target_type": "facility", "title": "Bomba detenida", "description": "Falla de arranque", "location": "Planta"}
+    response = client().post("/v1/maintenance/orders", headers=headers(True), json=payload)
+    assert response.status_code == 201
+    assert response.json()["data"]["code"] == "MT-000001"
+    assert response.json()["data"]["code_mode"] == "managed"
+    assert authority.allocations == [(None, "maintenance-order:usr_demo:maintenance-test-key")]
+
+
+def test_manual_maintenance_code_is_confirmed_by_admin():
+    response = client().post("/v1/maintenance/orders", headers=headers(True), json=production_payload())
+    assert response.status_code == 201
+    assert response.json()["data"]["code"] == "MT-001"
+    assert response.json()["data"]["code_mode"] == "manual"
+    assert authority.allocations == [("MT-001", "maintenance-order:usr_demo:maintenance-test-key")]
+
+
+def test_maintenance_code_authority_failure_leaves_no_order(monkeypatch):
+    def unavailable(*_args):
+        raise ErclaveError("maintenance_dependency_unavailable", "Admin unavailable", status_code=503)
+    monkeypatch.setattr(authority, "allocate_order_code", unavailable)
+    response = client().post("/v1/maintenance/orders", headers=headers(True), json=production_payload())
+    assert response.status_code == 503
+    assert repo.order is None
+
+
+def test_real_maintenance_authority_uses_admin_sequence_contract(monkeypatch):
+    real = authorities.MaintenanceAuthorityClient(Settings())
+    calls = []
+    monkeypatch.setattr(real, "_call", lambda *args: calls.append(args) or {"document_type": "maintenance.order", "mode": "managed", "code": "MT-000002"})
+    assert real.allocate_order_code(TENANT, None, "Bearer local", "stable-key") == {"code": "MT-000002", "mode": "managed"}
+    assert calls == [(f"{real.admin}/v1/catalogs/code-sequences/maintenance.order/next", TENANT, "Bearer local", "POST", {"manual_code": None}, "stable-key")]
 
 
 def test_production_order_creation_captures_snapshots_and_blocks_on_request():

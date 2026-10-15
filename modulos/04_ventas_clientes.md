@@ -1,14 +1,41 @@
 # ERClave - Ventas y Clientes
 
-## Feedback de formularios Local CHG-272
+## Costo estimado de cotización CC-21 · Local
 
-Clientes resuelve rutas anidadas de contacto y Cotizaciones identifica la segunda partida sin marcar la primera; conserva los datos capturados en el rechazo. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+Las cotizaciones nuevas no calculan margen desde `standard_cost` global. Al asignar División, Sales consulta el costo confirmado por producto/servicio en Production para esa División y Sociedad, conserva costo original en moneda base de Sociedad y convierte con tasa explícita a moneda documental. Si las monedas coinciden, la tasa es 1; si falta costo confirmado o tasa, costo/margen quedan nulos sin bloquear envío ni aprobación. La vista previa se recalcula al asignar contexto, editar borrador y enviar. La aprobación vuelve a consultar y congela el snapshot por partida; el pedido lo copia sin mezclarlo con costo real de surtimiento. Los históricos sin snapshot no se reinterpretan ni se muestran como estimados verificados en CSV. Accounting permanece apagado y no hubo promoción QA.
 
-Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+## Vigencia y relaciones · CHG-315
+
+Ciclo comercial base desplegado en QA. Sólo Local: cliente/condiciones por División, cotización→pedido, servicios y stock→reserva→entrega implementados. CHG-314 implementa adaptación monetaria CC-08: tarifa/costo original Decimal6 confirmado en moneda Sociedad, tasa explícita Decimal12 e importe convertido a moneda de pedido (dos decimales). Historia nullable sin inferencias; aceptar entradas de moneda desconocida requiere revisión. CHG-315 conecta CC-12 mediante solicitud, planificación en Production, recepción Inventory y conciliación explícita que reserva para entrega. Validación Local, sin nueva UAT ni promoción QA. No volver a bloquear ni implementar desde cero los recorridos ya cerrados.
+
+Estado por ambiente: [ESTADO_ACTUAL](../docs/contexto/ESTADO_ACTUAL.md). Brechas y cierre: [CONTROL_CONTABLE](../docs/contexto/CONTROL_CONTABLE.md). Relación operativa: [02_almacenes_inventarios](02_almacenes_inventarios.md). Contrato/regla: [cont_08_stock_contexto](../docs/arquitectura/cont_08_stock_contexto.md). Navegación: [índice de módulos](README.md).
+
+Las referencias CHG conservan procedencia; no se suman como pendientes vigentes. La historia de implementación está en [TRAZABILIDAD](../TRAZABILIDAD.md). Costos y tarifas deben usar moneda base de Sociedad (CHG-309); su aplicación se verifica por flujo en el control, sin reinterpretar historia. Centro requerido sólo donde el flujo de imputación esté habilitado.
+
+## Actualización CHG-307 · 2026-10-05
+
+Surtido desde existencias por División habilitado Local, búsqueda de almacén acotada y tipo explícito si monedas difieren. Entrega conserva costo original/convertido; fabricación se integra en CHG-315 con solicitud y conciliación explícitas. Claves estables por captura y costos/selección preservados en error. Ver docs/arquitectura/cont_08_stock_contexto.md. Las notas de cortes anteriores son históricas.
+
+
+## Contexto organizacional y comercial vigente
+
+Cliente compartido con disponibilidad y condiciones completas por División, sin herencia del maestro ni control de exposición crediticia. [Asignaciones](../docs/arquitectura/cont_07_commercial_asignaciones.md) y [condiciones](../docs/arquitectura/cont_07_commercial_condiciones.md) conservan revisión, auditoría e idempotencia.
+
+[Cotización](../docs/arquitectura/cont_08_cotizaciones_contexto.md) dimensionada aprobada convierte a [pedido](../docs/arquitectura/cont_08_pedidos_contexto.md) con copia fija de Sociedad/División/condiciones. Consultas, CSV y cancelación respetan alcance. [Servicios](../docs/arquitectura/cont_08_servicios_contexto.md) ejecutan su ciclo con recursos elegibles; CHG-314 conserva por entrada costo original, moneda Sociedad, tasa explícita y convertido documental, sin heredar tarifas ni modificar historia. Stock y entrega están habilitados Local desde CHG-307; fabricación dimensionada se incorpora en CHG-315. Documentos sin contexto conservan comportamiento por tenant hasta migración explícita.
+
+## Referencias comerciales históricas — Local CHG-285
+
+Clientes y Cotizaciones consumen monedas y condiciones de pago activas desde Sales/Admin. Si un registro existente conserva un código que ya no está activo, el formulario lo muestra explícitamente como no vigente y no lo sustituye por la primera opción disponible. El operador puede guardar otros cambios sin alterar esa referencia o elegir una opción activa para reemplazarla. Una alta nueva siempre exige valores activos. No cambia el contrato ni la persistencia.
+
+## Feedback de formularios — Local y QA
+
+Clientes resuelve rutas anidadas de contacto y Cotizaciones identifica la segunda partida sin marcar la primera; conserva los datos capturados en el rechazo. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: [.agents/skills/erclave-form-feedback/SKILL.md](../.agents/skills/erclave-form-feedback/SKILL.md). Evidencia: [docs/auditorias/formularios_feedback_2026-09-13.md](../docs/auditorias/formularios_feedback_2026-09-13.md).
+
+Feedback desplegado en Local y QA mediante el release `e57237f`. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del módulo. Estado y pendientes autenticados: [docs/contexto/ESTADO_ACTUAL.md](../docs/contexto/ESTADO_ACTUAL.md) y [docs/operaciones/release_qa_20260914.md](../docs/operaciones/release_qa_20260914.md).
 
 ## Coherencia de formularios Local (CHG-262)
 
-La planeacion de una orden de servicio usa controles de fecha desde el primer render y conserva las fechas recuperadas del backend. El registro de tiempo respeta el limite contractual de 1440 minutos. Las pruebas nuevas usan respuestas mutantes interceptadas, sin crear ordenes ni registrar costos reales. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+La planeacion de una orden de servicio usa controles de fecha desde el primer render y conserva las fechas recuperadas del backend. El registro de tiempo respeta el limite contractual de 1440 minutos. Las pruebas nuevas usan respuestas mutantes interceptadas, sin crear ordenes ni registrar costos reales. Evidencia: [docs/auditorias/frontend_backend_2026-09-07.md](../docs/auditorias/frontend_backend_2026-09-07.md).
 
 ## Objetivo
 
@@ -19,7 +46,7 @@ Ventas conecta la relacion comercial con los maestros autoritativos de ERClave. 
 | Ambiente | Alcance comprobado |
 |---|---|
 | Local | API, schema `sales` y migracion `20260901_0030` aplicados y certificados para Clientes, Cotizaciones, Pedidos, Ordenes de servicio y Entregas, con permisos, idempotencia, auditoria y pruebas de integracion. |
-| QA | `sales-service` desplegado dentro del release de siete servicios; cadena comun aplicada hasta `20260825_0029`. CHG-255 permanece solo en codigo Local hasta un candidato posterior. La disponibilidad efectiva depende del entitlement del tenant y de RH/Produccion. |
+| QA | `sales-service` desplegado en QA e57237f; cadena común aplicada hasta `20260913_0036`, incluidos servicios comerciales CHG-255 y confirmaciones posteriores. La disponibilidad efectiva depende del entitlement del tenant y de RH/Produccion. |
 | Produccion | No aprovisionado. |
 
 Devoluciones permanecen `planned`. Pedidos y Entregas ya no escriben mock cuando la interfaz opera en modo API.
@@ -28,7 +55,7 @@ Devoluciones permanecen `planned`. Pedidos y Entregas ya no escriben mock cuando
 
 CHG-204 aplico en Local el plan de correccion: la UI permite crear Entregas segun permiso y saldo no comprometido; el contenido comercial se escapa; cada producto exige un articulo autoritativo de Inventory con la misma unidad; y surtido, cancelacion y confirmacion usan reclamos durables, locks y claves estables para reintento/reconciliacion. La promocion a QA conserva sus gates de candidato, object storage y pruebas de ambiente.
 
-El detalle, evidencia y criterios de cierre viven en [`docs/auditorias/ventas_segundo_corte_2026-08-18.md`](../docs/auditorias/ventas_segundo_corte_2026-08-18.md).
+El detalle, evidencia y criterios de cierre viven en [[docs/auditorias/ventas_segundo_corte_2026-08-18.md](../docs/auditorias/ventas_segundo_corte_2026-08-18.md)](../docs/auditorias/ventas_segundo_corte_2026-08-18.md).
 
 ### Pedidos, surtido y entregas
 
@@ -152,18 +179,30 @@ Clientes, productos/servicios, responsables, cotizaciones, pedidos y almacenes d
 
 ## Confirmaciones y recuperaciones Local CHG-265
 
-Ventas prepara entrega; inventory.movement.create confirma salida desde Movimientos. sales.delivery.confirm por sí solo recibe guía para continuar en Almacén. Reintentos conservan las claves durables por reserva. Las partidas sin surtido stock comprobable no se despachan; conectar automáticamente solicitud comercial, Producción y recepción/entrega sigue planned. Inicio/reanudación de servicio comercial revalida responsable RH; no se agregan materiales a ese tipo de orden en este corte.
+Ventas prepara entrega; inventory.movement.create confirma salida desde Movimientos. sales.delivery.confirm por sí solo recibe guía para continuar en Almacén. Reintentos conservan las claves durables por reserva. Las partidas sin reserva comprobable no se despachan. CHG-315 permite fabricar por División mediante planificación y conciliación explícitas, sin automatizar esas decisiones. Inicio/reanudación de servicio comercial revalida responsable RH; no se agregan materiales a ese tipo de orden en este corte.
 
-CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: [docs/auditorias/flujos_almacen_mensajes_2026-09-08.md](../docs/auditorias/flujos_almacen_mensajes_2026-09-08.md).
 
 
 ## Ajustes UAT Local CHG-266
 
 Las tarjetas indican Borrador → Emitir cotización → Cotizada → Aprobar cotización → Aprobada. Emitir requiere sales.quote.submit y aprobar sales.quote.approve. Cuando falte autoridad se orienta a solicitar intervención del usuario autorizado o administrador de roles. La reparación del catálogo/Owner de pruebas fue exclusiva de Local; contratos y ciclo backend no cambian.
 
-Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+Evidencia y APIs: [docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md](../docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md).
 
 
 ## Disponibilidad QA CHG-270
 
-Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: [docs/operaciones/release_qa_20260908.md](../docs/operaciones/release_qa_20260908.md).
+
+## Fabricación por División · Local CHG-315
+
+Cada partida pendiente puede solicitar fabricación conservando cantidad/producto/unidad y el contexto del pedido. La tasa explícita convierte moneda Sociedad a moneda documental; no se hereda un costo arbitrario. El seguimiento muestra solicitud, orden y recepciones y exige `sales.order.fulfill`; lectura de pedido no habilita esa consulta. Conciliar recibe sólo partida y almacén, exige producción terminada y evidencia Inventory suficiente, conserva costo original y convertido y retoma su comando durable ante respuesta perdida. Sólo el almacén del intento pendiente se habilita para recuperar su reserva ya iniciada.
+
+Tras conciliación, la línea de modo production queda reservada y utiliza la entrega y salida física existentes; no genera una segunda entrada de producto terminado. No combina recepciones parciales de varios almacenes ni acepta cantidad/costo cliente para conciliar. Cancelación revalida estado de pedido, solicitud y orden. [Procedimiento operativo](../docs/manuales_solucion/fuentes/04_ventas_clientes.md), [Producción](01_produccion.md) e [Inventarios](02_almacenes_inventarios.md).
+
+Contrato vigente de este recorrido: [fabricación por División y conciliación](../docs/arquitectura/cont_08_fabricacion_contexto.md).
+
+## CC-17 - cotizacion imprimible - CHG-322 Local
+
+La cotizacion no aprobada consulta identidad y plantilla efectivas al imprimir. Al aprobar, Sales congela esa presentacion con Emisor, Sociedad, Division, origen de plantilla y formato en `sales.quotes.presentation_snapshot`. La impresion de una aprobada usa exclusivamente el snapshot; una aprobada anterior sin el informa que no hay presentacion historica. Reintentos conservan el mismo snapshot. La revision del costo estimado de cotizacion sigue pendiente y es independiente de esta presentacion. [Regla](../docs/arquitectura/plantillas_documentales.md).

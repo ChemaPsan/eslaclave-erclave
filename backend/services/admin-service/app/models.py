@@ -6,6 +6,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -433,3 +434,140 @@ class CodeSequence(TimestampMixin, Base):
     mode: Mapped[str] = mapped_column(String(20), nullable=False, default="managed")
     system_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+
+
+class FiscalIssuer(TimestampMixin, Base):
+    __tablename__ = "fiscal_issuers"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_fiscal_issuers_code"),
+        CheckConstraint("status in ('active','inactive')", name="ck_fiscal_issuers_status"),
+        CheckConstraint("length(trim(code)) > 0 and length(trim(legal_name)) > 0", name="ck_fiscal_issuers_identity"),
+        Index("ix_fiscal_issuers_tenant_status", "tenant_id", "status"),
+        {"schema": "admin"},
+    )
+    tenant_id: Mapped[str] = mapped_column(String(40), ForeignKey("admin.tenants.id", ondelete="RESTRICT"), primary_key=True)
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("emi"))
+    code: Mapped[str] = mapped_column(String(80), nullable=False)
+    legal_name: Mapped[str] = mapped_column(String(240), nullable=False)
+    tax_id: Mapped[str | None] = mapped_column(String(80))
+    fiscal_regime: Mapped[str | None] = mapped_column(String(80))
+    cfdi_usage: Mapped[str | None] = mapped_column(String(80))
+    fiscal_address: Mapped[str | None] = mapped_column(Text)
+    postal_code: Mapped[str | None] = mapped_column(String(20))
+    country_code: Mapped[str | None] = mapped_column(String(2))
+    contact: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
+
+
+class Society(TimestampMixin, Base):
+    __tablename__ = "societies"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_societies_code"),
+        UniqueConstraint("tenant_id", "id", "issuer_id", name="uq_societies_issuer"),
+        ForeignKeyConstraint(["tenant_id", "issuer_id"], ["admin.fiscal_issuers.tenant_id", "admin.fiscal_issuers.id"], ondelete="RESTRICT"),
+        CheckConstraint("status in ('active','inactive')", name="ck_societies_status"),
+        CheckConstraint("length(trim(code)) > 0 and length(trim(name)) > 0", name="ck_societies_identity"),
+        CheckConstraint("length(trim(base_currency)) > 0", name="ck_societies_currency"),
+        Index("ix_societies_tenant_issuer", "tenant_id", "issuer_id"),
+        Index("ix_societies_tenant_status", "tenant_id", "status"),
+        {"schema": "admin"},
+    )
+    tenant_id: Mapped[str] = mapped_column(String(40), ForeignKey("admin.tenants.id", ondelete="RESTRICT"), primary_key=True)
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("soc"))
+    code: Mapped[str] = mapped_column(String(80), nullable=False)
+    name: Mapped[str] = mapped_column(String(240), nullable=False)
+    issuer_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    base_currency: Mapped[str] = mapped_column(String(40), nullable=False, server_default="MXN")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
+
+
+class Division(TimestampMixin, Base):
+    __tablename__ = "divisions"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_divisions_code"),
+        UniqueConstraint("tenant_id", "id", "society_id", name="uq_divisions_society"),
+        ForeignKeyConstraint(["tenant_id", "society_id"], ["admin.societies.tenant_id", "admin.societies.id"], ondelete="RESTRICT"),
+        CheckConstraint("status in ('active','inactive')", name="ck_divisions_status"),
+        CheckConstraint("length(trim(code)) > 0 and length(trim(name)) > 0", name="ck_divisions_identity"),
+        Index("ix_divisions_tenant_society", "tenant_id", "society_id"),
+        Index("ix_divisions_tenant_status", "tenant_id", "status"),
+        {"schema": "admin"},
+    )
+    tenant_id: Mapped[str] = mapped_column(String(40), ForeignKey("admin.tenants.id", ondelete="RESTRICT"), primary_key=True)
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("div"))
+    code: Mapped[str] = mapped_column(String(80), nullable=False)
+    name: Mapped[str] = mapped_column(String(240), nullable=False)
+    society_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    address: Mapped[str | None] = mapped_column(Text)
+    phone: Mapped[str | None] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
+
+
+class OrganizationImport(TimestampMixin, Base):
+    """One reviewed shadow snapshot per tenant, before CONT-02 activates new writers."""
+    __tablename__ = "organization_imports"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_organization_import_tenant"),
+        CheckConstraint("length(source_hash) = 64 and length(plan_hash) = 64", name="ck_organization_import_hashes"),
+        {"schema": "admin"},
+    )
+    tenant_id: Mapped[str] = mapped_column(String(40), ForeignKey("admin.tenants.id", ondelete="RESTRICT"), primary_key=True)
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("oim"))
+    source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    plan_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_profile: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    resolutions: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    operator: Mapped[str] = mapped_column(String(120), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(120), nullable=False)
+
+
+class OrganizationLegacyMapping(Base):
+    __tablename__ = "organization_legacy_mappings"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id", "import_id"], ["admin.organization_imports.tenant_id", "admin.organization_imports.id"], ondelete="RESTRICT"),
+        ForeignKeyConstraint(["tenant_id", "society_id"], ["admin.societies.tenant_id", "admin.societies.id"], ondelete="RESTRICT"),
+        ForeignKeyConstraint(["tenant_id", "society_id", "issuer_id"], ["admin.societies.tenant_id", "admin.societies.id", "admin.societies.issuer_id"], ondelete="RESTRICT"),
+        ForeignKeyConstraint(["tenant_id", "division_id", "society_id"], ["admin.divisions.tenant_id", "admin.divisions.id", "admin.divisions.society_id"], ondelete="RESTRICT"),
+        CheckConstraint("(collection = 'legal_entities' and issuer_id is not null and division_id is null) or (collection = 'branches' and division_id is not null and issuer_id is null)", name="ck_organization_mapping_kind"),
+        Index("ix_organization_mappings_import", "tenant_id", "import_id"),
+        {"schema": "admin"},
+    )
+    tenant_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    collection: Mapped[str] = mapped_column(String(20), primary_key=True)
+    legacy_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    import_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    society_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    issuer_id: Mapped[str | None] = mapped_column(String(40))
+    division_id: Mapped[str | None] = mapped_column(String(40))
+    source_item: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class OrganizationAuthority(Base):
+    __tablename__ = "organization_authorities"
+    __table_args__ = (
+        CheckConstraint("length(source_hash)=64 and length(projection_hash)=64", name="ck_organization_authority_hashes"),
+        {"schema": "admin"},
+    )
+    tenant_id: Mapped[str] = mapped_column(String(40), ForeignKey("admin.tenants.id", ondelete="RESTRICT"), primary_key=True)
+    source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    projection_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_profile: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    prior_shadow: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    operator: Mapped[str] = mapped_column(String(120), nullable=False)
+    activated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
+
+
+class ScopedSetting(TimestampMixin, Base):
+    __tablename__ = "scoped_settings"
+    __table_args__ = (
+        CheckConstraint("scope_type in ('society','division')", name="ck_scoped_settings_scope"),
+        CheckConstraint("key = 'document.template'", name="ck_scoped_settings_key"),
+        CheckConstraint("revision > 0", name="ck_scoped_settings_revision"),
+        {"schema": "admin"},
+    )
+    tenant_id: Mapped[str] = mapped_column(String(40), ForeignKey("admin.tenants.id", ondelete="RESTRICT"), primary_key=True)
+    key: Mapped[str] = mapped_column(String(160), primary_key=True)
+    scope_type: Mapped[str] = mapped_column(String(16), primary_key=True)
+    scope_ref_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    value: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)

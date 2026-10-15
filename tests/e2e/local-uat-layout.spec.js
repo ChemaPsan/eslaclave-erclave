@@ -9,7 +9,7 @@ test.beforeEach(async({page})=>{
  await signInAsLocalAdmin(page);await expect.poll(()=>page.evaluate(()=>window.uat.state.adminApi.status)).toBe('ready');
  await page.evaluate(()=>{
   const {state}=window.uat;if(state.sessionApi.data.tenant.id!=='ten_739ee59d765d5e14818674800d')throw Error('Wrong tenant');
-  state.purchasingApi={...state.purchasingApi,status:'ready',suppliers:[{id:'sup_uat',code:'PROV-01',commercial_name:'Proveedor de cera y materiales',legal_name:'Proveedor SA',tax_id:'AAA010101AAA',tax_regime:'601',billing_email:'proveedor@example.com',fiscal_postal_code:'01234',fiscal_country:'MX',currency:'MXN',payment_terms:'cash',lead_time_days:0,status:'active'}],requisitions:[],orders:[],receipts:[],items:[{id:'itm_uat',code:'MAT-CERA',name:'Cera para vela aromática de larga duración',base_unit:'H87'}],warehouses:[],errors:{}};
+  state.purchasingApi={...state.purchasingApi,status:'ready',references:{currencies:[{code:'MXN',name_es:'Peso mexicano',name_en:'Mexican peso'},{code:'CAD',name_es:'Dólar canadiense',name_en:'Canadian dollar'}],payment_terms:[{code:'cash',name_es:'Contado',name_en:'Cash'},{code:'credit_45',name_es:'Crédito 45 días',name_en:'Net 45'}]},suppliers:[{id:'sup_uat',code:'PROV-01',commercial_name:'Proveedor de cera y materiales',legal_name:'Proveedor SA',tax_id:'AAA010101AAA',tax_regime:'601',billing_email:'proveedor@example.com',fiscal_postal_code:'01234',fiscal_country:'MX',currency:'MXN',payment_terms:'cash',lead_time_days:0,status:'active'}],requisitions:[],orders:[],receipts:[],items:[{id:'itm_uat',code:'MAT-CERA',name:'Cera para vela aromática de larga duración',base_unit:'H87'}],warehouses:[],errors:{}};
   state.operationalHandoffs={service:{status:'ready',data:[],offset:0}};
  });
 });

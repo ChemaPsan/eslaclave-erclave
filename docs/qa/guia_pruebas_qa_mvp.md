@@ -1,16 +1,16 @@
 # Guía de pruebas QA del MVP de ERClave
 
-**Ambiente:** QA base publicada y candidato Local pendiente de promoción
+**Ambiente:** QA publicado; aceptación funcional pendiente
 **Aplicación cliente:** https://erclave.web.app
 **Backoffice interno:** https://erclave.web.app/backoffice/
-**Última actualización:** 2026-09-14
-**Versión de referencia:** b63cdad2fbac423c24460e55582ccfc0003e9924
+**Última actualización:** 2026-09-15
+**Versión de referencia:** e57237fe90319f88e1db8ed8d2e686604d2d9c54
 
-**Candidato:** CHG-272–275; SHA de release y run por asignar después de publicar y fusionar. Los casos QA-FORM-*, QA-MARGIN-* y QA-EVID-* requieren la promoción de este candidato. No certificarlos contra la base anterior.
+**Release desplegado:** GitHub Actions `34932659212`; siete servicios y frontend completados. Los casos QA-FORM-*, QA-MARGIN-* y QA-EVID-* corresponden a esta versión. No certificarlos contra una versión anterior ni confundir el despliegue con UAT aprobada.
 
 ## 1 Objetivo y alcance de la ejecución
 
-Esta guía permite al tester validar la versión desplegada en QA y registrar evidencia reproducible. Los siete servicios y el frontend fueron publicados; eso no significa que estos casos funcionales ya hayan pasado con usuarios reales. Todos los casos comienzan **Sin ejecutar**.
+Esta guía permite al tester validar la versión desplegada en QA y registrar evidencia reproducible. Los siete servicios y el frontend fueron publicados; eso no significa que estos casos funcionales ya hayan pasado con usuarios reales. Los casos completos permanecen **Sin ejecutar** mientras no se registren todas sus variantes. El smoke parcial conocido se documenta en la matriz, sin marcar Pasa el caso completo.
 
 La regla central es separar la preparación del documento de la confirmación física. Compras prepara una recepción, Ventas prepara una entrega y las áreas operativas solicitan materiales. Almacén confirma los bienes que realmente entran o salen. El solicitante acepta los servicios comprados, que no mueven inventario.
 
@@ -19,7 +19,7 @@ La regla central es separar la preparación del documento de la confirmación f�
 | Área | Estado en QA | Alcance |
 |---|---|---|
 | Administración y Backoffice | Desplegado | Sesión, organización, usuarios, roles, permisos, módulos, catálogos y ciclo de tenants. |
-| Producción | Desplegado | Productos y servicios con receta, recursos, órdenes, salida previa de materiales, etapas y producto terminado. |
+| Producción | Desplegado | Productos y servicios con receta, recursos, órdenes, salida previa de materiales, etapas, producto terminado, margen sobre costo sin tope y evidencia inicial/final de servicios con adjuntos. |
 | Almacenes | Desplegado | Artículos, reservas, movimientos, confirmaciones, transferencias, devoluciones de materiales y Kardex. |
 | Recursos Humanos | Desplegado | Áreas, puestos, trabajadores, capacidad y elegibilidad operativa. |
 | Ventas | Desplegado | Clientes, cotizaciones, pedidos, preparación de entregas y órdenes comerciales de servicio. |
@@ -593,9 +593,9 @@ La parte de devolución desde Mantenimiento depende de la verificación de acces
 
 **Esperado:** etiquetas y estados ES/EN completos, datos capturados sin traducción automática, permisos y datos del contexto vigente, ningún acceso operativo después de cerrar sesión.
 
-## 15 Validación del candidato pendiente de promoción
+## 15 Validación de formularios, margen y evidencia desplegados
 
-Los casos siguientes comienzan **Sin ejecutar**. Primero confirmar SHA candidato, migraciones y almacenamiento mediante el plan de release.
+Los casos siguientes se ejecutan contra QA `e57237f`, con migraciones hasta `20260913_0036`. El release ya se completó. La matriz conserva pendientes de aceptación: el smoke observado sólo cubre el rechazo de descripción inicial vacía, sin guardado de evidencia ni descarga. Confirme la versión y use únicamente fixtures autorizados; consulte el plan de release para la evidencia técnica.
 
 ### QA-FORM-01 Campos y filas en conflicto
 

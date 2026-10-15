@@ -6,11 +6,13 @@ from .schemas import AreaRead,ProductionCapacityRead,RoleRead,SalesEligibleWorke
 class HrRepository:
     def __init__(self,engine):self.engine=engine
     def _claim(self,c,t,o,k,h):
-        row=c.execute(text("select request_hash,response_payload from hr.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k for update"),{"t":t,"o":o,"k":k}).mappings().first()
-        if row:
-            if row["request_hash"]!=h:raise ValueError("idempotency_key_reused")
-            return row["response_payload"]
-        c.execute(text("insert into hr.idempotency_records(id,tenant_id,operation,idempotency_key,request_hash) values(:id,:t,:o,:k,:h)"),{"id":f"ide_{uuid4().hex[:26]}","t":t,"o":o,"k":k,"h":h});return None
+        params={"id":f"ide_{uuid4().hex[:26]}","t":t,"o":o,"k":k,"h":h}
+        inserted=c.execute(text("insert into hr.idempotency_records(id,tenant_id,operation,idempotency_key,request_hash) values(:id,:t,:o,:k,:h) on conflict(tenant_id,operation,idempotency_key) do nothing returning id"),params).first()
+        if inserted:return None
+        row=c.execute(text("select request_hash,response_payload from hr.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k for update"),params).mappings().one()
+        if row["request_hash"]!=h:raise ValueError("idempotency_key_reused")
+        if row["response_payload"] is None:raise ValueError("idempotency_request_in_progress")
+        return row["response_payload"]
     def _done(self,c,t,o,k,v):c.execute(text("update hr.idempotency_records set response_payload=cast(:p as jsonb) where tenant_id=:t and operation=:o and idempotency_key=:k"),{"p":json.dumps(v.model_dump(mode="json")),"t":t,"o":o,"k":k})
     def _release(self,c,t,o,k):c.execute(text("delete from hr.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k and response_payload is null"),{"t":t,"o":o,"k":k})
     def _audit(self,c,t,a,action,kind,eid,payload):c.execute(text("insert into hr.audit_events(id,tenant_id,actor_id,action,entity_type,entity_id,payload) values(:id,:t,:a,:ac,:kind,:eid,cast(:p as jsonb))"),{"id":f"aud_{uuid4().hex[:26]}","t":t,"a":a,"ac":action,"kind":kind,"eid":eid,"p":json.dumps(payload)})
@@ -36,21 +38,21 @@ class HrRepository:
             if data:c.execute(text("update hr.labor_areas set "+",".join(f"{x}=:{x}" for x in data)+",updated_at=now() where tenant_id=:t and id=:i"),{"t":t,"i":i,**data})
             value=self._area(c,t,i);self._audit(c,t,a,"hr.area.update","area",i,{"before":before.model_dump(),"after":value.model_dump()});self._done(c,t,"area.update",k,value);return value
     def _role(self,c,t,i):
-        row=c.execute(text("select id,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production,intervenes_in_maintenance,status from hr.labor_roles where tenant_id=:t and id=:i"),{"t":t,"i":i}).mappings().first();return RoleRead.model_validate(dict(row)) if row else None
+        row=c.execute(text("select id,code,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production,intervenes_in_maintenance,status from hr.labor_roles where tenant_id=:t and id=:i"),{"t":t,"i":i}).mappings().first();return RoleRead.model_validate(dict(row)) if row else None
     def list_roles(self,t,area=None,production_only=False,maintenance_only=False):
         where=["tenant_id=:t"];params={"t":t}
         if area:where.append("labor_area_id=:area");params["area"]=area
         if production_only:where.extend(["intervenes_in_production=true","status='active'"])
         if maintenance_only:where.extend(["intervenes_in_maintenance=true","status='active'"])
-        with self.engine.connect() as c:rows=c.execute(text("select id,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production,intervenes_in_maintenance,status from hr.labor_roles where "+" and ".join(where)+" order by recipe_name"),params).mappings()
+        with self.engine.connect() as c:rows=c.execute(text("select id,code,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production,intervenes_in_maintenance,status from hr.labor_roles where "+" and ".join(where)+" order by recipe_name"),params).mappings()
         return [RoleRead.model_validate(dict(x)) for x in rows]
-    def create_role(self,t,p,k,h,a):
+    def create_role(self,t,p,k,h,a,code=None):
         with self.engine.begin() as c:
             replay=self._claim(c,t,"position.create",k,h)
             if replay:return RoleRead.model_validate(replay)
             area=self._area(c,t,p.labor_area_id)
             if not area or area.status!="active":self._release(c,t,"position.create",k);raise ValueError("labor_area_invalid")
-            i=f"hrp_{uuid4().hex[:26]}";row=c.execute(text("insert into hr.labor_roles(id,tenant_id,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production,intervenes_in_maintenance) values(:i,:t,:labor_area_id,:position,:recipe_name,:resource_quantity,:minutes_per_resource,:hourly_cost,:intervenes_in_production,:intervenes_in_maintenance) on conflict(tenant_id,labor_area_id,position) do nothing returning id"),{"i":i,"t":t,**p.model_dump()}).first()
+            i=f"hrp_{uuid4().hex[:26]}";row=c.execute(text("insert into hr.labor_roles(id,tenant_id,code,labor_area_id,position,recipe_name,resource_quantity,minutes_per_resource,hourly_cost,intervenes_in_production,intervenes_in_maintenance) values(:i,:t,:code,:labor_area_id,:position,:recipe_name,:resource_quantity,:minutes_per_resource,:hourly_cost,:intervenes_in_production,:intervenes_in_maintenance) on conflict do nothing returning id"),{"i":i,"t":t,**p.model_dump(exclude={'code'}),"code":code}).first()
             if not row:self._release(c,t,"position.create",k);return None
             value=self._role(c,t,i);self._audit(c,t,a,"hr.position.create","position",i,p.model_dump());self._done(c,t,"position.create",k,value);return value
     def update_role(self,t,i,p,k,h,a):
@@ -66,7 +68,7 @@ class HrRepository:
             if data:c.execute(text("update hr.labor_roles set "+",".join(f"{x}=:{x}" for x in data)+",updated_at=now() where tenant_id=:t and id=:i"),{"t":t,"i":i,**data})
             value=self._role(c,t,i);self._audit(c,t,a,"hr.position.update","position",i,{"before":before.model_dump(),"after":value.model_dump()});self._done(c,t,"position.update",k,value);return value
     def _worker(self,c,t,i):
-        row=c.execute(text("""select w.*,concat_ws(' ',w.first_names,w.first_last_name,w.second_last_name) full_name,r.position position_name,r.labor_area_id,a.name labor_area_name,r.intervenes_in_production,r.intervenes_in_maintenance from hr.workers w join hr.labor_roles r on r.tenant_id=w.tenant_id and r.id=w.labor_position_id join hr.labor_areas a on a.tenant_id=r.tenant_id and a.id=r.labor_area_id where w.tenant_id=:t and w.id=:i"""),{"t":t,"i":i}).mappings().first()
+        row=c.execute(text("""select w.*,concat_ws(' ',w.first_names,w.first_last_name,w.second_last_name) full_name,r.position position_name,r.code position_code,r.labor_area_id,a.name labor_area_name,r.intervenes_in_production,r.intervenes_in_maintenance from hr.workers w join hr.labor_roles r on r.tenant_id=w.tenant_id and r.id=w.labor_position_id join hr.labor_areas a on a.tenant_id=r.tenant_id and a.id=r.labor_area_id where w.tenant_id=:t and w.id=:i"""),{"t":t,"i":i}).mappings().first()
         return WorkerRead.model_validate(dict(row)) if row else None
     def list_workers(self,t,position=None,production_only=False,active_only=False,maintenance_only=False):
         where=["w.tenant_id=:t"];params={"t":t}
@@ -80,7 +82,7 @@ class HrRepository:
     def list_sales_eligible_workers(self,t):
         with self.engine.connect() as c:
             rows=c.execute(text("""select w.id,w.employee_number,concat_ws(' ',w.first_names,w.first_last_name,w.second_last_name) full_name,
-                r.position position_name,a.name labor_area_name,w.status
+                r.position position_name,r.code position_code,a.name labor_area_name,w.status
                 from hr.workers w join hr.labor_roles r on r.tenant_id=w.tenant_id and r.id=w.labor_position_id
                 join hr.labor_areas a on a.tenant_id=r.tenant_id and a.id=r.labor_area_id
                 where w.tenant_id=:t and w.status='active' and r.status='active' and a.status='active'

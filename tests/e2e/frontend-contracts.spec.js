@@ -11,6 +11,7 @@ window.frontendAudit = {
   openProductServiceModal, renderProductsServicesCatalogScreen, openWarehouseModal, openInventoryItemModal,
   openInventoryMovementModal, openLaborAreaModal, openLaborRoleModal,
   openWorkerModal, openMachineModal, openPurchasingCancellationModal,
+  openSalesCustomerModal, openSalesQuoteModal,
   renderPurchasingSubmodulePanel, enhanceEntitySelectors, renderMaintenanceSubmodulePanel,
   loadProductionApiData, loadHrApiData, loadPurchasingApiData,
   openMaintenanceActionModal, renderRecipeList, applyProductionActionPermissions, openRecipeModal
@@ -47,7 +48,7 @@ test.beforeEach(async ({ page }) => {
     mockDb.saveLaborAreas([{id:"area_audit",code:"AREA",name:"Area prueba",status:"Activo"}]);
     mockDb.saveLaborRoles([{id:"pos_audit",areaId:"area_audit",area:"Area prueba",position:"Tecnico",name:"Tecnico",quantity:1,minutesPerResource:480,hourlyCost:0,status:"Activo"}]);
     state.hrApi.workers=[{id:"wrk_audit",employee_number:"EMP-AUDIT",first_names:"Persona",first_last_name:"Prueba",full_name:"Persona Prueba",curp:"AAAA000101HDFRRN09",rfc:"AAAA000101ABC",nss:"00000000000",hire_date:"2025-01-01",birth_date:"1990-01-01",labor_position_id:"pos_audit",status:"active"}];
-    state.purchasingApi={...state.purchasingApi,suppliers:[],orders:[],receipts:[],requisitions:[{id:"req_audit",code:"REQ-AUDIT",required_date:"2026-09-07",priority:"normal",status:"draft",lines:[]}],items:[{id:"itm_audit",code:"MAT-AUDIT",name:"Material prueba",base_unit:"H87"}],warehouses:[]};
+    state.purchasingApi={...state.purchasingApi,references:{currencies:[{code:"MXN",name_es:"Peso mexicano",name_en:"Mexican peso"},{code:"CAD",name_es:"Dólar canadiense",name_en:"Canadian dollar"}],payment_terms:[{code:"cash",name_es:"Contado",name_en:"Cash"},{code:"credit_45",name_es:"Crédito 45 días",name_en:"Net 45"}]},suppliers:[],orders:[],receipts:[],requisitions:[{id:"req_audit",code:"REQ-AUDIT",required_date:"2026-09-07",priority:"normal",status:"draft",lines:[]}],items:[{id:"itm_audit",code:"MAT-AUDIT",name:"Material prueba",base_unit:"H87"}],warehouses:[]};
   });
 });
 
@@ -267,6 +268,47 @@ test("editar proveedor conserva codigos existentes que no estaban en la lista co
   await page.locator('[data-edit-supplier="sup_audit"]').click();
   for(const [name,value] of Object.entries({tax_regime:"620",fiscal_country:"US",currency:"CAD",payment_terms:"credit_45"}))await expect(page.locator(`#purchasingSupplierForm [name=${name}]`)).toHaveValue(value);
   await expect(page.locator("#purchasingSupplierForm [name=fiscal_postal_code]")).not.toHaveAttribute("pattern",/.+/);
+});
+
+test("alta de proveedor ofrece los catalogos comerciales activos de Administracion",async({page})=>{
+  await page.evaluate(()=>{
+    const a=window.frontendAudit;a.state.active="compras";a.state.activeSubmodule="proveedores";
+    a.renderPurchasingSubmodulePanel(a.modules.find(m=>m.id==="compras"));
+  });
+  await page.locator("[data-open-supplier]").click();
+  expect(await page.locator('#purchasingSupplierForm [name="currency"] option').evaluateAll(options=>options.map(option=>option.value))).toEqual(["MXN","CAD"]);
+  expect(await page.locator('#purchasingSupplierForm [name="payment_terms"] option').evaluateAll(options=>options.map(option=>option.value))).toEqual(["cash","credit_45"]);
+  await expect(page.locator('#purchasingSupplierForm [name="currency"]')).toHaveValue("MXN");
+  await expect(page.locator('#purchasingSupplierForm [name="payment_terms"]')).toHaveValue("cash");
+});
+
+test("Ventas muestra referencias historicas sin sustituirlas por la primera opcion activa",async({page})=>{
+  await page.evaluate(()=>{
+    const a=window.frontendAudit;
+    a.state.salesApi.references={currencies:[{code:"MXN",name_es:"Peso mexicano",name_en:"Mexican peso"}],payment_terms:[{code:"cash",name_es:"Contado",name_en:"Cash"}]};
+    a.state.salesApi.workers=[{id:"wrk_audit",full_name:"Persona Prueba",position_name:"Ventas"}];
+    a.state.unitCatalog={status:"ready",error:"",data:[{code:"E48",name_es:"Unidad de servicio",name_en:"Service unit",symbol:"E48",status:"active"}]};
+    a.mockDb.saveModuleRecords("ventas",[{id:"customer_historical",code:"CLI-HIST",moduleId:"ventas",submoduleId:"clientes",recordType:"customer",status:"Activo",title:"Cliente historico",fields:{customerType:"company",commercialName:"Cliente historico",contactName:"Persona",contactEmail:"persona@example.test",contactPhone:"5555555555",responsibleWorkerId:"wrk_audit",currency:"CAD",paymentTerms:"credit_45"}},{id:"quote_historical",code:"COT-HIST",moduleId:"ventas",submoduleId:"cotizaciones",recordType:"quote",status:"Borrador",title:"Cotizacion historica",fields:{customerId:"customer_historical",currency:"CAD",paymentTerms:"credit_45",validUntil:"2026-12-31",lines:[{productServiceId:"prs_audit",productServiceName:"Servicio prueba",quantity:1,unit:"E48",unitPrice:100,discount:0}]}}]);
+    a.openSalesCustomerModal(a.modules.find(m=>m.id==="ventas"),{id:"clientes"},"customer_historical");
+  });
+  for(const [name,value] of [["currency","CAD"],["paymentTerms","credit_45"]]){
+    const select=page.locator(`#salesCustomerForm [name=${name}]`);
+    await expect(select).toHaveValue(value);
+    await expect(select.locator("option:checked")).toBeDisabled();
+  }
+  const customerFormData=await page.locator("#salesCustomerForm").evaluate(form=>Object.fromEntries(new FormData(form)));
+  expect(customerFormData).not.toHaveProperty("currency");
+  expect(customerFormData).not.toHaveProperty("paymentTerms");
+  await page.evaluate(()=>window.frontendAudit.closeModal());
+  await page.evaluate(async()=>{const a=window.frontendAudit;await a.openSalesQuoteModal(a.modules.find(m=>m.id==="ventas"),{id:"cotizaciones"},"quote_historical");});
+  for(const [name,value] of [["currency","CAD"],["paymentTerms","credit_45"]]){
+    const select=page.locator(`#salesQuoteForm [name=${name}]`);
+    await expect(select).toHaveValue(value);
+    await expect(select.locator("option:checked")).toBeDisabled();
+  }
+  const quoteFormData=await page.locator("#salesQuoteForm").evaluate(form=>Object.fromEntries(new FormData(form)));
+  expect(quoteFormData).not.toHaveProperty("currency");
+  expect(quoteFormData).not.toHaveProperty("paymentTerms");
 });
 
 async function renderRecoverableParts(page,status="processing",operation="reserve",lang="es"){

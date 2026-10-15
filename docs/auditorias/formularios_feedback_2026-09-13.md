@@ -1,5 +1,7 @@
 # Formularios y feedback operativo - CHG-272
 
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](../contexto/ESTADO_ACTUAL.md).
+
 Fecha: 2026-09-13. Estado: implementacion y validacion Local completadas; UAT y promocion QA pendientes. Fuente viva: `docs/contexto/ESTADO_ACTUAL.md`.
 
 ## Problema y alcance

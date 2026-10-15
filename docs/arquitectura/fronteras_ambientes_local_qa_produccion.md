@@ -1,5 +1,72 @@
 # Fronteras para Local, QA y Produccion
 
+## CC-21 - CHG-325 - Local
+
+Costo estimado de cotizaciones implementado sobre PostgreSQL Local, migracion `20261014_0062` up/down/up y tenant autorizado. Production confirma costo por producto/Division en moneda base de Sociedad. Sales conserva tasa explicita, vista previa y snapshot al aprobar; pedido hereda el snapshot. Falta de costo o tasa permite aprobar con costo/margen estimados nulos. Historia previa queda nullable, sin backfill ni reinterpretacion. No ejecutar migracion ni seed en QA/Produccion por este corte; CC-19 y aceptacion CC-20 pendientes. Accounting apagado.
+
+## CC-18 - CHG-323 - Local
+
+Folios de Puestos RH, movimientos Inventory, proveedor/requisicion/orden/recepcion Purchasing y orden Maintenance conectados con Admin. Migracion `20261014_0061` y pruebas focales solo sobre PostgreSQL Local con tenant autorizado. No ejecutar migracion ni seed en QA/Produccion por este corte; promover solo mediante aceptacion CC-20 y autorizacion de ambiente. Accounting permanece apagado. Historia conserva codigos previos; manuales Word esperan regeneracion y revision visual.
+
+## CC-15 · CHG-319 · Local
+
+[Compras por División](cont_08_compras_contexto.md): Purchasing conserva contexto de requisición/OC/recepción y condiciones explícitas del proveedor congeladas. Admin autoriza; Inventory conserva validación/costo/proof CC-14. Migración `20261012_0058` nullable sin backfill, downgrade protegido con historia. Accounting apagado, sin QA; CC-16 implementado Local CHG-320; CC-17/18 y CC-19/20 abiertos.
+
+## CC-14 · CHG-317 · Local
+
+[Productores, transferencias y sobrantes](cont_08_inventario_productores.md) implementados: Inventory conserva contexto/costo de Purchasing/Maintenance y transferencias misma Sociedad; proofs autenticados, alcance y reintentos. Migración `20261012_0057` nullable sin backfill, downgrade protegido con historia. Sin QA ni Accounting; CC-16 integral y CC-19/20 siguen abiertos; CC-15 implementado CHG-319.
+
+
+
+## Estado y fuentes de vigencia
+
+La conciliación por submódulo vive en [CONTROL_CONTABLE](../contexto/CONTROL_CONTABLE.md); [ESTADO_ACTUAL](../contexto/ESTADO_ACTUAL.md) distingue Local de QA y [PENDIENTES](../contexto/PENDIENTES.md) fija la continuación. Evidencia de cada corte en [TRAZABILIDAD](../../TRAZABILIDAD.md). No sumar pendientes históricos como trabajo nuevo.
+
+Organización/sesión, [centros CONT-05](cont_05_catalogo_centros.md), asignaciones CONT-07 y [condiciones explícitas sin herencia](cont_07_commercial_condiciones.md) ya están implementados Local. CONT-04 es parcial y CONT-06 sigue abierto. CONT-08 conserva [cotización](cont_08_cotizaciones_contexto.md) → [pedido](cont_08_pedidos_contexto.md), [servicios](cont_08_servicios_contexto.md), [stock/entrega y movimientos manuales](cont_08_stock_contexto.md). [Producción manual CHG-313](cont_08_produccion_contexto.md) y [fabricación comercial CHG-315](cont_08_fabricacion_contexto.md) conectan contexto, recursos, recepción y entrega/costo; recorrido HTTP Local real aprobado, aceptación transversal CC-20 pendiente.
+
+Política CHG-309 confirmada: costos y tarifas en moneda base de Sociedad; documento en otra moneda conserva original, tasa explícita y convertido. Compras CC-15 implementado Local CHG-319; Mantenimiento CC-16 implementado Local CHG-320; Servicios CHG-314 y productores Inventory CHG-317 se conservan; no reinterpretar historia. Analítica Costing y Accounting permanecen planned. Datos reales y aceptación integrada siguen abiertos; estos cortes no fueron promovidos a QA.
+
+## Integración operativa vigente CHG-313/314
+
+[Tarifas CC-10](cont_08_tarifas_capacidad.md), [orden manual CC-11](cont_08_produccion_contexto.md) y [moneda Servicios CC-08](cont_08_servicios_contexto.md) se conservan. CHG-315 conecta [fabricación comercial CC-12](cont_08_fabricacion_contexto.md): prueba Sales, conversión única, conciliación de recepción real y entrega/costo. Head Local0056, sin backfill; recorrido HTTP real aprobado con 60MXN→3USD y limpieza de fixtures verificada. Cada dueño escribe sus tablas; Admin autoriza. Accounting apagado, datos reales CC-19/aceptación transversal CC-20 y QA pendientes.
+
+## Registro de cortes (evidencia histórica)
+
+Los apartados fechados conservan el alcance de su corte; los números de revisión y pendientes citados no son el estado actual.
+
+## Actualización CHG-308 · 2026-10-07
+
+Local `20261007_0050` migrado up/down vacío/up en loopback 5434 y tenant autorizado. Sin backfill ni QA. Preparación Production sin nueva UI ni fabricación dimensionada habilitada. Ver docs/arquitectura/cont_08_produccion_contexto.md.
+
+
+## Actualización CHG-307 · 2026-10-05
+
+Local head `20261005_0049`, migración probada sólo en loopback 5434 y tenant autorizado. Código stock/moneda no promovido a QA; fixtures con rollback, sin backfill. Ver docs/arquitectura/cont_08_stock_contexto.md. Las notas de cortes anteriores son históricas.
+
+
+## Actualización CHG-306 · 2026-10-05
+
+Local head `20261005_0048` probado upgrade/downgrade vacío/upgrade en loopback 5434/erclave_local, tenant autorizado. QA/Producción intactos. Inventory requiere destino Sales explícito para futura promoción; no se usó QA.
+
+
+## Actualización CHG-305 · 2026-10-05
+
+CHG-305 sin migración (head Local 0047); pruebas de servicios en tenant autorizado con rollback y APIs/Emulator loopback. QA/Producción intactos.
+
+
+## Actualización CHG-304 · 2026-10-05
+
+Local head 20261005_0047, loopback 5434/erclave_local y tenant autorizado; fixtures con rollback, sin datos dimensionados permanentes. QA/Producción intactos.
+
+
+## Actualización CHG-303 · 2026-10-05
+
+Local head 20261005_0046 aplicado sólo en loopback 5434/erclave_local, tenant autorizado, fixtures con rollback. QA/Producción intactos.
+
+
+
+**Corte Local CHG-292 (2026-09-25):** Alembic `20260925_0038`, APIs/UI organizacionales y autoridad normalizada activadas sólo en `127.0.0.1:5434/erclave_local`, tenant demo autorizado. Admin en 8000 usa Firebase Auth Emulator demo-erclave; frontend en 4173. Doce permisos nuevos y grants sólo para el Owner de ese tenant. Ninguna conexión, migración ni promoción QA/Producción en este corte; la revisión QA documentada se mantiene. [Detalle CONT-02](cont_02_administracion_organizacional.md).
+
 > **Estado:** decisiones aprobadas e implementadas en agentes, skills, validadores y pipeline QA.
 > **Fecha:** 2026-08-12.
 > **Autor del analisis:** Arquitectura transversal ERClave.
@@ -47,9 +114,11 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 - Local no consume recursos QA o Prod por defecto.
 - Toda excepcion debe nombrarse, justificarse y autorizarse expresamente.
 
-## 4. Inventario actual confirmado
+## 4. Inventario documentado por ambiente
 
-### 4.1 QA verificado al 9 de septiembre de 2026
+### 4.1 QA: último release documentado, 14 de septiembre de 2026
+
+[Release CHG-280](../operaciones/release_qa_20260914.md): PR #15 fusionado, SHA `e57237fe90319f88e1db8ed8d2e686604d2d9c54`, siete servicios y Hosting, Alembic `20260913_0036`. Es evidencia registrada, no una comprobación remota de esta auditoría. [ESTADO_ACTUAL](../contexto/ESTADO_ACTUAL.md) es autoridad para actualizaciones posteriores.
 
 | Componente o capacidad | Estado confirmado | Evidencia o limite |
 |---|---|---|
@@ -61,13 +130,13 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 | Administracion | Real QA | Tenant, sesion, permisos, roles, entitlements y organizacion |
 | Productos y servicios | Real QA | API de Produccion desplegada |
 | Recetas y versiones | Real QA | Integracion publicada y documentada |
-| Ordenes de produccion | Real QA | API, snapshots, etapas y validacion observada persistidos; no reserva Inventario |
+| Ordenes de produccion | Real QA | Ciclo base con reservas/entrega de materiales; la fabricación por Sociedad/División sigue sólo en preparación Local |
 | `inventory-service` | Activo QA | Servicio real sobre el SHA certificado vigente |
-| Schema `inventory` | Presente en QA | Migrado hasta `20260825_0029`; datos solo por UAT autorizada |
+| Schema `inventory` | Presente en QA | Incluido en Alembic QA `20260913_0036`; datos sólo por UAT autorizada |
 | `hr-service` | Activo QA | Servicio real y entitlement estructural activo |
-| Schema `hr` | Presente en QA | Migrado hasta `20260825_0029`; datos solo por UAT autorizada |
+| Schema `hr` | Presente en QA | Incluido en Alembic QA `20260913_0036`; datos sólo por UAT autorizada |
 | Ventas | Activo QA | Servicio real; activacion efectiva depende del entitlement |
-| Compras | Activo QA | `purchasing-service-qa`, schema propio y dependencia obligatoria de Inventory |
+| Compras | Activo QA | `purchasing-service-qa`, schema propio; Inventory interviene cuando la compra recibe bienes inventariables |
 | Mantenimiento | Activo QA | `maintenance-service-qa`, schema propio y dependencias RH e Inventory |
 | Gastos, Costos, Contabilidad y Reportes | Demo o futuro | Sin backend certificado en QA |
 | Infraestructura de Produccion | No confirmada | No hay evidencia documental de ambiente productivo desplegado |
@@ -446,7 +515,7 @@ Las skills deben:
 
 ### 15.2 Estado de adopcion
 
-Ya estan implementados la definicion canonica, agentes transversales, separacion Local/QA, guia QA, workflow manual, bloqueo de configuracion Local remota y sanitizacion runtime del frontend. Permanecen pendientes el manifest/provenance fuerte de recursos, la promocion compensatoria y el checklist productivo final.
+Ya estan implementados la definicion canonica, agentes transversales, separacion Local/QA, guia QA, workflow manual, bloqueo de configuracion Local remota y sanitizacion runtime del frontend. La promoción compensatoria de tráfico está implementada. Permanecen pendientes el manifest/provenance fuerte de recursos y el checklist productivo final.
 
 ## 16. Mantenimiento continuo
 
@@ -482,11 +551,11 @@ Ya estan implementados la definicion canonica, agentes transversales, separacion
 Toda modificacion de ambientes debe actualizar este documento, agentes, skills, validadores, runbooks y trazabilidad en el mismo corte; Produccion continúa bloqueada hasta autorizacion explicita y certificacion completa.
 
 
-## Candidato de continuidad CHG-269
+## Historial de candidato de continuidad CHG-269
 
 CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
 
 
-## Release QA verificado CHG-270
+## Historial de release QA verificado CHG-270
 
-CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
+CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff histórico: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.

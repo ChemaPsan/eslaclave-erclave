@@ -1,5 +1,13 @@
 # ERClave — Módulo de Reportes e Inteligencia Operativa
 
+## Vigencia y relaciones · conciliación CHG-311
+
+Reporting transversal, tableros configurables y consolidación continúan planned. Los reportes estándar operativos pertenecen a cada módulo y ya existen; no implementan por sí mismos este módulo. Las secciones siguientes describen el alcance objetivo.
+
+Estado por ambiente: [ESTADO_ACTUAL](../docs/contexto/ESTADO_ACTUAL.md). Brechas y cierre: [CONTROL_CONTABLE](../docs/contexto/CONTROL_CONTABLE.md). Relación operativa: [00_sinergia_modular](00_sinergia_modular.md). Contrato/regla: [reportes_estandar_por_modulo](../docs/arquitectura/reportes_estandar_por_modulo.md). Navegación: [índice de módulos](README.md).
+
+Las referencias CHG conservan procedencia; no se suman como pendientes vigentes. La historia de implementación está en [TRAZABILIDAD](../TRAZABILIDAD.md). Costos y tarifas deben usar moneda base de Sociedad (CHG-309); su aplicación se verifica por flujo en el control, sin reinterpretar historia. Centro requerido sólo donde el flujo de imputación esté habilitado.
+
 ## 1. Objetivo
 
 El módulo de Reportes e Inteligencia Operativa permitirá convertir datos de producción, inventario, compras, ventas, gastos y costos en información útil para tomar decisiones.
@@ -197,4 +205,4 @@ Estado: **inactivo y planeado**.
 
 Cada módulo operativo presenta en su propia raíz los catálogos y reportes estándar que le pertenecen, sin mutaciones. Este módulo no absorbe esas consultas cotidianas. Se reserva para cruces entre módulos, tableros configurables, indicadores avanzados, vistas guardadas, distribución y reportes a la medida.
 
-La matriz transversal y la regla para módulos futuros se mantienen en `docs/arquitectura/reportes_estandar_por_modulo.md`. Ningún dashboard, exportación o consulta especializada de este documento debe presentarse como implementada mientras el módulo permanezca inactivo.
+La matriz transversal y la regla para módulos futuros se mantienen en [docs/arquitectura/reportes_estandar_por_modulo.md](../docs/arquitectura/reportes_estandar_por_modulo.md). Ningún dashboard, exportación o consulta especializada de este documento debe presentarse como implementada mientras el módulo permanezca inactivo.

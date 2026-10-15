@@ -1,20 +1,43 @@
 # Modulo 11 - Mantenimiento
 
-## Feedback de formularios Local CHG-272
+## Folios CC-18 · Local
 
-Alta de orden y registro de tiempo conservan descripcion/notas y resuelven titulo y ended_at al campo visible correspondiente. No altera el flujo de sobrantes ni cierra sus pendientes de UAT. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+Administración asigna el folio de una orden correctiva nueva mediante la secuencia `maintenance.order`, después de validar la División y antes de guardar la orden. En modo administrado, el formulario no solicita un folio editable; en modo manual, captura el código y Admin lo confirma. La clave idempotente conserva el folio ante reintentos y Mantenimiento mantiene unicidad local por tenant; dos altas concurrentes con la misma clave devuelven la misma orden. El modo queda guardado como `code_mode`; las órdenes anteriores conservan su código y `code_mode = null`, sin renumeración ni inferencia retroactiva. Un fallo posterior a la asignación puede dejar un hueco en la secuencia, pues Admin y Mantenimiento no comparten transacción. Disponible sólo en Local; no promociona QA ni activa Accounting.
 
-Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+Los nuevos snapshots de tiempo copian el código nullable del puesto elegible que informa RH, junto al ID y nombre del puesto. Los snapshots previos conservan su contenido histórico sin backfill.
+
+## Contexto integral CC-16 · CHG-320 · Implementado Local
+
+[Contexto de Mantenimiento](../docs/arquitectura/cont_08_mantenimiento_contexto.md): orden con División fija derivada de máquina/origen o explícita para instalación/otro; RH elegible por División y tarifa confirmada; tiempos con costo/moneda/revisiones congelados; alcance en documentos, reportes y reintentos. Nuevas refacciones heredan orden; recuperación CC-14 conservada. Control de tiempo por persona y día UTC dentro de Maintenance, sin reserva global Sales/Production. Gate y aceptación pendientes; no promoción QA ni Accounting.
+
+## Vigencia CC-14 · CHG-317 · Local
+
+Ver [contexto y costo de productores Inventory](../docs/arquitectura/cont_08_inventario_productores.md). Recepción Purchasing con tasa explícita, refacciones Maintenance con intención durable, transferencias misma Sociedad y sobrantes con snapshot/alcance/reintento implementados Local. Compras CC-15 se implementó Local en CHG-319; Mantenimiento CC-16 implementado Local CHG-320; datos y aceptación transversal siguen abiertos.
+
+
+## Vigencia y relaciones · conciliación CHG-311
+
+Correctivos, técnicos, tiempos y refacciones base desplegados en QA. CC-16 implementado Local según el contrato superior. Reutiliza ciclo y recuperación existentes; preventivos continúan planned.
+
+Estado por ambiente: [ESTADO_ACTUAL](../docs/contexto/ESTADO_ACTUAL.md). Brechas y cierre: [CONTROL_CONTABLE](../docs/contexto/CONTROL_CONTABLE.md). Relación operativa: [02_almacenes_inventarios](02_almacenes_inventarios.md). Contrato/regla: [plan_preparacion_contabilidad](../docs/arquitectura/plan_preparacion_contabilidad.md). Navegación: [índice de módulos](README.md).
+
+Las referencias CHG conservan procedencia; no se suman como pendientes vigentes. La historia de implementación está en [TRAZABILIDAD](../TRAZABILIDAD.md). Costos y tarifas deben usar moneda base de Sociedad (CHG-309); su aplicación se verifica por flujo en el control, sin reinterpretar historia. Centro requerido sólo donde el flujo de imputación esté habilitado.
+
+## Feedback de formularios — Local y QA
+
+Alta de orden y registro de tiempo conservan descripcion/notas y resuelven titulo y ended_at al campo visible correspondiente. No altera el flujo de sobrantes ni cierra sus pendientes de UAT. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: [.agents/skills/erclave-form-feedback/SKILL.md](../.agents/skills/erclave-form-feedback/SKILL.md). Evidencia: [docs/auditorias/formularios_feedback_2026-09-13.md](../docs/auditorias/formularios_feedback_2026-09-13.md).
+
+Feedback desplegado en Local y QA mediante el release `e57237f`. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del módulo. Estado y pendientes autenticados: [docs/contexto/ESTADO_ACTUAL.md](../docs/contexto/ESTADO_ACTUAL.md) y [docs/operaciones/release_qa_20260914.md](../docs/operaciones/release_qa_20260914.md).
 
 ## Entrega por Almacen ? Local CHG-263
 
 Las solicitudes reservadas aparecen en **Almacenes > Movimientos > Solicitudes de refacciones**. El almacenista confirma la entrega completa o rechaza con motivo; Maintenance conserva solicitud, estado y auditoria, mientras Inventory escribe exclusivamente sus reservas y salidas. `issued` ahora significa entrega confirmada por el actor de Almacen. Resolver y conciliar la orden nunca consumen refacciones; se requiere que las solicitudes esten `issued|cancelled`.
 
-Una falla parcial de entrega queda durable como `needs_reconciliation/issue` y se reintenta desde Movimientos, no desde la conciliacion tecnica. Los estados `processing/issue` tras una interrupcion tambien son recuperables. Las cancelaciones del tecnico comparten el lock de la solicitud con las entregas del almacenista. Detalle de permisos, compatibilidad y validacion: `docs/auditorias/refacciones_movimientos_2026-09-07.md`. Este comportamiento no esta desplegado en QA.
+Una falla parcial de entrega queda durable como `needs_reconciliation/issue` y se reintenta desde Movimientos, no desde la conciliacion tecnica. Los estados `processing/issue` tras una interrupcion tambien son recuperables. Las cancelaciones del tecnico comparten el lock de la solicitud con las entregas del almacenista. Detalle de permisos, compatibilidad y validacion: [docs/auditorias/refacciones_movimientos_2026-09-07.md](../docs/auditorias/refacciones_movimientos_2026-09-07.md). Este comportamiento se promovió en CHG-270 y está incluido en QA e57237f.
 
 ## Coherencia de resolucion Local (CHG-262)
 
-Resolver y editar diagnostico mantienen permisos independientes. Un rol que solo puede resolver utiliza los campos ya persistidos sin enviar PATCH; si falta diagnostico, trabajo o verificacion se conserva el bloqueo del formulario/backend. Las lecturas opcionales de Produccion solo solicitan maquinas/ordenes con permisos efectivos y no dependen de recetas/productos. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+Resolver y editar diagnostico mantienen permisos independientes. Un rol que solo puede resolver utiliza los campos ya persistidos sin enviar PATCH; si falta diagnostico, trabajo o verificacion se conserva el bloqueo del formulario/backend. Las lecturas opcionales de Produccion solo solicitan maquinas/ordenes con permisos efectivos y no dependen de recetas/productos. Evidencia: [docs/auditorias/frontend_backend_2026-09-07.md](../docs/auditorias/frontend_backend_2026-09-07.md).
 
 ## Autorizacion operativa Local y QA
 
@@ -22,7 +45,7 @@ Solicitar, asignar, iniciar, esperar refacciones, reanudar, resolver, cerrar, re
 
 ## Estado y objetivo
 
-Estado: `implemented` en Local desde CHG-234 y endurecido en CHG-235 con la revision `20260824_0028`; el corte acumulado esta desplegado en QA dentro de la cabeza `20260825_0029`. Produccion no esta provisionada. La disponibilidad efectiva depende del entitlement y de datos funcionales autorizados del tenant.
+Estado: `implemented` en Local desde CHG-234 y endurecido en CHG-235 con la revision `20260824_0028`; el corte acumulado está desplegado en QA e57237f, cabeza `20260913_0036`. Produccion no esta provisionada. La disponibilidad efectiva depende del entitlement y de datos funcionales autorizados del tenant.
 
 El modulo controlara mantenimiento correctivo desde el reporte de una falla hasta su cierre verificado, incluyendo responsable, tiempo real, diagnostico, trabajo realizado y refacciones. El primer corte implementable sera correctivo; planes preventivos, recurrencia, garantias y proveedores quedan para cortes posteriores.
 
@@ -134,7 +157,7 @@ Alternos:
 
 1. El tecnico crea una solicitud multi-linea contra un almacen de tipo estable `spare_parts`.
 2. Inventory valida articulo, unidad, almacen y disponibilidad; reserva sin permitir existencia negativa.
-3. En Local CHG-263, Almacen confirma la entrega desde Movimientos; cada reserva se consume en una salida inmutable con costo snapshot. Resolver exige entrega o cancelacion previa. QA conserva el consumo al resolver hasta una promocion aprobada. CHG-265 agrega devolución confirmada de sobrantes sin editar la salida.
+3. En Local CHG-263, Almacen confirma la entrega desde Movimientos; cada reserva se consume en una salida inmutable con costo snapshot. Resolver exige entrega o cancelacion previa. QA también exige entrega o cancelación previa; resolver no genera la salida. CHG-265 agrega devolución confirmada de sobrantes sin editar la salida.
 4. Si falta material, la orden puede quedar `waiting_parts`. Elevar la necesidad a Compras sera una accion explicita futura, no automatica.
 
 ## Reglas criticas
@@ -217,14 +240,14 @@ MTBF queda pendiente hasta contar con horas reales de operacion; no se inferira 
 
 Inicio, reanudación y reapertura revalidan elegibilidad RH. La máquina permanece bloqueada hasta liberación por Mantenimiento; no puede liberarse editando su estatus en Producción. Solicitudes resueltas/cerradas/canceladas con refacciones emitidas permiten solicitar devolución de sobrantes. Almacén confirma entrada; Mantenimiento registra cantidad/costo devuelto sin editar la salida. Una reapertura concurrente no impide conciliar una devolución ya recibida físicamente. Cancelar puede liberar reservas propias sin permiso de emitir refacciones.
 
-CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: [docs/auditorias/flujos_almacen_mensajes_2026-09-08.md](../docs/auditorias/flujos_almacen_mensajes_2026-09-08.md).
 
 
 ## Recuperación de refacciones Local CHG-268
 
-CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: [docs/auditorias/recuperacion_refacciones_2026-09-08.md](../docs/auditorias/recuperacion_refacciones_2026-09-08.md).
 
 
 ## Disponibilidad QA CHG-270
 
-Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: [docs/operaciones/release_qa_20260908.md](../docs/operaciones/release_qa_20260908.md).

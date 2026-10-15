@@ -68,10 +68,13 @@ for(const lang of ['es','en']){
       evidenceCalls++;const body=route.request().postDataJSON();expect(body.description).toBe('Received device with scratches');
       await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({data:[{phase:'start',description:body.description,created_at:'2026-09-13T12:00:00Z',files:[]}]})});
     });
-    await page.route('**/orders/order_evidence_ui/status',async route=>{statusCalls++;await route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:{code:'invalid_order_transition'}})});});
+    await page.route('**/orders/order_evidence_ui/status',async route=>{statusCalls++;await route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:{code:'hr_service_unavailable',correlation_id:'hr-fixture-ref'}})});});
     await form.locator('[type=submit]').click();expect(evidenceCalls).toBe(0);expect(statusCalls).toBe(0);
     await form.locator('textarea').fill('Received device with scratches');await form.locator('[type=submit]').click();
     await expect.poll(()=>statusCalls).toBe(1);await expect(form.locator('textarea')).toHaveValue('Received device with scratches');
+    await expect(form.locator('[data-form-feedback]')).toContainText(lang==='es'?'La evidencia de recepción e inicio está guardada.':'The receipt and start evidence is saved.');
+    await expect(form.locator('[data-form-feedback]')).toContainText(lang==='es'?'Recursos Humanos':'Human resources');
+    await expect(form.locator('[aria-invalid=true]')).toHaveCount(0);
     await expect(form.locator('[type=submit]')).toBeEnabled();await form.locator('[type=submit]').click();
     await expect.poll(()=>statusCalls).toBe(2);expect(evidenceCalls).toBe(1);
   });
@@ -112,4 +115,30 @@ test('expired attachments keep written evidence and have no download action',asy
   await expect(page.locator('.service-evidence-description')).toHaveText('Received in good condition');
   await expect(page.locator('[data-evidence-download]')).toHaveCount(0);
   await expect(page.locator('.service-evidence-fields').first()).toContainText('eliminado');
+});
+
+for(const lang of ['es','en']) test(`${lang}: real progress form keeps both saved evidence sections after HR failure`,async({page})=>{
+  await orderFixture(page,lang);
+  await page.evaluate(()=>window.frontendAudit.advanceOrderStage('order_evidence_ui',0));
+  const form=page.locator('[data-form="order-stage-progress"]');
+  await form.locator('[name=progressPercent]').fill('100');
+  await form.locator('[name=startDescription]').fill('Received device with scratches');
+  await form.locator('[name=finishDescription]').fill('Returned device repaired');
+  let evidenceCalls=0,statusCalls=0,stageCalls=0;
+  const entries=[];
+  await page.route('**/service-evidence/*',async route=>{
+    evidenceCalls++;const phase=route.request().url().split('/').pop();
+    entries.push({phase,description:route.request().postDataJSON().description,created_at:'2026-09-16T12:00:00Z',files:[]});
+    await route.fulfill({status:200,json:{data:entries}});
+  });
+  await page.route('**/orders/order_evidence_ui/status',async route=>{statusCalls++;await route.fulfill({status:503,json:{error:{code:'hr_service_unavailable',correlation_id:'hr-real-form-fixture'}}});});
+  await page.route('**/order-stages/stage_evidence_ui',async route=>{stageCalls++;await route.fulfill({status:503,json:{error:{code:'service_unavailable'}}});});
+  await form.locator('[type=submit]').click();
+  await expect(form.locator('[data-form-feedback]')).toContainText(lang==='es'?'La evidencia de cierre está guardada.':'The completion evidence is saved.');
+  await expect(form.locator('[data-form-feedback]')).toContainText(lang==='es'?'Recursos Humanos':'Human resources');
+  await expect(form.locator('[name=progressPercent]')).toHaveValue('100');
+  await expect(form.locator('[name=finishDescription]')).toHaveValue('Returned device repaired');
+  await expect(form.locator('[aria-invalid=true]')).toHaveCount(0);
+  expect(evidenceCalls).toBe(2);expect(statusCalls).toBe(1);expect(stageCalls).toBe(0);
+  expect(await page.evaluate(()=>window.frontendAudit.mockDb.findOrder('order_evidence_ui').status)).toBe('Liberada');
 });

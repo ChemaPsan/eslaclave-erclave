@@ -1,5 +1,13 @@
 # Preparación de promoción QA — 14 septiembre 2026
 
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](../contexto/ESTADO_ACTUAL.md).
+
+## Resultado posterior CHG-280 — 15 septiembre 2026
+
+Release 34932659212 completado: cinco jobs (preflight, migrate, deploy_candidate, promote_traffic y frontend) success. Siete endpoints públicos /version confirmaron `e57237fe90319f88e1db8ed8d2e686604d2d9c54`; interfaz nueva de evidencia visible. QA Alembic `20260913_0036`. Las revisiones candidatas registradas abajo fueron promovidas por el workflow. Los apartados de preparación y CHG-278/279 conservan la observación histórica anterior a la promoción. No repetir el despliegue.
+
+Smoke autenticado parcial: recepción obligatoria antes de espera de recursos y rechazo de descripción vacía comprobados en OP-000003, sin guardar evidencia. Carga sintética bloqueada por permiso de archivos locales de Chrome; carga/descarga/cierre100 y UAT con dos tenants siguen pendientes. No certificación funcional completa. Frontend reconstruido en release, limitación build-once vigente.
+
 ## Promoción CHG-278 — candidatos verificados, tráfico pendiente
 
 PR #15 fusionado tras CI34931780981 aprobado. SHA inmutable: `e57237fe90319f88e1db8ed8d2e686604d2d9c54`. Candidato34932158226 aprobado, siete imágenes verificadas; archivo del manifiesto SHA256 `50f6df93bd59f09ce3198cf43f1a64cbbb782888bb23a483c28bc7fb256c8cde`.

@@ -4,8 +4,8 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 
 ## Antes de modificar
 
-1. Ejecutar `npm run session:context` y leer `docs/contexto/INICIO_SESION.md`.
-2. Leer `AGENTES.md`, los documentos de `docs/contexto/` y el documento del módulo en `modulos/`.
+1. Ejecutar `npm run session:context` y leer `docs/contexto/INICIO_SESION.md`. Si Node/npm no está disponible, usar `python tools/context_brief.py` como resumen local y leer las fuentes vigentes; registrar la verificación que faltó.
+2. Leer el estado y pendientes vigentes de `docs/contexto/`, las secciones pertinentes de `AGENTES.md` y el documento del módulo en `modulos/`. Consultar decisiones e historia relacionadas con el corte, sin tratar notas antiguas como estado actual.
 3. Para arquitectura, datos, seguridad o ambientes, consultar los documentos pertinentes en `docs/arquitectura/`.
 4. Identificar el módulo, microfrontend, microservicio, dueño del dato, contratos y dependencias afectadas.
 5. Revisar `git status --short` y preservar cambios locales ajenos.
@@ -13,7 +13,12 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 
 ## Reglas obligatorias
 
+- Para Contabilidad, eventos económicos o imputación por Sociedad/División/Centro de costos, aplicar `$erclave-accounting` en `.agents/skills/erclave-accounting/SKILL.md` y consultar negocio/técnico contable junto con los guardianes transversales. No confundir estructura organizacional con un libro implementado. Para seguimiento por submódulo, consultar `docs/contexto/CONTROL_CONTABLE.md` bajo custodia del agente técnico de Contabilidad; contrastar evidencia antes de reabrir un flujo y mantener el detalle alineado con PENDIENTES/ESTADO.
+- Al agregar módulos o cambiar integraciones/ownership, aplicar `$erclave-module-boundaries` y revisar `docs/arquitectura/cobertura_agentes_modulos.md`. Cada módulo debe conservar fichas de negocio y técnica propias; las skills transversales cubren requisitos comunes sin duplicarlas por módulo.
+
 - Al crear o modificar formularios, validaciones, serialización de sus payloads o feedback compartido, aplicar `$erclave-form-feedback` en `.agents/skills/erclave-form-feedback/SKILL.md`. Exigir errores vinculados por rutas estructuradas a controles, fallback seguro, conservación de captura y pruebas conductuales negativas por consumidor afectado; la presencia del helper no prueba cobertura transversal.
+- Al agregar, quitar, exigir o auditar campos y selectores de un formulario, aplicar `$erclave-form-contract`: justificar la tarea que resuelve cada campo, contrastar alta/edición/lectura con backend y catálogo dueño, y separar diferencias comprobadas de decisiones pendientes. No añadir captura sin propósito ni asumir que un campo opcional de API debe ser opcional en la experiencia sin revisar la regla funcional.
+- Al registrar pruebas funcionales o incidencias QA, aplicar `$erclave-qa-evidence`: conservar ambiente, SHA, rol, pasos y evidencia; un smoke parcial no convierte un caso completo en `Pasa`.
 - Antes de levantar servicios, conectar recursos, probar en QA, migrar, ejecutar seeds o desplegar, usar `$erclave-environment-boundaries` y leer `docs/arquitectura/fronteras_ambientes_local_qa_produccion.md`.
 - Para preparar, desplegar o verificar un candidato Local→QA, usar además `$erclave-qa-release` y `docs/operaciones/flujo_local_a_qa.md`.
 - "Levantar en local" significa Local aislado: PostgreSQL local, APIs locales y Firebase Emulator. No permite Cloud SQL, APIs, Firebase, secretos ni integraciones QA/Produccion.
@@ -45,7 +50,7 @@ Estas reglas aplican a todo el repositorio. `AGENTES.md` conserva el conocimient
 1. Definir criterios de aceptación y blast radius.
 2. Declarar `Agentes consultados`: negocio/tecnico del modulo y transversales aplicables. Todo release QA incluye Arquitectura, Seguridad y QA/Release.
 3. Implementar el corte vertical mínimo completo.
-4. Agregar o actualizar pruebas negativas, de permisos, idempotencia y aislamiento según aplique.
+4. Durante la implementación ejecutar primero las pruebas focalizadas del recorrido afectado; agregar o actualizar pruebas negativas, de permisos, idempotencia y aislamiento según aplique. `npm run verify` sigue siendo el gate final del corte.
 5. Actualizar documentacion contractual y operativa conforme a `docs/arquitectura/gobierno_documentacion_viva.md`; eliminar afirmaciones obsoletas de fuentes vivas sin reescribir evidencia historica.
 6. Agregar una entrada correlativa a `TRAZABILIDAD.md`. Usar `npm run traceability:draft -- --title "..."` para preparar el borrador.
 7. Actualizar `docs/contexto/ESTADO_ACTUAL.md` y `docs/contexto/PENDIENTES.md` cuando cambie el estado real.
@@ -68,6 +73,11 @@ npm.cmd run validate:responsive
 npm.cmd run verify
 npm.cmd run traceability:draft -- --title "Descripción del cambio"
 npm.cmd run session:context
+python tools/context_brief.py
 ```
 
 Las pruebas backend usan el intérprete indicado por `PYTHON` cuando exista; en caso contrario usan `python`.
+
+## Control documental automático · CHG-311
+
+Entrar por [docs/INICIO.md](docs/INICIO.md) y consultar la clase/autoridad en [registro documental](docs/documentacion-registro.json). No usar evidencia histórica o Word pendiente como instrucción actual. Aplicar $erclave-context-reconcile; el custodio de manuales coordina dueños funcionales/técnicos y Arquitectura para corregir el cuerpo de las fuentes vigentes. Cada cambio documental nuevo/movido/eliminado actualiza registro y npm run docs:index; ejecutar validate:documentation y verify. La automatización no sustituye la justificación de reglas con decisión, contrato y evidencia.

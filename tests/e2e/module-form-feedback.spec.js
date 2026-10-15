@@ -7,7 +7,7 @@ const TENANT = "ten_739ee59d765d5e14818674800d";
 // Test-only access to real view functions. No hook is shipped with the application.
 const hook = `
 window.frontendAudit = {
-  state, mockDb, modules, closeModal, renderSalesServiceOrderModal,
+  state, mockDb, modules, closeModal, renderSalesServiceOrderModal, openSalesServiceTransitionModal, openSalesOrderFulfillmentModal, mapApiSalesOrder, mapApiSalesServiceOrder, renderSalesOrderCard,
   openProductServiceModal, openWarehouseModal, openInventoryItemModal,
   openInventoryMovementModal, openLaborAreaModal, openLaborRoleModal,
   openWorkerModal, openMachineModal, openPurchasingCancellationModal,
@@ -17,6 +17,7 @@ window.frontendAudit = {
 };`;
 
 test.beforeEach(async ({ page }) => {
+  page.on("pageerror", error => console.error("Local form page error:", error.message));
   await page.route("**/*", route => {
     const url=new URL(route.request().url());
     if (!["127.0.0.1","localhost"].includes(url.hostname)) return route.abort();
@@ -35,6 +36,7 @@ test.beforeEach(async ({ page }) => {
     await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({error:{code:"invalid_state",message:"internal diagnostic must stay hidden"}}) });
   });
   await page.route("**/v1/catalogs/code-sequences/*/next", route=>route.fulfill({json:{data:{code:"AUDIT-ONLY"}}}));
+  await page.route("**/v1/inventory/warehouses/*/operation-context",route=>route.fulfill({json:{data:null}}));
   await signInAsLocalAdmin(page);
   await expect.poll(() => page.evaluate(() => window.frontendAudit.state.adminApi.status)).toBe("ready");
   await page.evaluate(() => {
@@ -48,7 +50,7 @@ test.beforeEach(async ({ page }) => {
     mockDb.saveLaborAreas([{id:"area_audit",code:"AREA",name:"Area prueba",status:"Activo"}]);
     mockDb.saveLaborRoles([{id:"pos_audit",areaId:"area_audit",area:"Area prueba",position:"Tecnico",name:"Tecnico",quantity:1,minutesPerResource:480,hourlyCost:0,status:"Activo"}]);
     state.hrApi.workers=[{id:"wrk_audit",employee_number:"EMP-AUDIT",first_names:"Persona",first_last_name:"Prueba",full_name:"Persona Prueba",curp:"AAAA000101HDFRRN09",rfc:"AAAA000101ABC",nss:"00000000000",hire_date:"2025-01-01",birth_date:"1990-01-01",labor_position_id:"pos_audit",status:"active"}];
-    state.purchasingApi={...state.purchasingApi,suppliers:[],orders:[],receipts:[],requisitions:[{id:"req_audit",code:"REQ-AUDIT",required_date:"2026-09-07",priority:"normal",status:"draft",lines:[]}],items:[{id:"itm_audit",code:"MAT-AUDIT",name:"Material prueba",base_unit:"H87"}],warehouses:[]};
+    state.purchasingApi={...state.purchasingApi,references:{currencies:[{code:"MXN",name_es:"Peso mexicano",name_en:"Mexican peso"}],payment_terms:[{code:"cash",name_es:"Contado",name_en:"Cash"}]},suppliers:[],orders:[],receipts:[],requisitions:[{id:"req_audit",code:"REQ-AUDIT",required_date:"2026-09-07",priority:"normal",status:"draft",lines:[]}],items:[{id:"itm_audit",code:"MAT-AUDIT",name:"Material prueba",base_unit:"H87"}],warehouses:[]};
   });
 });
 
@@ -143,7 +145,7 @@ for(const lang of ["es","en"]){
   });
   test(`MAIN ${lang} Compras receipt filtered second DOM row receives payload index zero error`,async({page})=>{
     const requests=await rejectFields(page,"/v1/purchasing/receipts",["lines.0.quantity"]);
-    await page.evaluate(lang=>{const a=window.frontendAudit;a.state.lang=lang;a.state.active="compras";a.state.activeSubmodule="recepciones";a.state.purchasingReceiptSourceOrderId="po_audit";a.state.purchasingApi.orders=[{id:"po_audit",code:"PO-AUDIT",status:"issued",lines:[1,2].map(i=>({id:`line_${i}`,line_type:"service",description:`Service ${i}`,quantity:10,received_quantity:0,unit_code:"E48"}))}];a.renderPurchasingSubmodulePanel(a.modules.find(m=>m.id==="compras"));},lang);
+    await page.evaluate(lang=>{const a=window.frontendAudit;a.state.lang=lang;a.state.active="compras";a.state.activeSubmodule="recepciones";a.state.purchasingReceiptSourceOrderId="po_audit";a.state.purchasingApi.orders=[{id:"po_audit",code:"PO-AUDIT",organization_context:{division_ref_id:"div-audit",society_ref_id:"soc-audit",cost_currency:"MXN"},status:"issued",lines:[1,2].map(i=>({id:`line_${i}`,line_type:"service",description:`Service ${i}`,quantity:10,received_quantity:0,unit_code:"E48"}))}];a.renderPurchasingSubmodulePanel(a.modules.find(m=>m.id==="compras"));},lang);
     const f=page.locator("#purchasingReceiptForm"),rows=f.locator("[data-receipt-line]");
     await f.locator("[name=code]").fill("REC-AUDIT");
     await rows.nth(1).locator("[name=quantity]").fill("2");
@@ -207,4 +209,41 @@ for(const lang of ["es","en"]){
     await expect(f.locator(".recipe-area-option").nth(1).locator("[data-stage-weight]")).toHaveAttribute("aria-invalid","true");
     await expect(f.locator(".recipe-area-option").nth(0).locator("[data-stage-weight]")).not.toHaveAttribute("aria-invalid","true");
   });
+}
+
+for(const lang of ["es","en"]){
+ test(`CHG304 ${lang} order snapshot, cancellation retry and service execution boundary`,async({page})=>{
+  const requests=[];
+  await page.route('**/v1/sales/orders/scoped-order/cancel',route=>{requests.push({headers:route.request().headers(),body:route.request().postDataJSON()});return requests.length===3?route.fulfill({status:422,json:{error:{code:'validation_failed',message:'PRIVATE SQL',details:{issues:[{loc:['body','reason'],type:'string_too_short',msg:'PRIVATE SQL',ctx:{min_length:3}}]}}}}):route.fulfill({status:503,json:{error:{code:'authority_unavailable',message:'PRIVATE SQL'}}});});
+  await page.evaluate(lang=>{
+   const a=window.frontendAudit;a.state.lang=lang;
+   a.state.sessionApi.data.permissions=[...a.state.sessionApi.data.permissions,'sales.order.cancel'];
+   const item={id:'scoped-order',code:'ORDER-SCOPE',status:'confirmed',quote_id:'quote',quote_code:'QUOTE',customer_code:'CLI',customer_name:'Customer',currency:'MXN',division_ref_id:'div-a',society_ref_id:'soc-a',commercial_terms_snapshot:{division:{code:'DIV-A',name:'Division <script>unsafe</script>'},terms_revision:2,values:{currency:'MXN',payment_terms:'cash',credit_limit:'0.00'}},lines:[]};
+   const record=a.mapApiSalesOrder(item);if(!a.renderSalesOrderCard(record).includes(lang==='es'?'División y condiciones':'Division and terms'))throw new Error('Missing contextual action label');a.mockDb.saveModuleRecords('ventas',[record]);a.openSalesOrderFulfillmentModal(a.modules.find(m=>m.id==='ventas'),record.id);
+  },lang);
+  const form=page.locator('[data-scoped-order]');await expect(form.locator('[data-order-context]')).toContainText('DIV-A');await expect(form.locator('script')).toHaveCount(0);await expect(form.locator('select')).toHaveCount(0);
+  await expect(form.locator('[name=reason]')).toHaveAttribute('maxlength','500');await expect(form.locator('[name=reason]')).toHaveAttribute('minlength','3');
+  await form.locator('[name=reason]').fill('Cancelación de prueba');await form.locator('[type=submit]').click();await expect(form.locator('[type=submit]')).toBeEnabled();await expect(form.locator('[name=reason]')).toHaveValue('Cancelación de prueba');await expect(form).not.toContainText('PRIVATE SQL');await form.locator('[type=submit]').click();await expect.poll(()=>requests.length).toBe(2);expect(requests[0].headers['idempotency-key']).toBe(requests[1].headers['idempotency-key']);await expect(form.locator('[type=submit]')).toBeEnabled();await form.locator('[type=submit]').click();await assertField(form,'[name=reason]','Cancelación de prueba');
+  await page.evaluate(()=>{const a=window.frontendAudit;const order=a.mockDb.findModuleRecord('ventas','scoped-order');a.closeModal();a.state.sessionApi.data.permissions=a.state.sessionApi.data.permissions.filter(p=>!p.startsWith('sales.service_order.'));a.renderSalesServiceOrderModal({...order,id:'service',recordType:'serviceOrder',status:'draft'});});
+  await expect(page.locator('#modalContent [data-order-context]')).toContainText('MXN');await expect(page.locator('#modalContent form')).toHaveCount(0);await expect(page.locator('[data-service-transition]')).toHaveCount(0);
+  await page.locator('#modalContent').evaluate(n=>n.style.width='320px');expect(await page.locator('[data-order-context]').evaluate(n=>n.scrollWidth<=n.clientWidth)).toBe(true);
+  await page.screenshot({path:test.info().outputPath('order-context.png'),fullPage:true});
+ });
+}
+
+for(const lang of ['es','en']){
+ test(`CHG305 ${lang} scoped service workers, assignment retry and cost feedback`,async({page})=>{
+  const queries=[],requests=[];
+  await page.route('**/v1/sales/service-orders/service-scope/eligible-workers?*',route=>{queries.push(new URL(route.request().url()).searchParams.get('q'));return route.fulfill({json:{data:[{id:'worker-a',employee_number:'EMP-A',full_name:'Worker A',position_name:'Role A',division_ref_id:'division-a'}],has_more:false}});});
+  await page.route('**/v1/sales/service-orders/service-scope/transitions/assign',route=>{requests.push({headers:route.request().headers(),payload:route.request().postDataJSON()});return route.fulfill({status:503,json:{error:{code:'authority_unavailable',message:'PRIVATE SQL'}}});});
+  await page.evaluate(lang=>{const a=window.frontendAudit;a.state.lang=lang;const record={id:'service-scope',code:'OS-SCOPE',status:'planned',fields:{divisionRefId:'division-a',societyRefId:'society-a',productServiceName:'Service',commercialTermsSnapshot:{division:{code:'DIV-A',name:'Division A'},terms_revision:2,values:{currency:'USD',payment_terms:'cash',credit_limit:'0'}}}};window.scopedService=record;a.renderSalesServiceOrderModal(record);a.openSalesServiceTransitionModal(record,'assign');},lang);
+  const form=page.locator('#serviceTransitionForm');await expect(form.locator('[name=responsible_worker_id] option[value=worker-a]')).toHaveCount(1);
+  await form.locator('[data-worker-query]').fill('Worker');await form.locator('[data-worker-find]').click();await expect.poll(()=>queries.includes('Worker')).toBe(true);
+  await form.locator('[name=responsible_worker_id]').selectOption('worker-a');await form.locator('[type=submit]').click();await expect(form.locator('[type=submit]')).toBeEnabled();await expect(form.locator('[name=responsible_worker_id]')).toHaveValue('worker-a');await form.locator('[type=submit]').click();await expect.poll(()=>requests.length).toBe(2);expect(requests[0].headers['idempotency-key']).toBe(requests[1].headers['idempotency-key']);expect(requests[0].payload).toEqual({responsible_worker_id:'worker-a'});await expect(form).not.toContainText('PRIVATE SQL');
+  await page.route('**/v1/sales/service-orders/service-scope/cost-entries',route=>route.fulfill({status:422,json:{detail:[{loc:['body','unit_cost'],type:'greater_than_equal',msg:'PRIVATE SQL',ctx:{ge:0}}]}}));
+  await page.evaluate(()=>{window.scopedService.status='in_progress';window.scopedService.fields.currency='USD';window.frontendAudit.state.sessionApi.data.scope={version:2,divisions:[{id:'division-a',society_id:'society-a'}],societies:[{id:'society-a',base_currency:'USD'}]};window.frontendAudit.renderSalesServiceOrderModal(window.scopedService);});
+  await expect(page.locator('[data-order-context]')).toContainText('USD');const costs=page.locator('#serviceOrderCostForm');await costs.locator('[name=description]').fill('Explicit cost');await costs.locator('[name=quantity]').fill('2');await costs.locator('[name=unit_cost]').fill('3');await costs.locator('[name=confirm_cost_currency]').check();await costs.locator('[type=submit]').click();await assertField(costs,'[name=unit_cost]','3');await expect(costs.locator('[name=description]')).toHaveValue('Explicit cost');
+  const times=page.locator('#serviceOrderTimeForm');await expect(times.locator('[name=worker_id] option[value=worker-a]')).toHaveCount(1);await expect(times.locator('[name=minutes]')).toHaveAttribute('max','1440');
+  await page.locator('#modalContent').evaluate(n=>n.style.width='320px');expect(await page.locator('.service-order-modal').evaluate(n=>n.scrollWidth<=n.clientWidth)).toBe(true);await page.screenshot({path:test.info().outputPath('service-context.png'),fullPage:true});
+ });
 }

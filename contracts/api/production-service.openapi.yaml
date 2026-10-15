@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ERClave Production Service API
-  version: 0.2.0
+  version: 0.3.0
   summary: Product, recipe, production order and machine APIs; labor catalogs belong to hr-service.
 servers:
 - url: https://api.eslaclave.com
@@ -13,42 +13,882 @@ tags:
 - name: Orders
 - name: Machines
 paths:
-  /v1/production/orders/{order_id}/service-evidence/{phase}:
-    post:
-      x-required-module: production
-      x-permissions:
-      - production.order.start
-      - production.order.wait_resources
-      - production.order_stage.complete
-      operationId: saveProductionServiceEvidence
-      summary: Record immutable service start or finish evidence
-      description: Only service recipes. Start requires production.order.start or production.order.wait_resources;
-        finish requires production.order_stage.complete. Written description is required;
-        up to three optional attachments. Retry with identical content returns the recorded
-        evidence. All attachments expire 365 days after upload; written evidence remains.
-        Images are normalized to metadata-free WebP <=307200 bytes, documents <=2097152
-        bytes.
+  /v1/production/orders/{order_id}/reservation-context:
+    get:
+      tags:
+      - Organization assignments
+      summary: Reservation Context
+      operationId: reservation_context_v1_production_orders__order_id__reservation_context_get
       parameters:
-      - &id001
-        name: order_id
+      - name: order_id
         in: path
         required: true
         schema:
           type: string
-      - &id002
-        name: X-Tenant-Id
-        in: header
+          maxLength: 40
+          title: Order Id
+      - name: line_id
+        in: query
         required: true
         schema:
           type: string
+          minLength: 1
+          maxLength: 160
+          title: Line Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionReservationContextResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [production.order.release]
+  /v1/production/orders/{order_id}/resources/{resource_id}:
+    patch:
+      summary: Update Order Resource Actual
+      operationId: update_order_resource_actual_v1_production_orders__order_id__resources__resource_id__patch
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Resource Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionOrderResourceUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrderResourceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [production.order.update]
+  /v1/production/finished-goods-candidates/{order_id}:
+    get:
+      summary: Get Finished Goods Candidate
+      operationId: get_finished_goods_candidate_v1_production_finished_goods_candidates__order_id__get
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinishedGoodsCandidateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [inventory.finished_goods_receipt.read, inventory.finished_goods_receipt.receive]
+  /v1/production/organization/divisions:
+    get:
+      tags:
+      - Organization assignments
+      summary: Divisions
+      operationId: divisions_v1_production_organization_divisions_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionChoicesResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+      x-required-module: production
+      x-permissions: [production.machine.read, production.product_service.read]
+  /v1/production/machines/{machine_id}/division:
+    get:
+      tags:
+      - Organization assignments
+      summary: Machine Division
+      operationId: machine_division_v1_production_machines__machine_id__division_get
+      parameters:
+      - name: machine_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Machine Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineDivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+      x-required-module: production
+      x-permissions: [production.machine.read]
+    patch:
+      tags:
+      - Organization assignments
+      summary: Assign Machine
+      operationId: assign_machine_v1_production_machines__machine_id__division_patch
+      parameters:
+      - name: machine_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Machine Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MachineDivisionCommand'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineDivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+      x-required-module: production
+      x-permissions: [production.machine.update]
+  /v1/production/product-services/{product_service_id}/division-assignments:
+    get:
+      tags:
+      - Organization assignments
+      summary: Product Service Divisions
+      operationId: product_service_divisions_v1_production_product_services__product_service_id__division_assignments_get
+      parameters:
+      - name: product_service_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Product Service Id
+      - name: division_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 40
+          - type: 'null'
+          title: Division Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductServiceDivisionListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+      x-required-module: production
+      x-permissions: [production.product_service.read]
+  /v1/production/product-services/{product_service_id}/division-assignments/{division_id}:
+    put:
+      tags:
+      - Organization assignments
+      summary: Assign Item
+      operationId: assign_item_v1_production_product_services__product_service_id__division_assignments__division_id__put
+      parameters:
+      - name: product_service_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Product Service Id
+      - name: division_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Division Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductServiceDivisionCommand'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductServiceDivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are
+            preserved.
+      x-required-module: production
+      x-permissions: [production.product_service.update]
+  /v1/production/product-services/{product_service_id}/division-assignments/{division_id}/estimated-unit-cost:
+    put:
+      tags: [Organization assignments]
+      summary: Confirm or clear Division estimated unit cost in Society base currency
+      operationId: confirm_product_estimated_cost_v1_production_product_services__product_service_id__division_assignments__division_id__estimated_unit_cost_put
+      parameters:
+      - name: product_service_id
+        in: path
+        required: true
+        schema: {type: string, maxLength: 40}
+      - name: division_id
+        in: path
+        required: true
+        schema: {type: string, maxLength: 40}
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: {type: string, minLength: 8, maxLength: 160}
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema: {type: string, maxLength: 128}
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProductServiceEstimatedCostCommand'}
+      responses:
+        '200':
+          description: Assignment with updated cost, shared revision and confirmation timestamp.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductServiceDivisionResponse'}
+        '422': {description: Validation or Society-currency mismatch}
+        '403': {description: Division scope or permission denied}
+        '409': {description: Assignment revision or active-status conflict}
+      x-required-module: production
+      x-permissions: [production.product_service.update]
+  /v1/production/division-product-services/{product_service_id}/estimated-cost:
+    get:
+      tags: [Organization assignments]
+      summary: Read confirmed Division cost for Sales quote estimate
+      operationId: product_estimated_cost_v1_production_division_product_services__product_service_id__estimated_cost_get
+      parameters:
+      - name: product_service_id
+        in: path
+        required: true
+        schema: {type: string, maxLength: 40}
+      - name: division_id
+        in: query
+        required: true
+        schema: {type: string, minLength: 1, maxLength: 40}
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Null data if cost is unconfirmed, assignment inactive, or saved Society/currency no longer matches the current Division.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductServiceEstimatedCostResponse'}
+        '403': {description: Division scope or permission denied}
+        '404': {description: Product or service not found in tenant}
+      x-required-module: production
+      x-permissions: [production.product_service.read, sales.quote.update, sales.quote.submit, sales.quote.approve]
+  /v1/production/division-product-services:
+    get:
+      tags:
+      - Organization assignments
+      summary: Division Items
+      operationId: division_items_v1_production_division_product_services_get
+      parameters:
+      - name: division_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Division Id
+      - name: resource_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 40
+          - type: 'null'
+          title: Resource Id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibleProductServicesResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [production.product_service.read, sales.order.create, sales.order.fulfill, sales.quote.approve, sales.quote.submit, sales.quote.update, sales.service_order.accept, sales.service_order.assign, sales.service_order.cost.create, sales.service_order.evidence.create, sales.service_order.plan, sales.service_order.resume, sales.service_order.start, sales.service_order.submit_acceptance, sales.service_order.time.create]
+  /v1/production/orders/{order_id}/service-evidence/{phase}:
+    post:
+      summary: Save Service Evidence
+      operationId: save_service_evidence_v1_production_orders__order_id__service_evidence__phase__post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
       - name: phase
         in: path
         required: true
         schema:
-          type: string
           enum:
           - start
           - finish
+          type: string
+          title: Phase
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
@@ -57,194 +897,374 @@ paths:
               $ref: '#/components/schemas/ServiceEvidenceRequest'
       responses:
         '200':
-          description: Written evidence and metadata only; never attachment bytes
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ServiceEvidenceRead'
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
         '403':
-          description: Permission denied
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
         '409':
-          description: Product order, terminal order, missing start evidence or differing
-            immutable evidence
-        '413':
-          description: Request exceeds 21 MiB
-        '422':
-          description: Invalid description, file format or file limits
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [production.order.start, production.order.wait_resources, production.order_stage.complete]
   /v1/production/orders/{order_id}/service-evidence/files/{file_id}:
     get:
-      x-required-module: production
-      x-permissions:
-      - production.order.read
-      operationId: downloadProductionServiceEvidence
-      summary: Download private unexpired evidence
-      description: Requires production.order.read and matching tenant. No public URL
-        or caching. Expired files are unavailable even before physical cleanup.
+      summary: Download Service Evidence
+      operationId: download_service_evidence_v1_production_orders__order_id__service_evidence_files__file_id__get
       parameters:
-      - *id001
-      - *id002
-      - name: file_id
-        in: path
-        required: true
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Attachment
-          content:
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-        '403':
-          description: Permission denied
-        '404':
-          description: Not found for tenant/order
-        '410':
-          description: Retention expired
-  /v1/production/warehouse-material-requests:
-    get:
-      tags:
-      - Orders
-      operationId: listProductionWarehouseMaterials
-      summary: Pending production material issues, minimal tenant-scoped warehouse projection.
-      x-required-module: production
-      x-required-modules:
-      - production
-      - inventory
-      x-permissions: [inventory.movement.read]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - name: limit
-        in: query
-        schema:
-          type: integer
-          default: 25
-          minimum: 1
-          maximum: 100
-      - name: offset
-        in: query
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-      responses:
-        '200':
-          description: Pending issues with limit/offset pagination.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WarehouseMaterialListResponse'
-        '403':
-          description: Permission, tenant or module denied.
-        '409':
-          description: Invalid state, missing reservations or competing command.
-  /v1/production/orders/{order_id}/issue-materials:
-    post:
-      tags:
-      - Orders
-      operationId: issueProductionWarehouseMaterials
-      summary: Warehouse confirms complete material issue before product or service production starts.
-      x-required-module: production
-      x-required-modules:
-      - production
-      - inventory
-      x-permissions: [inventory.movement.create]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/IdempotencyKey'
       - name: order_id
         in: path
         required: true
         schema:
           type: string
+          title: Order Id
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: File Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Durable issue result; needs_reconciliation remains retryable.
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [production.order.read]
+  /v1/production/warehouse-material-requests:
+    get:
+      summary: Warehouse Material Requests
+      operationId: warehouse_material_requests_v1_production_warehouse_material_requests_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseMaterialListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [inventory.movement.read]
+  /v1/production/orders/{order_id}/issue-materials:
+    post:
+      summary: Issue Order Materials
+      operationId: issue_order_materials_v1_production_orders__order_id__issue_materials_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/WarehouseIssueRequest'
+              - type: 'null'
+              title: Payload
+      responses:
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WarehouseMaterialResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
         '403':
-          description: Permission, tenant or module denied.
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
         '409':
-          description: Invalid state, missing reservations or competing command.
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WarehouseIssueRequest'
-      description: No business payload. Stable order/reservation keys recover crashes and repeated calls without duplicate movements. Starting/resuming
-        never consumes. Issuance does not change order status. Actor and designated order owner are audited.
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [inventory.movement.create]
   /v1/production/reports/{report_code}/export:
     get:
-      tags:
-      - Reports
-      operationId: exportProductionStandardReport
-      summary: Export a fixed Production report as UTF-8 CSV.
-      x-required-module: production
-      x-permissions: [production.product_service.read, production.recipe.read, production.order.read, production.machine.read]
+      summary: Export Report
+      operationId: export_report_v1_production_reports__report_code__export_get
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
       - name: report_code
         in: path
         required: true
         schema:
           type: string
+          title: Report Code
       - name: lang
         in: query
+        required: false
         schema:
-          type: string
           enum:
           - es
           - en
+          type: string
           default: es
+          title: Lang
       - name: date_from
         in: query
+        required: false
         schema:
-          type: string
-          format: date
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Date From
       - name: date_to
         in: query
+        required: false
         schema:
-          type: string
-          format: date
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Date To
       - name: status
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
       - name: priority
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Priority
       - name: type
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Type
       - name: q
         in: query
+        required: false
         schema:
-          type: string
-          maxLength: 120
+          anyOf:
+          - type: string
+            maxLength: 120
+          - type: 'null'
+          title: Q
       - name: product_id
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Product Id
       - name: area_id
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Area Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: CSV export.
-        '204':
-          description: No rows matched the filters.
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [production.machine.read, production.order.read, production.product_service.read, production.recipe.read]
   /v1/production/product-services:
     get:
       tags:
@@ -658,11 +1678,40 @@ paths:
       operationId: validateProductionResources
       summary: Validate resources before creating or releasing an order.
       x-required-module: production
-      x-permissions: [production.order.validate]
+      x-permissions: [production.order.validate, production.order.release]
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
@@ -678,12 +1727,8 @@ paths:
                 $ref: '#/components/schemas/ResourceValidationResponse'
   /v1/production/orders:
     get:
-      tags:
-      - Orders
-      operationId: listProductionOrders
       summary: List Orders
-      x-required-module: production
-      x-permissions: [production.order.read]
+      operationId: list_orders_v1_production_orders_get
       parameters:
       - name: limit
         in: query
@@ -739,20 +1784,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
         '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
         '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
         '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
-    post:
-      tags:
-      - Orders
-      operationId: createProductionOrder
-      summary: Create Order
+          description: Stable error envelope; no partial document effect.
       x-required-module: production
-      x-permissions: [production.order.release]
+      x-permissions: [production.order.read]
+    post:
+      summary: Create Order
+      operationId: create_order_v1_production_orders_post
       parameters:
       - name: X-Tenant-Id
         in: header
@@ -805,159 +1851,264 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
         '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
         '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
         '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
-      description: HR and resource validation precede creation. Failed creation records a recovery owned by its actor; rollback releases only
-        that failed source and prevents late reservation writes.
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [production.order.release]
   /v1/production/finished-goods-candidates:
     get:
-      tags:
-      - Orders
-      operationId: listFinishedGoodsCandidates
-      summary: List the minimum completed-order projection needed for Inventory receipt.
-      x-required-module: production
-      x-permissions: [inventory.finished_goods_receipt.read, inventory.finished_goods_receipt.receive]
-      x-permission-mode: any
+      summary: List Finished Goods Candidates
+      operationId: list_finished_goods_candidates_v1_production_finished_goods_candidates_get
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/Limit'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Minimal finished-goods receipt candidates.
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FinishedGoodsCandidateListResponse'
-  /v1/production/finished-goods-candidates/{id}:
-    get:
-      tags:
-      - Orders
-      operationId: getFinishedGoodsCandidate
-      summary: Get one minimum completed-order projection for Inventory validation.
-      x-required-module: production
-      x-permissions: [inventory.finished_goods_receipt.read, inventory.finished_goods_receipt.receive]
-      x-permission-mode: any
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Minimal finished-goods receipt candidate.
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FinishedGoodsCandidateResponse'
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [inventory.finished_goods_receipt.read, inventory.finished_goods_receipt.receive]
   /v1/production/order-requests:
     get:
-      tags:
-      - Orders
-      operationId: listProductionOrderRequests
-      summary: List authoritative Sales requests awaiting Production planning.
-      x-implementation-status: implemented
-      x-required-module: production
-      x-permissions: [production.order.read]
+      summary: List Sales Order Requests
+      operationId: list_sales_order_requests_v1_production_order_requests_get
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
       - name: status
         in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: q
+        in: query
+        required: false
         schema:
           type: string
-          enum:
-          - pending_configuration
-          - converted
-          - cancelled
+          maxLength: 120
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Production requests.
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductionSalesRequestListResponse'
-    post:
-      tags:
-      - Orders
-      operationId: createProductionOrderRequest
-      summary: Register an authoritative Sales request without releasing a Production order.
-      x-implementation-status: implemented
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
       x-required-module: production
-      x-permissions: [sales.order.fulfill]
+      x-permissions: [production.order.read]
+      x-implementation-status: implemented
+      description: CHG315 authenticated Sales source, current Division authorization
+        and stable request/order relationship. No client-supplied organizational context.
+    post:
+      summary: Create Sales Order Request
+      operationId: create_sales_order_request_v1_production_order_requests_post
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProductionOrderRequest'
+              $ref: '#/components/schemas/ProductionSalesRequestCreate'
       responses:
         '201':
-          description: Production request registered.
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductionSalesRequestResponse'
-  /v1/production/orders/{id}/resources/{resource_id}:
-    patch:
-      tags:
-      - Orders
-      operationId: updateProductionOrderResourceActual
-      summary: Record actual labor or machine usage for operational costing.
-      x-required-module: production
-      x-permissions: [production.order.update]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
-      - name: resource_id
-        in: path
-        required: true
-        schema:
-          type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProductionOrderResourceUpdateRequest'
-      responses:
-        '200':
-          description: Actual resource usage recorded.
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductionOrderResourceResponse'
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: production
+      x-permissions: [sales.order.fulfill]
+      x-implementation-status: implemented
+      description: CHG315 authenticated Sales source, current Division authorization
+        and stable request/order relationship. No client-supplied organizational context.
   /v1/production/order-stages/{stage_id}:
     patch:
-      tags:
-      - Orders
-      operationId: updateProductionOrderStage
-      summary: Update order stage.
-      description: Starting a stage requires its production order to already be in_progress. The client must first change the order status so
-        Inventory can confirm all material issues; this endpoint never bypasses that rule.
-      x-required-module: production
-      x-permissions: [production.order_stage.block, production.order_stage.complete, production.order_stage.reset, production.order_stage.skip, production.order_stage.update]
-      x-permission-mode: by-requested-status
+      summary: Update Order Stage
+      operationId: update_order_stage_v1_production_order_stages__stage_id__patch
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdempotencyKey'
       - name: stage_id
         in: path
         required: true
         schema:
           type: string
+          title: Stage Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
@@ -966,11 +2117,29 @@ paths:
               $ref: '#/components/schemas/OrderStageUpdateRequest'
       responses:
         '200':
-          description: Stage updated.
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderStageResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [production.order_stage.block, production.order_stage.complete, production.order_stage.reset, production.order_stage.skip, production.order_stage.update]
   /v1/production/machines:
     get:
       tags:
@@ -980,10 +2149,46 @@ paths:
       x-required-module: production
       x-permissions: [production.machine.read]
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/Search'
-      - $ref: '#/components/parameters/Status'
-      - $ref: '#/components/parameters/CorrelationId'
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Q
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
           description: Machines.
@@ -999,9 +2204,38 @@ paths:
       x-required-module: production
       x-permissions: [production.machine.create]
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
@@ -1033,7 +2267,7 @@ paths:
           title: Machine Id
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1069,11 +2303,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
         '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Authorization, workflow precondition, or recoverable dependency
+            error; use error.code and details.
         '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Authorization, workflow precondition, or recoverable dependency
+            error; use error.code and details.
         '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Authorization, workflow precondition, or recoverable dependency
+            error; use error.code and details.
       x-implementation-status: implemented
     patch:
       tags:
@@ -1091,7 +2328,7 @@ paths:
           title: Machine Id
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1107,7 +2344,7 @@ paths:
           title: Authorization
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1141,25 +2378,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
         '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Authorization, workflow precondition, or recoverable dependency
+            error; use error.code and details.
         '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Authorization, workflow precondition, or recoverable dependency
+            error; use error.code and details.
         '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Authorization, workflow precondition, or recoverable dependency
+            error; use error.code and details.
       x-implementation-status: implemented
-      description: A machine held by Maintenance cannot have its status changed manually; Maintenance must release the hold.
+      description: A machine held by Maintenance cannot have its status changed manually;
+        Maintenance must release the hold.
   /v1/production/machines/{machine_id}/maintenance-block:
     post:
       tags:
       - Machines
       operationId: blockMachineForMaintenance
-      summary: Mark a machine in maintenance and pause an eligible linked Production order.
+      summary: Mark a scoped, dimensioned machine in maintenance and pause an eligible linked Production order.
       x-required-module: production
       x-permissions: [maintenance.order.reopen, maintenance.order.request]
       x-permission-mode: any
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
       - $ref: '#/components/parameters/IdempotencyKey'
+      - name: Authorization
+        in: header
+        required: false
+        schema: {type: string}
       - name: machine_id
         in: path
         required: true
@@ -1174,18 +2419,25 @@ paths:
       responses:
         '200':
           description: Machine blocked and Production order left waiting or paused.
+        '403': {description: Current organization scope does not include the machine Division.}
+        '404': {description: Machine not found in the tenant.}
+        '409': {description: Legacy machine requires full scope or transition conflicts with durable state.}
   /v1/production/machines/{machine_id}/maintenance-release:
     post:
       tags:
       - Machines
       operationId: releaseMachineFromMaintenance
-      summary: Return a maintained machine to active without automatically resuming Production.
+      summary: Release a machine within current Division scope; legacy machines require full scope. Production does not automatically resume.
       x-required-module: production
       x-permissions: [maintenance.order.cancel, maintenance.order.resolve]
       x-permission-mode: any
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
       - $ref: '#/components/parameters/IdempotencyKey'
+      - name: Authorization
+        in: header
+        required: false
+        schema: {type: string}
       - name: machine_id
         in: path
         required: true
@@ -1200,14 +2452,13 @@ paths:
       responses:
         '200':
           description: Machine released; Production remains paused or waiting.
+        '403': {description: Current organization scope does not include the machine Division.}
+        '404': {description: Machine not found in the tenant.}
+        '409': {description: Machine release conflicts with durable state or legacy history requires review.}
   /v1/production/orders/{order_id}:
     get:
-      tags:
-      - Orders
-      operationId: getProductionOrder
       summary: Get Order
-      x-required-module: production
-      x-permissions: [production.order.read]
+      operationId: get_order_v1_production_orders__order_id__get
       parameters:
       - name: order_id
         in: path
@@ -1252,24 +2503,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
         '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
         '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
         '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [production.order.read]
   /v1/production/orders/{order_id}/status:
     patch:
-      tags:
-      - Orders
-      operationId: updateProductionOrderStatus
       summary: Update Order Status
-      description: Starting/resuming requires issued materials, active machines without maintenance holds, and currently eligible HR assignees.
-        Workflow errors include stable codes and transition context.
-      x-required-module: production
-      x-permissions: [production.order.cancel, production.order.complete, production.order.pause, production.order.release, production.order.resume, production.order.send_to_validation, production.order.start, production.order.wait_resources]
-      x-permission-mode: by-requested-transition
+      description: Starting/resuming requires issued materials, active machines without maintenance holds, and currently eligible HR assignees. Organizational scope
+        is checked before effects.
+      operationId: update_order_status_v1_production_orders__order_id__status_patch
       parameters:
       - name: order_id
         in: path
@@ -1328,13 +2579,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
         '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
         '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
         '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
+          description: Stable error envelope; no partial document effect.
+      x-required-module: production
+      x-permissions: [production.order.cancel, production.order.complete, production.order.pause, production.order.release, production.order.resume, production.order.send_to_validation, production.order.start, production.order.wait_resources]
   /v1/production/returnable-materials:
     get:
       summary: Returnable Materials
@@ -1391,18 +2647,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
         '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
         '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
         '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
+          description: Stable error envelope; no partial document effect.
       x-required-module: production
       x-permissions: [inventory.movement.read, production.order.update]
-      x-required-modules:
-      - production
-      - inventory
   /v1/production/material-returns/validate:
     post:
       summary: Validate Material Return
@@ -1448,18 +2704,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
         '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
         '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
         '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
+          description: Stable error envelope; no partial document effect.
       x-required-module: production
       x-permissions: [inventory.movement.create, production.order.update]
-      x-required-modules:
-      - production
-      - inventory
   /v1/production/material-returns/reconcile:
     post:
       summary: Reconcile Material Return
@@ -1513,18 +2769,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
         '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
         '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
         '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
+          description: Stable error envelope; no partial document effect.
       x-required-module: production
       x-permissions: [inventory.movement.create]
-      x-required-modules:
-      - production
-      - inventory
   /v1/production/failed-order-creations:
     get:
       summary: Failed Order Creations
@@ -1706,6 +2962,568 @@ paths:
       x-implementation-status: implemented
       x-required-module: production
       x-permissions: [production.order.release]
+  /v1/production/division-machines:
+    get:
+      tags:
+      - Organization assignments
+      summary: Division Machines
+      description: Confirmed Society-base tariffs and globally committed machine minutes;
+        read only.
+      operationId: division_machines_v1_production_division_machines_get
+      parameters:
+      - name: division_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Division Id
+      - name: planned_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+          title: Planned Date
+      - name: resource_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 40
+          - type: 'null'
+          title: Resource Id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibleMachinesResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: production
+      x-permissions: [production.machine.read, production.order.validate, production.order.release]
+  /v1/production/division-recipes:
+    get:
+      tags:
+      - Organization assignments
+      summary: Division Recipes
+      operationId: division_recipes_v1_production_division_recipes_get
+      parameters:
+      - name: division_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Division Id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibleRecipesResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: production
+      x-permissions: [production.order.validate, production.order.release, production.recipe.read]
+  /v1/production/order-requests/{request_id}:
+    get:
+      summary: Read Request
+      operationId: read_request_v1_production_order_requests__request_id__get
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionSalesRequestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: production
+      x-permissions: [production.order.read, production.order.release, sales.order.read, sales.order.fulfill, sales.order.cancel]
+      x-implementation-status: implemented
+      description: CHG315 authenticated Sales source, current Division authorization
+        and stable request/order relationship. No client-supplied organizational context.
+  /v1/production/order-requests/{request_id}/production-status:
+    get:
+      summary: Request Status
+      operationId: request_status_v1_production_order_requests__request_id__production_status_get
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionSalesStatusResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: production
+      x-permissions: [production.order.read, production.order.release, sales.order.read, sales.order.fulfill, sales.order.cancel]
+      x-implementation-status: implemented
+      description: CHG315 authenticated Sales source, current Division authorization
+        and stable request/order relationship. No client-supplied organizational context.
+  /v1/production/order-requests/{request_id}/recipes:
+    get:
+      summary: Request Recipes
+      operationId: request_recipes_v1_production_order_requests__request_id__recipes_get
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 120
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesRequestRecipesResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: production
+      x-permissions: [production.order.validate, production.order.release]
+      x-implementation-status: implemented
+      description: CHG315 authenticated Sales source, current Division authorization
+        and stable request/order relationship. No client-supplied organizational context.
+  /v1/production/order-requests/{request_id}/resource-validations:
+    post:
+      summary: Request Validation
+      operationId: request_validation_v1_production_order_requests__request_id__resource_validations_post
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalesProductionValidationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceValidationResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: production
+      x-permissions: [production.order.validate, production.order.release]
+      x-implementation-status: implemented
+      description: CHG315 authenticated Sales source, current Division authorization
+        and stable request/order relationship. No client-supplied organizational context.
+  /v1/production/order-requests/{request_id}/orders:
+    post:
+      summary: Convert Request
+      operationId: convert_request_v1_production_order_requests__request_id__orders_post
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SalesProductionOrderCreateRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: production
+      x-permissions: [production.order.release]
+      x-implementation-status: implemented
+      description: CHG315 authenticated Sales source, current Division authorization
+        and stable request/order relationship. No client-supplied organizational context.
+  /v1/production/order-requests/{request_id}/cancel:
+    post:
+      summary: Cancel Request
+      operationId: cancel_request_v1_production_order_requests__request_id__cancel_post
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionSalesRequestCancel'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionSalesRequestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: production
+      x-permissions: [sales.order.cancel]
+      x-implementation-status: implemented
+      description: CHG315 authenticated Sales source, current Division authorization
+        and stable request/order relationship. No client-supplied organizational context.
 components:
   securitySchemes:
     bearerAuth:
@@ -1767,6 +3585,429 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    ServiceEvidenceFileRequest:
+      properties:
+        filename:
+          type: string
+          maxLength: 180
+          minLength: 1
+          title: Filename
+        content_base64:
+          type: string
+          maxLength: 6990508
+          minLength: 1
+          title: Content Base64
+      additionalProperties: false
+      type: object
+      required:
+      - filename
+      - content_base64
+      title: ServiceEvidenceFileRequest
+    ProductionSalesRequestCreate:
+      properties:
+        sales_order_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Sales Order Id
+        sales_order_line_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Sales Order Line Id
+        product_service_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Product Service Id
+        quantity:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
+          title: Quantity
+        unit:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Unit
+        requested_due_date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Requested Due Date
+      additionalProperties: false
+      type: object
+      required:
+      - sales_order_id
+      - sales_order_line_id
+      - product_service_id
+      - quantity
+      - unit
+      title: ProductionSalesRequestCreate
+    ProductionReservationContextResponse:
+      properties:
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/ProductionReservationContextRead'
+          - type: 'null'
+      type: object
+      title: ProductionReservationContextResponse
+    ProductionReservationContextRead:
+      properties:
+        order_id:
+          type: string
+          title: Order Id
+        organization_context:
+          $ref: '#/components/schemas/OperationalContext'
+        allocation:
+          $ref: '#/components/schemas/CreationAllocationRead'
+      type: object
+      required:
+      - order_id
+      - organization_context
+      - allocation
+      title: ProductionReservationContextRead
+    OperationalContext:
+      properties:
+        cost_currency:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z]{3}$
+          - type: 'null'
+          title: Cost Currency
+        division_ref_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Division Ref Id
+        society_ref_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Society Ref Id
+        division_code:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Division Code
+        division_name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Division Name
+      additionalProperties: false
+      type: object
+      required:
+      - division_ref_id
+      - society_ref_id
+      - division_code
+      - division_name
+      title: OperationalContext
+    FinishedGoodsCandidateRead:
+      properties:
+        order:
+          $ref: '#/components/schemas/FinishedGoodsOrderProjection'
+        product:
+          $ref: '#/components/schemas/FinishedGoodsProductProjection'
+      type: object
+      required:
+      - order
+      - product
+      title: FinishedGoodsCandidateRead
+    CreationAllocationRead:
+      properties:
+        line_id:
+          type: string
+          title: Line Id
+        inventory_item_id:
+          type: string
+          title: Inventory Item Id
+        warehouse_id:
+          type: string
+          title: Warehouse Id
+        quantity:
+          type: string
+          title: Quantity
+        unit:
+          type: string
+          title: Unit
+      type: object
+      required:
+      - line_id
+      - inventory_item_id
+      - warehouse_id
+      - quantity
+      - unit
+      title: CreationAllocationRead
+    AssignmentPage:
+      properties:
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - total
+      - limit
+      - offset
+      title: AssignmentPage
+    DivisionChoice:
+      properties:
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        society_id:
+          type: string
+          title: Society Id
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - society_id
+      title: DivisionChoice
+    DivisionChoicesResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DivisionChoice'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: DivisionChoicesResponse
+    EligibleProductService:
+      properties:
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        base_unit:
+          type: string
+          title: Base Unit
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        cost_center_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Center Ref Id
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - base_unit
+      - division_ref_id
+      title: EligibleProductService
+    EligibleProductServicesResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/EligibleProductService'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: EligibleProductServicesResponse
+    MachineDivisionCommand:
+      properties:
+        division_ref_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Division Ref Id
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+      additionalProperties: false
+      type: object
+      required:
+      - division_ref_id
+      - expected_revision
+      title: MachineDivisionCommand
+    MachineDivisionRead:
+      properties:
+        machine_id:
+          type: string
+          title: Machine Id
+        division_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Division Ref Id
+        revision:
+          type: integer
+          title: Revision
+      type: object
+      required:
+      - machine_id
+      - revision
+      title: MachineDivisionRead
+    MachineDivisionResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/MachineDivisionRead'
+      type: object
+      required:
+      - data
+      title: MachineDivisionResponse
+    ProductServiceDivisionCommand:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+          default: active
+        cost_center_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Cost Center Ref Id
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      title: ProductServiceDivisionCommand
+    ProductServiceDivisionListResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ProductServiceDivisionRead'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: ProductServiceDivisionListResponse
+    ProductServiceDivisionRead:
+      properties:
+        product_service_id:
+          type: string
+          title: Product Service Id
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        cost_center_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Center Ref Id
+        cost_center_snapshot:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Cost Center Snapshot
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+        revision:
+          type: integer
+          title: Revision
+        estimated_unit_cost:
+          type: [string, 'null']
+          description: Decimal6, confirmed for this Division; null for legacy or unconfirmed assignment.
+        cost_currency:
+          type: [string, 'null']
+          pattern: '^[A-Z]{3}$'
+        cost_society_ref_id:
+          type: [string, 'null']
+        cost_confirmed_at:
+          type: [string, 'null']
+          format: date-time
+      type: object
+      required:
+      - product_service_id
+      - division_ref_id
+      - status
+      - revision
+      title: ProductServiceDivisionRead
+    ProductServiceEstimatedCostCommand:
+      type: object
+      additionalProperties: false
+      required: [expected_revision, estimated_unit_cost, cost_currency]
+      properties:
+        expected_revision: {type: integer, minimum: 1}
+        estimated_unit_cost:
+          anyOf:
+          - {type: string, pattern: '^\d{1,12}(\.\d{1,6})?$'}
+          - {type: number, minimum: 0, exclusiveMaximum: 1000000000000}
+          - {type: 'null'}
+          description: Use explicit null with null cost_currency to clear.
+        cost_currency:
+          type: [string, 'null']
+          pattern: '^[A-Z]{3}$'
+    ProductServiceEstimatedCostRead:
+      type: object
+      required: [product_service_id, division_ref_id, society_ref_id, cost_currency, estimated_unit_cost, assignment_revision, confirmed_at]
+      properties:
+        product_service_id: {type: string}
+        division_ref_id: {type: string}
+        society_ref_id: {type: string}
+        cost_currency: {type: string, pattern: '^[A-Z]{3}$'}
+        estimated_unit_cost: {type: string, description: Decimal6 in Society base currency}
+        assignment_revision: {type: integer, minimum: 1}
+        confirmed_at: {type: string, format: date-time}
+    ProductServiceEstimatedCostResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          anyOf:
+          - {$ref: '#/components/schemas/ProductServiceEstimatedCostRead'}
+          - {type: 'null'}
+    ProductServiceDivisionResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ProductServiceDivisionRead'
+      type: object
+      required:
+      - data
+      title: ProductServiceDivisionResponse
     WarehouseMaterialLine:
       properties:
         id:
@@ -2302,33 +4543,51 @@ components:
         reason:
           type: string
     ResourceValidationRequest:
+      properties:
+        division_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Division Ref Id
+        recipe_version_id:
+          type: string
+          title: Recipe Version Id
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+        unit:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Unit
+        planned_for:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Planned For
+        planned_start_date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Planned Start Date
+        planned_duration_days:
+          type: integer
+          maximum: 365.0
+          minimum: 1.0
+          title: Planned Duration Days
+          default: 1
+      additionalProperties: false
       type: object
       required:
       - recipe_version_id
       - quantity
       - unit
-      properties:
-        recipe_version_id:
-          type: string
-        quantity:
-          type: number
-        unit:
-          type: string
-        planned_for:
-          type:
-          - string
-          - 'null'
-          format: date
-        planned_start_date:
-          type:
-          - string
-          - 'null'
-          format: date
-        planned_duration_days:
-          type: integer
-          minimum: 1
-          maximum: 365
-          default: 1
+      title: ResourceValidationRequest
     ResourceValidationResponse:
       type: object
       properties:
@@ -2471,6 +4730,45 @@ components:
       - data
       title: ProductionOrderListResponse
     FinishedGoodsOrderProjection:
+      properties:
+        original_quantity:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Quantity
+        original_unit_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Unit Cost
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        product_service_id:
+          type: string
+          title: Product Service Id
+        quantity:
+          type: number
+          title: Quantity
+        unit:
+          type: string
+          title: Unit
+        status:
+          type: string
+          const: completed
+          title: Status
+        unit_cost:
+          type: number
+          title: Unit Cost
       type: object
       required:
       - id
@@ -2480,23 +4778,7 @@ components:
       - unit
       - status
       - unit_cost
-      properties:
-        id:
-          type: string
-        code:
-          type: string
-        product_service_id:
-          type: string
-        quantity:
-          type: number
-        unit:
-          type: string
-        status:
-          type: string
-          const: completed
-        unit_cost:
-          type: number
-          minimum: 0
+      title: FinishedGoodsOrderProjection
     FinishedGoodsProductProjection:
       type: object
       required:
@@ -2558,6 +4840,13 @@ components:
           $ref: '#/components/schemas/Page'
     ProductionOrderCreateRequest:
       properties:
+        division_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Division Ref Id
         recipe_version_id:
           type: string
           title: Recipe Version Id
@@ -2847,58 +5136,85 @@ components:
           type: string
           format: date
     ProductionSalesRequestRead:
+      properties:
+        original_quantity:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Quantity
+        production_order_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Production Order Id
+        production_order_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Production Order Ref Id
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
+        id:
+          type: string
+          title: Id
+        sales_order_id:
+          type: string
+          title: Sales Order Id
+        sales_order_line_id:
+          type: string
+          title: Sales Order Line Id
+        product_service_id:
+          type: string
+          title: Product Service Id
+        product_service_code:
+          type: string
+          title: Product Service Code
+        product_service_name:
+          type: string
+          title: Product Service Name
+        recipe_version_id:
+          type: string
+          title: Recipe Version Id
+        quantity:
+          type: number
+          title: Quantity
+        unit:
+          type: string
+          title: Unit
+        requested_due_date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Requested Due Date
+        status:
+          type: string
+          enum:
+          - pending_configuration
+          - converted
+          - cancelled
+          title: Status
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
       type: object
       required:
       - id
       - sales_order_id
       - sales_order_line_id
       - product_service_id
-      - product_code
-      - product_name
-      - recipe_id
+      - product_service_code
+      - product_service_name
       - recipe_version_id
-      - recipe_version
       - quantity
       - unit
       - status
       - created_at
-      properties:
-        id:
-          type: string
-        sales_order_id:
-          type: string
-        sales_order_line_id:
-          type: string
-        product_service_id:
-          type: string
-        product_code:
-          type: string
-        product_name:
-          type: string
-        recipe_id:
-          type: string
-        recipe_version_id:
-          type: string
-        recipe_version:
-          type: integer
-        quantity:
-          type: number
-        unit:
-          type: string
-        requested_due_date:
-          type:
-          - string
-          - 'null'
-          format: date
-        status:
-          type: string
-          enum:
-          - requested
-          - converted
-          - cancelled
-        created_at:
-          type: string
-          format: date-time
+      title: ProductionSalesRequestRead
     ProductionSalesRequestResponse:
       type: object
       required:
@@ -2907,14 +5223,20 @@ components:
         data:
           $ref: '#/components/schemas/ProductionSalesRequestRead'
     ProductionSalesRequestListResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ProductionSalesRequestRead'
+          type: array
+          title: Data
+        meta:
+          additionalProperties: true
+          type: object
+          title: Meta
       type: object
       required:
       - data
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProductionSalesRequestRead'
+      title: ProductionSalesRequestListResponse
     OrderStageUpdateRequest:
       type: object
       required:
@@ -3042,6 +5364,44 @@ components:
             type: object
             additionalProperties: true
     MachineCreateRequest:
+      properties:
+        code:
+          type: string
+          maxLength: 80
+          minLength: 1
+          title: Code
+        name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Name
+        machine_type:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Machine Type
+        area_ref_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Area Ref Id
+        area_name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Area Name
+        available_minutes_per_day:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Available Minutes Per Day
+        cost_per_minute:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
+          title: Cost Per Minute
+      additionalProperties: false
       type: object
       required:
       - code
@@ -3051,23 +5411,15 @@ components:
       - area_name
       - available_minutes_per_day
       - cost_per_minute
-      properties:
-        code:
-          type: string
-        name:
-          type: string
-        area_name:
-          type: string
-        area_ref_id:
-          type: string
-        machine_type:
-          type: string
-        available_minutes_per_day:
-          type: number
-        cost_per_minute:
-          type: number
+      title: MachineCreateRequest
     MachineUpdateRequest:
       properties:
+        cost_currency:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z]{3}$
+          - type: 'null'
+          title: Cost Currency
         name:
           anyOf:
           - type: string
@@ -3106,6 +5458,8 @@ components:
           anyOf:
           - type: number
             minimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
           - type: 'null'
           title: Cost Per Minute
         status:
@@ -3117,6 +5471,7 @@ components:
             - maintenance
           - type: 'null'
           title: Status
+      additionalProperties: false
       type: object
       title: MachineUpdateRequest
     MachineResponse:
@@ -3174,8 +5529,30 @@ components:
           type: number
           title: Available Minutes Per Day
         cost_per_minute:
-          type: number
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           title: Cost Per Minute
+        division_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Division Ref Id
+        cost_currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Currency
+        cost_society_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Society Ref Id
+        cost_confirmed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Cost Confirmed At
         status:
           type: string
           enum:
@@ -3228,15 +5605,66 @@ components:
       - msg
       - type
       title: ValidationError
+    DocumentTemplateSnapshot:
+      type: object
+      additionalProperties: false
+      required: [primary_color, accent_color, text_color, show_page_number]
+      properties:
+        logo_data_url: { type: [string, 'null'] }
+        primary_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+        accent_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+        text_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+        footer_text: { type: [string, 'null'] }
+        show_page_number: { type: boolean }
+    DocumentPresentationSnapshot:
+      type: object
+      additionalProperties: false
+      required: [division_ref_id, division_code, division_name, society_ref_id, society_code, society_name, issuer_ref_id, issuer_code, issuer_legal_name, template_origin, template_origin_id, template]
+      properties:
+        division_ref_id: { type: string }
+        division_code: { type: string }
+        division_name: { type: string }
+        society_ref_id: { type: string }
+        society_code: { type: string }
+        society_name: { type: string }
+        issuer_ref_id: { type: string }
+        issuer_code: { type: string }
+        issuer_legal_name: { type: string }
+        issuer_tax_id: { type: [string, 'null'] }
+        issuer_fiscal_address: { type: [string, 'null'] }
+        issuer_postal_code: { type: [string, 'null'] }
+        issuer_country_code: { type: [string, 'null'] }
+        template_origin: { type: string, enum: [corporate, society, division] }
+        template_origin_id: { type: string }
+        template: { $ref: '#/components/schemas/DocumentTemplateSnapshot' }
     ProductionOrderRead:
       properties:
-        is_service_order:
-          type: boolean
-          description: Derived from the product/service belonging to the source recipe.
-        service_evidence:
-          type: array
-          items:
-            $ref: '#/components/schemas/ServiceEvidenceRead'
+        presentation_snapshot:
+          anyOf:
+          - $ref: '#/components/schemas/DocumentPresentationSnapshot'
+          - type: 'null'
+        original_quantity:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Quantity
+        original_planned_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Planned Cost
+        original_actual_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Actual Cost
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
         id:
           type: string
           title: Id
@@ -3340,6 +5768,16 @@ components:
             type: object
           type: array
           title: Material Returns
+        is_service_order:
+          type: boolean
+          title: Is Service Order
+          default: false
+        service_evidence:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Service Evidence
         overall_progress_percent:
           type: number
           title: Overall Progress Percent
@@ -3473,6 +5911,29 @@ components:
       title: ProductionOrderStageRead
     ProductionOrderResourceRead:
       properties:
+        original_unit_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Unit Cost
+        original_planned_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Planned Cost
+        original_actual_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Actual Cost
+        cost_currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Currency
         id:
           type: string
           title: Id
@@ -3664,3 +6125,824 @@ components:
                 format: date-time
               expired:
                 type: boolean
+
+    EligibleMachine:
+      properties:
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        cost_society_ref_id:
+          type: string
+          title: Cost Society Ref Id
+        cost_currency:
+          type: string
+          title: Cost Currency
+        cost_per_minute:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Cost Per Minute
+        cost_confirmed_at:
+          type: string
+          format: date-time
+          title: Cost Confirmed At
+        available_minutes_per_day:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Available Minutes Per Day
+        committed_minutes:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Committed Minutes
+        available_minutes:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Available Minutes
+        planned_date:
+          type: string
+          format: date
+          title: Planned Date
+        capacity_pool_key:
+          type: string
+          title: Capacity Pool Key
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - division_ref_id
+      - cost_society_ref_id
+      - cost_currency
+      - cost_per_minute
+      - cost_confirmed_at
+      - available_minutes_per_day
+      - committed_minutes
+      - available_minutes
+      - planned_date
+      - capacity_pool_key
+      title: EligibleMachine
+
+    MachineCapacityPage:
+      properties:
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+        capacity_scope:
+          type: string
+          const: physical_machine
+          title: Capacity Scope
+          default: physical_machine
+        commitments_included:
+          type: boolean
+          title: Commitments Included
+          default: true
+      type: object
+      required:
+      - total
+      - limit
+      - offset
+      title: MachineCapacityPage
+
+    EligibleMachinesResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/EligibleMachine'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/MachineCapacityPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: EligibleMachinesResponse
+
+    ResourceValidationRow:
+      properties:
+        original_unit_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Unit Cost
+        original_total_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Total Cost
+        cost_currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Currency
+        resource_type:
+          type: string
+          enum:
+          - material
+          - labor
+          - machine
+          - other
+          title: Resource Type
+        resource_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resource Ref Id
+        resource_code:
+          type: string
+          title: Resource Code
+        resource_name:
+          type: string
+          title: Resource Name
+        unit:
+          type: string
+          title: Unit
+        required_quantity:
+          type: number
+          title: Required Quantity
+        available_quantity:
+          type: number
+          title: Available Quantity
+        unit_cost:
+          type: number
+          title: Unit Cost
+        total_cost:
+          type: number
+          title: Total Cost
+        source:
+          type: string
+          title: Source
+        ok:
+          type: boolean
+          title: Ok
+        blocker_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Blocker Code
+        allocations:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Allocations
+        daily_allocations:
+          items:
+            $ref: '#/components/schemas/ResourceDailyAllocation'
+          type: array
+          title: Daily Allocations
+      type: object
+      required:
+      - resource_type
+      - resource_code
+      - resource_name
+      - unit
+      - required_quantity
+      - available_quantity
+      - unit_cost
+      - total_cost
+      - source
+      - ok
+      title: ResourceValidationRow
+    ResourceValidationRead:
+      properties:
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
+        cost_currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Currency
+        original_planned_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Planned Cost
+        recipe_version_id:
+          type: string
+          title: Recipe Version Id
+        quantity:
+          type: number
+          title: Quantity
+        unit:
+          type: string
+          title: Unit
+        can_release:
+          type: boolean
+          title: Can Release
+        planned_cost:
+          type: number
+          title: Planned Cost
+        planned_start_date:
+          type: string
+          format: date
+          title: Planned Start Date
+        planned_end_date:
+          type: string
+          format: date
+          title: Planned End Date
+        planned_duration_days:
+          type: integer
+          title: Planned Duration Days
+        minimum_duration_days:
+          type: integer
+          title: Minimum Duration Days
+        validated_at:
+          type: string
+          format: date-time
+          title: Validated At
+        rows:
+          items:
+            $ref: '#/components/schemas/ResourceValidationRow'
+          type: array
+          title: Rows
+        blockers:
+          items:
+            type: string
+          type: array
+          title: Blockers
+      type: object
+      required:
+      - recipe_version_id
+      - quantity
+      - unit
+      - can_release
+      - planned_cost
+      - planned_start_date
+      - planned_end_date
+      - planned_duration_days
+      - minimum_duration_days
+      - validated_at
+      - rows
+      - blockers
+      title: ResourceValidationRead
+    ResourceDailyAllocation:
+      properties:
+        worker_allocations:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Worker Allocations
+        planned_date:
+          type: string
+          format: date
+          title: Planned Date
+        gross_capacity:
+          type: number
+          title: Gross Capacity
+        committed_quantity:
+          type: number
+          title: Committed Quantity
+        available_quantity:
+          type: number
+          title: Available Quantity
+        allocated_quantity:
+          type: number
+          title: Allocated Quantity
+        remaining_capacity:
+          type: number
+          title: Remaining Capacity
+      type: object
+      required:
+      - planned_date
+      - gross_capacity
+      - committed_quantity
+      - available_quantity
+      - allocated_quantity
+      - remaining_capacity
+      title: ResourceDailyAllocation
+    EligibleRecipesResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RecipeRead'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: EligibleRecipesResponse
+    RecipeRead:
+      properties:
+        id:
+          type: string
+          title: Id
+        product_service_id:
+          type: string
+          title: Product Service Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        status:
+          type: string
+          enum:
+          - draft
+          - active
+          - inactive
+          title: Status
+        current_version_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Version Id
+        versions:
+          items:
+            $ref: '#/components/schemas/RecipeVersionRead'
+          type: array
+          title: Versions
+      type: object
+      required:
+      - id
+      - product_service_id
+      - code
+      - name
+      - status
+      title: RecipeRead
+
+    RecipeVersionRead:
+      properties:
+        id:
+          type: string
+          title: Id
+        recipe_id:
+          type: string
+          title: Recipe Id
+        version_number:
+          type: integer
+          title: Version Number
+        status:
+          type: string
+          enum:
+          - draft
+          - pending_approval
+          - approved
+          - obsolete
+          title: Status
+        base_quantity:
+          type: number
+          title: Base Quantity
+        base_unit:
+          type: string
+          title: Base Unit
+        suggested_duration_days:
+          type: integer
+          title: Suggested Duration Days
+          default: 1
+        standard_cost:
+          type: number
+          title: Standard Cost
+        change_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Change Reason
+        approved_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Approved At
+        approved_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Approved By
+        resources:
+          items:
+            $ref: '#/components/schemas/RecipeResourceRead'
+          type: array
+          title: Resources
+        stages:
+          items:
+            $ref: '#/components/schemas/RecipeStageRead'
+          type: array
+          title: Stages
+      type: object
+      required:
+      - id
+      - recipe_id
+      - version_number
+      - status
+      - base_quantity
+      - base_unit
+      - standard_cost
+      title: RecipeVersionRead
+
+    RecipeResourceRead:
+      properties:
+        resource_type:
+          type: string
+          enum:
+          - material
+          - labor
+          - machine
+          - other
+          title: Resource Type
+        resource_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resource Ref Id
+        resource_code:
+          type: string
+          maxLength: 80
+          minLength: 1
+          title: Resource Code
+        resource_name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Resource Name
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+        unit:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Unit
+        unit_cost:
+          type: number
+          minimum: 0.0
+          title: Unit Cost
+          default: 0
+        sort_order:
+          type: integer
+          minimum: 0.0
+          title: Sort Order
+          default: 0
+        id:
+          type: string
+          title: Id
+        total_cost:
+          type: number
+          title: Total Cost
+      type: object
+      required:
+      - resource_type
+      - resource_code
+      - resource_name
+      - quantity
+      - unit
+      - id
+      - total_cost
+      title: RecipeResourceRead
+
+    RecipeStageRead:
+      properties:
+        id:
+          type: string
+          title: Id
+        weight_percent:
+          type: number
+          title: Weight Percent
+        labor_area_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Labor Area Ref Id
+        labor_area_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Labor Area Name
+        name:
+          type: string
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        expected_minutes:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Expected Minutes
+        sort_order:
+          type: integer
+          title: Sort Order
+          default: 0
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+          default: active
+      type: object
+      required:
+      - id
+      - weight_percent
+      - name
+      title: RecipeStageRead
+
+    ProductionSalesRequestCancel:
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - reason
+      title: ProductionSalesRequestCancel
+    ProductionSalesStatusRead:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        status:
+          type: string
+          enum:
+          - pending_configuration
+          - converted
+          - cancelled
+          title: Status
+        sales_order_id:
+          type: string
+          title: Sales Order Id
+        sales_order_line_id:
+          type: string
+          title: Sales Order Line Id
+        product_service_id:
+          type: string
+          title: Product Service Id
+        quantity:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Quantity
+        unit:
+          type: string
+          title: Unit
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
+        production_order_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Production Order Id
+        production_order_status:
+          anyOf:
+          - type: string
+            enum:
+            - released
+            - waiting_resources
+            - in_progress
+            - paused
+            - in_validation
+            - completed
+            - cancelled
+          - type: 'null'
+          title: Production Order Status
+        original_planned_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Planned Cost
+        original_actual_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Actual Cost
+        cost_currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Currency
+      type: object
+      required:
+      - request_id
+      - status
+      - sales_order_id
+      - sales_order_line_id
+      - product_service_id
+      - quantity
+      - unit
+      title: ProductionSalesStatusRead
+    ProductionSalesStatusResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ProductionSalesStatusRead'
+      type: object
+      required:
+      - data
+      title: ProductionSalesStatusResponse
+    SalesProductionValidationRequest:
+      properties:
+        division_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Division Ref Id
+        recipe_version_id:
+          type: string
+          title: Recipe Version Id
+        quantity:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
+          title: Quantity
+        unit:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Unit
+        planned_for:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Planned For
+        planned_start_date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Planned Start Date
+        planned_duration_days:
+          type: integer
+          maximum: 365.0
+          minimum: 1.0
+          title: Planned Duration Days
+          default: 1
+      additionalProperties: false
+      type: object
+      required:
+      - recipe_version_id
+      - quantity
+      - unit
+      title: SalesProductionValidationRequest
+    SalesProductionOrderCreateRequest:
+      properties:
+        division_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Division Ref Id
+        recipe_version_id:
+          type: string
+          title: Recipe Version Id
+        quantity:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
+          title: Quantity
+        unit:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Unit
+        planned_for:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Planned For
+        planned_start_date:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Planned Start Date
+        planned_duration_days:
+          type: integer
+          maximum: 365.0
+          minimum: 1.0
+          title: Planned Duration Days
+          default: 1
+        code:
+          anyOf:
+          - type: string
+            maxLength: 80
+            minLength: 1
+          - type: 'null'
+          title: Code
+        planned_start_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Planned Start At
+        required_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Required At
+        priority:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          title: Priority
+          default: medium
+        responsible_worker_id:
+          type: string
+          title: Responsible Worker Id
+        responsible_name:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Responsible Name
+        stage_assignments:
+          items:
+            $ref: '#/components/schemas/OrderStageAssignment'
+          type: array
+          title: Stage Assignments
+        source_type:
+          type: string
+          enum:
+          - manual
+          - sales_order
+          - integration
+          title: Source Type
+          default: manual
+        source_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Id
+        source_line_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Line Id
+      additionalProperties: false
+      type: object
+      required:
+      - recipe_version_id
+      - quantity
+      - unit
+      - responsible_worker_id
+      title: SalesProductionOrderCreateRequest
+    SalesRequestRecipesResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RecipeRead'
+          type: array
+          title: Data
+        page:
+          additionalProperties: true
+          type: object
+          title: Page
+      type: object
+      required:
+      - data
+      - page
+      title: SalesRequestRecipesResponse
+
+x-transport-policy:
+  implementation-status: local-only
+  operation-budget-seconds: 25
+  budget-enforcement: cooperative-http-steps-not-database-cancellation
+  request-budget-header: X-Request-Timeout-Ms
+  request-budget-unit: milliseconds
+  request-budget-rule: optional-positive-finite-value-can-only-reduce-budget
+  correlation-header: X-Correlation-Id
+  error-dependency-field: error.details.dependency_service
+  automatic-retries: false

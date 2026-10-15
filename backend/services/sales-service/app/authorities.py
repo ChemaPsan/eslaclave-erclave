@@ -1,3 +1,4 @@
+from erclave_common.transport import open_dependency
 import json
 from urllib import error, parse, request
 
@@ -15,7 +16,7 @@ class SalesAuthorityClient:
         self.hr_url = settings.hr_service_url.rstrip("/")
         self.production_url = settings.production_service_url.rstrip("/")
         self.inventory_url = settings.inventory_service_url.rstrip("/")
-        self.timeout = settings.authorization_timeout_seconds
+        self.timeout = getattr(settings,"dependency_timeout_seconds",settings.authorization_timeout_seconds)
 
     def _call(self, url: str, tenant_id: str, authorization: str | None, method: str = "GET", payload: dict | None = None, idempotency_key: str | None = None) -> dict:
         headers = {"Authorization": authorization or "", "X-Tenant-Id": tenant_id, "Accept": "application/json"}
@@ -25,14 +26,22 @@ class SalesAuthorityClient:
             headers["Idempotency-Key"] = idempotency_key
         call = request.Request(url, headers=headers, data=json.dumps(payload).encode("utf-8") if payload is not None else None, method=method)
         try:
-            with request.urlopen(call, timeout=self.timeout) as response:
+            with open_dependency(call, timeout=self.timeout, opener=request.urlopen) as response:
                 return json.loads(response.read().decode("utf-8"))["data"]
         except error.HTTPError as exc:
+            if exc.code==409 and '/v1/production/order-requests/' in url:
+                try: failure=json.loads(exc.read()).get('error',{})
+                except (ValueError,TypeError):failure={}
+                if failure.get('code') in {'production_request_has_order','production_creation_recovery_pending'}:
+                    raise ErclaveError(failure['code'], 'Cancel the linked Production order or recover its creation before cancelling the Sales order.',409,details=failure.get('details',{})) from exc
             if exc.code == 404:
                 raise ErclaveError("authoritative_reference_not_found", "An authoritative Sales reference does not exist or is inactive.", status_code=422) from exc
             raise ErclaveError("authority_validation_denied", "An authority rejected Sales reference validation.", status_code=403 if exc.code in (401, 403) else 503) from exc
         except (error.URLError, TimeoutError, KeyError, ValueError) as exc:
             raise ErclaveError("authority_unavailable", "A Sales authority is unavailable.", status_code=503) from exc
+
+    def cancel_production_request(self,tenant,request_id,reason,authorization,key):
+        return self._call(self.production_url+'/v1/production/order-requests/'+parse.quote(request_id,safe='')+'/cancel',tenant,authorization,'POST',{'reason':reason},key)
 
     def _get(self, url: str, tenant_id: str, authorization: str | None) -> dict:
         return self._call(url, tenant_id, authorization)
@@ -52,6 +61,14 @@ class SalesAuthorityClient:
         if product.type == "product" and not product.inventory_item_id:
             raise ErclaveError("product_inventory_mapping_required", "A sold product must map to an authoritative Inventory item.", status_code=422)
         return product
+
+    def get_division_estimated_cost(self, tenant_id: str, product_id: str, division_id: str, society_id: str, authorization: str | None) -> dict | None:
+        path=f"/v1/production/division-product-services/{parse.quote(product_id,safe='')}/estimated-cost?{parse.urlencode({'division_id':division_id})}"
+        row=self._get(self.production_url+path,tenant_id,authorization)
+        if row is None:return None
+        if not isinstance(row,dict) or row.get('product_service_id')!=product_id or row.get('division_ref_id')!=division_id or row.get('society_ref_id')!=society_id:
+            raise ErclaveError('estimated_cost_authority_mismatch','Production cost belongs to another document context.',status_code=422)
+        return row
 
     def get_inventory_item(self, tenant_id: str, item_id: str, authorization: str | None) -> dict:
         row = self._get(f"{self.inventory_url}/v1/inventory/items/{parse.quote(item_id)}", tenant_id, authorization)

@@ -1,22 +1,71 @@
 # ERClave - Modulo de Produccion
 
-## Feedback de formularios Local CHG-272
+## Costo estimado para cotizaciones · CC-21 · sólo Local
 
-Producto/servicio y Recetas verifican errores por campo; recursos y etapas usan identidad de la partida enviada. Evidencia real ES/EN de nombre de producto, segundo recurso y segunda etapa. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+La asignación activa de un producto o servicio por División puede conservar un **costo unitario estimado confirmado**, Decimal6 y en moneda base de su Sociedad. El responsable con `production.product_service.update` lo confirma o retira explícitamente desde **Asignación por División**; cero es válido. Producción conserva costo, moneda, Sociedad, fecha y revisión de la asignación, con idempotencia y auditoría. El costo global legado `standard_cost` no adquiere moneda ni se interpreta como confirmado.
 
-Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+`GET /v1/production/division-product-services/{product_service_id}/estimated-cost?division_id=...` expone a Ventas sólo un costo confirmado para asignación/producto activos, dentro del alcance autorizado. Devuelve `data: null` cuando falta confirmación o cambió la Sociedad/moneda base vigente; los valores anteriores quedan conservados para revisión. Ventas calcula su propio estimado documental y congela su snapshot; esta confirmación no altera cotizaciones anteriores ni crea efectos contables. [Regla CC-21](../docs/arquitectura/cont_08_costo_estimado_cotizaciones.md).
+
+## Vigencia y relaciones · CHG-315
+
+Operación productiva base desplegada en QA; preparación por División sólo Local. Productos/servicios y máquinas ya tienen asignaciones. CC-10 agrega en Local confirmación monetaria Decimal de tarifa de máquina y consulta de capacidad por División/fecha, neta de compromisos globales. CHG-313 conecta CC-11 manual: selección explícita de División, recursos/costos confirmados, compromisos globales de personas y máquinas, intento durable previo a reservas y recepción de terminado dimensionada. CHG-315 conecta CC-12: solicitud probada contra Sales, origen de sólo lectura, validación y alta dedicadas, una única orden por solicitud y seguimiento hasta recepción/conciliación comercial. Validación Local; no nueva UAT ni promoción QA.
+
+Estado por ambiente: [ESTADO_ACTUAL](../docs/contexto/ESTADO_ACTUAL.md). Brechas y cierre: [CONTROL_CONTABLE](../docs/contexto/CONTROL_CONTABLE.md). Relación operativa: [10_recursos_humanos](10_recursos_humanos.md). Contrato/regla: [cont_08_produccion_contexto](../docs/arquitectura/cont_08_produccion_contexto.md). Navegación: [índice de módulos](README.md).
+
+Las referencias CHG conservan procedencia; no se suman como pendientes vigentes. La historia de implementación está en [TRAZABILIDAD](../TRAZABILIDAD.md). Costos y tarifas deben usar moneda base de Sociedad (CHG-309); su aplicación se verifica por flujo en el control, sin reinterpretar historia. Centro requerido sólo donde el flujo de imputación esté habilitado.
+
+## Tarifas y consulta de máquinas por División sólo Local
+
+[Contrato CC-10](../docs/arquitectura/cont_08_tarifas_capacidad.md): desde Asignación por División se confirma Costo por minuto en la moneda base derivada de Sociedad con casilla explícita no preseleccionada. Cero es válido y se conservan hasta seis decimales. Tarifa histórica sin moneda permanece sin confirmar; el editor general no redondea ni sobrescribe una tarifa confirmada al cambiar otros campos.
+
+La consulta requiere fecha y devuelve máquinas activas/elegibles de la División con capacidad neta de compromisos por identidad física/fecha, incluidas órdenes legacy. No suma capacidad por División ni reserva recursos. RH proporciona capacidad nominal por IDs compartidos; las órdenes manuales concilian compromisos laborales por persona/fecha, sin multiplicar capacidad entre Divisiones. La coexistencia con compromisos legacy sin persona requiere revisión y bloquea el solapamiento. QA mantiene el corte previo.
+
+## Actualización CHG-308 · 2026-10-07
+
+Preparación de documentos/intentos por División y alcance en órdenes, estado, recursos, etapas, evidencia, colas y CSV. La preparación CHG-308 se conecta en CHG-313 al alta manual por División. CHG-309 confirmó moneda base de Sociedad y CHG-312 implementó tarifas confirmadas. Se conservan originales Decimal6, autorización antes de replay y revalidación de recursos al iniciar/reanudar, sin recostear historia. Ver docs/arquitectura/cont_08_produccion_contexto.md.
+
+
+## Actualización CHG-307 · 2026-10-05
+
+Consulta de productos elegibles admite sales.order.fulfill para stock. CHG-307 no habilitaba fabricación dimensionada; CHG-315 conecta su propagación y retorno por solicitud, orden, recepción y conciliación explícitas. Ver docs/arquitectura/cont_08_stock_contexto.md. Las notas de cortes anteriores son históricas.
+
+
+## Actualización CHG-305 · 2026-10-05
+
+Lookup de productos/servicios admite consumidores puntuales de ejecución de servicios Sales. Se valida disponibilidad por División sin crear solicitudes ni órdenes de Production.
+
+
+## Actualización CHG-304 · 2026-10-05
+
+Lookup de productos por División admite sales.order.create para validar conversión. La propagación y retorno de solicitudes/órdenes dimensionadas desde Sales se incorpora en CHG-315 (CC-12), sin alterar los pedidos históricos.
+
+
+## Actualización CHG-303 · 2026-10-05
+
+Lookup division-product-services admite resource_id exacto para validación de cotización; permisos del consumidor Sales y módulo habilitado. Sin cambios a recetas/órdenes.
+
+
+## Asignaciones por División — CHG-299 Local
+
+Máquina con División fija y productos/servicios con asignaciones compartidas, estado y Centro de costos predeterminado opcional. [Contrato y límites](../docs/arquitectura/cont_07_production_asignaciones.md). La asignación del maestro no dimensiona por sí sola las órdenes ni activa Accounting; los consumidores por División se conectan en CHG-313/315. El campo cost_center heredado conserva compatibilidad; no es la referencia Costing autoritativa.
+
+## Feedback de formularios — Local y QA
+
+Producto/servicio y Recetas verifican errores por campo; recursos y etapas usan identidad de la partida enviada. Evidencia real ES/EN de nombre de producto, segundo recurso y segunda etapa. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: [.agents/skills/erclave-form-feedback/SKILL.md](../.agents/skills/erclave-form-feedback/SKILL.md). Evidencia: [docs/auditorias/formularios_feedback_2026-09-13.md](../docs/auditorias/formularios_feedback_2026-09-13.md).
+
+Feedback desplegado en Local y QA mediante el release `e57237f`. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del módulo. Estado y pendientes autenticados: [docs/contexto/ESTADO_ACTUAL.md](../docs/contexto/ESTADO_ACTUAL.md) y [docs/operaciones/release_qa_20260914.md](../docs/operaciones/release_qa_20260914.md).
 
 ## Entrega previa de materiales CHG-264
 
-CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+CHG-264 implementó en Local, posteriormente promovido a QA en CHG-270, la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: [docs/auditorias/materiales_produccion_movimientos_2026-09-08.md](../docs/auditorias/materiales_produccion_movimientos_2026-09-08.md).
 
 ## Coherencia de formularios Local (CHG-262)
 
-El tipo de Producto/Servicio es inmutable al editar. La ficha conserva el estatus y el cambio usa la accion separada del catalogo. Maquinaria nueva nace activa y conserva costos cero al editar. Version y centro de receta son campos derivados; editar inicia un borrador, y enviar/aprobar exige cada permiso antes de la primera mutacion. No se ofrece obsoletar ni eliminar mediante un comando inexistente. Consultar `docs/auditorias/frontend_backend_2026-09-07.md` para evidencia y APIs.
+El tipo de Producto/Servicio es inmutable al editar. La ficha conserva el estatus y el cambio usa la accion separada del catalogo. Maquinaria nueva nace activa y conserva costos cero al editar. Version y centro de receta son campos derivados; editar inicia un borrador, y enviar/aprobar exige cada permiso antes de la primera mutacion. No se ofrece obsoletar ni eliminar mediante un comando inexistente. Consultar [docs/auditorias/frontend_backend_2026-09-07.md](../docs/auditorias/frontend_backend_2026-09-07.md) para evidencia y APIs.
 
 ## Autorizacion operativa Local
 
-Las autoridades de liberar, iniciar, pausar, reanudar, enviar a validacion, finalizar y cancelar una orden son permisos independientes. Actualizar avance no concede terminar una etapa. La matriz contractual vive en `docs/arquitectura/matriz_autorizacion_operativa.md`. La orden nueva vigente nace liberada, por lo que su alta exige `production.order.release`; el borrador previo a liberacion no esta implementado.
+Las autoridades de liberar, iniciar, pausar, reanudar, enviar a validacion, finalizar y cancelar una orden son permisos independientes. Actualizar avance no concede terminar una etapa. La matriz contractual vive en [docs/arquitectura/matriz_autorizacion_operativa.md](../docs/arquitectura/matriz_autorizacion_operativa.md). La orden nueva vigente nace liberada, por lo que su alta exige `production.order.release`; el borrador previo a liberacion no esta implementado.
 
 ## 1. Objetivo
 
@@ -32,7 +81,7 @@ El enfoque del modulo debe ser agnostico a la industria. No debe asumir procesos
 
 ## 2. Alcance por ambiente
 
-El corte desplegado en QA persiste productos/servicios, recetas/versiones, maquinaria, ordenes y etapas. El codigo Local posterior agrega validacion autoritativa, reservas y consumo de materiales, capacidad comprometida y costo real; estas capacidades no se consideran disponibles en QA hasta su promocion gobernada.
+QA e57237f incluye productos/servicios, recetas/versiones, maquinaria, órdenes, etapas, validación autoritativa, reservas/consumo, capacidad comprometida y costo real del recorrido base. La separación por División posterior sólo está en Local; CHG-313 habilita el recorrido manual y conserva bloqueado el origen Sales.
 
 El alcance funcional contempla:
 
@@ -102,7 +151,7 @@ Campos principales:
 | Nombre | Nombre comercial u operativo. |
 | Unidad base | Codigo activo seleccionado del catalogo de unidades de Administracion. |
 | Categoria | Agrupador del catalogo. |
-| Centro de costos | Centro donde se acumula el costo. |
+| Centro de costos heredado | Texto compatible del maestro; no es la referencia Costing. En Local, el centro predeterminado se elige por asignación de División. |
 | Responsable | Area o persona dueña de la ficha. |
 | Precio objetivo | Precio esperado o referencia comercial. |
 | Margen esperado | Margen objetivo para control gerencial. |
@@ -542,26 +591,38 @@ El editor de Recetas valida que los recursos seleccionados sigan existiendo en s
 
 La salida completa de materiales sigue siendo previa al inicio (CHG-264). Las transiciones no consumen reservas. El responsable general y los de fases pendientes deben seguir elegibles en RH. Las máquinas deben estar activas y sin bloqueo de Mantenimiento. Órdenes terminadas/canceladas pueden solicitar devolución; costo neto y cantidades devueltas se consultan sin borrar cantidad entregada. Creaciones fallidas dejan recuperación del mismo actor; Inventory libera por origen demostrado y bloquea reservas tardías de ese intento.
 
-CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: [docs/auditorias/flujos_almacen_mensajes_2026-09-08.md](../docs/auditorias/flujos_almacen_mensajes_2026-09-08.md).
 
 
 ## Ajustes UAT Local CHG-266
 
 Órdenes mantiene Control de orden y las bandejas operativas en la columna principal al colapsar la guía. La clase production-orders-layout apila guía y contenido bajo 720 px reales del panel; no cambia el componente compartido ni las reglas de salida/inicio.
 
-Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+Evidencia y APIs: [docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md](../docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md).
 
 
 ## Disponibilidad QA CHG-270
 
-Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: [docs/operaciones/release_qa_20260908.md](../docs/operaciones/release_qa_20260908.md).
 
 
 ## Productos y servicios: margen esperado CHG-273
 
-CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración Local `20260913_0035` aplicada; QA conserva `20260908_0034` y release b63cdad. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
+CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración `20260913_0035` aplicada en Local y QA, actualmente en head `20260913_0036`; release QA `e57237f`. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: [docs/auditorias/margen_esperado_2026-09-13.md](../docs/auditorias/margen_esperado_2026-09-13.md).
 
 
 ## Evidencia de servicios CHG-274
 
-CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local y QA head `20260913_0036`; desplegado en QA con `e57237f`, sin aceptación UAT inferida. Detalle: [docs/auditorias/evidencia_servicios_2026-09-13.md](../docs/auditorias/evidencia_servicios_2026-09-13.md).
+
+## Solicitud comercial y orden vinculada · Local CHG-315
+
+Producción > Órdenes muestra una bandeja acotada de solicitudes sólo con `production.order.read`; la acción de convertir requiere además `production.order.release`. La conversión hereda producto, cantidad original Decimal, unidad y División; Sociedad/moneda proceden del contexto. Recetas y responsables se consultan por elegibilidad; plan y responsables se capturan antes de validar/liberar. Validación y alta usan endpoints dedicados con prueba del pedido Sales, no el endpoint manual para simular origen. Claves estables recuperan el mismo intento; una solicitud enlazada no crea una segunda orden. Cancelar una solicitud con orden requiere atender primero la orden productiva y cualquier recuperación pendiente.
+
+El ciclo termina con recepción física Inventory y conciliación explícita Sales; ninguna transición de Producción reserva mercancía para la entrega al cliente por sí sola. Procedimiento: [manual Producción](../docs/manuales_solucion/fuentes/01_produccion.md) y [Ventas](04_ventas_clientes.md). Pruebas de navegador interceptadas separadas de integración HTTP y aceptación; [estado por ambiente](../docs/contexto/ESTADO_ACTUAL.md).
+
+Contrato vigente de este recorrido: [fabricación por División y conciliación](../docs/arquitectura/cont_08_fabricacion_contexto.md).
+
+## CC-17 - orden imprimible - CHG-322 Local
+
+La orden nace liberada. Production consulta a Admin la presentacion efectiva de su Division y congela Emisor, Sociedad, Division, plantilla y origen en `production.production_orders.presentation_snapshot` dentro de la transaccion de creacion. Reintentos conservan la misma identidad; la impresion historica no cambia al editar Admin. Una orden anterior sin snapshot no se reconstruye con valores vigentes. [Regla](../docs/arquitectura/plantillas_documentales.md).

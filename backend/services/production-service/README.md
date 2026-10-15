@@ -36,6 +36,10 @@ La revision `20260825_0029` incorpora planeacion multi-dia. La receta conserva u
 
 Una receta puede referir maquinaria activa o en mantenimiento aunque su area RH este pendiente: la receta define el proceso. La validacion de la orden define la disponibilidad y asigna cero capacidad a una maquina en mantenimiento. Maquinaria inactiva o inexistente se rechaza.
 
-En el corte Local vigente, crear/liberar la orden reserva materiales por almacen. La primera transicion desde `released` o `waiting_resources` a `in_progress` solicita a Inventory consumir cada reserva; Inventory registra la salida inmutable en el almacen correspondiente. Reanudar desde `paused`, volver desde `in_validation` o cerrar la orden no repite el consumo. Cancelar antes de iniciar libera reservas; cancelar despues de iniciar conserva las salidas ya registradas.
+Crear/liberar la orden reserva materiales por almacén. Desde CHG-264 Almacén confirma la entrega por `POST /v1/production/orders/{order_id}/issue-materials`; Production conserva el intento durable y orquesta consumo en Inventory. Iniciar/reanudar valida entregas completas y recursos vigentes, sin volver a consumir. Cancelar libera reservas restantes y conserva salidas; sobrantes se devuelven mediante su recorrido auditado. [Contrato y evidencia](../../../docs/auditorias/materiales_produccion_movimientos_2026-09-08.md).
 
 La entrada a `in_validation` exige que todas las etapas tengan `progress_percent=100` y esten `completed` o `skipped`. El cliente captura un porcentaje: `0` corresponde a pendiente, `1..99` a en proceso y `100` a terminada. La ultima etapa al 100% mueve automaticamente la orden a validacion. El cierre `completed` no exige minutos ni cantidades reales de mano de obra/maquinaria en este corte; esos campos permanecen opcionales para una futura medicion de eficiencia. El cliente no debe ofrecer transiciones incompatibles ni presentar los codigos de precondicion como errores tecnicos genericos.
+
+## Preparación contable y alcance vigente
+
+Máquinas/productos asignados por División implementados. CHG-308 prepara contexto/intento durable y scope, sin habilitar fabricación dimensionada (CC-10/11/12). Véase [CONTROL_CONTABLE](../../../docs/contexto/CONTROL_CONTABLE.md) y [estado por ambiente](../../../docs/contexto/ESTADO_ACTUAL.md). La preparación no activa Accounting.

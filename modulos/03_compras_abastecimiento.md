@@ -1,16 +1,53 @@
 # ERClave — Módulo de Compras y Abastecimiento
 
-## Feedback de formularios Local CHG-272
+## Folios CC-18 · Local
 
-Proveedor y Recepcion verifican mensajes junto al campo. Las recepciones vinculan el indice de payload a la linea de orden: la segunda fila visible puede ser lines.0 si se omiten cantidades cero. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+Las altas de proveedor, requisición, orden de compra y recepción consumen la secuencia de Admin para su tipo. En modo administrado, el servicio asigna el código y lo bloquea durante las ediciones; en modo manual exige el código capturado y conserva la unicidad del dueño. Cada registro nuevo guarda `code_mode`; los registros históricos mantienen valor nulo y código original. Los reintentos usan la misma clave de asignación y el servicio revisa el replay antes de consumir otro folio. Sólo Local: sin promoción QA ni Accounting activo.
 
-Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+## Contexto documental CC-15 · CHG-319 · Implementado Local
+
+[Contrato de Compras por División](../docs/arquitectura/cont_08_compras_contexto.md): requisición con División explícita y fija; orden heredada o directa con motivo; proveedor elegible y condiciones completas por División conservadas; recepción heredada incluso para servicios y almacén de la misma División. Alcance también en bandejas, reportes y reintentos. Legado sin backfill: lectura/cancelación con alcance completo y revisión antes de editar o recibir de nuevo. Backend focal77 aprobadas/0 omitidas y navegador focal16 CC-15 +6 CC-14 aprobadas; regresión completa255 aprobadas. Gate general aprobado (727 aprobadas/223 omitidas/1 advertencia sin DB); aceptación CC-20 pendiente, sin despliegue QA. CC-16 y folios CC-18 son cortes separados.
+
+## Vigencia CC-14 · CHG-317 · Local
+
+Ver [contexto y costo de productores Inventory](../docs/arquitectura/cont_08_inventario_productores.md). Recepción Purchasing con tasa explícita, refacciones Maintenance con intención durable, transferencias misma Sociedad y sobrantes con snapshot/alcance/reintento implementados Local. Compras CC-15 se implementó Local en CHG-319; Mantenimiento CC-16, datos y aceptación transversal siguen abiertos.
+
+
+## Vigencia y relaciones · conciliación CHG-311
+
+Ciclo base de requisición, OC y recepción desplegado en QA. Sólo Local: proveedor compartido, disponibilidad, condiciones por División y contexto documental CC-15 CHG-319 implementados según el contrato superior; folios en CC-18.
+
+Estado por ambiente: [ESTADO_ACTUAL](../docs/contexto/ESTADO_ACTUAL.md). Brechas y cierre: [CONTROL_CONTABLE](../docs/contexto/CONTROL_CONTABLE.md). Relación operativa: [02_almacenes_inventarios](02_almacenes_inventarios.md). Contrato/regla: [cont_07_commercial_condiciones](../docs/arquitectura/cont_07_commercial_condiciones.md). Navegación: [índice de módulos](README.md).
+
+Las referencias CHG conservan procedencia; no se suman como pendientes vigentes. La historia de implementación está en [TRAZABILIDAD](../TRAZABILIDAD.md). Costos y tarifas deben usar moneda base de Sociedad (CHG-309); su aplicación se verifica por flujo en el control, sin reinterpretar historia. Centro requerido sólo donde el flujo de imputación esté habilitado.
+
+## Condiciones comerciales explícitas — CHG-302 Local
+
+Decisión del usuario: configuración completa por División sin herencia. [Contrato y flujo](../docs/arquitectura/cont_07_commercial_condiciones.md): moneda/pago y crédito del cliente o plazo del proveedor, catálogos Admin, permisos propios, revisión/auditoría/idempotencia. Sin copia desde maestro, sin cambio de documentos históricos ni control de crédito implementado. CONT-08 pendiente.
+
+## Disponibilidad por División — CHG-301 Local
+
+Asociaciones de maestro compartido, Sociedad derivada y estado por División. [Contrato funcional/técnico](../docs/arquitectura/cont_07_commercial_asignaciones.md). No se duplican maestros; condiciones comerciales ya se configuran por División. Su consumo documental Local se describe en CC-15 CHG-319. Permisos read/update propios, sin Costing ni Accounting.
+
+## Catálogos comerciales autoritativos — Local CHG-284
+
+El formulario de Proveedor obtiene monedas y condiciones de pago activas mediante `GET /v1/purchasing/reference-data`. Purchasing conserva la frontera del módulo y consulta a Administración como autoridad; el navegador no requiere permisos administrativos. Alta y edición dejan de depender de listas fijas, prefieren `MXN` y `cash` sólo cuando esos códigos están activos y mantienen visible un código histórico al editar. Si las referencias no pueden cargarse, la lista de Compras sigue disponible y el formulario se bloquea con un mensaje accionable.
+
+Administración reconoce como consumidores los permisos de proveedor y orden de Compras para listar o validar los códigos correspondientes. No hay migración ni cambio de persistencia. Contrato Purchasing vigente en Local: `1.5.0`.
+
+## Feedback de formularios — Local y QA
+
+Proveedor y Recepcion verifican mensajes junto al campo. Las recepciones vinculan el indice de payload a la linea de orden: la segunda fila visible puede ser lines.0 si se omiten cantidades cero. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: [.agents/skills/erclave-form-feedback/SKILL.md](../.agents/skills/erclave-form-feedback/SKILL.md). Evidencia: [docs/auditorias/formularios_feedback_2026-09-13.md](../docs/auditorias/formularios_feedback_2026-09-13.md).
+
+Feedback desplegado en Local y QA mediante el release `e57237f`. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del módulo. Estado y pendientes autenticados: [docs/contexto/ESTADO_ACTUAL.md](../docs/contexto/ESTADO_ACTUAL.md) y [docs/operaciones/release_qa_20260914.md](../docs/operaciones/release_qa_20260914.md).
 
 ## Coherencia de formularios Local (CHG-262)
 
-Las lecturas del workspace se seleccionan por permisos de cada recurso. Alternar Servicio/Articulo restaura la unidad autoritativa del articulo y deshabilita Inventory para servicios. Cancelar exige un motivo de 3 a 500 caracteres. Editar proveedor conserva sus codigos estables aunque no aparezcan en las listas cortas de la UI y aplica el formato postal correspondiente al pais existente. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+Las lecturas del workspace se seleccionan por permisos de cada recurso. Alternar Servicio/Articulo restaura la unidad autoritativa del articulo y deshabilita Inventory para servicios. Cancelar exige un motivo de 3 a 500 caracteres. Editar proveedor conserva sus codigos estables aunque no aparezcan en las listas cortas de la UI y aplica el formato postal correspondiente al pais existente. Evidencia: [docs/auditorias/frontend_backend_2026-09-07.md](../docs/auditorias/frontend_backend_2026-09-07.md).
 
 ## 1. Objetivo
+
+Las secciones conceptuales siguientes incluyen capacidades futuras. La vigencia superior y el manual distinguen el runtime disponible de XML, facturas, cuentas por pagar y automatizaciones aún no implementadas.
 
 El módulo de Compras y Abastecimiento permitirá controlar necesidades de compra, proveedores, requisiciones, órdenes de compra, recepciones, precios, tiempos de entrega y relación con inventarios, producción y gastos.
 
@@ -198,7 +235,7 @@ Las compras deberán poder mapear:
 
 ## 12. Primer corte acordado
 
-Estado: el ciclo inventariable esta implementado en Local y desplegado en QA hasta `20260825_0029`. CHG-255 esta aplicado y certificado en Local con `20260901_0030` para operar tambien partidas y recepciones comerciales de servicio sin exigir Inventory al tenant.
+Estado: ciclos inventariable y de servicios implementados en Local y QA e57237f, cabeza `20260913_0036`. Las partidas de servicio no exigen Inventory al tenant. Dimensiones de documentos continúan pendientes sólo Local.
 
 El corte operativo vigente cubre:
 
@@ -297,7 +334,7 @@ La segregacion no se implementa con nombres fijos de rol. Cada accion usa permis
 - `hr`: no es dependencia inicial; el actor autenticado se conserva como solicitante/aprobador/comprador. La seleccion de trabajadores se agregara solo con regla funcional aprobada.
 - Gastos, Costos y Contabilidad son consumidores futuros y no bloquean la activacion inicial.
 
-Compras esta `implemented` en Local y QA para el ciclo inventariable certificado. La ampliacion de servicios esta aplicada y probada solo en Local con `20260901_0030`; QA no la recibe hasta una promocion mediante el pipeline gobernado.
+Compras está `implemented` en Local y QA e57237f para bienes y servicios; la aceptación funcional integral sigue pendiente. La separación por División de documentos no está implementada.
 
 ## 17. Continuidad operativa CHG-238
 
@@ -337,16 +374,16 @@ La requisicion aprobada conserva ademas una accion **Crear orden de compra** mie
 
 Crear recepción conserva pending_confirmation y no cambia existencias ni acepta servicios. Las cantidades pendientes evitan sobre-recepción. Almacén confirma/reintenta únicamente partidas de inventario desde Movimientos. Quien solicitó la requisición acepta sus servicios; en compra directa lo hace el comprador. Una recepción mixta termina cuando ambas responsabilidades confirmaron. purchasing.receipt.reconcile por sí solo no permite entrada física. Las partidas conservan actor y fecha de confirmación.
 
-CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: [docs/auditorias/flujos_almacen_mensajes_2026-09-08.md](../docs/auditorias/flujos_almacen_mensajes_2026-09-08.md).
 
 
 ## Ajustes UAT Local CHG-266
 
 Proveedores abre en listado; Nuevo proveedor y Editar usan un modal independiente con permisos create/update, captura conservada ante error y recarga al guardar. Requisiciones dedica toda la fila al artículo bajo 680 px del formulario y apila campos bajo 380 px. Su clase purchasing-requisitions-layout apila el riel bajo 720 px del panel; otras pantallas conservan su composición.
 
-Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+Evidencia y APIs: [docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md](../docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md).
 
 
 ## Disponibilidad QA CHG-270
 
-Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: [docs/operaciones/release_qa_20260908.md](../docs/operaciones/release_qa_20260908.md).

@@ -1,5 +1,7 @@
 # Validacion local de volumen de Inventario
 
+> Evidencia histórica: no ejecutar como próximo paso ni como autorización de datos. Consultar [estado vigente](../contexto/ESTADO_ACTUAL.md) y [verificación Local gobernada](../operaciones/verificacion_local_integral.md).
+
 Esta validacion comprueba la semantica propuesta de busqueda, filtros y paginacion con datos sinteticos. No abre conexiones, no modifica PostgreSQL y no toca QA.
 
 ## Ejecutar

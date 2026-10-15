@@ -11,6 +11,7 @@ Produce documentacion de solucion comprensible para usuarios operativos, supervi
 
 - Mantener una fuente Markdown por modulo en `docs/manuales_solucion/fuentes/`.
 - Generar el Word correspondiente en `docs/manuales_solucion/word/` mediante `scripts/build_manual_docx.py`.
+- Para regenerar los siete manuales usar `tools/generate-solution-manuals.py`; para la guía del tester usar `tools/generate-qa-document.py`. Ambos comparten `tools/build-functional-document.py`; el script de esta skill delega en ese mismo generador.
 - No editar el DOCX como unica fuente: todo contenido debe poder reconstruirse desde Markdown.
 - Consultar [references/estructura_manual.md](references/estructura_manual.md) al crear un manual o agregar una seccion sustancial.
 
@@ -27,6 +28,8 @@ Produce documentacion de solucion comprensible para usuarios operativos, supervi
 ## Mantenimiento
 
 Cuando cambien textos, campos, estados, permisos, validaciones, flujos o dependencias visibles, revisar el manual del modulo en el mismo corte. Comparar el manual con interfaz, i18n, OpenAPI y pruebas; eliminar instrucciones obsoletas en vez de acumular parches históricos.
+
+Después de una promoción, contrastar también README, REGISTRO, entrega al tester, guía y matriz contra el SHA y migración realmente publicados. Distinguir despliegue, pruebas ejecutadas y aceptación pendiente. Registrar revisión estructural y visual por separado; si falta renderizador, conservar explícitamente ese pendiente sin certificar el Word como final.
 
 Mantener al inicio de cada fuente: modulo, audiencia, alcance por ambiente, fecha de revision y capacidades cubiertas. El historial tecnico pertenece a `TRAZABILIDAD.md`, no al manual.
 

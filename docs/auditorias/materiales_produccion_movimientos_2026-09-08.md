@@ -1,5 +1,7 @@
 # Materiales de Produccion desde Movimientos — CHG-264
 
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](../contexto/ESTADO_ACTUAL.md).
+
 Implementado solo en Local. Peticion: Almacen debe dar salida a materias primas/materiales antes de iniciar la orden de produccion o servicio. Se conserva el trabajo CHG-262/263.
 
 ## Comportamiento

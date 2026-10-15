@@ -116,6 +116,37 @@ const TRANSITION_GUIDANCE = {
   }
 };
 const ERROR_MESSAGES = Object.freeze({
+  quote_context_currency_mismatch: { es: "La moneda del borrador no coincide con la División. Revisa y ajusta moneda y precios antes de asignar el contexto; no se hace conversión automática.", en: "The draft currency does not match the Division. Review currency and prices before assigning context; no automatic conversion is performed." },
+  quote_context_locked: { es: "La División y el cliente quedan fijos. Las condiciones sólo se actualizan explícitamente desde División y condiciones mientras sea borrador.", en: "Division and customer are fixed. Terms can only be explicitly refreshed from Division and terms while the quote is a draft." },
+  quote_context_unavailable: { es: "Confirma la asociación activa del cliente, la Sociedad y sus condiciones explícitas en esta División antes de continuar.", en: "Confirm the customer's active assignment, Society and explicit terms in this Division before continuing." },
+  quote_context_resource_unavailable: { es: "El responsable o un producto no está habilitado en esta División. Revisa sus asignaciones en RH o Producción.", en: "The responsible worker or a product is not enabled in this Division. Review its HR or Production assignments." },
+  service_context_order_unavailable: { es: "El pedido está cancelado o su cancelación está en curso. Recarga antes de continuar.", en: "The order is cancelled or cancellation is in progress. Reload before continuing." },
+  operational_cost_currency_unavailable: { es: "Confirma la moneda base de la Sociedad antes de surtir productos.", en: "Confirm the Society base currency before supplying products." },
+  operational_cost_history_review_required: { es: "Estas existencias tienen costos históricos sin moneda confirmada o con otra moneda. Revisa su migración antes de utilizarlas.", en: "This stock has historical costs without a confirmed currency or with a different currency. Review its migration before using it." },
+  purchasing_receipt_exchange_rate_required: { es: "Captura cuántas unidades de moneda de la Sociedad equivalen a una unidad de la moneda de la orden de compra.", en: "Enter how many units of the Society currency equal one unit of the purchase order currency." },
+  purchasing_receipt_exchange_rate_invalid: { es: "Revisa el tipo de cambio de la recepción: debe ser positivo, admitir hasta seis decimales y ser 1 cuando las monedas coinciden.", en: "Review the receipt exchange rate: it must be positive, allow up to six decimal places, and be 1 when currencies match." },
+  operational_exchange_rate_required: { es: "Captura un tipo de cambio positivo desde la moneda del costo hacia la moneda del pedido.", en: "Enter a positive exchange rate from the cost currency to the order currency." },
+  operational_exchange_rate_invalid: { es: "Cuando las monedas coinciden, el tipo de cambio debe ser 1.", en: "When currencies match, the exchange rate must be 1." },
+  operational_exchange_rate_locked: { es: "El surtimiento ya fijó su moneda y tipo de cambio. Reintenta con los valores originales.", en: "Fulfillment has already fixed its currency and exchange rate. Retry with the original values." },
+  operational_context_required: { es: "Este almacén requiere un documento con contexto organizacional confirmado. Revisa la Sociedad y División del origen.", en: "This warehouse requires a document with confirmed organizational context. Review the source Society and Division." },
+  operational_context_mismatch: { es: "El documento, el almacén y sus referencias deben corresponder a la misma Sociedad y División.", en: "The document, warehouse and references must belong to the same Society and Division." },
+  operational_context_resource_unavailable: { es: "La referencia no está activa y disponible en la División del documento. Revisa su asignación.", en: "The reference is not active and available in the document Division. Review its assignment." },
+  maintenance_document_context_required: { es: "Selecciona la División de la orden de mantenimiento.", en: "Select the maintenance order Division." },
+  maintenance_document_history_review_required: { es: "Revisa el contexto de la orden histórica antes de registrar nuevas operaciones.", en: "Review the historical order context before recording further operations." },
+  maintenance_worker_tariff_unavailable: { es: "El técnico necesita una tarifa confirmada y una asignación vigente en la División de la orden.", en: "The technician needs a confirmed rate and a current assignment in the order Division." },
+  maintenance_worker_tariff_changed: { es: "La tarifa del técnico cambió. Revisa la tarifa actual antes de registrar el tiempo.", en: "The technician rate changed. Review the current rate before recording time." },
+  maintenance_time_cost_out_of_range: { es: "El costo calculado supera el límite permitido. Revisa el intervalo registrado.", en: "The calculated cost exceeds the allowed limit. Review the recorded interval." },
+  maintenance_worker_daily_capacity_exceeded: { es: "El intervalo supera la capacidad diaria del técnico. Revisa los tiempos registrados.", en: "The interval exceeds the technician daily capacity. Review the recorded times." },
+  maintenance_time_timezone_required: { es: "El intervalo debe incluir su zona horaria.", en: "The interval must include its time zone." },
+  purchasing_document_context_required: { es: "Selecciona la División del documento.", en: "Select the document Division." },
+  purchasing_document_context_locked: { es: "El documento conserva su División original.", en: "The document keeps its original Division." },
+  purchasing_document_history_review_required: { es: "Revisa el contexto del documento histórico antes de crear nuevas operaciones.", en: "Review the historical document context before creating further operations." },
+  purchasing_document_terms_required: { es: "El proveedor requiere condiciones confirmadas para esta División.", en: "The supplier requires confirmed terms for this Division." },
+  purchasing_document_terms_changed: { es: "Las condiciones del proveedor cambiaron. Revisa la selección antes de guardar.", en: "The supplier terms changed. Review the selection before saving." },
+  purchasing_document_terms_mismatch: { es: "La moneda y condiciones de pago deben coincidir con las condiciones confirmadas del proveedor.", en: "Currency and payment terms must match the supplier confirmed terms." },
+  service_context_resource_unavailable: { es: "El servicio o trabajador no está disponible en la División del pedido. Revisa su asignación vigente.", en: "The service or worker is unavailable in the order Division. Review its current assignment." },
+  order_context_downstream_pending: { es: "Este flujo aún no admite operaciones por División. El surtido desde existencias sí está disponible; la fabricación y otros flujos siguen pendientes.", en: "This flow does not yet support Division operations. Stock fulfillment is available; manufacturing and other flows are still pending." },
+  quote_context_downstream_pending: { es: "La conversión a pedido de una cotización con División está pendiente de integración. Se conserva la cotización.", en: "Converting a quote with a Division into an order is pending integration. The quote is retained." },
   ...FORM_BUSINESS_ERRORS,
   material_return_not_cancellable: {"es": "La devolución ya fue recibida físicamente y no puede cancelarse. Almacén debe finalizar su conciliación en Movimientos si sigue pendiente.", "en": "The return has already been physically received and cannot be cancelled. Warehouse must finish reconciliation in Movements if it is still pending."},
   material_return_not_receivable: {"es": "La solicitud de devolución está cancelada. Revisa el sobrante real y solicita una nueva devolución desde la orden si todavía corresponde.", "en": "The return request is cancelled. Review the actual unused materials and request a new return from the order if still needed."},
@@ -152,6 +183,10 @@ const ERROR_MESSAGES = Object.freeze({
   network_unavailable: {
     es: "No pudimos comunicarnos con {service}. Comprueba que el servicio esté disponible y vuelve a intentar.",
     en: "We could not reach {service}. Check that the service is available and try again."
+  },
+  request_cancelled: {
+    es: "Se canceló la espera. No pudimos confirmar el resultado; recarga la información antes de volver a intentar.",
+    en: "Waiting was cancelled. We could not confirm the result; reload the information before trying again."
   },
   request_timeout: {
     es: "La operación tardó demasiado y no pudimos confirmar el resultado. Recarga la información antes de volver a intentar.",

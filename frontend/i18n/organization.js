@@ -1,0 +1,40 @@
+export const organizationCopy = {
+  es: {
+    title: "Estructura de la organización", description: "Un emisor puede tener varias sociedades. Cada división pertenece a una sociedad.",
+    "fiscal-issuers": "Emisores", societies: "Sociedades", divisions: "Divisiones", issuer: "Emisor", society: "Sociedad",
+    create: "Dar de alta", edit: "Editar", save: "Guardar", cancel: "Cancelar", activate: "Activar", deactivate: "Desactivar",
+    active: "Activo", inactive: "Inactivo", all: "Todos", status: "Estado", search: "Buscar por código o nombre", find: "Buscar",
+    loading: "Cargando…", empty: "No hay registros para esta búsqueda.", saved: "Cambios guardados.", previous: "Anterior", next: "Siguiente",
+    count: "{total} registros", code: "Código", automatic: "Se asigna al guardar", name: "Nombre", legal_name: "Razón social del emisor",
+    tax_id: "RFC / identificación fiscal", fiscal_regime: "Régimen fiscal", cfdi_usage: "Uso CFDI predeterminado", fiscal_address: "Domicilio fiscal",
+    postal_code: "Código postal fiscal", country_code: "País (código de dos letras)", contact_name: "Nombre del contacto", contact_email: "Correo del contacto",
+    contact_phone: "Teléfono del contacto", contact_position: "Puesto del contacto", base_currency: "Moneda base", address: "Dirección", phone: "Teléfono",
+    issuer_id: "Emisor", society_id: "Sociedad", select: "Busca y selecciona un registro activo", required: "Completa este campo.",
+    selectResult: "Selecciona un resultado de la búsqueda.", noPermission: "No tienes permiso para consultar esta estructura.",
+    parentPermission: "Necesitas permiso de lectura del catálogo padre para dar de alta o cambiar esta relación.",
+    currencyPermission: "Necesitas permiso de lectura de catálogos para seleccionar una moneda base.",
+    fiscalHint: "Datos fiscales compartidos por las sociedades asociadas a este emisor.",
+    currencyHint: "Moneda de referencia para los importes de esta sociedad.",
+    corporate: "Corporativo", corporateHint: "Datos generales del tenant.", commercial_name: "Nombre corporativo", corporate_legal_name: "Razón social principal",
+    corporate_tax_id: "RFC", corporate_phone: "Teléfono corporativo", updateCorporate: "Actualizar corporativo"
+  },
+  en: {
+    title: "Organization structure", description: "An issuer can have several societies. Each division belongs to one society.",
+    "fiscal-issuers": "Issuers", societies: "Societies", divisions: "Divisions", issuer: "Issuer", society: "Society",
+    create: "Create", edit: "Edit", save: "Save", cancel: "Cancel", activate: "Activate", deactivate: "Deactivate",
+    active: "Active", inactive: "Inactive", all: "All", status: "Status", search: "Search by code or name", find: "Search",
+    loading: "Loading…", empty: "No records match this search.", saved: "Changes saved.", previous: "Previous", next: "Next",
+    count: "{total} records", code: "Code", automatic: "Assigned when saved", name: "Name", legal_name: "Issuer legal name",
+    tax_id: "Tax identification", fiscal_regime: "Tax regime", cfdi_usage: "Default CFDI usage", fiscal_address: "Fiscal address",
+    postal_code: "Fiscal postal code", country_code: "Country (two-letter code)", contact_name: "Contact name", contact_email: "Contact email",
+    contact_phone: "Contact phone", contact_position: "Contact position", base_currency: "Base currency", address: "Address", phone: "Phone",
+    issuer_id: "Issuer", society_id: "Society", select: "Search and select an active record", required: "Complete this field.",
+    selectResult: "Select a search result.", noPermission: "You do not have permission to view this structure.",
+    parentPermission: "Read access to the parent catalog is required to create or change this relationship.",
+    currencyPermission: "Catalog read access is required to select a base currency.",
+    fiscalHint: "Fiscal details shared by the societies associated with this issuer.",
+    currencyHint: "Reference currency for this society’s amounts.",
+    corporate: "Corporate", corporateHint: "General tenant details.", commercial_name: "Corporate name", corporate_legal_name: "Main legal name",
+    corporate_tax_id: "Tax identification", corporate_phone: "Corporate phone", updateCorporate: "Update corporate details"
+  }
+};

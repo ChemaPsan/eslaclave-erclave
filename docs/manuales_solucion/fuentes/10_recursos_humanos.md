@@ -1,10 +1,10 @@
 # Manual funcional de Recursos Humanos
 
 - Audiencia: responsables de RH, administradores de estructura y supervisores operativos
-- Alcance por ambiente: Local actual y QA; las mejoras pendientes de promoción se indican expresamente
-- Última revisión: 2026-09-14
-- Versión funcional de referencia: QA b63cdad
-- Capacidades cubiertas: áreas, puestos, trabajadores, capacidad productiva y elegibilidad para Producción, Mantenimiento y servicios de Ventas
+- Alcance por ambiente: Local y QA; las capacidades futuras se indican expresamente
+- Última revisión: 2026-10-14 (folios CC-18 implementados sólo Local; sin promoción QA)
+- Versión funcional de referencia: QA e57237f
+- Capacidades cubiertas: áreas, puestos, trabajadores, capacidad productiva y elegibilidad para Producción, Mantenimiento y servicios de Ventas; preparación por División sólo Local
 
 ## Propósito
 
@@ -12,7 +12,7 @@ Recursos Humanos conserva la estructura organizacional y el expediente operativo
 
 ## Corregir errores de captura
 
-**Disponible en Local; pendiente de promoción a QA.** Si un dato es inválido, el formulario muestra una explicación junto al campo y un resumen desde el que puede ir al control correspondiente. Corrija el dato indicado y vuelva a guardar; la captura se conserva mientras el formulario permanezca abierto. En partidas, revise la fila señalada y seleccione nuevamente el registro del catálogo si corresponde.
+**Disponible en Local y QA.** Si un dato es inválido, el formulario muestra una explicación junto al campo y un resumen desde el que puede ir al control correspondiente. Corrija el dato indicado y vuelva a guardar; la captura se conserva mientras el formulario permanezca abierto. En partidas, revise la fila señalada y seleccione nuevamente el registro del catálogo si corresponde.
 
 Los errores de permisos, conexión o reglas generales se muestran como un aviso de la operación. Si no aparece un campo señalado, no cambie datos al azar: revise el aviso y conserve la referencia de correlación para soporte. Corregir un campo no elimina los avisos de los demás. Cerrar el formulario o recargar no garantiza conservar cambios sin guardar.
 
@@ -26,6 +26,7 @@ Los errores de permisos, conexión o reglas generales se muestran como un aviso 
 | Elegibilidad para Mantenimiento | Disponible | Disponible |
 | Elegibilidad para órdenes de servicio de Ventas | Disponible | Disponible |
 | Reportes estándar descargables | Disponible | Disponible |
+| Elegibilidad por División para validar/liberar/iniciar/reanudar producción manual | Implementado; validación Local | No promovido |
 | Nómina, reclutamiento, ausencias y documentos | No disponible | No disponible |
 
 ## Mapa del módulo
@@ -127,3 +128,41 @@ No incluye nómina, salario, reclutamiento, expedientes documentales, datos méd
 ## Soporte y protección de datos
 
 Para soporte comparta número de empleado o nombre visible, puesto, área, estado y correlación. No copie CURP, RFC, NSS, teléfono o correo en tickets salvo canal y necesidad expresamente autorizados.
+
+
+## Demoras de comunicación en Local
+
+Mejora disponible solo en Local, pendiente de QA: la espera de cada petición incluye la descarga de la respuesta. Un fallo conserva la captura mientras permanezca abierto el formulario; no realiza un nuevo envío automáticamente. Consulte el estado del registro antes de repetir una operación cuyo resultado no se confirmó.
+
+## Preparar puestos y trabajadores por División
+
+Disponible sólo en Local. Estas asignaciones preparan la separación; todavía no cambian recetas, órdenes, disponibilidad comprometida o nómina. El maestro del puesto y el expediente siguen siendo únicos.
+
+En Recursos Humanos → Áreas y puestos, abra el área y pulse **Asignación por División** en el puesto. En Trabajadores, use la misma acción en la tarjeta del expediente. Se requiere lectura del catálogo correspondiente; guardar necesita el permiso de actualización de puesto o trabajador.
+
+1. Busque y seleccione una División autorizada por nombre o código.
+2. Para un puesto, revise el **Costo por hora en esta División**: tarifa de costeo para la empresa, no salario. Admite cero y hasta seis decimales. Compruebe la **Moneda base de la Sociedad**, derivada de la División y de sólo lectura; marque **Confirmo este importe en la moneda indicada para operaciones futuras** antes de guardar la asignación activa. La casilla no viene seleccionada. Un importe propuesto o histórico no acredita moneda confirmada. Cambiar la tarifa general después no actualiza esta asignación.
+3. Puede elegir un centro activo de esa División o dejar **Sin centro**. Preparar el sistema no vuelve obligatorio el centro ni activa Contabilidad. Cambiar División limpia la selección anterior.
+4. Para un trabajador, el puesto vigente y su área deben estar activos y el puesto debe tener una asignación activa en esa División. No capture de nuevo el puesto ni datos personales en este formulario.
+5. Guarde y revise **Asignaciones existentes**. Puede habilitar el mismo maestro en varias Divisiones sin duplicarlo.
+6. Para retirar disponibilidad, abra la asignación y cambie su estado a inactiva. Se conservan el centro, tarifa, moneda y puesto históricos; desactivar no exige confirmar de nuevo la moneda. Reactivar revalida las referencias y exige confirmación explícita de tarifa en moneda vigente.
+
+Si el trabajador cambia de puesto, sus asignaciones anteriores dejan de dar elegibilidad para el nuevo puesto: revise la asignación de ese puesto y vuelva a guardar la del trabajador para confirmarla. Dar de baja al trabajador o inactivar el área/puesto también lo excluye de la consulta elegible. Las banderas **Interviene en producción/mantenimiento** siguen siendo necesarias para esos usos.
+
+Un rechazo conserva la captura y señala el costo por hora cuando es corregible. Conflicto de revisión: vuelva a abrir la asignación para revisar la versión guardada. Puesto no disponible: revise su estado y asignación en esa División. Área inactiva: revise su estado en RH. Ninguno de estos cambios crea por sí solo disponibilidad adicional en órdenes ni permite sumar dos veces la capacidad de una persona habilitada en varias Divisiones.
+
+## Consultar capacidad nominal por División
+
+En **Recursos Humanos → Áreas y puestos → Ver área → Asignación por División** de un puesto, seleccione la División y pulse **Consultar capacidad de esta División**. La consulta requiere permiso de lectura de puestos y alcance sobre esa División. Muestra trabajadores elegibles y capacidad declarada de la División, usando las tarifas confirmadas vigentes.
+
+Es capacidad nominal: no descuenta compromisos de Producción ni reserva tiempo. Una persona habilitada en varias Divisiones sigue siendo la misma persona; no sume las consultas para prometer más horas disponibles. Las órdenes manuales Local ya combinan esos IDs con compromisos globales por persona/día dentro de Producción. Una persona habilitada en dos Divisiones no aporta dos jornadas. Al iniciar o reanudar, Producción vuelve a verificar los responsables, trabajadores comprometidos y sus puestos vigentes. La ocupación histórica sin persona identificada exige revisión y puede bloquear el solapamiento; RH no inventa asignaciones ni libera compromisos productivos.
+
+Una tarifa histórica sin moneda permanece sin confirmar y no se considera un costo vigente por aparecer en la ficha. Si cambia la Sociedad o su moneda, revise el importe y confirme de nuevo antes de utilizarla. No convierta importes anteriores por inferencia. El rechazo de moneda, alcance o elegibilidad conserva captura y requiere corregir el dato o renovar el contexto autorizado, no duplicar el puesto.
+
+## Documentos relacionados
+
+[Registro de esta fuente y su Word](../REGISTRO.md) · [Ficha funcional](../../../modulos/10_recursos_humanos.md) · [Estado por ambiente](../../contexto/ESTADO_ACTUAL.md) · [Control de integración por submódulo](../../contexto/CONTROL_CONTABLE.md).
+
+## Folio de puesto · sólo Local (CC-18)
+
+Al crear un puesto, Administración asigna su código visible. Si la secuencia `hr.position` está en modo manual, capture el código solicitado; RH conserva el mismo código. En modo administrado, el sistema lo asigna al guardar. Los puestos anteriores conservan su identidad y pueden aparecer sin código nuevo. El código queda visible en la consulta de puestos y en las proyecciones de elegibilidad de trabajadores. Reintentar el alta con la misma clave de operación recupera el mismo folio.

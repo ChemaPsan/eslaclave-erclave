@@ -14,11 +14,15 @@ def _query(repository,sql,params):
 
 def _where(filters,mapping,params):
     where=["x.tenant_id=:tenant_id"]
+    if filters.get('allowed_divisions') is not None and filters.get('_document_scope'):
+        where.append("(x.organization_context->>'division_ref_id')=any(:divisions)")
+        params['divisions']=filters['allowed_divisions']
     for key,expr in mapping.items():
         if filters.get(key) not in (None,""):where.append(expr);params[key]=filters[key]
     return where
 
 def build_report(repository,tenant_id,report_code,filters):
+    filters={**filters,'_document_scope':report_code in {'requisitions','orders'}}
     if report_code not in REPORT_PERMISSIONS:raise ErclaveError("report_not_found","Purchasing report does not exist.",status_code=404)
     params={"tenant_id":tenant_id};stamp=date.today().isoformat()
     if report_code=="suppliers":
@@ -37,6 +41,10 @@ def build_report(repository,tenant_id,report_code,filters):
         columns=[C("code","Orden de compra","Purchase order"),C("supplier_code","Proveedor","Supplier"),C("supplier_name","Nombre del proveedor","Supplier name"),C("status","Estatus","Status"),C("currency","Moneda","Currency"),C("payment_terms","Condiciones de pago","Payment terms"),C("subtotal","Subtotal","Subtotal"),C("line_count","Partidas","Lines"),C("received_quantity","Cantidad recibida","Received quantity"),C("issued_at","Emitida","Issued"),C("created_at","Creada","Created")]
     else:
         where=_where(filters,{"status":"x.status=:status","supplier_id":"po.supplier_id=:supplier_id","date_from":"x.received_at::date>=:date_from","date_to":"x.received_at::date<=:date_to","line_type":"pol.line_type=:line_type"},params)
+        divisions=filters.get("allowed_divisions")
+        if divisions is not None:
+            where.append("true"+repository.receipt_scope_sql(divisions,alias="x"))
+            params["divisions"]=divisions
         rows=_query(repository,f"""select x.code,po.code order_code,po.supplier_code_snapshot supplier_code,po.supplier_name_snapshot supplier_name,x.status,x.supplier_document_reference,x.received_at,count(distinct rl.id) line_count,coalesce(sum(rl.quantity),0) received_quantity,count(distinct rl.id) filter(where rl.reconciliation_status!='completed') pending_reconciliations,x.created_at
           from purchasing.purchase_receipts x join purchasing.purchase_orders po on po.id=x.purchase_order_id and po.tenant_id=x.tenant_id left join purchasing.purchase_receipt_lines rl on rl.receipt_id=x.id and rl.tenant_id=x.tenant_id left join purchasing.purchase_order_lines pol on pol.id=rl.order_line_id and pol.tenant_id=x.tenant_id where {' and '.join(where)} group by x.id,po.id order by x.received_at desc""",params)
         columns=[C("code","Recepción","Receipt"),C("order_code","Orden de compra","Purchase order"),C("supplier_code","Proveedor","Supplier"),C("supplier_name","Nombre del proveedor","Supplier name"),C("status","Estatus","Status"),C("supplier_document_reference","Documento del proveedor","Supplier document"),C("received_at","Recibida","Received"),C("line_count","Partidas","Lines"),C("received_quantity","Cantidad recibida","Received quantity"),C("pending_reconciliations","Conciliaciones pendientes","Pending reconciliations"),C("created_at","Creada","Created")]

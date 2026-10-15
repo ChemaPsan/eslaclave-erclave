@@ -1,9 +1,9 @@
 # Manual funcional de Administración y Backoffice
 
 - Audiencia: administradores del tenant y operadores internos autorizados
-- Alcance por ambiente: Local actual y QA; las mejoras pendientes de promoción se indican expresamente
-- Última revisión: 2026-09-14
-- Versión funcional de referencia: QA b63cdad
+- Alcance por ambiente: Local y QA; las capacidades futuras se indican expresamente
+- Última revisión: 2026-10-14 (selector de Sociedad y División y folios nuevos sólo Local)
+- Versión funcional de referencia: QA e57237f; organización y alcances nuevos sólo en Local
 - Capacidades cubiertas: contexto de sesión, organización, usuarios, roles, permisos, módulos, unidades, folios, catálogos, plantilla documental y ciclo de tenants en Backoffice
 
 ## Propósito
@@ -14,7 +14,7 @@ Backoffice es una aplicación interna separada para alta, configuración, suspen
 
 ## Corregir errores de captura
 
-**Disponible en Local; pendiente de promoción a QA.** Si un dato es inválido, el formulario muestra una explicación junto al campo y un resumen desde el que puede ir al control correspondiente. Corrija el dato indicado y vuelva a guardar; la captura se conserva mientras el formulario permanezca abierto. En partidas, revise la fila señalada y seleccione nuevamente el registro del catálogo si corresponde.
+**Disponible en Local y QA.** Si un dato es inválido, el formulario muestra una explicación junto al campo y un resumen desde el que puede ir al control correspondiente. Corrija el dato indicado y vuelva a guardar; la captura se conserva mientras el formulario permanezca abierto. En partidas, revise la fila señalada y seleccione nuevamente el registro del catálogo si corresponde.
 
 Los errores de permisos, conexión o reglas generales se muestran como un aviso de la operación. Si no aparece un campo señalado, no cambie datos al azar: revise el aviso y conserve la referencia de correlación para soporte. Corregir un campo no elimina los avisos de los demás. Cerrar el formulario o recargar no garantiza conservar cambios sin guardar.
 
@@ -26,13 +26,14 @@ Los errores de permisos, conexión o reglas generales se muestran como un aviso 
 | Usuarios, roles y permisos | Disponible | Disponible |
 | Entitlements y módulos activos | Disponible | Disponible |
 | Unidades, folios y catálogos comerciales | Disponible | Disponible |
-| Entidades legales, sucursales y perfil organizacional | Disponible | Disponible |
+| Perfil organizacional | Disponible | Disponible |
+| Emisores, Sociedades, Divisiones y alcance por usuario | Disponible | No disponible; conserva entidades legales y sucursales |
 | Alta, edición, suspensión y eliminación de tenants | Disponible | Disponible |
 | Onboarding automático por checkout/pago | No disponible | No disponible |
 
 ## Mapa de Administración
 
-- **Organización:** perfil, entidades legales y sucursales.
+- **Organización:** perfil y, en Local, Emisores, Sociedades y Divisiones. QA conserva entidades legales y sucursales.
 - **Usuarios:** invitaciones, estado y membresía.
 - **Roles:** definición y matriz de permisos.
 - **Módulos activos:** entitlements contratados por tenant.
@@ -51,12 +52,43 @@ Un módulo visible requiere tres condiciones: tenant activo, entitlement activo 
 ## Usuarios
 
 1. Abra **Administración > Usuarios**.
-2. Invite con correo, rol y alcance permitidos.
+2. Invite con correo y rol permitidos. En Local una membresía nueva inicia sin Divisiones autorizadas; configure su alcance después.
 3. El usuario establece su contraseña mediante Firebase; nunca se envía una contraseña por correo.
-4. Actualice rol, sucursal o estado cuando sea necesario.
+4. Actualice rol y estado cuando sea necesario. En Local use el editor de alcance para asignar Divisiones.
 5. Use **Deshabilitar** para bloquear acceso conservando evidencia o **Eliminar** cuando corresponda retirar la membresía.
 
 La identidad Firebase sólo se elimina si ya no está compartida con otro tenant. Una respuesta de invitación o limpieza pendiente debe conservarse; el reintento automático durable permanece como mejora futura.
+
+## Sociedades y Divisiones en Local
+
+Una Sociedad agrupa Divisiones y tiene un único Emisor fiscal. Una División identifica la unidad operativa. En **Administración > Organización**, registre primero el Emisor, después la Sociedad y finalmente sus Divisiones. La Sociedad exige Emisor y moneda base; la División exige Sociedad. Use los selectores del catálogo y revise el código y nombre antes de guardar.
+
+Esta estructura y el alcance de sesión están disponibles sólo en Local. La plantilla por alcance y el catálogo básico de Centros de costos ya están disponibles Local. La separación documental es parcial: Ventas, Compras, Mantenimiento y movimientos adaptados de Inventarios tienen recorridos por División; la fabricación comercial conecta solicitud, orden, recepción y conciliación explícitas en Local. La aceptación integrada de esos recorridos sigue pendiente. Cambiar el contexto visible no certifica que todos los documentos estén filtrados por División.
+
+### Cambiar la Sociedad y División activa en Local
+
+1. En la barra superior, pulse **SOCIEDAD / DIVISIÓN**. El botón muestra la Sociedad y División activas.
+2. Revise las opciones con nombre y código. Puede buscar por Sociedad, División o código para acortar la lista.
+3. Pulse la División deseada. El sistema confirma el alcance con Administración y actualiza el contexto; la marca identifica la opción activa.
+4. Si la lista está vacía, solicite a un administrador que revise su acceso a Divisiones. Si el cambio falla, permanece activa la selección anterior.
+
+El menú se cierra con **Escape** o al salir de él. La División elegida se conserva al recargar la sesión del mismo usuario y tenant. El **Centro de costos** no se cambia desde esta barra: es un catálogo y una asignación por División o por documento, según el flujo. Cambiar la División activa no cambia por sí mismo el centro de costos de documentos existentes.
+
+## Folios operativos CC-18 (solo Local)
+
+En Administración, configure por tipo el prefijo, separador, siguiente número y modo administrado o manual. Un operador autorizado ve la secuencia de su documento. En modo administrado, el formulario muestra el folio como asignado automáticamente; en modo manual se captura antes de guardar. Los movimientos generados por otros procesos reciben un código estable del origen si Inventario está en modo manual. Los registros anteriores conservan su código y pueden carecer de modo histórico. La configuración de un tipo no concede permiso para operar otro.
+
+## Asignar acceso a Sociedades y Divisiones en Local
+
+1. Abra **Administración > Usuarios** y seleccione la acción de acceso a Sociedades y Divisiones del usuario.
+2. Elija acceso a todas las Divisiones o sólo a las seleccionadas. El acceso total incluye nuevas Divisiones activas; el restringido requiere asignarlas explícitamente.
+3. Para restringir, busque una División por código o nombre y revise su Sociedad. Agregue las necesarias o quite las que ya no correspondan.
+4. Guarde el alcance. Una selección vacía deja al usuario sin Divisiones autorizadas; conserva los permisos de sus roles.
+5. Actualice la sesión del usuario para obtener el alcance vigente. El selector de contexto muestra Sociedad y División; sin opciones no se crea una sucursal «Matriz» automáticamente.
+
+Consultar requiere permiso de lectura de usuarios; guardar requiere actualización de usuarios. Buscar nuevas Divisiones exige lectura del catálogo de Divisiones. Un rol por sí solo no concede acceso a todas ellas.
+
+Si aparece un conflicto por edición simultánea, cierre y reabra el editor para revisar la versión vigente antes de guardar de nuevo. Ante un fallo de conexión, la captura permanece mientras el editor siga abierto. Una División inactiva, ajena al tenant o no autorizada no es válida para seleccionar contexto. Si falla el cambio de contexto, se conserva la selección previamente confirmada.
 
 ## Roles y matriz de permisos
 
@@ -107,7 +139,7 @@ Revise las acciones necesarias en cada rol antes de comenzar las pruebas. El nom
 - **Ventas:** prepara entregas con `sales.delivery.create`. El permiso comercial de confirmación por sí solo no sustituye la salida de Almacén. En Cotizaciones, enviar y aprobar requieren `sales.quote.submit` y `sales.quote.approve`, respectivamente.
 - **Producción y Mantenimiento:** conservan sus permisos de transición y solicitud; Almacén confirma el material antes del inicio productivo o de la resolución de mantenimiento, según corresponda.
 
-Si falta una acción, revise el permiso puntual en **Roles**, el módulo efectivo y la membresía. Renueve la sesión después del cambio. No conceda todos los permisos ni active módulos adicionales sólo para hacer desaparecer un bloqueo de flujo. Los permisos de Almacén de este corte son globales dentro del tenant; no hay asignación individual de almacenes por usuario.
+Si falta una acción, revise el permiso puntual en **Roles**, el módulo efectivo y la membresía. Renueve la sesión después del cambio. No conceda todos los permisos ni active módulos adicionales sólo para hacer desaparecer un bloqueo de flujo. QA conserva permisos de Almacén dentro del tenant; en Local, los recorridos dimensionados también validan alcance por División. No hay asignación individual de almacenes por usuario.
 
 ## Alta de tenant desde Backoffice
 
@@ -143,3 +175,29 @@ No existe checkout/billing operativo, provisioning service-to-service endurecido
 ## Soporte y seguridad
 
 Conserve tenant visible, correo, módulo, rol, acción y referencia de correlación. Nunca comparta tokens, enlaces vigentes de invitación o contraseñas. Para pruebas use sólo datos ficticios y el tenant autorizado para el ambiente.
+
+
+## Demoras de comunicación en Local
+
+Mejora disponible solo en Local, pendiente de QA: la espera de cada petición incluye la descarga de la respuesta. Un fallo conserva la captura mientras permanezca abierto el formulario; no realiza un nuevo envío automáticamente. Consulte el estado del registro antes de repetir una operación cuyo resultado no se confirmó.
+
+
+## Preparar una plantilla por Sociedad o División en Local
+
+En **Administración > Organización**, abra Sociedades o Divisiones y use **Plantilla por alcance** en un registro activo. La pantalla indica si hereda de Corporativo/Sociedad o tiene configuración propia. Ajuste colores, pie y numeración; el logo actual se conserva. Guardar crea una plantilla completa para ese alcance. **Volver a heredar** retira el ajuste y muestra la configuración superior vigente.
+
+Consultar requiere lectura de configuración; guardar y restaurar requieren actualización. Un usuario con acceso limitado sólo puede usar sus Divisiones; el ajuste por Sociedad requiere alcance global. Un conflicto pide cerrar y reabrir para revisar la versión vigente; una falla conserva los datos capturados mientras el editor esté abierto.
+
+En Local, este editor define la plantilla por Sociedad o Division. La impresion de cotizaciones con contexto consulta la plantilla e identidad efectivas antes de aprobar y conserva un snapshot al aprobar; la orden de produccion lo conserva al liberar. Cambios posteriores en el editor no modifican esas impresiones historicas. Los demas generadores se integraran por documento. QA no dispone de este recorrido.
+
+## Centros de costos por División — CHG-297 Local
+
+En Organización, abrir Divisiones y elegir Centros de costos en la División correspondiente. Se requiere permiso de lectura de Divisiones y del catálogo. La opción sólo aparece cuando el catálogo básico está disponible.
+
+Escribir el nombre y crear el centro. El sistema asigna el código; la División queda fija. Buscar por nombre/código y filtrar estado. Editar cambia sólo el nombre; desactivar conserva el historial. Una División inactiva no admite altas/reactivaciones. Las acciones dependen de los permisos del usuario. Si falla la solicitud, conservar la captura y reintentar; ante conflicto de revisión, consultar de nuevo antes de editar.
+
+Preparar centros no activa cálculos de Costos ni Contabilidad y no obliga a capturarlos en operaciones sin flujo de imputación habilitado. Las asignaciones a maestros ya existen Local; cada flujo documental debe comprobar su integración. Preparar un centro no implica que todos los documentos lo consuman.
+
+## Documentos relacionados
+
+[Registro de esta fuente y su Word](../REGISTRO.md) · [Ficha funcional](../../../modulos/08_administracion_configuracion.md) · [Estado por ambiente](../../contexto/ESTADO_ACTUAL.md) · [Control de integración por submódulo](../../contexto/CONTROL_CONTABLE.md).

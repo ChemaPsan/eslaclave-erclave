@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from erclave_common.csv_reports import REPORT_MAX_ROWS, ReportColumn, ReportResult
 from erclave_common.errors import ErclaveError
+from .order_context import scope_sql
 
 
 C = ReportColumn
@@ -34,7 +35,7 @@ def _where(filters: dict, mapping: dict[str, str], params: dict) -> list[str]:
     return clauses
 
 
-def build_report(repository, tenant_id: str, report_code: str, filters: dict) -> ReportResult:
+def build_report(repository, tenant_id: str, report_code: str, filters: dict, scope=None) -> ReportResult:
     if report_code not in REPORT_PERMISSIONS:
         raise ErclaveError("report_not_found", "Production report does not exist.", status_code=404)
     params = {"tenant_id": tenant_id}
@@ -65,6 +66,9 @@ def build_report(repository, tenant_id: str, report_code: str, filters: dict) ->
             "status": "x.status = :status", "priority": "x.priority = :priority",
             "date_from": "x.required_at::date >= :date_from", "date_to": "x.required_at::date <= :date_to",
         }, params)
+        clause, scoped=scope_sql(scope,'x.organization_context')
+        if clause:clauses.append(clause.removeprefix(' and '))
+        params.update(scoped)
         rows = _query(repository, f"""select x.code,p.code product_code,p.name product_name,x.quantity,x.unit,x.status,x.priority,
             x.required_at,x.planned_start_at,x.planned_end_at,x.actual_start_at,x.actual_end_at,
             x.responsible_name_snapshot,x.planned_cost,x.actual_cost,x.created_at
@@ -76,6 +80,9 @@ def build_report(repository, tenant_id: str, report_code: str, filters: dict) ->
             "status": "x.status = :status", "area_id": "s.labor_area_ref_id = :area_id",
             "date_from": "x.required_at::date >= :date_from", "date_to": "x.required_at::date <= :date_to",
         }, params)
+        clause, scoped=scope_sql(scope,'x.organization_context')
+        if clause:clauses.append(clause.removeprefix(' and '))
+        params.update(scoped)
         rows = _query(repository, f"""select coalesce(s.labor_area_name_snapshot,'Sin área') area_name,x.code order_code,
             p.code product_code,p.name product_name,s.name stage_name,s.status stage_status,s.progress_percent,
             s.responsible_name_snapshot,x.required_at,x.status,x.priority

@@ -26,11 +26,11 @@ No inferir autorizacion conjunta: publicar la rama, abrir PR, fusionar, `qa-buil
 ## Construir y promover
 
 1. Solicitar autorizacion antes de publicar la rama, abrir PR o fusionar. Fusionar un PR validado a `main`; no desplegar un working tree ni reconstruir despues de aprobar.
-2. Despachar `qa-candidate.yml` con SHA completo y confirmacion. Registrar run, cuatro digests y resultados.
+2. Despachar `qa-candidate.yml` con SHA completo y confirmacion. Registrar run, siete digests y resultados.
 3. Despachar `qa-release.yml` con el mismo `release_sha` y run candidato. Autorizar solo el siguiente gate solicitado.
 4. En `qa-database`, ejecutar migracion/configuracion solo si el plan las requiere y fueron autorizadas por separado. El workflow actual obliga ambos pasos en cada release: mientras no sean condicionales, declarar esa limitacion y obtener autorizacion explicita para ambos; nunca fingir que se omitieron. Nunca ejecutar Alembic QA desde una terminal local.
 5. En `qa-services`, crear revisiones candidatas y probar `/health`, `/ready`, `/version`, configuracion y contratos sin mover trafico cuando el servicio ya existe.
-6. En `qa-traffic`, comprobar ausencia de drift; registrar las cuatro revisiones estables y el plan compensatorio antes de promover. Si falla un servicio, detenerse y restaurar los ya modificados antes de reintentar. Verificar cada revision exacta al 100%.
+6. En `qa-traffic`, comprobar ausencia de drift; registrar las siete revisiones estables y el plan compensatorio antes de promover. Si falla un servicio, detenerse y restaurar los ya modificados antes de reintentar. Verificar cada revision exacta al 100%.
 7. En `qa-frontend`, publicar el artefacto sanitizado y comprobar el contenido realmente servido, no solo el directorio local. El pipeline actual reconstruye el frontend durante release: registrar esta limitacion y no afirmar identidad build-once hasta mover el build al candidato y verificar su hash.
 8. Detenerse si cambia SHA/digest, revision estable, base, tenant, imagen, identidad o configuracion respecto al plan.
 

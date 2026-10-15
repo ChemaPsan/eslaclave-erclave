@@ -1,10 +1,16 @@
 # Manual funcional de Almacenes e Inventarios
 
 - Audiencia: almacenistas, supervisores, planeadores y responsables de recepción
-- Alcance por ambiente: Local actual y QA; las mejoras pendientes de promoción se indican expresamente
-- Última revisión: 2026-09-14
-- Versión funcional de referencia: QA `b63cdad`; mejoras Local de formularios, margen y evidencia pendientes de promoción
+- Alcance por ambiente: Local y QA; las capacidades futuras se indican expresamente
+- Última revisión: 2026-10-14 (folios CC-18 implementados sólo Local; sin promoción QA)
+- Versión funcional de referencia: QA `e57237f`
 - Capacidades cubiertas: almacenes, artículos, movimientos, existencias, Kardex, reservas, valuación, solicitudes de entradas y salidas, transferencias en tránsito, devoluciones de materiales y reportes estándar
+
+## Operación por División y moneda de costo · sólo Local
+
+En un almacén asignado a División, revise la moneda mostrada antes de capturar entrada/ajuste positivo y escriba su costo unitario (cero permitido). Las salidas usan el costo de existencias. Si la historia no tiene moneda confirmada, resolver mapeo antes de operar. Stock de pedidos conserva su contexto.
+
+
 
 ## Propósito
 
@@ -12,7 +18,7 @@ Almacenes e Inventarios es la autoridad de la existencia física. Los saldos y e
 
 ## Corregir errores de captura
 
-**Disponible en Local; pendiente de promoción a QA.** Si un dato es inválido, el formulario muestra una explicación junto al campo y un resumen desde el que puede ir al control correspondiente. Corrija el dato indicado y vuelva a guardar; la captura se conserva mientras el formulario permanezca abierto. En partidas, revise la fila señalada y seleccione nuevamente el registro del catálogo si corresponde.
+**Disponible en Local y QA.** Si un dato es inválido, el formulario muestra una explicación junto al campo y un resumen desde el que puede ir al control correspondiente. Corrija el dato indicado y vuelva a guardar; la captura se conserva mientras el formulario permanezca abierto. En partidas, revise la fila señalada y seleccione nuevamente el registro del catálogo si corresponde.
 
 Los errores de permisos, conexión o reglas generales se muestran como un aviso de la operación. Si no aparece un campo señalado, no cambie datos al azar: revise el aviso y conserve la referencia de correlación para soporte. Corregir un campo no elimina los avisos de los demás. Cerrar el formulario o recargar no garantiza conservar cambios sin guardar.
 
@@ -29,6 +35,10 @@ Los errores de permisos, conexión o reglas generales se muestran como un aviso 
 | Salidas de materiales productivos, refacciones y pedidos confirmadas por Almacén | Disponible | Disponible |
 | Transferencias con recepción en destino y retorno al origen | Disponible | Disponible |
 | Recepción de devoluciones de sobrantes | Disponible | Disponible |
+| Materiales y terminado de órdenes manuales por División | Implementado; validación Local | No promovido |
+| Recepción y reserva comercial de fabricación por División | Implementado; validación Local | No promovido |
+| Prueba del origen y costo de recepciones de Compras y refacciones por División | Implementado sólo Local | No promovido |
+| Transferencias dentro de una Sociedad y sobrantes con contexto histórico | Implementado sólo Local | No promovido |
 | Lotes, series, cuarentena y ubicaciones operativas | No disponible | No disponible |
 
 ## Mapa del módulo
@@ -119,6 +129,8 @@ Ventas prepara la entrega. En **Movimientos > Ver solicitudes > Salidas de pedid
 
 ## Transferir entre almacenes
 
+**Regla adicional sólo Local:** origen y destino deben estar asignados a Divisiones de la misma Sociedad. El usuario necesita alcance sobre ambas y el artículo debe estar habilitado en cada División. El sistema conserva los contextos y la moneda de costo desde la salida; no se captura una conversión monetaria al recibir. Una transferencia entre Sociedades se rechaza y requiere otro flujo futuro; no la sustituya por entradas o salidas manuales.
+
 1. Registre una **Transferencia** con artículo, almacén origen, un destino diferente, cantidad y motivo. La confirmación descuenta el origen; todavía no incrementa el destino.
 2. El responsable del destino abre **Movimientos > Ver solicitudes > Transferencias en tránsito** y revisa origen, destino y saldo pendiente.
 3. Al recibir, selecciona **Confirmar recepción física**, captura la cantidad que realmente llegó y las observaciones. Se permiten recepciones parciales hasta agotar el saldo.
@@ -135,6 +147,8 @@ El área que usó el material solicita una devolución desde su orden terminada 
 
 Si el sobrante ya no se devolverá, **Cancelar solicitud de devolución** exige motivo y sólo aplica mientras esté pendiente, antes de registrar la entrada. Si la entrada ya ocurrió y falta conciliación, use **Continuar confirmación pendiente**; no reciba físicamente dos veces ni cree otra solicitud para el mismo material.
 
+**Conservación histórica sólo Local:** la devolución reutiliza la División, Sociedad, moneda y costo de la salida confirmada. No utiliza el costo actual del artículo ni reasigna una salida histórica a la configuración actual. Si falta contexto o moneda confirmada, la operación requiere revisión; no complete datos por suposición ni cree una entrada manual para evitarla.
+
 ## Recibir producto terminado
 
 1. Confirme que la orden de Producción esté **Terminada** y el producto tenga artículo terminado vinculado.
@@ -142,6 +156,8 @@ Si el sobrante ya no se devolverá, **Cancelar solicitud de devolución** exige 
 3. Revise folio, producto, unidad y cantidad pendiente.
 4. Seleccione almacén, capture la cantidad físicamente recibida, fecha y observaciones.
 5. Confirme la entrada.
+
+En Local, para una orden por División, el artículo y almacén receptor deben pertenecer a esa División y respetar su moneda Sociedad. El sistema obtiene de Producción el contexto y costo unitario original exacto, a seis decimales. No sustituya ese costo por el del maestro ni capture uno para eludir un rechazo. Si el productor o contexto no se puede verificar, corrija la dependencia y reintente la misma recepción.
 
 Se permiten recepciones parciales y nunca puede superarse lo producido. Una reversa vuelve a incrementar el pendiente. El rol receptor sólo ve la proyección necesaria; no recibe receta, recursos ni costos completos de Producción.
 
@@ -176,3 +192,47 @@ No incluye lotes, series, cuarentena, inventario bloqueado, ubicaciones operativ
 ## Soporte
 
 Ejemplo: al transferir 6 unidades y recibir 4, las 2 restantes sólo regresan al saldo de origen cuando éste confirma su recepción. Conserve artículo, almacén, folio, fecha y correlación para soporte. No modifique la base ni improvise movimientos para ocultar una conciliación pendiente.
+
+
+## Demoras de comunicación en Local
+
+Mejora disponible solo en Local, pendiente de QA: la espera de cada petición incluye la descarga de la respuesta. Un fallo conserva la captura mientras permanezca abierto el formulario; no realiza un nuevo envío automáticamente. Consulte el estado del registro antes de repetir una operación cuyo resultado no se confirmó.
+
+## Asignación por División — disponible en Local
+
+En el catálogo de Almacenes o de Artículos, abrir **Asignación por División** desde la tarjeta del registro. Se requiere permiso de lectura y sesión con alcance organizacional; guardar requiere permiso de edición del recurso.
+
+Para un almacén pendiente, un usuario con alcance completo busca y selecciona la División real. Al guardar queda fija. El texto anterior de centro de negocio no se convierte automáticamente en División; solicita una revisión si la asignación fue incorrecta.
+
+Un artículo conserva su identidad y puede tener una asignación distinta en cada División permitida. Buscar la División, seleccionar un centro predeterminado si corresponde y guardar. El selector de centros sólo muestra activos de esa División y requiere permiso de lectura del catálogo. El centro no es obligatorio sólo por preparar el sistema ni activa Contabilidad.
+
+Las asignaciones existentes pueden consultarse y desactivarse sin borrar su historia. Desactivar conserva el centro guardado; reactivar vuelve a validar las referencias. Si hay conflicto, conservar la captura y consultar de nuevo la asignación; si falla la conexión, reintentar. Cambiar de División limpia el centro seleccionado para evitar referencias cruzadas.
+
+Esta preparación no modifica movimientos previos. En Local están adaptados movimientos manuales, reversas, surtimiento/entrega desde existencias de Ventas, materiales y terminado de Producción, recepciones físicas de Compras y solicitudes de refacciones. La reserva o recepción comprueba documento, partida, artículo, almacén, cantidad y unidad contra el documento preparado por su módulo. Transferencias dentro de una Sociedad y devoluciones de sobrantes conservan los contextos y costos de origen. Esto no completa la separación de todos los documentos de Compras o Mantenimiento ni convierte la historia pendiente de mapeo en datos confirmados.
+
+## Recepciones y refacciones con origen confirmado
+
+**Disponible sólo Local; no promovido a QA.** Para una recepción física de Compras, el proveedor debe estar activo y habilitado en la División del almacén. Compras conserva el precio en la moneda de la orden y, cuando difiere de la moneda de Sociedad, captura la tasa explícita antes de preparar la recepción. Almacén confirma el documento preparado y no sustituye sus cantidades, fecha o costo con una entrada manual.
+
+Para refacciones, el almacén define la División de la solicitud. Cuando existe máquina u orden productiva asociada, su División debe coincidir. El sistema comprueba el origen antes de reservar o entregar y mantiene la moneda de costo. Si falta acceso o la autoridad del documento no responde, espere su recuperación o solicite la corrección y continúe la misma solicitud.
+
+Un intento repetido conserva la misma entrada, salida o reserva confirmada. Si la operación física ya ocurrió y falta actualizar el documento del otro módulo, utilice la continuación pendiente; no vuelva a recibir o entregar mercancía.
+
+## Documentos relacionados
+
+[Registro de esta fuente y su Word](../REGISTRO.md) · [Ficha funcional](../../../modulos/02_almacenes_inventarios.md) · [Estado por ambiente](../../contexto/ESTADO_ACTUAL.md) · [Control de integración por submódulo](../../contexto/CONTROL_CONTABLE.md).
+
+## Producto terminado destinado a un pedido por División
+
+**Disponible en Local; no promovido a QA.** Una orden productiva originada en Ventas se recibe mediante el mismo recorrido de producto terminado. Almacenes confirma la recepción física en un destino elegible de la División; el artículo, unidad y costo original provienen de la orden.
+
+La recepción no reserva automáticamente mercancía para el cliente. Después, Ventas abre el seguimiento del pedido, actualiza las recepciones y utiliza **Conciliar recepción de fabricación**. La selección sólo se habilita cuando la orden está terminada y el almacén tiene recepción y disponibilidad suficientes para la partida pendiente. Una recepción parcial sigue visible, pero no permite esa conciliación hasta cumplir el requisito; no se combina el saldo de varios almacenes desde ese formulario.
+
+Una conciliación confirmada crea la reserva comercial. La salida física se confirma posteriormente desde **Salidas de pedidos de venta**, con el procedimiento y permisos habituales. Si se interrumpe la conciliación, Ventas reintenta la misma operación; no registre entradas o salidas manuales compensatorias para continuar.
+
+
+Si una conciliación ya inició y quedó sin respuesta, el seguimiento puede habilitar exclusivamente el almacén guardado para continuar ese intento. Esa opción recupera la reserva existente; no afirma que haya disponibilidad libre para una nueva reserva.
+
+## Folio de movimiento · sólo Local (CC-18)
+
+Al registrar una entrada, salida, ajuste o transferencia manual, Administración asigna el folio de `inventory.movement`. Si la secuencia está en modo manual, capture **Código manual**; si está en modo administrado, el folio aparece al guardar. Los movimientos generados por recepciones, consumos, transferencias, devoluciones y reversas usan una referencia estable derivada de su origen cuando la secuencia está en modo manual. El Kardex conserva los folios históricos sin renumerarlos. Ante una falla, reintente la misma operación con la misma clave para recuperar el folio reservado.

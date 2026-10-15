@@ -1,16 +1,18 @@
 # ERClave — Documentación por módulos
 
+Estado conciliado CHG-311: [estado por ambiente](../docs/contexto/ESTADO_ACTUAL.md), [control contable por submódulo](../docs/contexto/CONTROL_CONTABLE.md), [pendientes vigentes](../docs/contexto/PENDIENTES.md) y [cobertura de agentes](../docs/arquitectura/cobertura_agentes_modulos.md). Las fichas distinguen operación implementada, preparación Local y capacidades planned; una definición futura no prueba disponibilidad.
+
 Esta carpeta separa la documentación funcional de ERClave por módulo, para que cada área pueda crecer sin saturar el documento base del proyecto.
 
 El documento base mantiene la visión general, el enfoque modular y el roadmap. Los documentos de esta carpeta deberán usarse para bajar cada módulo a reglas, flujos, catálogos, estados, permisos, métricas y criterios de aceptación.
 
-Regla transversal de selección: maestros y documentos que crecen se consultan mediante búsqueda y resultados acotados, guardando IDs estables; listas cerradas como estatus, tipo o prioridad conservan el selector directo. La cobertura y los criterios completos están en `docs/arquitectura/seleccion_escalable_documentos.md`.
+Regla transversal de selección: maestros y documentos que crecen se consultan mediante búsqueda y resultados acotados, guardando IDs estables; listas cerradas como estatus, tipo o prioridad conservan el selector directo. La cobertura y los criterios completos están en [docs/arquitectura/seleccion_escalable_documentos.md](../docs/arquitectura/seleccion_escalable_documentos.md).
 
-Regla transversal de portada: la raíz de cada módulo operativo consulta reportes estándar propios y no genera acciones operativas. Altas, cambios y transiciones viven en submódulos. Administración es la excepción: su raíz conserva el centro de configuración. Los cruces, tableros configurables y análisis a la medida se reservan para el módulo Reportes, actualmente inactivo. La matriz completa está en `docs/arquitectura/reportes_estandar_por_modulo.md`.
+Regla transversal de portada: la raíz de cada módulo operativo consulta reportes estándar propios y no genera acciones operativas. Altas, cambios y transiciones viven en submódulos. Administración es la excepción: su raíz conserva el centro de configuración. Los cruces, tableros configurables y análisis a la medida se reservan para el módulo Reportes, actualmente inactivo. La matriz completa está en [docs/arquitectura/reportes_estandar_por_modulo.md](../docs/arquitectura/reportes_estandar_por_modulo.md).
 
 Regla transversal de mutaciones: guardar, crear, editar, eliminar o cambiar estatus muestra inmediatamente un indicador bilingüe de operación en curso y bloquea nuevas activaciones hasta que finaliza la solicitud. El bloqueo se libera también ante error y usa un contador para no ocultarse mientras exista otra mutación pendiente.
 
-Regla transversal de feedback: los bloqueos funcionales, warnings y errores se localizan por `error.code`, explican qué no cambió y cuál es la siguiente acción. El diagnóstico de la API no se muestra directamente y un control de estatus rechazado vuelve al valor confirmado. La taxonomía vive en `docs/arquitectura/feedback_operativo_y_errores.md`.
+Regla transversal de feedback: los bloqueos funcionales, warnings y errores se localizan por `error.code`, explican qué no cambió y cuál es la siguiente acción. El diagnóstico de la API no se muestra directamente y un control de estatus rechazado vuelve al valor confirmado. La taxonomía vive en [docs/arquitectura/feedback_operativo_y_errores.md](../docs/arquitectura/feedback_operativo_y_errores.md).
 
 ## Módulos documentados
 
@@ -47,18 +49,21 @@ Cada módulo deberá documentarse con una estructura similar:
 
 ## Estado MVP funcional
 
+Release QA `e57237f`, cabeza Alembic `20260913_0036`. Despliegue técnico verificado; smoke de adjuntos y UAT autenticada completa pendientes. Detalle: [docs/operaciones/release_qa_20260914.md](../docs/operaciones/release_qa_20260914.md).
+
 | Modulo | Estado actual |
 |---|---|
-| Produccion | API, persistencia y UI reales en Local y QA: recetas ponderadas, validacion autoritativa, reservas/consumo, capacidad comprometida, avance porcentual y recepcion posterior de producto terminado. |
+| Produccion | API, persistencia y UI reales en Local y QA: recetas ponderadas, validacion autoritativa, reservas/consumo, capacidad comprometida, avance porcentual, recepción posterior de producto terminado, margen esperado sin tope superior y evidencia de inicio/cierre para recetas de servicio. |
 | Almacenes | Inventory real en Local y QA para almacenes, articulos, movimientos, existencias, Kardex, reservas/consumo, disponibilidad neta, valuacion, concurrencia y recepcion de producto terminado. |
-| Ventas | Local aplica `20260901_0030` con Clientes, Cotizaciones, Pedidos, Entregas y Ordenes de servicio; QA conserva el corte certificado hasta `20260825_0029`, sin Ordenes de servicio. Devoluciones y facturacion permanecen `planned`. |
+| Ventas | Local y QA incluyen Clientes, Cotizaciones, Pedidos, Entregas y Órdenes de servicio. Devoluciones y facturacion permanecen `planned`. |
 | Administracion | UI y `admin-service` reales en QA para organizacion, usuarios, roles, permisos, entitlements, sesion y backoffice. |
 | Recursos Humanos | `hr-service`, schema, contrato, UI, expedientes, elegibilidad productiva y capacidad autoritativa reales en Local y QA. Los datos QA dependen de captura funcional autorizada; no se asumen catalogos vacios. |
-| Compras | Proveedores, Requisiciones, Ordenes y Recepciones estan desplegados en Local y QA hasta `20260825_0029`; Local aplica `20260901_0030` para partidas de servicio sin Inventory obligatorio. |
-| Mantenimiento | Correctivos, asignacion RH, tiempos, refacciones, bloqueo seguro y conciliacion durable estan desplegados en Local y QA hasta `20260825_0029`. |
-| Gastos, Costos, Reportes y Contabilidad | Permanecen `planned`; sus pantallas genericas no prueban runtime operativo. |
+| Compras | Proveedores, Requisiciones, Ordenes y Recepciones están desplegados en Local y QA, incluidas partidas de servicio sin Inventory obligatorio. |
+| Mantenimiento | Correctivos, asignacion RH, tiempos, refacciones, bloqueo seguro y conciliacion durable están desplegados en Local y QA como ciclo base. CC-16 CHG-320 sólo Local añade contexto fijo, RH por División, costo laboral y alcance integral; aceptación CC-20 pendiente. |
+| Costos | Catálogo básico de Centros de costos implementado sólo Local desde Administración; analítica permanece `planned`. |
+| Gastos, Reportes y Contabilidad | Permanecen `planned`; sus pantallas genéricas no prueban runtime operativo. |
 
-La navegacion efectiva depende de `session/context`, entitlements y permisos. Cada capacidad debe identificarse como QA, Local, mock o futura conforme a `docs/contexto/ESTADO_ACTUAL.md`; el estado no se duplica en fichas de agentes.
+La navegacion efectiva depende de `session/context`, entitlements y permisos. Cada capacidad debe identificarse como QA, Local, mock o futura conforme a [docs/contexto/ESTADO_ACTUAL.md](../docs/contexto/ESTADO_ACTUAL.md); el estado no se duplica en fichas de agentes.
 
 ## Principio rector
 

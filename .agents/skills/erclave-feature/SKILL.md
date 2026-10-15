@@ -9,12 +9,16 @@ description: Implementar funcionalidades verticales completas de ERClave desde c
 
 0. Usar `$erclave-environment-boundaries` y confirmar ambiente, recursos y clasificacion de escritura.
 
-1. Leer `AGENTS.md`, `AGENTES.md` y `modulos/<modulo>.md`.
+1. Leer `AGENTS.md`, las fichas pertinentes de `AGENTES.md` y `modulos/<modulo>.md`.
+
+   Para cambios de imputación o Contabilidad usar `erclave-accounting`; para módulos nuevos o integraciones/ownership usar `erclave-module-boundaries`. Las fichas se consultan como perspectivas de revisión, sin atribuirles ejecución de pruebas.
 2. Leer sólo los documentos de arquitectura relacionados con el cambio.
 3. Inspeccionar `git status --short`; preservar trabajo ajeno.
 4. Expresar criterios de aceptación verificables.
 5. Identificar tenant y actor; dueños de UI, servicio y datos; contratos, permisos, i18n, dependencias, fallos parciales, auditoría y rollback.
 6. Registrar los agentes de negocio, tecnicos y transversales consultados; para liberar a QA usar `$erclave-qa-release`.
+
+Si el corte cambia campos, obligatoriedad o selectores de un formulario, aplicar `$erclave-form-contract` antes de definir el payload. Registrar para cada campo nuevo la tarea que resuelve y si puede derivarse o seleccionarse de una fuente existente.
 
 Detenerse y pedir decisión sólo si falta una regla de negocio que cambiaría materialmente el resultado.
 

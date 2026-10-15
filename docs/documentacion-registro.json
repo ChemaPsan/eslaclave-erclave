@@ -1,0 +1,1100 @@
+{
+  "schemaVersion": 1,
+  "scope": "Documentación propia; excluye dependencias, entornos virtuales, dist y artefactos de pruebas.",
+  "documents": [
+    {
+      "path": ".agents/skills/erclave-accounting/SKILL.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": ".agents/skills/erclave-context-reconcile/SKILL.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": ".agents/skills/erclave-db-migration/SKILL.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": ".agents/skills/erclave-environment-boundaries/SKILL.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": ".agents/skills/erclave-feature/SKILL.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": ".agents/skills/erclave-form-contract/SKILL.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": ".agents/skills/erclave-form-feedback/SKILL.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": ".agents/skills/erclave-module-boundaries/SKILL.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": ".agents/skills/erclave-qa-evidence/SKILL.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": ".agents/skills/erclave-qa-release/SKILL.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": ".agents/skills/erclave-solution-manuals/references/estructura_manual.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": ".agents/skills/erclave-solution-manuals/SKILL.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": "AGENTES.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": "AGENTS.md",
+      "status": "vigente",
+      "owner": "Custodio documental",
+      "authority": "AGENTS.md"
+    },
+    {
+      "path": "backend/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/accounting-service/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/admin-service/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/costing-service/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/expenses-service/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/hr-service/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/inventory-service/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/maintenance-service/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/production-service/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/purchasing-service/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/reporting-service/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "backend/services/sales-service/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "contracts/api/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "contracts/events.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "contracts/microfrontend.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "contracts/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/admin_service_modelo_fisico.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/apis_mvp.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cobertura_agentes_modulos.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_00_decisiones_y_preflight.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_01_estructura_organizacional.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_02_administracion_organizacional.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_03_sesion_alcances.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cc19_mapeos_y_configuracion_contable.md",
+      "status": "vigente",
+      "owner": "Arquitectura, Datos y custodio contable",
+      "authority": "docs/contexto/CONTROL_CONTABLE.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_04_configuracion_por_alcance.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_05_catalogo_centros.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_07_commercial_asignaciones.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_07_commercial_condiciones.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_07_hr_asignaciones.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_07_inventory_asignaciones.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_07_production_asignaciones.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_costo_estimado_cotizaciones.md",
+      "status": "vigente",
+      "owner": "Sales, Production y custodio contable",
+      "authority": "docs/contexto/CONTROL_CONTABLE.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_cotizaciones_contexto.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_fabricacion_contexto.md",
+      "status": "vigente",
+      "owner": "Arquitectura, Sales, Production e Inventory",
+      "authority": "docs/contexto/CONTROL_CONTABLE.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_pedidos_contexto.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_produccion_contexto.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_reservas_contexto.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_servicios_contexto.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_stock_contexto.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_tarifas_capacidad.md",
+      "status": "vigente",
+      "owner": "RH, Production y Custodio contable",
+      "authority": "docs/contexto/CONTROL_CONTABLE.md"
+    },
+    {
+      "path": "docs/arquitectura/contabilidad_opcional_y_capacidades.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/diagramas/apis_mvp_relaciones.drawio",
+      "status": "diseno",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/diagramas/arquitectura_qa_prod.drawio",
+      "status": "diseno",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/diagramas/estado_actual_backend_mvp.drawio",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/diagramas/flujo_negocio_adquisicion_uso.drawio",
+      "status": "diseno",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/diagramas/flujos_operativos_modulos.drawio",
+      "status": "diseno",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/diagramas/onboarding_comercial_saas.drawio",
+      "status": "diseno",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/estandar_responsive_transversal.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/feedback_operativo_y_errores.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/fronteras_ambientes_local_qa_produccion.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/gobierno_documentacion_viva.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/inventario_consulta_escalable.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/matriz_autorizacion_operativa.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/matriz_capacidades_organizacionales.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/microservicios_microfrontends.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/modelo_datos_mvp.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/modelo_multitenant.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/onboarding_comercial_saas.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/ownership_datos_mvp.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/plan_implementacion_backend_mvp.md",
+      "status": "diseno",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/plan_preparacion_contabilidad.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/plan_separacion_modular_y_contabilidad_opcional.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/plantillas_documentales.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/politica_aislamiento_tenant.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/qa_prod.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/reportes_estandar_por_modulo.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/seleccion_escalable_documentos.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/siguiente_paso_backend_mvp.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/catalogos_selectores_transversales_2026-09-20.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/documentacion_2026-10-07.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/evidencia_servicios_2026-09-13.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/flujos_almacen_mensajes_2026-09-08.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/formularios_feedback_2026-09-13.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/frontend_backend_2026-09-07.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/impacto_preparacion_contabilidad_2026-09-21.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/margen_esperado_2026-09-13.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/materiales_produccion_movimientos_2026-09-08.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/piloto_contrato_formularios_2026-09-20.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/recuperacion_refacciones_2026-09-08.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/refacciones_movimientos_2026-09-07.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/timeouts_local_2026-09-16.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/auditorias/ventas_segundo_corte_2026-08-18.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/catalogos_base.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/CONTROL_CONTABLE.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/DECISIONES.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/ESTADO_ACTUAL.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/historico/AGENTES_cortes_hasta_CHG310.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/historico/DECISIONES_PRE_CHG311.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/historico/ESTADO_ACTUAL_PRE_CHG311.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/historico/INICIO_SESION_PRE_CHG311.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/historico/PENDIENTES_PRE_CHG311.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/historico/README.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/INICIO_SESION.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/PENDIENTES.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/REANUDACION_CHG255.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/REANUDACION_CHG261.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/REANUDACION_CHG269.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/contexto/TENANTS.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/INDICE_DOCUMENTAL.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/INICIO.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/manuales_solucion/fuentes/01_produccion.md",
+      "status": "vigente",
+      "owner": "Custodio de manuales y dueño del módulo",
+      "authority": "docs/manuales_solucion/REGISTRO.md"
+    },
+    {
+      "path": "docs/manuales_solucion/fuentes/02_almacenes_inventarios.md",
+      "status": "vigente",
+      "owner": "Custodio de manuales y dueño del módulo",
+      "authority": "docs/manuales_solucion/REGISTRO.md"
+    },
+    {
+      "path": "docs/manuales_solucion/fuentes/03_compras_abastecimiento.md",
+      "status": "vigente",
+      "owner": "Custodio de manuales y dueño del módulo",
+      "authority": "docs/manuales_solucion/REGISTRO.md"
+    },
+    {
+      "path": "docs/manuales_solucion/fuentes/04_ventas_clientes.md",
+      "status": "vigente",
+      "owner": "Custodio de manuales y dueño del módulo",
+      "authority": "docs/manuales_solucion/REGISTRO.md"
+    },
+    {
+      "path": "docs/manuales_solucion/fuentes/08_administracion_configuracion.md",
+      "status": "vigente",
+      "owner": "Custodio de manuales y dueño del módulo",
+      "authority": "docs/manuales_solucion/REGISTRO.md"
+    },
+    {
+      "path": "docs/manuales_solucion/fuentes/10_recursos_humanos.md",
+      "status": "vigente",
+      "owner": "Custodio de manuales y dueño del módulo",
+      "authority": "docs/manuales_solucion/REGISTRO.md"
+    },
+    {
+      "path": "docs/manuales_solucion/fuentes/11_mantenimiento.md",
+      "status": "vigente",
+      "owner": "Custodio de manuales y dueño del módulo",
+      "authority": "docs/manuales_solucion/REGISTRO.md"
+    },
+    {
+      "path": "docs/manuales_solucion/fuentes/PLANTILLA.md",
+      "status": "vigente",
+      "owner": "Custodio de manuales y dueño del módulo",
+      "authority": "docs/manuales_solucion/REGISTRO.md"
+    },
+    {
+      "path": "docs/manuales_solucion/README.md",
+      "status": "vigente",
+      "owner": "Custodio de manuales y dueño del módulo",
+      "authority": "docs/manuales_solucion/REGISTRO.md"
+    },
+    {
+      "path": "docs/manuales_solucion/REGISTRO.md",
+      "status": "vigente",
+      "owner": "Custodio de manuales y dueño del módulo",
+      "authority": "docs/manuales_solucion/REGISTRO.md"
+    },
+    {
+      "path": "docs/manuales_solucion/word/01_produccion.docx",
+      "status": "exportacion-pendiente",
+      "owner": "Custodio de manuales y QA",
+      "authority": "docs/manuales_solucion/fuentes/01_produccion.md",
+      "source": "docs/manuales_solucion/fuentes/01_produccion.md",
+      "sourceSha256": "9d7f7bb0a0738c51dfb80f367fee49e700bdaab134789a7cacd991e3ccd7d7a2",
+      "artifactSha256": "894192690f5f5551a0a3fec6f8e0076f5bf6eee2435fd625f4e78172e701d101",
+      "review": "CHG-331: fuente y DOCX cotejados (texto, ZIP/XML y tablas); render LibreOffice 26.8.1 y revisión visual de 10 páginas sin recortes ni páginas vacías. Exportación candidata Local; aceptación CC-20 y promoción QA pendientes."
+    },
+    {
+      "path": "docs/manuales_solucion/word/02_almacenes_inventarios.docx",
+      "status": "exportacion-pendiente",
+      "owner": "Custodio de manuales y QA",
+      "authority": "docs/manuales_solucion/fuentes/02_almacenes_inventarios.md",
+      "source": "docs/manuales_solucion/fuentes/02_almacenes_inventarios.md",
+      "sourceSha256": "aba1b3ae1a446ecc360c6e65eac9beeecd2e88619698fc4e523d4ea0c723bd40",
+      "artifactSha256": "e9ae900193f6621a6f4f1e78c968b2636360cece93f4fa35c9d56000d197e27c",
+      "review": "CHG-331: fuente y DOCX cotejados (texto, ZIP/XML y tablas); render LibreOffice 26.8.1 y revisión visual de 8 páginas sin recortes ni páginas vacías. Exportación candidata Local; aceptación CC-20 y promoción QA pendientes."
+    },
+    {
+      "path": "docs/manuales_solucion/word/03_compras_abastecimiento.docx",
+      "status": "exportacion-pendiente",
+      "owner": "Custodio de manuales y QA",
+      "authority": "docs/manuales_solucion/fuentes/03_compras_abastecimiento.md",
+      "source": "docs/manuales_solucion/fuentes/03_compras_abastecimiento.md",
+      "sourceSha256": "8be1ac8da3b1975c27153dd8634c77bce58a71dcb4d8dbc9a94baf1865db611e",
+      "artifactSha256": "22b98f59a755f6a5abde46eec0a72e7eb75417c7e3e994e956e9cc72f12c72e4",
+      "review": "CHG-331: fuente y DOCX cotejados (texto, ZIP/XML y tablas); render LibreOffice 26.8.1 y revisión visual de 7 páginas sin recortes ni páginas vacías. Exportación candidata Local; aceptación CC-20 y promoción QA pendientes."
+    },
+    {
+      "path": "docs/manuales_solucion/word/04_ventas_clientes.docx",
+      "status": "exportacion-pendiente",
+      "owner": "Custodio de manuales y QA",
+      "authority": "docs/manuales_solucion/fuentes/04_ventas_clientes.md",
+      "source": "docs/manuales_solucion/fuentes/04_ventas_clientes.md",
+      "sourceSha256": "45b0da8abc1720f284660a7679fdb20db7f491c68543f2f5983f3c87f77407ab",
+      "artifactSha256": "2b0683e63e82567a7df5badb1694d832087f1e174c9cd1aa6f96f28fa1fa3037",
+      "review": "CHG-331: fuente y DOCX cotejados (texto, ZIP/XML y tablas); render LibreOffice 26.8.1 y revisión visual de 8 páginas sin recortes ni páginas vacías. Exportación candidata Local; aceptación CC-20 y promoción QA pendientes."
+    },
+    {
+      "path": "docs/manuales_solucion/word/08_administracion_configuracion.docx",
+      "status": "exportacion-pendiente",
+      "owner": "Custodio de manuales y QA",
+      "authority": "docs/manuales_solucion/fuentes/08_administracion_configuracion.md",
+      "source": "docs/manuales_solucion/fuentes/08_administracion_configuracion.md",
+      "sourceSha256": "e5f9ab62f9280e6d1863ec183e9cc616522fb4d282a2cf0e8d2c2fd8c0795f8d",
+      "artifactSha256": "bd778a56b7c6304151ae7ecbe4737373a4e49bdedd6f8beeee7e0d446895da84",
+      "review": "CHG-331: fuente y DOCX cotejados (texto, ZIP/XML y tablas); render LibreOffice 26.8.1 y revisión visual de 6 páginas sin recortes ni páginas vacías. Exportación candidata Local; aceptación CC-20 y promoción QA pendientes."
+    },
+    {
+      "path": "docs/manuales_solucion/word/10_recursos_humanos.docx",
+      "status": "exportacion-pendiente",
+      "owner": "Custodio de manuales y QA",
+      "authority": "docs/manuales_solucion/fuentes/10_recursos_humanos.md",
+      "source": "docs/manuales_solucion/fuentes/10_recursos_humanos.md",
+      "sourceSha256": "3fb4b4d4a8f02241232dd157a00ee18dd16f4243f7266dc3891bbdec39f4a317",
+      "artifactSha256": "52f370d805c4764220596ffd143656be253bb010000ea4b7d6e6f76447b5a5ed",
+      "review": "CHG-331: fuente y DOCX cotejados (texto, ZIP/XML y tablas); render LibreOffice 26.8.1 y revisión visual de 5 páginas sin recortes ni páginas vacías. Exportación candidata Local; aceptación CC-20 y promoción QA pendientes."
+    },
+    {
+      "path": "docs/manuales_solucion/word/11_mantenimiento.docx",
+      "status": "exportacion-pendiente",
+      "owner": "Custodio de manuales y QA",
+      "authority": "docs/manuales_solucion/fuentes/11_mantenimiento.md",
+      "source": "docs/manuales_solucion/fuentes/11_mantenimiento.md",
+      "sourceSha256": "410d3f04ad8849ae29476f2af36a9f66172497e463f504f192ace55e5c46ebe3",
+      "artifactSha256": "37036d0354438fb643de4025f0713234460d4e2ada716d8e9b7d3479b2149c63",
+      "review": "CHG-331: fuente y DOCX cotejados (texto, ZIP/XML y tablas); render LibreOffice 26.8.1 y revisión visual de 6 páginas sin recortes ni páginas vacías. Exportación candidata Local; aceptación CC-20 y promoción QA pendientes."
+    },
+    {
+      "path": "docs/operaciones/cloud_sql_postgres_qa.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/flujo_local_a_qa.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/preparacion_release_qa_20260806.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/preparacion_release_qa_20260821.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/preparacion_release_qa_20260831.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/release_qa_20260908.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/release_qa_20260914.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/release_qa_20260923_cont01.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/resultado_release_qa_20260901.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/validacion_volumen_inventario_local.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/cc20_aceptacion_integrada_local.md",
+      "status": "vigente",
+      "owner": "QA, Seguridad, Sinergia y dueños operativos",
+      "authority": "docs/contexto/CONTROL_CONTABLE.md"
+    },
+    {
+      "path": "docs/operaciones/verificacion_local_integral.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/qa/ENTREGA_TESTER.md",
+      "status": "vigente",
+      "owner": "QA/Release",
+      "authority": "docs/qa/MATRIZ_EJECUCION_QA.md"
+    },
+    {
+      "path": "docs/qa/guia_pruebas_qa_mvp.docx",
+      "status": "exportacion-pendiente",
+      "owner": "Custodio de manuales y QA",
+      "authority": "docs/qa/guia_pruebas_qa_mvp.md",
+      "source": "docs/qa/guia_pruebas_qa_mvp.md",
+      "sourceSha256": "48e7f439628dba4cfa1c33880a33d57cf572c124381b4d5903b6761523c58b67",
+      "artifactSha256": "3cc54fdd178517befe8a0c59e9e0f1aafbe1916a6dca0a857eb33dd45d62b78b",
+      "review": "Paridad textual/ZIP/XML comprobada CHG-311; revisión visual pendiente: runtime sin LibreOffice soffice.exe."
+    },
+    {
+      "path": "docs/qa/guia_pruebas_qa_mvp.md",
+      "status": "vigente",
+      "owner": "QA/Release",
+      "authority": "docs/qa/MATRIZ_EJECUCION_QA.md"
+    },
+    {
+      "path": "docs/qa/MATRIZ_EJECUCION_QA.md",
+      "status": "vigente",
+      "owner": "QA/Release",
+      "authority": "docs/qa/MATRIZ_EJECUCION_QA.md"
+    },
+    {
+      "path": "ERClave_documento_base.md",
+      "status": "diseno",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "ERClave_funcionalidades_y_valor_para_analisis_de_mercado.md",
+      "status": "diseno",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "ERClave_requerimientos_no_funcionales_e_infraestructura.md",
+      "status": "diseno",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "frontend/backoffice/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "frontend/microfrontends/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "frontend/shell/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "infra/qa/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "manual_identidad_paleta_morado.md",
+      "status": "diseno",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/00_sinergia_modular.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/01_produccion.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/02_almacenes_inventarios.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/03_compras_abastecimiento.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/04_ventas_clientes.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/05_gastos_cuentas_por_pagar.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/06_costos_centros_de_costos.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/07_reportes_inteligencia_operativa.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/08_administracion_configuracion.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/09_contabilidad.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/10_recursos_humanos.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/11_mantenimiento.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "modulos/README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "README.md",
+      "status": "vigente",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "TRAZABILIDAD.md",
+      "status": "historico",
+      "owner": "Arquitectura y dueño del módulo",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_mantenimiento_contexto.md",
+      "status": "vigente",
+      "owner": "Maintenance y custodio contable",
+      "authority": "docs/contexto/CONTROL_CONTABLE.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_compras_contexto.md",
+      "status": "vigente",
+      "owner": "Purchasing y custodio contable",
+      "authority": "docs/contexto/CONTROL_CONTABLE.md"
+    },
+    {
+      "path": "docs/arquitectura/cont_08_inventario_productores.md",
+      "status": "vigente",
+      "owner": "Inventory, Purchasing, Maintenance y custodio contable",
+      "authority": "docs/contexto/CONTROL_CONTABLE.md"
+    }
+  ]
+}

@@ -23,7 +23,7 @@
         <mxCell id="onboard" value="Admin Service&lt;br&gt;onboarding idempotente" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#5B2A86;strokeColor=#8A6AA3;fontColor=#FFFFFF;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="980" y="220" width="360" height="100" as="geometry" />
         </mxCell>
-        <mxCell id="persist" value="Cloud SQL admin&lt;br&gt;tenant + user + membership + role&lt;br&gt;entitlements + organization.profile" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+        <mxCell id="persist" value="Cloud SQL admin&lt;br&gt;tenant + user + membership + role&lt;br&gt;entitlements + perfil compatible" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="1430" y="195" width="430" height="150" as="geometry" />
         </mxCell>
         <mxCell id="firebase" value="Firebase Auth&lt;br&gt;asegura identidad y envía&lt;br&gt;recuperación/activación" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">

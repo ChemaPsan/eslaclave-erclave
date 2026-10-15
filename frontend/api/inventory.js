@@ -11,7 +11,7 @@ export async function createInventoryWarehouse(payload){return (await request("/
 export async function updateInventoryWarehouse(id,payload){return (await request(`/v1/inventory/warehouses/${id}`,{method:"PATCH",body:JSON.stringify(payload)})).data;}
 export async function createInventoryItem(payload){return (await request("/v1/inventory/items",{method:"POST",body:JSON.stringify(payload)})).data;}
 export async function updateInventoryItem(id,payload){return (await request(`/v1/inventory/items/${id}`,{method:"PATCH",body:JSON.stringify(payload)})).data;}
-export async function createInventoryMovement(payload){return (await request("/v1/inventory/movements",{method:"POST",body:JSON.stringify(payload)})).data;}
+export async function createInventoryMovement(payload,requestKey){return (await request("/v1/inventory/movements",{method:"POST",body:JSON.stringify(payload),...(requestKey?{headers:{"Idempotency-Key":requestKey}}:{})})).data;}
 export async function getFinishedGoodsReceipts(){return request("/v1/inventory/finished-goods-receipts");}
 export async function createFinishedGoodsReceipt(payload){return (await request("/v1/inventory/finished-goods-receipts",{method:"POST",body:JSON.stringify(payload)})).data;}
 
@@ -21,3 +21,5 @@ export function getInventoryMaterialReturns(offset=0){return request(`/v1/invent
 export async function requestInventoryMaterialReturn(payload,commandKey){return (await request('/v1/inventory/material-returns',{method:'POST',body:JSON.stringify(payload),headers:{'Idempotency-Key':commandKey}})).data;}
 export async function receiveInventoryMaterialReturn(id){return (await request(`/v1/inventory/material-returns/${encodeURIComponent(id)}/receive`,{method:'POST'})).data;}
 export async function cancelInventoryMaterialReturn(id,reason){return (await request(`/v1/inventory/material-returns/${encodeURIComponent(id)}/cancel`,{method:"POST",body:JSON.stringify({reason})})).data;}
+
+export async function getWarehouseOperationContext(id){return (await request(`/v1/inventory/warehouses/${encodeURIComponent(id)}/operation-context`)).data;}

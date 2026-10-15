@@ -16,6 +16,7 @@ QA_SETTINGS = {
     "inventory_service_url": "https://inventory-service-qa.example.run.app",
     "production_service_url": "https://production-service-qa.example.run.app",
     "maintenance_service_url": "https://maintenance-service-qa.example.run.app",
+    "purchasing_service_url": "https://purchasing-service-qa.example.run.app",
 }
 
 
@@ -32,6 +33,7 @@ def test_local_environment_allows_local_app_url():
         ("database_url", "postgresql+psycopg://user:password@127.0.0.1:5432/erclave_qa"),
         ("database_url", "postgresql+psycopg://user:password@qa-db.example/erclave_local"),
         ("firebase_project_id", "erclave"),
+        ("purchasing_service_url", "https://purchasing-service-qa.example.run.app"),
     ],
 )
 def test_local_environment_rejects_qa_resources(field, value):
@@ -120,6 +122,7 @@ def test_inventory_uses_its_service_database_url_for_readiness():
     [
         ("inventory-service", "production_service_url", "ERCLAVE_PRODUCTION_SERVICE_URL"),
         ("inventory-service", "maintenance_service_url", "ERCLAVE_MAINTENANCE_SERVICE_URL"),
+        ("inventory-service", "purchasing_service_url", "ERCLAVE_PURCHASING_SERVICE_URL"),
         ("sales-service", "inventory_service_url", "ERCLAVE_INVENTORY_SERVICE_URL"),
     ],
 )

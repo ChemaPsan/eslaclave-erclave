@@ -1,3 +1,4 @@
+from erclave_common.transport import open_dependency
 """HTTP-only integration for material returns; never accesses another owner's tables."""
 import json
 from urllib import request,error,parse
@@ -25,14 +26,14 @@ class MaterialReturnClient:
     def __init__(self,settings):
         self.inventory=settings.inventory_service_url.rstrip('/')
         self.owners={"production_order":(settings.production_service_url.rstrip('/'),'production'),"maintenance_order":(settings.maintenance_service_url.rstrip('/'),'maintenance')}
-        self.timeout=settings.authorization_timeout_seconds
+        self.timeout=getattr(settings,"dependency_timeout_seconds",settings.authorization_timeout_seconds)
 
     def call(self,url,t,authorization,method='GET',payload=None,key=None):
         headers={"Authorization":authorization or '',"X-Tenant-Id":t,"Content-Type":"application/json"}
         if key:headers['Idempotency-Key']=key
         req=request.Request(url,headers=headers,method=method,data=json.dumps(payload,default=str).encode() if payload is not None else None)
         try:
-            with request.urlopen(req,timeout=self.timeout) as response:return json.loads(response.read())['data']
+            with open_dependency(req,timeout=self.timeout, opener=request.urlopen) as response:return json.loads(response.read())['data']
         except error.HTTPError as exc:
             try:code=json.loads(exc.read()).get('error',{}).get('code','material_return_dependency_rejected')
             except (ValueError,AttributeError):code='material_return_dependency_rejected'

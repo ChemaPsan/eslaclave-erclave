@@ -1,3 +1,4 @@
+from erclave_common.transport import open_dependency
 from dataclasses import dataclass
 import json
 from urllib import error, request
@@ -37,7 +38,7 @@ class AdminSessionClient:
             method="GET",
         )
         try:
-            with request.urlopen(session_request, timeout=self.timeout) as response:
+            with open_dependency(session_request, timeout=self.timeout, opener=request.urlopen) as response:
                 return json.loads(response.read().decode("utf-8"))["data"]
         except error.HTTPError as exc:
             if exc.code == 401:
@@ -78,6 +79,8 @@ def require_production_access(permission: str | tuple[str, ...]):
             raise ErclaveError("module_not_enabled", "Production module is not enabled for this tenant.", status_code=403)
         if any(item.startswith("inventory.movement.") for item in required) and "inventory" not in context.get("active_modules", []):
             raise ErclaveError("module_not_enabled", "Inventory module is not enabled.", status_code=403)
+        if any(item.startswith("sales.") and item in context.get("permissions",[]) for item in required) and not any(not item.startswith("sales.") and item in context.get("permissions",[]) for item in required) and "sales" not in context.get("active_modules", []):
+            raise ErclaveError("module_not_enabled", "Sales module is not enabled.", status_code=403)
         if not any(item in context.get("permissions", []) for item in required):
             details = {"permission": required[0]} if len(required) == 1 else {"permissions_any": list(required)}
             raise ErclaveError("permission_denied", "Authenticated actor does not have the required permission.", status_code=403, details=details)

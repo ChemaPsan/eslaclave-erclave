@@ -51,6 +51,7 @@ foreach ($portSpec in @(
     @{ Port = 8008; Name = "Sales API" },
     @{ Port = 8010; Name = "Purchasing API" },
     @{ Port = 8012; Name = "Maintenance API" },
+    @{ Port = 8014; Name = "Cost Center API" },
     @{ Port = $FirebaseAuthPort; Name = "Firebase Auth Emulator" },
     @{ Port = $FirebaseUiPort; Name = "Firebase Emulator UI" }
 )) { Assert-Port-Free $portSpec.Port $portSpec.Name }
@@ -69,6 +70,9 @@ $env:ERCLAVE_HR_DATABASE_URL = $localDbUrl
 $env:ERCLAVE_SALES_DATABASE_URL = $localDbUrl
 $env:ERCLAVE_PURCHASING_DATABASE_URL = $localDbUrl
 $env:ERCLAVE_MAINTENANCE_DATABASE_URL = $localDbUrl
+$env:ERCLAVE_COSTING_DATABASE_URL = $localDbUrl
+$env:ERCLAVE_COST_CENTER_CATALOG_ENABLED = "true"
+$env:ERCLAVE_COSTING_SERVICE_URL = "http://127.0.0.1:8014"
 $env:ERCLAVE_API_PUBLIC_BASE_URL = "http://127.0.0.1:8000"
 $env:ERCLAVE_APP_PUBLIC_BASE_URL = "http://127.0.0.1:4173"
 $env:ERCLAVE_ADMIN_SERVICE_URL = "http://127.0.0.1:8000"
@@ -76,6 +80,7 @@ $env:ERCLAVE_HR_SERVICE_URL = "http://127.0.0.1:8006"
 $env:ERCLAVE_INVENTORY_SERVICE_URL = "http://127.0.0.1:8004"
 $env:ERCLAVE_PRODUCTION_SERVICE_URL = "http://127.0.0.1:8002"
 $env:ERCLAVE_MAINTENANCE_SERVICE_URL = "http://127.0.0.1:8012"
+$env:ERCLAVE_PURCHASING_SERVICE_URL = "http://127.0.0.1:8010"
 $env:ERCLAVE_BACKOFFICE_ADMIN_EMAILS = $localEmail
 
 & $pythonPath (Join-Path $PSScriptRoot "seed_admin_mvp.py")
@@ -106,7 +111,8 @@ $services = @(
     @{ Adapter = "services.hr_service_adapter:app"; Port = 8006; Name = "hr-local" },
     @{ Adapter = "services.sales_service_adapter:app"; Port = 8008; Name = "sales-local" },
     @{ Adapter = "services.purchasing_service_adapter:app"; Port = 8010; Name = "purchasing-local" },
-    @{ Adapter = "services.maintenance_service_adapter:app"; Port = 8012; Name = "maintenance-local" }
+    @{ Adapter = "services.maintenance_service_adapter:app"; Port = 8012; Name = "maintenance-local" },
+    @{ Adapter = "services.costing_service_adapter:app"; Port = 8014; Name = "costing-local" }
 )
 foreach ($service in $services) {
     Start-Process -FilePath $pythonPath -ArgumentList "-m", "uvicorn", $service.Adapter, "--host", "127.0.0.1", "--port", "$($service.Port)" -WorkingDirectory $backendRoot -RedirectStandardOutput (Join-Path $backendRoot "$($service.Name).out.log") -RedirectStandardError (Join-Path $backendRoot "$($service.Name).err.log") -WindowStyle Hidden
@@ -118,7 +124,7 @@ Write-Output "Ambiente: Local aislado"
 Write-Output "Firebase Auth Emulator: http://127.0.0.1:$FirebaseAuthPort"
 Write-Output "Firebase Emulator UI: http://127.0.0.1:$FirebaseUiPort"
 Write-Output "Frontend: http://127.0.0.1:4173"
-Write-Output "APIs: 8000, 8002, 8004, 8006, 8008, 8010, 8012"
+Write-Output "APIs: 8000, 8002, 8004, 8006, 8008, 8010, 8012, 8014"
 Write-Output "PostgreSQL: 127.0.0.1:$PostgresPort/erclave_local"
 Write-Output "Tenant: $localTenantId"
 Write-Output "Actor: $localActorId ($localEmail)"

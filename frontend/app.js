@@ -1,4 +1,30 @@
-import { hasServiceEvidence, serviceEvidenceFields, toggleServiceEvidence, saveServiceEvidenceFromForm, serviceEvidenceHistory, downloadServiceEvidence } from "./features/service-evidence.js";
+import { mountReceiptCostContext, receiptCommand } from "./features/receipt-cost-context.js";
+import {mountMaintenanceOrderContext,mountMaintenanceTimeContext,mountMaintenanceAssignments,mountMaintenanceMaterials,maintenanceContextSummary,maintenanceCommand,saveMaintenanceTime} from "./features/maintenance-context.js";
+import { mountPurchasingRequisitionContext, mountPurchasingOrderContext, purchasingContextSummary, purchasingDraftCommand, purchasingOrderTermsRevision } from "./features/purchasing-context.js";
+import { mountSalesProductionFulfillment } from "./features/sales-production-fulfillment.js";
+import { mountProductionRequestQueue } from "./features/production-request-queue.js";
+import { getProductionOrderRequest } from "./api/production.js";
+import { mountServiceCostContext, serviceCostPayload, renderServiceCostHistory } from "./features/service-cost-context.js";
+import { mountProductionOrderForm, renderProductionOrderContext } from "./features/production-order-context.js";
+import { resourceRateCopy } from "./i18n/resource-rates.js";
+import { mountMovementCostContext } from "./features/movement-cost-context.js";
+import { mountScopedStockFulfillment } from "./features/scoped-stock-fulfillment.js";
+import { mountServiceWorkerLookup } from "./features/service-worker-lookup.js";
+import { renderOrderContext } from "./features/order-context.js";
+import { mountQuoteContext } from "./features/quote-context.js";
+import { quoteContextCopy } from "./i18n/quote-context.js";
+import { mountCommercialOrganization } from "./features/commercial-organization.js";
+import { commercialOrganizationCopy } from "./i18n/commercial-organization.js";
+import { mountHrOrganization } from "./features/hr-organization.js";
+import { hrOrganizationCopy } from "./i18n/hr-organization.js";
+import { mountProductionOrganization } from "./features/production-organization.js";
+import { productionOrganizationCopy } from "./i18n/production-organization.js";
+import { mountInventoryOrganization } from "./features/inventory-organization.js";
+import { inventoryOrganizationCopy } from "./i18n/inventory-organization.js";
+import { serviceEvidencePartialFeedback, hasServiceEvidence, serviceEvidenceFields, toggleServiceEvidence, saveServiceEvidenceFromForm, serviceEvidenceHistory, downloadServiceEvidence } from "./features/service-evidence.js";
+import { renderOrganizationPanel, bindOrganizationPanel } from "./features/organization.js";
+import { mountScopeEditor, divisionPreferenceKey } from "./features/organization-scope.js?v=chg329-final";
+import { scopeCopy } from "./i18n/organization-scope.js?v=chg329-final";
 import { modules, erpSubmoduleCatalog } from "./data/modules.js";
 import { defaultRecipes } from "./data/resources.js";
 import { mockDb } from "./data/mockDb.js";
@@ -21,6 +47,7 @@ import {
   getAdminDashboard,
   getSessionTenants,
   getSessionContext,
+  getDocumentPresentation,
   inviteTenantUser,
   replaceTenantRolePermissions,
   setTenantBranchStatus,
@@ -82,9 +109,17 @@ function getUnitCatalog(){return state.adminApi.data?.units?.filter((item)=>item
 function normalizeUnitCode(value){const raw=String(value||"").trim();return ({pieza:"H87",pza:"H87",pz:"H87",unidad:"C62",servicio:"E48",kg:"KGM",g:"GRM",l:"LTR",ml:"MLT",m:"MTR",cm:"CMT",min:"MIN",hora:"HUR",h:"HUR"})[raw.toLowerCase()]||raw.toUpperCase();}
 function unitOptions(selected=""){const units=getUnitCatalog();const normalized=normalizeUnitCode(selected);return units.map((item)=>`<option value="${escapeAttribute(item.code)}" ${item.code.toUpperCase()===normalized?"selected":""}>${escapeHtml(state.lang==="en"?item.name_en:item.name_es)} (${escapeHtml(item.symbol)}) · ${escapeHtml(item.code)}</option>`).join("");}
 function codeSequenceConfig(documentType){return (state.adminApi.data?.codeSequences||[]).find((item)=>item.document_type===documentType&&item.status==="active")||null;}
+function ownerCodeInput(documentType,value="",historicalMode=null,maxlength=60){const managed=historicalMode==="managed"||(!historicalMode&&codeSequenceConfig(documentType)?.mode==="managed");return `<input name="code" maxlength="${maxlength}" value="${escapeAttribute(value||"")}" placeholder="${managed?escapeAttribute(t("codeAssignedAutomatically")):""}" ${managed?"readonly":"required"}>`;}
 function codeRequestKey(documentType){const value=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;return `web-code-${documentType}-${value}`;}
 async function resolveBusinessCode(documentType,manualCode,requestKey){if(getApiMode()!=="api")return String(manualCode||"").trim().toUpperCase();const allocation=await allocateBusinessCode(documentType,String(manualCode||"").trim()||null,requestKey);return allocation.code;}
 function unitSelect(name,selected="",attributes="required"){return `<select name="${name}" ${attributes}>${unitOptions(selected||"H87")}</select>`;}
+function preferredCommercialReference(items=[],preferred=""){return items.some(item=>item.code===preferred)?preferred:(items[0]?.code||"");}
+function commercialReferenceOptions(items=[],selected="",showCode=false){
+  const historical=selected&&!items.some(item=>item.code===selected)
+    ? `<option value="${escapeAttribute(selected)}" selected disabled data-historical-reference>${escapeHtml(selected)} · ${escapeHtml(state.lang==="en"?"Inactive; choose an active option to replace it":"No vigente; selecciona una opción activa para reemplazarlo")}</option>`
+    : "";
+  return historical+items.map(item=>`<option value="${escapeAttribute(item.code)}" ${selectedOption(selected,item.code)}>${showCode?`${escapeHtml(item.code)} · `:""}${escapeHtml(state.lang==="en"?item.name_en:item.name_es)}</option>`).join("");
+}
 const mvpModuleIds = ["produccion", "almacenes", "recursos-humanos", "ventas", "compras", "mantenimiento"];
 const backendModuleByUiModule = {
   administracion: "admin",
@@ -1077,6 +1112,7 @@ function renderAdminUserCard(user, data, apiMode, apiStatus) {
         <span>${user.roles.join(", ") || "sin rol"}</span>
       </div>
       <div class="admin-actions">
+        ${isApiReady && (data.session?.permissions || []).includes("admin.user.read") && data.session?.scope?.version === 2 ? `<button class="secondary-action small-action" type="button" data-action="admin-user-scope" data-user-id="${escapeAttribute(user.id)}">${scopeCopy[state.lang].edit}</button>` : ""}
         <button class="secondary-action small-action" type="button" data-action="admin-reinvite-user" data-user-id="${user.id}" data-role-ids="${roleIds}" ${canInvite ? "" : "disabled"}>
           Activar / invitar
         </button>
@@ -1588,6 +1624,15 @@ function getAdminOrganization() {
 }
 
 function getBranchOptions() {
+  if (getSessionContextData()?.scope?.version === 2) {
+    const scope = getSessionContextData().scope;
+    const societies = new Map((scope.societies || []).map(row => [row.id, row]));
+    return (scope.divisions || []).filter(row => societies.has(row.society_id)).map(row => ({
+      id: row.id, name: row.name, code: row.code || "",
+      societyName: societies.get(row.society_id).name,
+      societyCode: societies.get(row.society_id).code || ""
+    }));
+  }
   const sessionBranches = getSessionContextData()?.scope?.branches;
   if (Array.isArray(sessionBranches) && sessionBranches.length) {
     return sessionBranches
@@ -1615,11 +1660,14 @@ function getBranchOptions() {
 }
 
 function getSelectedBranch(branches) {
-  const savedBranchId = localStorage.getItem("erclave-active-branch-id") || "";
+  const context = getSessionContextData();
+  const preferenceKey = context?.scope?.version === 2 ? divisionPreferenceKey(context) : "erclave-active-branch-id";
+  const savedBranchId = localStorage.getItem(preferenceKey) || "";
   const selected = branches.find((branch) => branch.id === savedBranchId) || branches[0];
   if (selected?.id && selected.id !== savedBranchId && selected.id !== "loading") {
-    localStorage.setItem("erclave-active-branch-id", selected.id);
+    localStorage.setItem(preferenceKey, selected.id);
   }
+  if (!selected) localStorage.removeItem(preferenceKey);
   return selected;
 }
 
@@ -1633,26 +1681,94 @@ function getContextUserLabel() {
 
 function renderContextBar() {
   if (!contextUser || !contextBranch || !branchContext) return;
+  const organizationScope = getSessionContextData()?.scope?.version === 2;
+  const copy = scopeCopy[state.lang];
+  branchContext.querySelector(".context-label").textContent = organizationScope ? copy.organizationLabel : t("branchLabel");
   const branches = getBranchOptions();
   const selectedBranch = getSelectedBranch(branches);
   contextUser.textContent = getContextUserLabel();
+  if (!selectedBranch) { branchContext.classList.remove("is-selectable"); contextBranch.textContent = copy.none; return; }
   if (branches.length > 1) {
     branchContext.classList.add("is-selectable");
     contextBranch.innerHTML = `
-      <select id="branchSelector" data-entity-selector aria-label="${t("selectActiveBranch")}">
-        ${branches
-          .map((branch) => `<option value="${escapeAttribute(branch.id)}" ${selectedOption(branch.id, selectedBranch.id)}>${escapeAttribute(branch.name)}${branch.code ? ` · ${escapeAttribute(branch.code)}` : ""}</option>`)
-          .join("")}
-      </select>
+      <button id="branchSelector" class="context-switcher" type="button" aria-expanded="false" aria-controls="branchOptions" aria-label="${escapeAttribute(`${organizationScope ? copy.active : t("selectActiveBranch")}: ${selectedBranch.societyName ? `${selectedBranch.societyName} / ` : ""}${selectedBranch.name}`)}">
+        <span class="context-switcher-value"><span class="context-switcher-parent">${escapeHtml(selectedBranch.societyName || "")}</span><span class="context-switcher-name">${escapeHtml(selectedBranch.name)}</span></span>
+        <span class="context-switcher-chevron" aria-hidden="true">▾</span>
+      </button>
+      <div id="branchOptions" class="context-switcher-menu" role="group" aria-label="${escapeAttribute(organizationScope ? copy.available : t("selectActiveBranch"))}" hidden>
+        <input class="context-switcher-search" type="search" aria-label="${escapeAttribute(copy.searchOrganizations)}" placeholder="${escapeAttribute(copy.searchOrganizations)}" autocomplete="off">
+        ${branches.map(branch => `<button class="context-switcher-option" type="button" data-division-id="${escapeAttribute(branch.id)}" ${branch.id === selectedBranch.id ? 'aria-current="true"' : ""}>
+          <span class="context-switcher-option-text"><span class="context-switcher-option-parent">${escapeHtml(branch.societyName || "")}</span><span class="context-switcher-option-name">${escapeHtml(branch.name)}</span><span class="context-switcher-option-code">${escapeHtml(branch.code)}</span></span>
+          <span class="context-switcher-check" aria-hidden="true">${branch.id === selectedBranch.id ? "✓" : ""}</span>
+        </button>`).join("")}
+        <p class="context-switcher-empty" hidden>${escapeHtml(copy.noOrganizations)}</p>
+      </div>
     `;
-    contextBranch.querySelector("#branchSelector")?.addEventListener("change", (event) => {
-      localStorage.setItem("erclave-active-branch-id", event.target.value);
+    const trigger = contextBranch.querySelector("#branchSelector");
+    const menu = contextBranch.querySelector("#branchOptions");
+    const close = (restoreFocus = false) => {
+      menu.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+      document.removeEventListener("pointerdown", outside);
+      if (restoreFocus) trigger.focus();
+    };
+    const outside = event => { if (!contextBranch.contains(event.target)) close(); };
+    trigger.addEventListener("click", () => {
+      if (!menu.hidden) { close(); return; }
+      menu.hidden = false;
+      trigger.setAttribute("aria-expanded", "true");
+      document.addEventListener("pointerdown", outside);
+      menu.querySelector(".context-switcher-search")?.focus();
+    });
+    menu.querySelector(".context-switcher-search").addEventListener("input", event => {
+      const query = normalizeDocumentSearch(event.target.value);
+      let visible = 0;
+      menu.querySelectorAll("[data-division-id]").forEach(button => {
+        button.hidden = !normalizeDocumentSearch(button.textContent).includes(query);
+        if (!button.hidden) visible += 1;
+      });
+      menu.querySelector(".context-switcher-empty").hidden = visible > 0;
+    });
+    contextBranch.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !menu.hidden) { event.preventDefault(); close(true); }
+    });
+    contextBranch.addEventListener("focusout", event => {
+      if (!contextBranch.contains(event.relatedTarget)) close();
+    });
+    menu.addEventListener("click", async event => {
+      if (menu.getAttribute("aria-busy") === "true") return;
+      const option = event.target.closest("[data-division-id]");
+      if (!option) return;
+      if (option.dataset.divisionId === selectedBranch.id) { close(true); return; }
+      const context = getSessionContextData();
+      trigger.disabled = true;
+      menu.setAttribute("aria-busy", "true");
+      if (context?.scope?.version === 2) {
+        try {
+          const fresh = await getSessionContext(option.dataset.divisionId);
+          if (getSessionContextData()?.tenant?.id !== context.tenant.id || getSessionContextData()?.user?.id !== context.user.id) {
+            trigger.disabled = false;
+            menu.removeAttribute("aria-busy");
+            close();
+            return;
+          }
+          state.sessionApi = { status: "ready", data: fresh, error: "" };
+          localStorage.setItem(divisionPreferenceKey(fresh), fresh.scope.active_division_id);
+          close();
+          render();
+          contextBranch.querySelector("#branchSelector")?.focus();
+        } catch (error) { showApiError(error); trigger.disabled = false; menu.removeAttribute("aria-busy"); close(true); }
+        return;
+      }
+      localStorage.setItem("erclave-active-branch-id", option.dataset.divisionId);
+      close();
       render();
+      contextBranch.querySelector("#branchSelector")?.focus();
     });
     return;
   }
   branchContext.classList.remove("is-selectable");
-  contextBranch.textContent = selectedBranch.code ? `${selectedBranch.name} · ${selectedBranch.code}` : selectedBranch.name;
+  contextBranch.textContent = selectedBranch.societyName ? `${selectedBranch.societyName} / ${selectedBranch.name}` : selectedBranch.name;
 }
 
 function getOrganizationContact(payload) {
@@ -1697,7 +1813,7 @@ function updateAdminCorporate(form) {
     phone: String(formData.get("phone") || "").trim(),
     ...getOrganizationContact(formData)
   };
-  saveAdminOrganization({ ...organization, corporate }, "Corporativo actualizado.", form);
+  saveAdminOrganization(getApiMode() === "api" ? { corporate } : { ...organization, corporate }, state.lang === "en" ? "Corporate details updated." : "Corporativo actualizado.", form);
 }
 
 function createAdminLegalEntity(form) {
@@ -1820,8 +1936,8 @@ function getAdminCards(data) {
   return [
     {
       id: "organization",
-      title: "Organizacion",
-      detail: "Corporativo, razones sociales, sucursales y datos fiscales.",
+      title: state.lang === "en" ? "Organization" : "Organización",
+      detail: state.lang === "en" ? "Corporate details, issuers, societies and divisions." : "Corporativo, emisores, sociedades y divisiones.",
       count: "Base",
       tone: "neutral"
     },
@@ -1962,6 +2078,7 @@ function renderAdminPermissionsPanel(data) {
 }
 
 function renderAdminOrganizationPanel(data, apiMode, apiStatus) {
+  if (apiMode === "api") return renderOrganizationPanel(data, state.lang);
   const tenant = data.tenant;
   const organization = normalizeAdminOrganization(data);
   const corporate = organization.corporate;
@@ -2342,6 +2459,8 @@ function renderAdminApiPanel(module) {
     </div>
   `;
 
+  if (apiMode === "api") bindOrganizationPanel(modulePanel, safeData, state.lang);
+
   modulePanel.querySelector("[data-action='admin-toggle-api']").addEventListener("click", () => {
     if (!closePermissionEditorForNavigation()) return;
     setApiMode(apiMode === "api" ? "mock" : "api");
@@ -2456,6 +2575,18 @@ function renderAdminApiPanel(module) {
   modulePanel.querySelectorAll("[data-action='admin-reinvite-user']").forEach((button) => {
     button.addEventListener("click", () => {
       reinviteAdminUser(button.dataset.userId);
+    });
+  });
+
+  modulePanel.querySelectorAll("[data-action='admin-user-scope']").forEach(button => {
+    button.addEventListener("click", () => {
+      const c = scopeCopy[state.lang];
+      modalContent.innerHTML = `<div class="modal-head"><h2 id="modalTitle">${c.title}</h2><button class="icon-button modal-close" type="button" aria-label="${c.close}">×</button></div><div data-scope-editor></div>`;
+      modalBackdrop.hidden = false;
+      modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
+      mountScopeEditor(modalContent.querySelector("[data-scope-editor]"), button.dataset.userId, safeData.session?.permissions || [], state.lang, () => {
+        state.sessionApi.status = "idle"; loadSessionContext();
+      });
     });
   });
 
@@ -2623,7 +2754,7 @@ function mapApiRecipe(item, products) {
   };
 }
 
-function mapApiMachine(item){return {id:item.id,code:item.code,name:item.name,areaId:item.area_ref_id||"",area:item.area_name||"",machineType:item.machine_type,unit:"MIN",available:Number(item.available_minutes_per_day||0),cost:Number(item.cost_per_minute||0),type:"Maquinaria",source:"Maquinaria",status:item.status==="active"?"Activo":item.status==="maintenance"?"Mantenimiento":"Inactivo"};}
+function mapApiMachine(item){return {id:item.id,code:item.code,name:item.name,areaId:item.area_ref_id||"",area:item.area_name||"",machineType:item.machine_type,unit:"MIN",available:Number(item.available_minutes_per_day||0),cost:Number(item.cost_per_minute||0),costExact:String(item.cost_per_minute ?? "0"),costCurrency:item.cost_currency||null,type:"Maquinaria",source:"Maquinaria",status:item.status==="active"?"Activo":item.status==="maintenance"?"Mantenimiento":"Inactivo"};}
 function mapApiOrderStatus(status){return ({released:"Liberada",waiting_resources:"En espera de recursos",in_progress:"En produccion",paused:"Pausada",in_validation:"En validacion",completed:"Terminada",cancelled:"Cancelada"})[status]||status;}
 function toApiOrderStatus(status){return ({Liberada:"released","En espera de recursos":"waiting_resources","En produccion":"in_progress",Pausada:"paused","En validacion":"in_validation",Terminada:"completed",Cancelada:"cancelled"})[status]||status;}
 function mapApiStageStatus(status){return ({pending:"Pendiente",in_progress:"En proceso",completed:"Terminada",skipped:"Omitida",blocked:"Bloqueada"})[status]||status;}
@@ -2687,7 +2818,7 @@ function mapApiOrderRecipeSnapshot(item, fallbackRecipe) {
     steps: (version.stages || []).filter((stage) => stage.status === "active").map((stage) => stage.name)
   };
 }
-function mapApiOrder(item, recipes){const recipe=recipes.find((entry)=>entry.id===item.recipe_id);const recipeSnapshot=mapApiOrderRecipeSnapshot(item,recipe);return {id:item.id,code:item.code,productServiceId:item.product_service_id,recipeId:item.recipe_id,recipeVersion:recipeSnapshot.version||1,recipeSnapshot,recipeName:recipeSnapshot.product||item.product_service_id,quantity:Number(item.quantity),unit:item.unit,status:mapApiOrderStatus(item.status),priority:({high:"Alta",medium:"Media",low:"Baja"})[item.priority]||item.priority,plannedStartDate:item.planned_start_at?.slice(0,10)||"",plannedEndDate:item.planned_end_date||"",plannedDurationDays:Number(item.planned_duration_days||1),dueDate:item.required_at?.slice(0,10)||"",center:recipeSnapshot.center||"Produccion",responsibleWorkerId:item.responsible_worker_id,responsible:item.responsible_name,isService: Boolean(item.is_service_order),serviceEvidence:item.service_evidence||[],materialReturns:item.material_returns||[],plannedCost:Number(item.planned_cost||0),actualCost:item.actual_cost==null?null:Number(item.actual_cost),overallProgress:Number(item.overall_progress_percent||0),resources:(item.resources||[]).map((resource)=>({id:resource.id,type:resource.resource_type,refId:resource.resource_ref_id,code:resource.resource_code,name:resource.resource_name,unit:resource.unit,plannedQuantity:Number(resource.planned_quantity),actualQuantity:resource.actual_quantity==null?null:Number(resource.actual_quantity),unitCost:Number(resource.unit_cost),plannedCost:Number(resource.planned_cost),actualCost:resource.actual_cost==null?null:Number(resource.actual_cost),returnedQuantity:(item.material_returns||[]).filter(r=>r.resource_id===resource.id).reduce((sum,r)=>sum+Number(r.quantity),0),reservationIds:resource.reservation_ref_ids||[]})),releaseStatus:"Liberada",areas:(item.stages||[]).map((stage)=>({id:stage.id,recipeStageId:stage.recipe_stage_id,area:stage.name,phaseNumber:Number(stage.sort_order||0),weightPercent:Number(stage.weight_percent||0),responsibleWorkerId:stage.responsible_worker_id,responsible:stage.responsible_name||"",status:mapApiStageStatus(stage.status),progress:Number(stage.progress_percent||0),plannedMinutes:stage.planned_minutes,actualMinutes:stage.actual_minutes,actualCostFactor:1})),createdAt:item.created_at?.slice(0,10)||""};}
+function mapApiOrder(item, recipes){const recipe=recipes.find((entry)=>entry.id===item.recipe_id);const recipeSnapshot=mapApiOrderRecipeSnapshot(item,recipe);return {id:item.id,code:item.code,productServiceId:item.product_service_id,recipeId:item.recipe_id,recipeVersion:recipeSnapshot.version||1,recipeSnapshot,organizationContext:item.organization_context||null,presentationSnapshot:item.presentation_snapshot||null,costCurrency:item.organization_context?.cost_currency||null,originalPlannedCost:item.original_planned_cost??null,originalActualCost:item.original_actual_cost??null,recipeName:recipeSnapshot.product||item.product_service_id,quantity:Number(item.quantity),unit:item.unit,status:mapApiOrderStatus(item.status),priority:({high:"Alta",medium:"Media",low:"Baja"})[item.priority]||item.priority,plannedStartDate:item.planned_start_at?.slice(0,10)||"",plannedEndDate:item.planned_end_date||"",plannedDurationDays:Number(item.planned_duration_days||1),dueDate:item.required_at?.slice(0,10)||"",center:recipeSnapshot.center||"Produccion",responsibleWorkerId:item.responsible_worker_id,responsible:item.responsible_name,isService: Boolean(item.is_service_order),serviceEvidence:item.service_evidence||[],materialReturns:item.material_returns||[],plannedCost:Number(item.planned_cost||0),actualCost:item.actual_cost==null?null:Number(item.actual_cost),overallProgress:Number(item.overall_progress_percent||0),resources:(item.resources||[]).map((resource)=>({id:resource.id,type:resource.resource_type,refId:resource.resource_ref_id,code:resource.resource_code,name:resource.resource_name,unit:resource.unit,plannedQuantity:Number(resource.planned_quantity),actualQuantity:resource.actual_quantity==null?null:Number(resource.actual_quantity),unitCost:Number(resource.unit_cost),plannedCost:Number(resource.planned_cost),actualCost:resource.actual_cost==null?null:Number(resource.actual_cost),returnedQuantity:(item.material_returns||[]).filter(r=>r.resource_id===resource.id).reduce((sum,r)=>sum+Number(r.quantity),0),reservationIds:resource.reservation_ref_ids||[]})),releaseStatus:"Liberada",areas:(item.stages||[]).map((stage)=>({id:stage.id,recipeStageId:stage.recipe_stage_id,area:stage.name,phaseNumber:Number(stage.sort_order||0),weightPercent:Number(stage.weight_percent||0),responsibleWorkerId:stage.responsible_worker_id,responsible:stage.responsible_name||"",status:mapApiStageStatus(stage.status),progress:Number(stage.progress_percent||0),plannedMinutes:stage.planned_minutes,actualMinutes:stage.actual_minutes,actualCostFactor:1})),createdAt:item.created_at?.slice(0,10)||""};}
 
 function loadProductionApiData() {
   state.warehouseProductionRequests={status:"idle",data:[],page:{offset:0,has_more:false},error:""};
@@ -2768,7 +2899,7 @@ function loadHrApiData() {
   state.hrApi={status:"loading",error:""};
   return Promise.all([getHrCatalog({}, { areas: hasPermission("hr.area.read"), positions: hasPermission("hr.position.read") }),hasPermission("hr.worker.read") ? getHrWorkers() : Promise.resolve([])]).then(([{areas,positions},workers])=>{
     mockDb.saveLaborAreas((areas||[]).map((area)=>({id:area.id,code:area.code,name:area.name,description:area.description||"",status:area.status==="active"?"Activo":"Inactivo"})));
-    mockDb.saveLaborRoles((positions||[]).map((position)=>({id:position.id,areaId:position.labor_area_id,area:(areas||[]).find((area)=>area.id===position.labor_area_id)?.name||"",position:position.position,name:position.recipe_name,quantity:position.resource_quantity,minutesPerResource:position.minutes_per_resource,available:position.resource_quantity*position.minutes_per_resource,hourlyCost:Number(position.hourly_cost),cost:Number(position.hourly_cost)/60,unit:"min",type:"Mano de obra",source:"Recursos Humanos",intervenesInProduction:Boolean(position.intervenes_in_production),intervenesInMaintenance:Boolean(position.intervenes_in_maintenance),status:position.status==="active"?"Activo":"Inactivo"})));
+    mockDb.saveLaborRoles((positions||[]).map((position)=>({id:position.id,code:position.code||null,areaId:position.labor_area_id,area:(areas||[]).find((area)=>area.id===position.labor_area_id)?.name||"",position:position.position,name:position.recipe_name,quantity:position.resource_quantity,minutesPerResource:position.minutes_per_resource,available:position.resource_quantity*position.minutes_per_resource,hourlyCost:Number(position.hourly_cost),cost:Number(position.hourly_cost)/60,unit:"min",type:"Mano de obra",source:"Recursos Humanos",intervenesInProduction:Boolean(position.intervenes_in_production),intervenesInMaintenance:Boolean(position.intervenes_in_maintenance),status:position.status==="active"?"Activo":"Inactivo"})));
     state.hrApi={status:"ready",error:"",workers:workers||[]};render();
   }).catch((error)=>{state.hrApi={status:"error",error:userFacingError(error,"HR API unavailable")};render();});
 }
@@ -2779,11 +2910,13 @@ const salesQuoteStatusFromApi={draft:"Borrador",quoted:"Cotizada",approved:"Apro
 const salesOrderStatusFromApi={confirmed:"Confirmado",fulfillment_pending:"Pendiente de surtido",ready:"Listo",partially_delivered:"Parcialmente entregado",delivered:"Entregado",cancelled:"Cancelado"};
 const salesDeliveryStatusFromApi={draft:"Pendiente de entrega",confirmed:"Entregado",cancelled:"Cancelado"};
 function formatSalesMoney(value,currency="MXN"){return new Intl.NumberFormat(state.lang==="en"?"en-US":"es-MX",{style:"currency",currency}).format(Number(value||0));}
+function salesEstimatedCostText(fields){if(fields?.estimatedCost==null)return t("estimatePending");const value=fields.currency?formatSalesMoney(fields.estimatedCost,fields.currency):`${formatNumber(fields.estimatedCost)} ${t("estimateCurrencyUnconfirmed")}`;return fields.divisionRefId&&!fields.estimatedCostSnapshot?`${value} (${t("estimateHistoricalUnverified")})`:value;}
+function salesEstimatedMarginText(fields){if(fields?.estimatedMargin==null)return t("estimatePending");const value=`${formatNumber(fields.estimatedMargin)}%`;return fields.divisionRefId&&!fields.estimatedCostSnapshot?`${value} (${t("estimateHistoricalUnverified")})`:value;}
 function mapApiSalesCustomer(item){const contact=(item.contacts||[]).find(entry=>entry.is_primary&&entry.status==="active")||(item.contacts||[])[0]||{};const address=item.billing_address||{};return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"clientes",recordType:"customer",title:item.commercial_name,detail:`${item.legal_name||item.commercial_name} - ${item.tax_id||"Sin perfil fiscal"}`,status:salesCustomerStatusFromApi[item.status]||item.status,owner:item.responsible_worker_name,fields:{customerType:item.customer_type,commercialName:item.commercial_name,contactName:contact.name||"",contactEmail:contact.email||"",contactPhone:contact.phone||"",contactRole:contact.role||"",responsibleWorkerId:item.responsible_worker_id,salesOwner:item.responsible_worker_name,paymentTerms:item.payment_terms,currency:item.currency,creditLimit:Number(item.credit_limit||0),commercialNotes:item.notes||"",billingLegalName:item.legal_name||"",taxId:item.tax_id||"",taxRegime:item.tax_regime||"",cfdiUse:item.cfdi_use||"",billingEmail:item.billing_email||"",billingPhone:item.billing_phone||"",billingStreet:address.street||"",billingExterior:address.exterior_number||"",billingInterior:address.interior_number||"",billingNeighborhood:address.neighborhood||"",billingCity:address.city||"",billingState:address.state||"",billingZipCode:address.postal_code||"",billingCountry:address.country||""},createdAt:item.created_at,updatedAt:item.updated_at};}
-function mapApiSalesQuote(item){const lines=(item.lines||[]).map(line=>({productServiceId:line.product_service_id,productServiceName:`${line.product_service_code} - ${line.product_service_name}`,quantity:Number(line.quantity),unit:line.unit,unitPrice:Number(line.unit_price),discount:Number(line.discount_percentage),subtotal:Number(line.subtotal),total:Number(line.total),estimatedCost:line.estimated_cost==null?null:Number(line.estimated_cost)}));return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"cotizaciones",recordType:"quote",title:`${item.customer_name} - ${lines.length} líneas`,detail:`${formatSalesMoney(item.total,item.currency)} - ${item.valid_until}`,status:salesQuoteStatusFromApi[item.status]||item.status,owner:item.responsible_worker_name,fields:{customerId:item.customer_id,customerName:`${item.customer_code} - ${item.customer_name}`,responsibleWorkerId:item.responsible_worker_id,lines,productServiceId:lines[0]?.productServiceId||"",productServiceName:lines[0]?.productServiceName||"",quantity:lines.reduce((sum,line)=>sum+line.quantity,0),unit:lines[0]?.unit||"",unitPrice:lines[0]?.unitPrice||0,discount:lines[0]?.discount||0,subtotal:Number(item.subtotal),total:Number(item.total),estimatedCost:item.estimated_cost==null?null:Number(item.estimated_cost),estimatedMargin:item.estimated_margin==null?null:Number(item.estimated_margin),validUntil:item.valid_until,deliveryPromise:item.promised_delivery_date||"",paymentTerms:item.payment_terms,currency:item.currency,notes:item.notes||""},createdAt:item.created_at,updatedAt:item.updated_at};}
-function mapApiSalesOrder(item){const lines=(item.lines||[]).map(line=>({id:line.id,productServiceId:line.product_service_id,productServiceName:`${line.product_service_code} - ${line.product_service_name}`,productServiceType:line.product_service_type,quantity:Number(line.ordered_quantity),deliveredQuantity:Number(line.delivered_quantity),unit:line.unit,unitPrice:Number(line.unit_price),discount:Number(line.discount_percentage),total:Number(line.total),estimatedCost:line.estimated_cost==null?null:Number(line.estimated_cost),fulfillmentMode:line.fulfillment_mode,fulfillmentStatus:line.fulfillment_status,inventoryItemId:line.inventory_item_id||"",inventoryItemCode:line.inventory_item_code||"",inventoryItemName:line.inventory_item_name||"",reservations:line.reservations||[],productionRequestId:line.production_request_id||""}));return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"pedidos",recordType:"salesOrder",title:`${item.customer_code} - ${item.customer_name}`,detail:`${item.quote_code} - ${formatSalesMoney(item.total,item.currency)}`,status:salesOrderStatusFromApi[item.status]||item.status,owner:item.responsible_worker_name,fields:{quoteId:item.quote_id,quoteCode:item.quote_code,customerId:item.customer_id,customerName:item.customer_name,lines,subtotal:Number(item.subtotal),total:Number(item.total),currency:item.currency,paymentTerms:item.payment_terms,estimatedCost:item.estimated_cost==null?null:Number(item.estimated_cost),estimatedMargin:item.estimated_margin==null?null:Number(item.estimated_margin),actualCost:item.actual_cost==null?null:Number(item.actual_cost),actualMargin:item.actual_margin==null?null:Number(item.actual_margin),deliveryPromise:item.promised_delivery_date||"",fulfillmentMode:[...new Set(lines.map(line=>line.fulfillmentMode))].join(" / "),fulfillmentState:item.fulfillment_state||"idle",cancellationState:item.cancellation_state||"idle",notes:item.notes||""},createdAt:item.created_at,updatedAt:item.updated_at};}
-function mapApiSalesDelivery(item){const lines=(item.lines||[]).filter(line=>line.product_service_type!=="service").map(line=>({id:line.id,orderLineId:line.order_line_id,productServiceId:line.product_service_id,productServiceName:`${line.product_service_code} - ${line.product_service_name}`,productServiceType:line.product_service_type||"product",quantity:Number(line.quantity),unit:line.unit,actualCost:line.actual_cost==null?null:Number(line.actual_cost),actualCostSource:line.actual_cost_source||""}));return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"entregas",recordType:"salesDelivery",title:`${item.order_code} - ${item.customer_name}`,detail:`${salesDeliveryStatusFromApi[item.status]||item.status} - ${item.scheduled_date}`,status:salesDeliveryStatusFromApi[item.status]||item.status,owner:item.recipient_name||item.customer_name,fields:{orderId:item.order_id,orderCode:item.order_code,customerName:item.customer_name,deliveryStatus:salesDeliveryStatusFromApi[item.status]||item.status,confirmationState:item.confirmation_state||"idle",deliveryDate:item.scheduled_date,deliveredAt:item.delivered_at||"",recipient:item.recipient_name||"",deliveryReference:item.evidence_reference||"",notes:item.notes||"",lines},createdAt:item.created_at,updatedAt:item.updated_at};}
-function mapApiSalesServiceOrder(item){return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"ordenes-de-servicio",recordType:"serviceOrder",title:`${item.order_code} - ${item.customer_name}`,detail:`${item.product_service_code} - ${item.product_service_name}`,status:item.status,owner:item.responsible_worker_name||"",fields:{orderId:item.order_id,orderCode:item.order_code,orderLineId:item.order_line_id,customerId:item.customer_id,customerName:item.customer_name,productServiceId:item.product_service_id,productServiceName:`${item.product_service_code} - ${item.product_service_name}`,quantity:Number(item.ordered_quantity||0),unit:item.unit,responsibleWorkerId:item.responsible_worker_id||"",responsibleWorkerName:item.responsible_worker_name||"",scheduledStartAt:item.planned_start_date||"",scheduledEndAt:item.planned_end_date||"",startedAt:item.started_at||"",submittedAt:item.acceptance_requested_at||"",acceptedAt:item.accepted_at||"",notes:item.notes||"",actualCost:item.actual_cost==null?null:Number(item.actual_cost),actualMinutes:(item.time_entries||[]).reduce((sum,entry)=>sum+Number(entry.minutes||0),0),timeEntries:item.time_entries||[],costEntries:item.cost_entries||[],evidence:item.evidence||[]},createdAt:item.created_at,updatedAt:item.updated_at};}
+function mapApiSalesQuote(item){const lines=(item.lines||[]).map(line=>({productServiceId:line.product_service_id,productServiceName:`${line.product_service_code} - ${line.product_service_name}`,quantity:Number(line.quantity),unit:line.unit,unitPrice:Number(line.unit_price),discount:Number(line.discount_percentage),subtotal:Number(line.subtotal),total:Number(line.total),estimatedCost:line.estimated_cost==null?null:Number(line.estimated_cost),estimatedCostSnapshot:line.estimated_cost_snapshot||null}));return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"cotizaciones",recordType:"quote",title:`${item.customer_name} - ${lines.length} líneas`,detail:`${formatSalesMoney(item.total,item.currency)} - ${item.valid_until}`,status:salesQuoteStatusFromApi[item.status]||item.status,owner:item.responsible_worker_name,fields:{divisionRefId:item.division_ref_id,presentationSnapshot:item.presentation_snapshot||null,commercialTermsSnapshot:item.commercial_terms_snapshot,customerId:item.customer_id,customerName:`${item.customer_code} - ${item.customer_name}`,responsibleWorkerId:item.responsible_worker_id,lines,productServiceId:lines[0]?.productServiceId||"",productServiceName:lines[0]?.productServiceName||"",quantity:lines.reduce((sum,line)=>sum+line.quantity,0),unit:lines[0]?.unit||"",unitPrice:lines[0]?.unitPrice||0,discount:lines[0]?.discount||0,subtotal:Number(item.subtotal),total:Number(item.total),estimatedCost:item.estimated_cost==null?null:Number(item.estimated_cost),estimatedCostSnapshot:item.estimated_cost_snapshot||null,estimatedMargin:item.estimated_margin==null?null:Number(item.estimated_margin),validUntil:item.valid_until,deliveryPromise:item.promised_delivery_date||"",paymentTerms:item.payment_terms,currency:item.currency,notes:item.notes||""},createdAt:item.created_at,updatedAt:item.updated_at};}
+function mapApiSalesOrder(item){const lines=(item.lines||[]).map(line=>({id:line.id,productServiceId:line.product_service_id,productServiceName:`${line.product_service_code} - ${line.product_service_name}`,productServiceType:line.product_service_type,quantity:Number(line.ordered_quantity),deliveredQuantity:Number(line.delivered_quantity),unit:line.unit,unitPrice:Number(line.unit_price),discount:Number(line.discount_percentage),total:Number(line.total),estimatedCost:line.estimated_cost==null?null:Number(line.estimated_cost),estimatedCostSnapshot:line.estimated_cost_snapshot||null,fulfillmentMode:line.fulfillment_mode,fulfillmentStatus:line.fulfillment_status,inventoryItemId:line.inventory_item_id||"",inventoryItemCode:line.inventory_item_code||"",inventoryItemName:line.inventory_item_name||"",reservations:line.reservations||[],productionRequestId:line.production_request_id||""}));return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"pedidos",recordType:"salesOrder",title:`${item.customer_code} - ${item.customer_name}`,detail:`${item.quote_code} - ${formatSalesMoney(item.total,item.currency)}`,status:salesOrderStatusFromApi[item.status]||item.status,owner:item.responsible_worker_name,fields:{divisionRefId:item.division_ref_id||null,societyRefId:item.society_ref_id||null,commercialTermsSnapshot:item.commercial_terms_snapshot||null,quoteId:item.quote_id,quoteCode:item.quote_code,customerId:item.customer_id,customerName:item.customer_name,lines,subtotal:Number(item.subtotal),total:Number(item.total),currency:item.currency,costCurrency:item.cost_currency||null,costExchangeRate:item.cost_exchange_rate||null,paymentTerms:item.payment_terms,estimatedCost:item.estimated_cost==null?null:Number(item.estimated_cost),estimatedCostSnapshot:item.estimated_cost_snapshot||null,estimatedMargin:item.estimated_margin==null?null:Number(item.estimated_margin),actualCost:item.actual_cost==null?null:Number(item.actual_cost),actualMargin:item.actual_margin==null?null:Number(item.actual_margin),deliveryPromise:item.promised_delivery_date||"",fulfillmentMode:[...new Set(lines.map(line=>line.fulfillmentMode))].join(" / "),fulfillmentState:item.fulfillment_state||"idle",cancellationState:item.cancellation_state||"idle",notes:item.notes||""},createdAt:item.created_at,updatedAt:item.updated_at};}
+function mapApiSalesDelivery(item){const lines=(item.lines||[]).filter(line=>line.product_service_type!=="service").map(line=>({id:line.id,orderLineId:line.order_line_id,productServiceId:line.product_service_id,productServiceName:`${line.product_service_code} - ${line.product_service_name}`,productServiceType:line.product_service_type||"product",quantity:Number(line.quantity),unit:line.unit,actualCost:line.actual_cost==null?null:Number(line.actual_cost),actualCostSource:line.actual_cost_source||"",originalActualCost:line.original_actual_cost??null}));return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"entregas",recordType:"salesDelivery",title:`${item.order_code} - ${item.customer_name}`,detail:`${salesDeliveryStatusFromApi[item.status]||item.status} - ${item.scheduled_date}`,status:salesDeliveryStatusFromApi[item.status]||item.status,owner:item.recipient_name||item.customer_name,fields:{divisionRefId:item.division_ref_id||null,societyRefId:item.society_ref_id||null,costCurrency:item.cost_currency||null,costExchangeRate:item.cost_exchange_rate||null,currency:item.currency||null,orderId:item.order_id,orderCode:item.order_code,customerName:item.customer_name,deliveryStatus:salesDeliveryStatusFromApi[item.status]||item.status,confirmationState:item.confirmation_state||"idle",deliveryDate:item.scheduled_date,deliveredAt:item.delivered_at||"",recipient:item.recipient_name||"",deliveryReference:item.evidence_reference||"",notes:item.notes||"",lines},createdAt:item.created_at,updatedAt:item.updated_at};}
+function mapApiSalesServiceOrder(item){return {id:item.id,code:item.code,moduleId:"ventas",submoduleId:"ordenes-de-servicio",recordType:"serviceOrder",title:`${item.order_code} - ${item.customer_name}`,detail:`${item.product_service_code} - ${item.product_service_name}`,status:item.status,owner:item.responsible_worker_name||"",fields:{currency:item.currency||null,divisionRefId:item.division_ref_id||null,societyRefId:item.society_ref_id||null,commercialTermsSnapshot:item.commercial_terms_snapshot||null,orderId:item.order_id,orderCode:item.order_code,orderLineId:item.order_line_id,customerId:item.customer_id,customerName:item.customer_name,productServiceId:item.product_service_id,productServiceName:`${item.product_service_code} - ${item.product_service_name}`,quantity:Number(item.ordered_quantity||0),unit:item.unit,responsibleWorkerId:item.responsible_worker_id||"",responsibleWorkerName:item.responsible_worker_name||"",scheduledStartAt:item.planned_start_date||"",scheduledEndAt:item.planned_end_date||"",startedAt:item.started_at||"",submittedAt:item.acceptance_requested_at||"",acceptedAt:item.accepted_at||"",notes:item.notes||"",actualCost:item.actual_cost==null?null:Number(item.actual_cost),actualMinutes:(item.time_entries||[]).reduce((sum,entry)=>sum+Number(entry.minutes||0),0),timeEntries:item.time_entries||[],costEntries:item.cost_entries||[],evidence:item.evidence||[]},createdAt:item.created_at,updatedAt:item.updated_at};}
 async function loadSalesApiData() {
   if (getApiMode() !== "api" || state.salesApi.status === "loading") return;
   state.salesApi = { ...state.salesApi, status: "loading", error: "", referenceWarnings: [] };
@@ -2896,13 +3029,16 @@ function ensureSessionContext() {
 
 async function loadPurchasingApiData() {
   if (getApiMode() !== "api" || state.purchasingApi.status === "loading") return;
-  state.purchasingApi={...state.purchasingApi,status:"loading",error:""};
+  state.purchasingApi={...state.purchasingApi,status:"loading",error:"",referenceWarnings:[]};
   try {
-    const [workspace,itemResult,catalogResult,unitsResult]=await Promise.all([getPurchasingWorkspace({ suppliers: hasPermission("purchasing.supplier.read"), requisitions: hasPermission("purchasing.requisition.read"), orders: hasPermission("purchasing.order.read"), receipts: hasPermission("purchasing.receipt.read") }),getInventoryItems({status:"active"}).catch(()=>({data:[]})),getInventoryCatalog().catch(()=>({warehouses:[]})),getUnitsOfMeasure().catch(()=>[])]);
-    const critical=Object.entries(workspace.errors||{});
+    const needsReferences=["purchasing.supplier.create","purchasing.supplier.update"].some(hasPermission);
+    const [workspace,itemResult,catalogResult,unitsResult]=await Promise.all([getPurchasingWorkspace({ suppliers: hasPermission("purchasing.supplier.read"), requisitions: hasPermission("purchasing.requisition.read"), orders: hasPermission("purchasing.order.read"), receipts: hasPermission("purchasing.receipt.read"), references: needsReferences }),hasPermission("inventory.item.read")?getInventoryItems({status:"active"}).catch(()=>({data:[]})):Promise.resolve({data:[]}),hasPermission("inventory.warehouse.read")?getInventoryCatalog().catch(()=>({warehouses:[]})):Promise.resolve({warehouses:[]}),getUnitsOfMeasure().catch(()=>[])]);
+    const critical=Object.entries(workspace.errors||{}).filter(([name])=>name!=="references");
     if(critical.length) throw critical[0][1];
     state.unitCatalog={status:"ready",data:unitsResult||[],error:""};
-    state.purchasingApi={status:"ready",error:"",...workspace,items:itemResult.data||[],warehouses:catalogResult.warehouses||[]};
+    const references=workspace.errors?.references?state.purchasingApi.references:workspace.references;
+    const referenceWarnings=workspace.errors?.references?[t("purchasingReferencesUnavailable")]:[];
+    state.purchasingApi={status:"ready",error:"",...workspace,referenceWarnings,references:references||{currencies:[],payment_terms:[]},items:itemResult.data||[],warehouses:catalogResult.warehouses||[]};
   } catch(error) { state.purchasingApi={...state.purchasingApi,status:"error",error:userFacingError(error,"Purchasing API unavailable")}; }
   render();
 }
@@ -2913,7 +3049,7 @@ async function loadMaintenanceApiData(){
   state.maintenanceApi={...state.maintenanceApi,status:"loading",error:""};
   try{
     const canMutateOrders=hasPermission("maintenance.order.create")||["request","assign","start","wait_for_parts","resume","resolve","close","reopen","cancel"].some(action=>hasPermission(`maintenance.order.${action}`)),canUseTime=hasPermission("maintenance.time.create"),canUseMaterials=hasPermission("maintenance.material_request.create")||hasPermission("maintenance.material_request.cancel")||hasPermission("maintenance.material_request.reconcile");
-    const [ordersResult,workersResult,productionResult,itemsResult,catalogResult]=await Promise.allSettled([getMaintenanceOrders(),canMutateOrders||canUseTime?getMaintenanceEligibleWorkers():Promise.resolve([]),canMutateOrders?getProductionCatalog({products:false,recipes:false,machines:hasPermission("production.machine.read"),orders:hasPermission("production.order.read")}):Promise.resolve({machines:[],orders:[]}),canUseMaterials?getInventoryItems({status:"active"}):Promise.resolve({data:[]}),canUseMaterials?getInventoryCatalog():Promise.resolve({warehouses:[]})]);
+    const [ordersResult,workersResult,productionResult,itemsResult,catalogResult]=await Promise.allSettled([getMaintenanceOrders(),Promise.resolve([]),canMutateOrders?getProductionCatalog({products:false,recipes:false,machines:hasPermission("production.machine.read"),orders:hasPermission("production.order.read")}):Promise.resolve({machines:[],orders:[]}),canUseMaterials?getInventoryItems({status:"active"}):Promise.resolve({data:[]}),canUseMaterials?getInventoryCatalog():Promise.resolve({warehouses:[]})]);
     if(ordersResult.status==="rejected")throw ordersResult.reason;
     const workers=workersResult.status==="fulfilled"?workersResult.value:[],production=productionResult.status==="fulfilled"?productionResult.value:{machines:[],orders:[]},items=itemsResult.status==="fulfilled"?itemsResult.value:{data:[]},catalog=catalogResult.status==="fulfilled"?catalogResult.value:{warehouses:[]};
     const warnings=[workersResult,productionResult,itemsResult,catalogResult].filter(result=>result.status==="rejected").map(result=>userFacingError(result.reason,"Catalog unavailable"));
@@ -2922,7 +3058,7 @@ async function loadMaintenanceApiData(){
   render();
 }
 function maintenanceStatus(value){const map={draft:["Borrador","Draft"],requested:["Solicitada","Requested"],assigned:["Asignada","Assigned"],in_progress:["En proceso","In progress"],waiting_resources:["Esperando recursos","Waiting for resources"],waiting_parts:["Esperando refacciones","Waiting for parts"],resolved:["Resuelta","Resolved"],closed:["Cerrada","Closed"],cancelled:["Cancelada","Cancelled"],processing:["Procesando","Processing"],completed:["Conciliada","Reconciled"],reserved:["Reservada","Reserved"],issued:["Entregada","Issued"],released:["Liberada","Released"],failed:["Fallida","Failed"],cancelling:["Cancelando","Cancelling"],needs_reconciliation:["Requiere conciliacion","Needs reconciliation"]};return (map[value]||[value,value])[state.lang==="en"?1:0];}
-function maintenanceTransitionButtons(order,en){if(order.integration_status==="needs_reconciliation")return hasPermission("maintenance.order.reconcile")?`<button class="primary-action small-action" type="button" data-maintenance-transition="reconcile" data-order-id="${escapeAttribute(order.id)}">${en?"Reconcile":"Conciliar"}</button>`:"";const buttons=[];if(order.status==="draft")buttons.push(["request",en?"Request":"Solicitar"]);if(["requested","assigned"].includes(order.status))buttons.push(["assign",order.status==="assigned"?(en?"Reassign":"Reasignar"):(en?"Assign":"Asignar")]);if(order.status==="assigned")buttons.push(["start",en?"Start":"Iniciar"]);if(order.status==="in_progress")buttons.push(["wait_for_parts",en?"Wait for parts":"Esperar refacciones"],["resolve",en?"Resolve":"Resolver"]);if(order.status==="waiting_parts")buttons.push(["resume",en?"Resume":"Reanudar"],["resolve",en?"Resolve":"Resolver"]);if(order.status==="resolved")buttons.push(["close",en?"Close":"Cerrar"],["reopen",en?"Reopen":"Reabrir"]);if(["draft","requested","assigned"].includes(order.status))buttons.push(["cancel",en?"Cancel":"Cancelar"]);return buttons.filter(([action])=>hasPermission(`maintenance.order.${action}`)).map(([action,label])=>`<button class="${action==="resolve"?"primary-action":"secondary-action"} small-action" type="button" data-maintenance-transition="${action}" data-order-id="${escapeAttribute(order.id)}">${label}</button>`).join("");}
+function maintenanceTransitionButtons(order,en){if(!order.organization_context)return "";if(order.integration_status==="needs_reconciliation")return hasPermission("maintenance.order.reconcile")?`<button class="primary-action small-action" type="button" data-maintenance-transition="reconcile" data-order-id="${escapeAttribute(order.id)}">${en?"Reconcile":"Conciliar"}</button>`:"";const buttons=[];if(order.status==="draft")buttons.push(["request",en?"Request":"Solicitar"]);if(["requested","assigned"].includes(order.status))buttons.push(["assign",order.status==="assigned"?(en?"Reassign":"Reasignar"):(en?"Assign":"Asignar")]);if(order.status==="assigned")buttons.push(["start",en?"Start":"Iniciar"]);if(order.status==="in_progress")buttons.push(["wait_for_parts",en?"Wait for parts":"Esperar refacciones"],["resolve",en?"Resolve":"Resolver"]);if(order.status==="waiting_parts")buttons.push(["resume",en?"Resume":"Reanudar"],["resolve",en?"Resolve":"Resolver"]);if(order.status==="resolved")buttons.push(["close",en?"Close":"Cerrar"],["reopen",en?"Reopen":"Reabrir"]);if(["draft","requested","assigned"].includes(order.status))buttons.push(["cancel",en?"Cancel":"Cancelar"]);return buttons.filter(([action])=>hasPermission(`maintenance.order.${action}`)).map(([action,label])=>`<button class="${action==="resolve"?"primary-action":"secondary-action"} small-action" type="button" data-maintenance-transition="${action}" data-order-id="${escapeAttribute(order.id)}">${label}</button>`).join("");}
 
 function maintenanceDateTimeValue(value=new Date()){
   const date=value instanceof Date?value:new Date(value);
@@ -2938,7 +3074,8 @@ function maintenanceTimeFields(order,en){
 
 function openMaintenanceTimeModal(order,en){
   modalContent.innerHTML=`<form class="recipe-form" id="maintenanceTimeModalForm"><div class="modal-head"><div><p class="eyebrow">${en?"Maintenance order":"Orden de mantenimiento"}</p><h2 id="modalTitle">${en?"Log time":"Registrar tiempo"}</h2><p class="helper-copy">${escapeHtml(order.code)} &middot; ${escapeHtml(order.title)}</p></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div>${maintenanceTimeFields(order,en)}<div class="form-errors" id="formErrors" hidden></div><div class="modal-actions"><button class="secondary-action" type="button" data-action="close-maintenance-time">${t("cancel")}</button><button class="primary-action" type="submit">${en?"Save time":"Guardar tiempo"}</button></div></form>`;
-  modalBackdrop.hidden=false;modalContent.querySelector(".modal-close").addEventListener("click",closeModal);modalContent.querySelector("[data-action='close-maintenance-time']").addEventListener("click",closeModal);modalContent.querySelector("#maintenanceTimeModalForm").addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget)),start=new Date(data.time_started_at),end=new Date(data.time_ended_at),errors=[];if(!order.assigned_worker_id)errors.push(en?"Assign a technician before logging time.":"Asigna un tecnico antes de registrar tiempo.");if(!data.time_started_at||!data.time_ended_at||end<=start)errors.push(en?"End must be after start.":"El fin debe ser posterior al inicio.");if(end>new Date())errors.push(en?"End cannot be in the future.":"El fin no puede estar en el futuro.");renderFormErrors(errors);if(errors.length)return;try{await createMaintenanceTime(order.id,{worker_id:order.assigned_worker_id,started_at:start.toISOString(),ended_at:end.toISOString(),notes:data.time_notes.trim()||null});closeModal();await loadMaintenanceApiData();render();showToast(en?"Maintenance time saved.":"Tiempo de mantenimiento guardado.");}catch(error){renderFormErrors([error]);}});
+  mountMaintenanceTimeContext(modalContent.querySelector("#maintenanceTimeModalForm"),{lang:state.lang,order});
+  modalBackdrop.hidden=false;modalContent.querySelector(".modal-close").addEventListener("click",closeModal);modalContent.querySelector("[data-action='close-maintenance-time']").addEventListener("click",closeModal);modalContent.querySelector("#maintenanceTimeModalForm").addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget,data=Object.fromEntries(new FormData(form)),start=new Date(data.time_started_at),end=new Date(data.time_ended_at),errors=[];if(!order.assigned_worker_id)errors.push(en?"Assign a technician before logging time.":"Asigna un tecnico antes de registrar tiempo.");if(!data.time_started_at||!data.time_ended_at||end<=start)errors.push(en?"End must be after start.":"El fin debe ser posterior al inicio.");if(end>new Date())errors.push(en?"End cannot be in the future.":"El fin no puede estar en el futuro.");renderFormErrors(errors);if(errors.length)return;try{await saveMaintenanceTime(form,order.id,{worker_id:order.assigned_worker_id,started_at:start.toISOString(),ended_at:end.toISOString(),notes:data.time_notes.trim()||null});closeModal();await loadMaintenanceApiData();render();showToast(en?"Maintenance time saved.":"Tiempo de mantenimiento guardado.");}catch(error){renderFormErrors([error]);}});
 }
 
 function openMaintenanceActionModal(order,action,en){
@@ -2957,11 +3094,12 @@ function openMaintenanceActionModal(order,action,en){
     <div class="form-errors" id="formErrors" hidden></div><div class="modal-actions"><button class="secondary-action" type="button" data-action="close-maintenance-action">${t("cancel")}</button><button class="primary-action" type="submit">${resolving?(en?"Save and resolve":"Guardar y resolver"):(en?"Confirm cancellation":"Confirmar cancelacion")}</button></div>
   </form>`;
   modalBackdrop.hidden=false;
+  if(needsTime&&canCreateTime)mountMaintenanceTimeContext(modalContent.querySelector("#maintenanceActionForm"),{lang:state.lang,order});
   modalContent.querySelector(".modal-close").addEventListener("click",closeModal);
   modalContent.querySelector("[data-action='close-maintenance-action']").addEventListener("click",closeModal);
   modalContent.querySelector("#maintenanceActionForm").addEventListener("submit",async event=>{
     event.preventDefault();
-    const data=Object.fromEntries(new FormData(event.currentTarget));
+    const form=event.currentTarget,data=Object.fromEntries(new FormData(event.currentTarget));
     if(resolving&&!canUpdateResolution)for(const key of ["diagnosis","root_cause","work_performed","verification_notes"])data[key]=order[key]||"";
     const errors=[];
     if(resolving){if(!data.diagnosis.trim())errors.push(en?"Diagnosis is required.":"El diagnostico es obligatorio.");if(!data.work_performed.trim())errors.push(en?"Work performed is required.":"El trabajo realizado es obligatorio.");if(!data.verification_notes.trim())errors.push(en?"Verification is required.":"La verificacion es obligatoria.");if(needsTime&&!canCreateTime)errors.push(en?"Logged time is required and your role cannot create it.":"Se requiere tiempo registrado y tu rol no puede crearlo.");if(needsTime&&canCreateTime&&!timeCreated){const start=new Date(data.time_started_at),end=new Date(data.time_ended_at);if(!order.assigned_worker_id)errors.push(en?"Assign a technician before logging time.":"Asigna un tecnico antes de registrar tiempo.");if(!data.time_started_at||!data.time_ended_at||end<=start)errors.push(en?"Time end must be after start.":"El fin del tiempo debe ser posterior al inicio.");if(end>new Date())errors.push(en?"Time end cannot be in the future.":"El fin del tiempo no puede estar en el futuro.");}}
@@ -2969,7 +3107,7 @@ function openMaintenanceActionModal(order,action,en){
     renderFormErrors(errors);if(errors.length)return;
     try{
       let result;
-      if(resolving){if(canUpdateResolution)await updateMaintenanceOrder(order.id,{diagnosis:data.diagnosis.trim(),root_cause:data.root_cause.trim()||null,work_performed:data.work_performed.trim(),verification_notes:data.verification_notes.trim()});if(needsTime&&canCreateTime&&!timeCreated){await createMaintenanceTime(order.id,{worker_id:order.assigned_worker_id,started_at:new Date(data.time_started_at).toISOString(),ended_at:new Date(data.time_ended_at).toISOString(),notes:data.time_notes.trim()||null});timeCreated=true;}result=await transitionMaintenanceOrder(order.id,"resolve",{});}
+      if(resolving){if(canUpdateResolution)await updateMaintenanceOrder(order.id,{diagnosis:data.diagnosis.trim(),root_cause:data.root_cause.trim()||null,work_performed:data.work_performed.trim(),verification_notes:data.verification_notes.trim()});if(needsTime&&canCreateTime&&!timeCreated){await saveMaintenanceTime(form,order.id,{worker_id:order.assigned_worker_id,started_at:new Date(data.time_started_at).toISOString(),ended_at:new Date(data.time_ended_at).toISOString(),notes:data.time_notes.trim()||null});timeCreated=true;}result=await transitionMaintenanceOrder(order.id,"resolve",{});}
       else result=await transitionMaintenanceOrder(order.id,"cancel",{reason:data.reason.trim()});
       closeModal();await loadMaintenanceApiData();render();showToast(result.integration_status==="needs_reconciliation"?(en?"The operation still requires reconciliation.":"La operacion aun requiere conciliacion."):(resolving?(en?"Maintenance order resolved.":"Orden de mantenimiento resuelta."):(en?"Maintenance order cancelled.":"Orden de mantenimiento cancelada.")));
     }catch(error){renderFormErrors([...(timeCreated?[en?"Time was saved. Complete the remaining correction and try resolving again.":"El tiempo ya fue guardado. Corrige lo pendiente e intenta resolver nuevamente."]:[]),error]);}
@@ -2983,24 +3121,28 @@ function getMaintenanceFlowSteps(id){const steps={es:{ordenes:[["Reporte","Descr
 function renderMaintenanceSubmodulePanel(module){
   const api=state.maintenanceApi,en=state.lang==="en",id=state.activeSubmodule;
   const workerOptions=api.workers.map(item=>`<option value="${escapeAttribute(item.id)}">${escapeHtml(item.full_name)} · ${escapeHtml(item.position_name)}</option>`).join("");
-  const cards=api.orders.map(order=>{const assignedWorkerOptions=api.workers.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===order.assigned_worker_id?"selected":""}>${escapeHtml(item.full_name)} · ${escapeHtml(item.position_name)}</option>`).join("");return `<article class="catalog-card maintenance-order-card"><div class="maintenance-order-main"><span class="muted-label">${escapeHtml(order.code)} · ${escapeHtml(order.priority)}</span><strong>${escapeHtml(order.title)}</strong><p>${escapeHtml(order.machine_name_snapshot||order.location)}</p><div class="record-main"><span>${en?"Assigned technician":"Tecnico asignado"}</span><strong>${escapeHtml(order.assigned_worker_name||(en?"Unassigned":"Sin asignar"))}</strong></div></div><div class="maintenance-order-meta"><span class="chip ${order.status==="closed"?"active":"warning"}">${maintenanceStatus(order.status)}</span>${order.integration_status==="needs_reconciliation"?`<span class="chip danger">${maintenanceStatus(order.integration_status)}</span>`:""}<small>${order.total_minutes||0} min · ${(order.material_requests||[]).reduce((sum,request)=>sum+(request.lines?.length||0),0)} ${en?"parts":"refacciones"}</small></div>${hasPermission("maintenance.order.assign")&&["requested","assigned"].includes(order.status)?`<label class="preview-field maintenance-technician-field"><span>${order.status==="assigned"?(en?"Reassign technician":"Reasignar tecnico"):(en?"Technician":"Tecnico")}</span><select data-maintenance-worker-for="${escapeAttribute(order.id)}"><option value="">${en?"Choose a technician":"Selecciona un tecnico"}</option>${assignedWorkerOptions}</select></label>`:""}${maintenanceMaterialActions(order,en)}<div class="row-actions maintenance-order-actions">${["assigned","in_progress","waiting_parts"].includes(order.status)&&hasPermission("maintenance.time.create")?`<button class="secondary-action small-action" type="button" data-log-maintenance-time="${escapeAttribute(order.id)}">${en?"Log time":"Registrar tiempo"}</button>`:""}${["assigned","in_progress","waiting_parts"].includes(order.status)&&hasPermission("maintenance.material_request.create")?`<button class="primary-action small-action" type="button" data-request-maintenance-material="${escapeAttribute(order.id)}">${en?"Request spare parts":"Solicitar refacciones"}</button>`:""}${maintenanceTransitionButtons(order,en)}</div></article>`;}).join("");
+  const cards=api.orders.map(order=>{const assignedWorkerOptions=api.workers.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===order.assigned_worker_id?"selected":""}>${escapeHtml(item.full_name)} · ${escapeHtml(item.position_name)}</option>`).join("");return `<article class="catalog-card maintenance-order-card"><div class="maintenance-order-main"><span class="muted-label">${escapeHtml(order.code)} · ${escapeHtml(order.priority)}</span><strong>${escapeHtml(order.title)}</strong><p>${escapeHtml(order.machine_name_snapshot||order.location)}</p>${maintenanceContextSummary(order,state.lang)}<div class="record-main"><span>${en?"Assigned technician":"Tecnico asignado"}</span><strong>${escapeHtml(order.assigned_worker_name||(en?"Unassigned":"Sin asignar"))}</strong></div></div><div class="maintenance-order-meta"><span class="chip ${order.status==="closed"?"active":"warning"}">${maintenanceStatus(order.status)}</span>${order.integration_status==="needs_reconciliation"?`<span class="chip danger">${maintenanceStatus(order.integration_status)}</span>`:""}<small>${order.total_minutes||0} min · ${(order.material_requests||[]).reduce((sum,request)=>sum+(request.lines?.length||0),0)} ${en?"parts":"refacciones"}</small></div>${hasPermission("maintenance.order.assign")&&["requested","assigned"].includes(order.status)?`<label class="preview-field maintenance-technician-field"><span>${order.status==="assigned"?(en?"Reassign technician":"Reasignar tecnico"):(en?"Technician":"Tecnico")}</span><select data-maintenance-worker-for="${escapeAttribute(order.id)}"><option value="">${en?"Choose a technician":"Selecciona un tecnico"}</option>${assignedWorkerOptions}</select></label>`:""}${maintenanceMaterialActions(order,en)}<div class="row-actions maintenance-order-actions">${order.organization_context&&["assigned","in_progress","waiting_parts"].includes(order.status)&&hasPermission("maintenance.time.create")?`<button class="secondary-action small-action" type="button" data-log-maintenance-time="${escapeAttribute(order.id)}">${en?"Log time":"Registrar tiempo"}</button>`:""}${order.organization_context&&["assigned","in_progress","waiting_parts"].includes(order.status)&&hasPermission("maintenance.material_request.create")?`<button class="primary-action small-action" type="button" data-request-maintenance-material="${escapeAttribute(order.id)}">${en?"Request spare parts":"Solicitar refacciones"}</button>`:""}${maintenanceTransitionButtons(order,en)}</div></article>`;}).join("");
   if(id==="ordenes"){
     const sourceOrder=api.productionOrders.find(item=>item.id===state.maintenanceSourceOrderId),sourceMachineId=sourceOrder?.resources?.find(item=>item.resource_type==="machine")?.resource_ref_id||"";const machines=api.machines.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===sourceMachineId?"selected":""}>${escapeHtml(item.code)} · ${escapeHtml(item.name)}</option>`).join(""),productionOrders=api.productionOrders.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===state.maintenanceSourceOrderId?"selected":""}>${escapeHtml(item.code)} · ${maintenanceStatus(item.status)}</option>`).join("");
-    modulePanel.innerHTML=`<div class="panel-head"><div><p class="eyebrow">${en?"Maintenance / Operations":"Mantenimiento / Operacion"}</p><h2>${en?"Corrective orders":"Ordenes correctivas"}</h2></div><button class="secondary-action" data-action="back-module">${t("overview")}</button></div><div class="flow-guided-layout maintenance-workspace">${renderFlowGuide(getMaintenanceFlowTitle(id),getMaintenanceFlowSteps(id))}<section class="section-card"><form class="form-grid" id="maintenanceOrderForm"><label class="preview-field"><span>${en?"Code":"Folio"}</span><input name="code" required></label><label class="preview-field"><span>${en?"Target":"Objetivo"}</span><select name="target_type"><option value="facility">${en?"Facility":"Instalacion"}</option><option value="other">${en?"Other":"Otro"}</option><option value="production_machine">${en?"Production machine":"Maquina de Produccion"}</option></select></label><label class="preview-field"><span>${en?"Machine":"Maquina"}</span><select name="production_machine_id"><option value="">${en?"Not applicable":"No aplica"}</option>${machines}</select></label><label class="preview-field"><span>${en?"Production order (optional)":"Orden de Produccion (opcional)"}</span><select name="source_production_order_id"><option value="">${en?"Manual report":"Reporte manual"}</option>${productionOrders}</select></label><label class="preview-field"><span>${en?"Priority":"Prioridad"}</span><select name="priority"><option value="low">${en?"Low":"Baja"}</option><option value="medium" selected>${en?"Medium":"Media"}</option><option value="high">${en?"High":"Alta"}</option><option value="critical">${en?"Critical":"Critica"}</option></select></label><label class="preview-field"><span>${en?"Title":"Titulo"}</span><input name="title" maxlength="180" required></label><label class="preview-field wide-field"><span>${en?"Fault description":"Descripcion de la falla"}</span><textarea name="description" maxlength="4000" required></textarea></label><label class="preview-field"><span>${en?"Location":"Ubicacion"}</span><input name="location" maxlength="300" required></label><label class="preview-field"><span>${en?"Safety notes":"Notas de seguridad"}</span><input name="safety_notes" maxlength="2000"></label><div class="wide-field"><button class="primary-action" type="submit">${en?"Create order":"Crear orden"}</button></div></form></section><section class="section-card"><div class="catalog-grid">${cards||`<p>${en?"No maintenance orders yet.":"Aun no hay ordenes de mantenimiento."}</p>`}</div></section></div>`;
+    modulePanel.innerHTML=`<div class="panel-head"><div><p class="eyebrow">${en?"Maintenance / Operations":"Mantenimiento / Operacion"}</p><h2>${en?"Corrective orders":"Ordenes correctivas"}</h2></div><button class="secondary-action" data-action="back-module">${t("overview")}</button></div><div class="flow-guided-layout maintenance-workspace">${renderFlowGuide(getMaintenanceFlowTitle(id),getMaintenanceFlowSteps(id))}<section class="section-card"><form class="form-grid" id="maintenanceOrderForm"><label class="preview-field"><span>${en?"Code":"Folio"}</span>${ownerCodeInput("maintenance.order")}</label><label class="preview-field"><span>${en?"Target":"Objetivo"}</span><select name="target_type"><option value="facility">${en?"Facility":"Instalacion"}</option><option value="other">${en?"Other":"Otro"}</option><option value="production_machine">${en?"Production machine":"Maquina de Produccion"}</option></select></label><label class="preview-field"><span>${en?"Machine":"Maquina"}</span><select name="production_machine_id"><option value="">${en?"Not applicable":"No aplica"}</option>${machines}</select></label><label class="preview-field"><span>${en?"Production order (optional)":"Orden de Produccion (opcional)"}</span><select name="source_production_order_id"><option value="">${en?"Manual report":"Reporte manual"}</option>${productionOrders}</select></label><label class="preview-field"><span>${en?"Priority":"Prioridad"}</span><select name="priority"><option value="low">${en?"Low":"Baja"}</option><option value="medium" selected>${en?"Medium":"Media"}</option><option value="high">${en?"High":"Alta"}</option><option value="critical">${en?"Critical":"Critica"}</option></select></label><label class="preview-field"><span>${en?"Title":"Titulo"}</span><input name="title" maxlength="180" required></label><label class="preview-field wide-field"><span>${en?"Fault description":"Descripcion de la falla"}</span><textarea name="description" maxlength="4000" required></textarea></label><label class="preview-field"><span>${en?"Location":"Ubicacion"}</span><input name="location" maxlength="300" required></label><label class="preview-field"><span>${en?"Safety notes":"Notas de seguridad"}</span><input name="safety_notes" maxlength="2000"></label><div class="wide-field"><button class="primary-action" type="submit">${en?"Create order":"Crear orden"}</button></div></form></section><section class="section-card"><div class="catalog-grid">${cards||`<p>${en?"No maintenance orders yet.":"Aun no hay ordenes de mantenimiento."}</p>`}</div></section></div>`;
     if(!hasPermission("maintenance.order.create"))modulePanel.querySelector("#maintenanceOrderForm")?.closest(".section-card")?.remove();
-    modulePanel.querySelector("#maintenanceOrderForm")?.addEventListener("submit",async event=>{event.preventDefault();const d=Object.fromEntries(new FormData(event.currentTarget));const machineId=d.production_machine_id||null,sourceId=d.source_production_order_id||null;try{await createMaintenanceOrder({...d,target_type:machineId?"production_machine":d.target_type,production_machine_id:machineId,source_type:sourceId?"production_order":"manual",source_production_order_id:sourceId,safety_notes:d.safety_notes||null});state.maintenanceSourceOrderId="";await loadMaintenanceApiData();render();showToast(en?"Maintenance order created.":"Orden de mantenimiento creada.");}catch(error){showApiError(error,en?"The maintenance order could not be created.":"No se pudo crear la orden de mantenimiento.");}});
+    mountMaintenanceOrderContext(modulePanel.querySelector("#maintenanceOrderForm"),{lang:state.lang,orders:api.productionOrders,scope:state.sessionApi.data?.scope});
+    modulePanel.querySelector("#maintenanceOrderForm")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget,d=Object.fromEntries(new FormData(form));const machineId=d.production_machine_id||null,sourceId=d.source_production_order_id||null;const payload={...d,target_type:machineId?"production_machine":d.target_type,production_machine_id:machineId,source_type:sourceId?"production_order":"manual",source_production_order_id:sourceId,safety_notes:d.safety_notes||null},command=maintenanceCommand(form,payload);if(!command)return;try{await createMaintenanceOrder(payload,command.key);state.maintenanceSourceOrderId="";await loadMaintenanceApiData();render();showToast(en?"Maintenance order created.":"Orden de mantenimiento creada.");}catch(error){showApiError(error,en?"The maintenance order could not be created.":"No se pudo crear la orden de mantenimiento.");}finally{command.finish();}});
   }else{
-    const materialOrders=api.orders.filter(item=>["assigned","in_progress","waiting_parts"].includes(item.status)),orders=materialOrders.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===state.maintenanceMaterialSourceOrderId?"selected":""}>${escapeHtml(item.code)} · ${escapeHtml(item.title)}</option>`).join(""),warehouses=api.warehouses.map(item=>`<option value="${escapeAttribute(item.id)}">${escapeHtml(item.code)} · ${escapeHtml(item.name)}</option>`).join("");
+    const materialOrders=api.orders.filter(item=>item.organization_context&&["assigned","in_progress","waiting_parts"].includes(item.status)),orders=materialOrders.map(item=>`<option value="${escapeAttribute(item.id)}" ${item.id===state.maintenanceMaterialSourceOrderId?"selected":""}>${escapeHtml(item.code)} · ${escapeHtml(item.title)}</option>`).join(""),warehouses=api.warehouses.map(item=>`<option value="${escapeAttribute(item.id)}">${escapeHtml(item.code)} · ${escapeHtml(item.name)}</option>`).join("");
     const materialSetup=!materialOrders.length?`<p class="helper-copy">${en?"Assign a technician to an order before requesting parts.":"Asigna un tecnico a una orden antes de solicitar refacciones."}</p>`:!api.warehouses.length?`<div><p class="helper-copy">${en?"An active spare-parts warehouse is required. None exists in Inventory yet.":"Se necesita un almacen activo de tipo Refacciones. Aun no existe ninguno en Inventario."}</p><div class="row-actions">${hasPermission("inventory.warehouse.create")?`<button class="primary-action small-action" type="button" data-open-spare-parts-warehouse>${en?"Create spare-parts warehouse":"Crear almacen de refacciones"}</button>`:`<span class="chip warning">${en?"Ask the Inventory manager to create it.":"Solicita su alta al encargado de Inventario."}</span>`}</div></div>`:!api.items.length?`<div><p class="helper-copy">${en?"Create an active inventory item before requesting it.":"Crea primero un articulo activo en Inventario para poder solicitarlo."}</p>${hasPermission("inventory.item.create")?`<button class="primary-action small-action" type="button" data-open-spare-parts-items>${en?"Create inventory item":"Crear articulo"}</button>`:`<span class="chip warning">${en?"Ask the Inventory manager to create it.":"Solicita su alta al encargado de Inventario."}</span>`}</div>`:`<form class="form-grid" id="maintenanceMaterialForm"><label class="preview-field"><span>${en?"Order":"Orden"}</span><select name="order_id" required><option value="" ${state.maintenanceMaterialSourceOrderId?"":"selected"}>${en?"Choose":"Selecciona"}</option>${orders}</select></label><label class="preview-field"><span>${en?"Spare-parts warehouse":"Almacen de refacciones"}</span><select name="warehouse_id" required><option value="">${en?"Choose":"Selecciona"}</option>${warehouses}</select></label><div class="wide-field"><button class="secondary-action small-action" type="button" data-add-maintenance-line>${en?"Add part":"Agregar refaccion"}</button></div><div class="wide-field purchasing-requisition-lines" id="maintenanceMaterialLines">${maintenanceLineMarkup(api.items,en)}</div><div class="wide-field"><button class="primary-action" type="submit">${en?"Reserve parts":"Solicitar y reservar refacciones"}</button></div></form>`;
     modulePanel.innerHTML=`<div class="panel-head"><div><p class="eyebrow">${en?"Maintenance / Spare parts":"Mantenimiento / Refacciones"}</p><h2>${en?"Labor and spare parts":"Tiempos y refacciones"}</h2></div><button class="secondary-action" data-action="back-module">${t("overview")}</button></div><div class="flow-guided-layout maintenance-workspace">${renderFlowGuide(getMaintenanceFlowTitle(id),getMaintenanceFlowSteps(id))}<section class="section-card"><h3>${en?"Log labor time":"Registrar tiempo"}</h3><form class="form-grid" id="maintenanceTimeForm"><label class="preview-field"><span>${en?"Order":"Orden"}</span><select name="order_id" required><option value="">${en?"Choose":"Selecciona"}</option>${orders}</select></label><label class="preview-field"><span>${en?"Technician":"Tecnico"}</span><select name="worker_id" required><option value="">${en?"Choose":"Selecciona"}</option>${workerOptions}</select></label><label class="preview-field"><span>${en?"Start":"Inicio"}</span><input name="started_at" type="datetime-local" required></label><label class="preview-field"><span>${en?"End":"Fin"}</span><input name="ended_at" type="datetime-local" required></label><label class="preview-field wide-field"><span>${en?"Notes":"Notas"}</span><input name="notes" maxlength="1000"></label><div class="wide-field"><button class="primary-action" type="submit">${en?"Save time":"Guardar tiempo"}</button></div></form></section><section class="section-card"><h3>${en?"Request spare parts":"Solicitar refacciones"}</h3>${materialSetup}</section><section class="section-card"><div class="catalog-grid">${cards}</div></section></div>`;
     if(!hasPermission("maintenance.time.create"))modulePanel.querySelector("#maintenanceTimeForm")?.closest(".section-card")?.remove();
     if(!hasPermission("maintenance.material_request.create"))modulePanel.querySelector("#maintenanceMaterialForm")?.closest(".section-card")?.remove();
-    modulePanel.querySelector("#maintenanceTimeForm")?.addEventListener("submit",async event=>{event.preventDefault();const d=Object.fromEntries(new FormData(event.currentTarget));try{await createMaintenanceTime(d.order_id,{worker_id:d.worker_id,started_at:new Date(d.started_at).toISOString(),ended_at:new Date(d.ended_at).toISOString(),notes:d.notes||null});await loadMaintenanceApiData();render();showToast(en?"Time saved.":"Tiempo guardado.");}catch(error){showApiError(error,en?"The time could not be saved.":"No se pudo guardar el tiempo.");}});
+    mountMaintenanceTimeContext(modulePanel.querySelector("#maintenanceTimeForm"),{lang:state.lang,orders:api.orders});
+    modulePanel.querySelector("#maintenanceTimeForm")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget,d=Object.fromEntries(new FormData(form));try{await saveMaintenanceTime(form,d.order_id,{worker_id:d.worker_id,started_at:new Date(d.started_at).toISOString(),ended_at:new Date(d.ended_at).toISOString(),notes:d.notes||null});await loadMaintenanceApiData();render();showToast(en?"Time saved.":"Tiempo guardado.");}catch(error){showApiError(error,en?"The time could not be saved.":"No se pudo guardar el tiempo.");}});
+    mountMaintenanceMaterials(modulePanel.querySelector("#maintenanceMaterialForm"),{lang:state.lang,orders:api.orders,warehouses:api.warehouses});
     const lineContainer=modulePanel.querySelector("#maintenanceMaterialLines");modulePanel.querySelector("[data-add-maintenance-line]")?.addEventListener("click",()=>lineContainer?.insertAdjacentHTML("beforeend",maintenanceLineMarkup(api.items,en)));modulePanel.addEventListener("change",event=>{if(event.target.name==="item_id"){const row=event.target.closest("[data-maintenance-material-line]");row.querySelector('[name="unit_code"]').value=event.target.selectedOptions[0]?.dataset.unit||"";}});modulePanel.addEventListener("click",event=>{const button=event.target.closest("[data-remove-maintenance-line]");if(button&&lineContainer?.querySelectorAll("[data-maintenance-material-line]").length>1)button.closest("[data-maintenance-material-line]").remove();});modulePanel.querySelector("[data-open-spare-parts-warehouse]")?.addEventListener("click",()=>{const inventoryModule=modules.find(item=>item.id==="almacenes"),submodule=getGenericSubmodule(inventoryModule,"almacenes");navigateTo({active:"almacenes",activeSubmodule:"almacenes",laborArea:""});openWarehouseModal(inventoryModule,submodule,null,{type:"spare_parts"});});modulePanel.querySelector("[data-open-spare-parts-items]")?.addEventListener("click",()=>{const inventoryModule=modules.find(item=>item.id==="almacenes"),submodule=getGenericSubmodule(inventoryModule,"articulos");navigateTo({active:"almacenes",activeSubmodule:"articulos",laborArea:""});openInventoryItemModal(inventoryModule,submodule,null,{type:"sparePart"});});modulePanel.querySelector("#maintenanceMaterialForm")?.addEventListener("submit",async event=>{event.preventDefault();const form=event.currentTarget,d=Object.fromEntries(new FormData(form)),lines=[...form.querySelectorAll("[data-maintenance-material-line]")].map(row=>({item_id:row.querySelector('[name="item_id"]').value,quantity:Number(row.querySelector('[name="quantity"]').value),unit_code:row.querySelector('[name="unit_code"]').value}));try{const request=await createMaintenanceMaterialRequest(d.order_id,{warehouse_id:d.warehouse_id,lines});state.maintenanceMaterialSourceOrderId="";await loadMaintenanceApiData();render();showToast(request.status==="needs_reconciliation"?(en?"Some parts require reconciliation.":"Algunas refacciones requieren conciliacion."):(en?"Spare parts requested and reserved.":"Refacciones solicitadas y reservadas."));}catch(error){showApiError(error,en?"The spare-parts request could not be created.":"No se pudo crear la solicitud de refacciones.");}});
   }
   modulePanel.querySelector("[data-action='back-module']")?.addEventListener("click",()=>navigateTo({active:"mantenimiento",activeSubmodule:null,laborArea:""}));
   modulePanel.querySelectorAll("[data-request-maintenance-material]").forEach(button=>button.addEventListener("click",()=>{state.maintenanceMaterialSourceOrderId=button.dataset.requestMaintenanceMaterial;navigateTo({active:"mantenimiento",activeSubmodule:"refacciones",laborArea:""});}));
   modulePanel.querySelectorAll("[data-log-maintenance-time]").forEach(button=>button.addEventListener("click",()=>{const order=api.orders.find(item=>item.id===button.dataset.logMaintenanceTime);if(order)openMaintenanceTimeModal(order,en);}));
+  mountMaintenanceAssignments(modulePanel,{orders:api.orders,lang:state.lang,onSaved:()=>loadMaintenanceApiData()});
   modulePanel.querySelectorAll("[data-maintenance-transition]").forEach(button=>button.addEventListener("click",async()=>{const order=api.orders.find(item=>item.id===button.dataset.orderId),action=button.dataset.maintenanceTransition;if(["resolve","cancel"].includes(action)){openMaintenanceActionModal(order,action,en);return;}let extra={};if(action==="assign"){const workerId=modulePanel.querySelector(`[data-maintenance-worker-for="${CSS.escape(order.id)}"]`)?.value;if(!workerId){showToast(en?"Choose a maintenance technician.":"Selecciona un técnico de mantenimiento.","warning");return;}extra.assigned_worker_id=workerId;}try{const result=action==="reconcile"?await reconcileMaintenanceOrder(order.id):await transitionMaintenanceOrder(order.id,action,extra);await loadMaintenanceApiData();render();if(action==="assign"){showToast(en?`Technician assigned: ${result.assigned_worker_name}`:`Técnico asignado: ${result.assigned_worker_name}`,"success");return;}showToast(result.integration_status==="needs_reconciliation"?(en?"The operation still requires reconciliation.":"La operación aún requiere conciliación."):(en?"Maintenance status updated.":"Estado de mantenimiento actualizado."),result.integration_status==="needs_reconciliation"?"warning":"success");}catch(error){showApiError(error,en?"The maintenance status could not be updated.":"No se pudo actualizar el estado de mantenimiento.");}}));
   modulePanel.querySelectorAll("[data-reconcile-maintenance-material]").forEach(button=>button.addEventListener("click",async()=>{if(button.disabled)return;button.disabled=true;try{const result=await reconcileMaintenanceMaterialRequest(button.dataset.reconcileMaintenanceMaterial);await loadMaintenanceApiData();render();showToast(result.status==="needs_reconciliation"?(en?"The request is still pending. Check available stock and retry from Maintenance.":"La solicitud sigue pendiente. Revisa la existencia disponible y reintenta desde Mantenimiento."):result.status==="reserved"?(en?"Parts reserved. Warehouse staff must authorize and confirm delivery in Warehouse → Movements.":"Refacciones reservadas. Almacén debe autorizar y confirmar la entrega en Almacenes → Movimientos."):(en?"Spare-parts request reconciled.":"Solicitud de refacciones conciliada."),result.status==="needs_reconciliation"?"warning":"success");}catch(error){showApiError(error,en?"The spare-parts request could not be reconciled.":"No se pudo conciliar la solicitud de refacciones.");}finally{button.disabled=false;}}));
   if(handoffEnabled("maintenanceReturn"))modulePanel.querySelector(".submodule-screen")?.insertAdjacentHTML("beforeend",renderOperationalHandoff("maintenanceReturn"));
@@ -3075,6 +3217,20 @@ function purchasingShell(module,title,help,content,form="",contentFirst=false) {
 }
 function purchasingForm(id,fields,button){return `<section class="section-card"><form class="form-grid" id="${id}">${fields}<div class="wide-field inline-actions"><button class="primary-action" type="submit">${escapeHtml(button)}</button></div></form></section>`;}
 
+function commercialAssignmentButton(kind, id) {
+  const module = kind === "customer" ? "sales" : "purchasing";
+  return getApiMode() === "api" && getSessionContextData()?.active_modules?.includes(module) && getSessionContextData()?.scope?.version === 2 && hasPermission(`${module}.${kind}.read`) ? `<button class="secondary-action small-action" type="button" data-commercial-assignment="${kind}" data-record-id="${escapeAttribute(id)}">${commercialOrganizationCopy[state.lang === "en" ? "en" : "es"].title}</button>` : "";
+}
+function bindCommercialOrganizationActions() {
+  modulePanel.querySelectorAll('[data-commercial-assignment]').forEach(button => button.addEventListener('click', () => {
+    const kind = button.dataset.commercialAssignment;
+    const records = kind === 'customer' ? mockDb.loadModuleRecords('ventas', 'clientes') : state.purchasingApi.suppliers;
+    const record = records.find(row => row.id === button.dataset.recordId);
+    if (!record) return;
+    modalContent.replaceChildren(); modalBackdrop.hidden = false;
+    mountCommercialOrganization(modalContent, kind, record, getSessionContextData(), state.lang, closeModal);
+  }));
+}
 function renderPurchasingSuppliersPanel(module){
   const api=state.purchasingApi,en=state.lang==="en";
   const cards=api.suppliers.map(item=>`<article class="catalog-card">
@@ -3083,21 +3239,33 @@ function renderPurchasingSuppliersPanel(module){
     <p>${escapeHtml(item.legal_name||"")}${item.tax_regime?` &middot; ${en?"Tax regime":"Regimen"} ${escapeHtml(item.tax_regime)}`:""}</p>
     <p>${escapeHtml(item.billing_email||item.email||"")} &middot; ${escapeHtml(item.currency)} &middot; ${escapeHtml(item.payment_terms)} &middot; ${item.lead_time_days} ${en?"days":"dias"}</p>
     <span class="chip ${item.status==="active"?"active":"warning"}">${purchasingStatus(item.status)}</span>
-    ${hasPermission("purchasing.supplier.update")?`<button class="secondary-action small-action" type="button" data-edit-supplier="${escapeAttribute(item.id)}">${en?"Edit supplier":"Editar proveedor"}</button>`:""}
+    ${commercialAssignmentButton("supplier", item.id)}${hasPermission("purchasing.supplier.update")?`<button class="secondary-action small-action" type="button" data-edit-supplier="${escapeAttribute(item.id)}">${en?"Edit supplier":"Editar proveedor"}</button>`:""}
   </article>`).join("");
   purchasingShell(module,t("suppliersTitle"),t("suppliersListHelp"),cards);
   modulePanel.querySelector(".submodule-screen").classList.add("purchasing-suppliers-screen");
   if(hasPermission("purchasing.supplier.create"))modulePanel.querySelector(".submodule-screen-head").insertAdjacentHTML("beforeend",`<button class="primary-action" type="button" data-open-supplier>${t("newSupplier")}</button>`);
   modulePanel.querySelector("[data-open-supplier]")?.addEventListener("click",()=>openPurchasingSupplierModal());
+  bindCommercialOrganizationActions();
   modulePanel.querySelectorAll("[data-edit-supplier]").forEach(button=>button.addEventListener("click",()=>openPurchasingSupplierModal(button.dataset.editSupplier)));
 }
 
 function openPurchasingSupplierModal(id=null){
   const en=state.lang==="en",editing=id?state.purchasingApi.suppliers.find(item=>item.id===id):null;
   if((id&&!editing)||!hasPermission(editing?"purchasing.supplier.update":"purchasing.supplier.create"))return;
+  const loadedReferences=state.purchasingApi.references||{currencies:[],payment_terms:[]};
+  const references=getApiMode()==="api"?loadedReferences:{
+    currencies:loadedReferences.currencies.length?loadedReferences.currencies:[{code:"MXN",name_es:"Peso mexicano",name_en:"Mexican peso"},{code:"USD",name_es:"Dólar estadounidense",name_en:"US dollar"},{code:"EUR",name_es:"Euro",name_en:"Euro"}],
+    payment_terms:loadedReferences.payment_terms.length?loadedReferences.payment_terms:[{code:"cash",name_es:"Contado",name_en:"Cash"},{code:"credit_30",name_es:"Crédito 30 días",name_en:"Net 30"}]
+  };
+  if(getApiMode()==="api"&&(!references.currencies.length||!references.payment_terms.length)){
+    showToast((state.purchasingApi.referenceWarnings||[]).join(" ")||t("purchasingReferencesUnavailable"));
+    return;
+  }
+  const currencyValue=editing?.currency||preferredCommercialReference(references.currencies,"MXN");
+  const paymentTermsValue=editing?.payment_terms||preferredCommercialReference(references.payment_terms,"cash");
   const value=name=>escapeAttribute(editing?.[name]??"");
   const fields=`
-    <label class="preview-field"><span>${en?"Code":"Codigo"}</span><input name="code" required maxlength="40" value="${value("code")}" ${editing?"readonly":""}></label>
+    <label class="preview-field"><span>${en?"Code":"Codigo"}</span>${ownerCodeInput("purchasing.supplier",editing?.code,editing?.code_mode,40)}</label>
     <label class="preview-field"><span>${en?"Commercial name":"Nombre comercial"}</span><input name="commercial_name" required maxlength="240" value="${value("commercial_name")}"></label>
     <label class="preview-field"><span>${en?"Legal name":"Razon social"}</span><input name="legal_name" required maxlength="240" value="${value("legal_name")}"></label>
     <label class="preview-field"><span>RFC</span><input name="tax_id" required maxlength="13" pattern="[A-Za-z&#209;&#241;&amp;]{3,4}[0-9]{6}[A-Za-z0-9]{3}" value="${value("tax_id")}" placeholder="AAA010101AAA"></label>
@@ -3124,8 +3292,8 @@ function openPurchasingSupplierModal(id=null){
     <label class="preview-field"><span>${en?"Contact email":"Correo de contacto"}</span><input name="email" type="email" maxlength="254" value="${value("email")}"></label>
     <label class="preview-field"><span>${en?"Phone":"Telefono"}</span><input name="phone" maxlength="30" value="${value("phone")}"></label>
     <label class="preview-field"><span>${en?"Website":"Sitio web"}</span><input name="website" type="url" maxlength="300" value="${value("website")}"></label>
-    <label class="preview-field"><span>${en?"Currency":"Moneda"}</span><select name="currency"><option ${selectedOption(editing?.currency||"MXN","MXN")}>MXN</option><option ${selectedOption(editing?.currency,"USD")}>USD</option><option ${selectedOption(editing?.currency,"EUR")}>EUR</option></select></label>
-    <label class="preview-field"><span>${en?"Payment terms":"Condiciones de pago"}</span><select name="payment_terms"><option value="cash" ${selectedOption(editing?.payment_terms||"cash","cash")}>${en?"Cash":"Contado"}</option><option value="credit_30" ${selectedOption(editing?.payment_terms,"credit_30")}>${en?"Net 30":"Credito 30 dias"}</option></select></label>
+    <label class="preview-field"><span>${en?"Currency":"Moneda"}</span><select name="currency" required>${commercialReferenceOptions(references.currencies,currencyValue,true)}</select></label>
+    <label class="preview-field"><span>${en?"Payment terms":"Condiciones de pago"}</span><select name="payment_terms" required>${commercialReferenceOptions(references.payment_terms,paymentTermsValue)}</select></label>
     <label class="preview-field"><span>${en?"Lead time (days)":"Entrega (dias)"}</span><input name="lead_time_days" type="number" min="0" value="${editing?.lead_time_days??0}"></label>
     <label class="preview-field"><span>${en?"Status":"Estatus"}</span><select name="status"><option value="active" ${selectedOption(editing?.status||"active","active")}>${en?"Active":"Activo"}</option><option value="inactive" ${selectedOption(editing?.status,"inactive")}>${en?"Inactive":"Inactivo"}</option></select></label>
     ${editing?`<button class="secondary-action wide-field" type="button" data-cancel-supplier-edit>${en?"Cancel editing":"Cancelar edicion"}</button>`:""}`;
@@ -3167,16 +3335,17 @@ function renderPurchasingSubmodulePanel(module){
   }
   if(id==="requisiciones"){
     const editing=api.requisitions.find(x=>x.id===state.purchasingRequisitionEditId)||null;
-    const cards=api.requisitions.map(x=>`<article class="catalog-card"><span class="muted-label">${escapeHtml(x.code)} &middot; ${escapeHtml(x.required_date)}</span><strong>${x.lines?.length||0} ${en?"lines":"partidas"}</strong><ul class="purchasing-line-summary">${(x.lines||[]).map(line=>`<li><span>${escapeHtml(line.description)}</span><strong>${formatNumber(Number(line.quantity))} ${escapeHtml(line.unit_code)}</strong></li>`).join("")}</ul><p>${escapeHtml(x.priority)}</p><span class="chip ${x.status==="approved"?"active":"warning"}">${purchasingStatus(x.status)}</span><div class="row-actions">${x.status==="draft"&&hasPermission("purchasing.requisition.update")?`<button class="secondary-action small-action" data-edit-requisition="${escapeAttribute(x.id)}">${en?"Edit":"Editar"}</button>`:""}${x.status==="draft"&&hasPermission("purchasing.requisition.submit")?`<button class="secondary-action small-action" data-purchasing-transition="submit" data-id="${escapeAttribute(x.id)}">${en?"Submit":"Enviar"}</button>`:""}${x.status==="submitted"&&hasPermission("purchasing.requisition.approve")?`<button class="primary-action small-action" data-purchasing-transition="approve" data-id="${escapeAttribute(x.id)}">${en?"Approve":"Aprobar"}</button>`:""}${x.status==="submitted"&&hasPermission("purchasing.requisition.reject")?`<button class="secondary-action small-action" data-purchasing-transition="reject" data-id="${escapeAttribute(x.id)}">${en?"Reject":"Rechazar"}</button>`:""}${x.status==="approved"&&hasPermission("purchasing.order.create")?`<button class="primary-action small-action" data-create-order-from-requisition="${escapeAttribute(x.id)}">${en?"Create purchase order":"Crear orden de compra"}</button>`:""}${["draft","submitted","approved"].includes(x.status)&&hasPermission("purchasing.requisition.cancel")?`<button class="secondary-action small-action" data-cancel-requisition="${escapeAttribute(x.id)}">${en?"Cancel":"Cancelar"}</button>`:""}</div></article>`).join("");
-    const today=new Date().toISOString().slice(0,10),editLines=(editing?.lines||[]).map(line=>({...line,inventory_item_id:line.inventory_item_ref_id}));const form=purchasingForm("purchasingRequisitionForm",`<label class="preview-field"><span>${en?"Code":"Codigo"}</span><input name="code" value="${escapeAttribute(editing?.code||"")}" required></label><label class="preview-field"><span>${en?"Required date":"Fecha requerida"}</span><input name="required_date" type="date" min="${today}" value="${escapeAttribute(editing?.required_date||today)}" required></label><label class="preview-field"><span>${en?"Priority":"Prioridad"}</span><select name="priority"><option value="normal" ${editing?.priority==="normal"?"selected":""}>Normal</option><option value="urgent" ${editing?.priority==="urgent"?"selected":""}>${en?"Urgent":"Urgente"}</option></select></label><div class="wide-field purchasing-lines-head"><div><strong>${en?"Requested items":"Articulos solicitados"}</strong><p>${en?"Add every item needed under the same requisition.":"Agrega todos los articulos necesarios en la misma requisicion."}</p></div><button class="secondary-action small-action" type="button" data-add-requisition-line>${en?"Add item":"Agregar articulo"}</button></div><div class="wide-field purchasing-requisition-lines" id="purchasingRequisitionLines">${(editLines.length?editLines:[{}]).map(line=>purchasingRequisitionLineMarkup(api.items,en,line)).join("")}</div>${editing?`<div class="wide-field"><button class="secondary-action" type="button" data-cancel-requisition-edit>${en?"Discard edit":"Descartar edicion"}</button></div>`:""}`,editing?(en?"Update requisition":"Actualizar requisicion"):(en?"Create requisition":"Crear requisicion"));
+    const cards=api.requisitions.map(x=>`<article class="catalog-card"><span class="muted-label">${escapeHtml(x.code)} &middot; ${escapeHtml(x.required_date)}</span>${purchasingContextSummary(x,state.lang)}<strong>${x.lines?.length||0} ${en?"lines":"partidas"}</strong><ul class="purchasing-line-summary">${(x.lines||[]).map(line=>`<li><span>${escapeHtml(line.description)}</span><strong>${formatNumber(Number(line.quantity))} ${escapeHtml(line.unit_code)}</strong></li>`).join("")}</ul><p>${escapeHtml(x.priority)}</p><span class="chip ${x.status==="approved"?"active":"warning"}">${purchasingStatus(x.status)}</span><div class="row-actions">${x.status==="draft"&&hasPermission("purchasing.requisition.update")?`<button class="secondary-action small-action" data-edit-requisition="${escapeAttribute(x.id)}">${en?"Edit":"Editar"}</button>`:""}${x.status==="draft"&&hasPermission("purchasing.requisition.submit")?`<button class="secondary-action small-action" data-purchasing-transition="submit" data-id="${escapeAttribute(x.id)}">${en?"Submit":"Enviar"}</button>`:""}${x.status==="submitted"&&hasPermission("purchasing.requisition.approve")?`<button class="primary-action small-action" data-purchasing-transition="approve" data-id="${escapeAttribute(x.id)}">${en?"Approve":"Aprobar"}</button>`:""}${x.status==="submitted"&&hasPermission("purchasing.requisition.reject")?`<button class="secondary-action small-action" data-purchasing-transition="reject" data-id="${escapeAttribute(x.id)}">${en?"Reject":"Rechazar"}</button>`:""}${x.status==="approved"&&hasPermission("purchasing.order.create")?`<button class="primary-action small-action" data-create-order-from-requisition="${escapeAttribute(x.id)}">${en?"Create purchase order":"Crear orden de compra"}</button>`:""}${["draft","submitted","approved"].includes(x.status)&&hasPermission("purchasing.requisition.cancel")?`<button class="secondary-action small-action" data-cancel-requisition="${escapeAttribute(x.id)}">${en?"Cancel":"Cancelar"}</button>`:""}</div></article>`).join("");
+    const today=new Date().toISOString().slice(0,10),editLines=(editing?.lines||[]).map(line=>({...line,inventory_item_id:line.inventory_item_ref_id}));const form=purchasingForm("purchasingRequisitionForm",`<label class="preview-field"><span>${en?"Code":"Codigo"}</span>${ownerCodeInput("purchasing.requisition",editing?.code,editing?.code_mode)}</label><label class="preview-field"><span>${en?"Required date":"Fecha requerida"}</span><input name="required_date" type="date" min="${today}" value="${escapeAttribute(editing?.required_date||today)}" required></label><label class="preview-field"><span>${en?"Priority":"Prioridad"}</span><select name="priority"><option value="normal" ${editing?.priority==="normal"?"selected":""}>Normal</option><option value="urgent" ${editing?.priority==="urgent"?"selected":""}>${en?"Urgent":"Urgente"}</option></select></label><div class="wide-field purchasing-lines-head"><div><strong>${en?"Requested items":"Articulos solicitados"}</strong><p>${en?"Add every item needed under the same requisition.":"Agrega todos los articulos necesarios en la misma requisicion."}</p></div><button class="secondary-action small-action" type="button" data-add-requisition-line>${en?"Add item":"Agregar articulo"}</button></div><div class="wide-field purchasing-requisition-lines" id="purchasingRequisitionLines">${(editLines.length?editLines:[{}]).map(line=>purchasingRequisitionLineMarkup(api.items,en,line)).join("")}</div>${editing?`<div class="wide-field"><button class="secondary-action" type="button" data-cancel-requisition-edit>${en?"Discard edit":"Descartar edicion"}</button></div>`:""}`,editing?(en?"Update requisition":"Actualizar requisicion"):(en?"Create requisition":"Crear requisicion"));
     purchasingShell(module,en?"Requisitions":"Requisiciones",en?"Request, submit and approve purchasing needs.":"Solicita, envia y aprueba necesidades de compra.",cards,form);
     modulePanel.querySelector('.flow-guided-layout')?.classList.add('purchasing-requisitions-layout');
     if(!hasPermission(editing?"purchasing.requisition.update":"purchasing.requisition.create"))modulePanel.querySelector("#purchasingRequisitionForm")?.closest(".section-card")?.remove();
     const requisitionForm=modulePanel.querySelector("#purchasingRequisitionForm"),lineContainer=modulePanel.querySelector("#purchasingRequisitionLines");
+    mountPurchasingRequisitionContext(requisitionForm,{record:editing,lang:state.lang,items:api.items,onItem:item=>{const existing=api.items.findIndex(row=>row.id===item.id);if(existing<0)api.items.push(item);else api.items[existing]={...api.items[existing],...item};}});
     modulePanel.querySelector("[data-add-requisition-line]")?.addEventListener("click",()=>lineContainer.insertAdjacentHTML("beforeend",purchasingRequisitionLineMarkup(api.items,en)));
     lineContainer?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-requisition-line]");if(!button)return;const rows=lineContainer.querySelectorAll("[data-requisition-line]");if(rows.length===1){showToast(en?"A requisition needs at least one line.":"La requisicion necesita al menos una partida.");return;}button.closest("[data-requisition-line]")?.remove();});
     lineContainer?.addEventListener("change",event=>{const row=event.target.closest("[data-requisition-line]");if(!row)return;if(event.target.matches('[name="line_type"]')){const current={line_type:event.target.value,inventory_item_id:row.querySelector('[name="inventory_item_id"]')?.value||"",description:row.querySelector('[name="description"]')?.value||"",quantity:row.querySelector('[name="quantity"]')?.value||"",unit_code:row.querySelector('[name="unit_code"]')?.value||""};row.outerHTML=purchasingRequisitionLineMarkup(api.items,en,current);return;}const select=event.target.closest('select[name="inventory_item_id"]');if(!select)return;const item=api.items.find(value=>value.id===select.value);if(!item)return;row.querySelector('[name="unit_code"]').value=item.base_unit;const description=row.querySelector('[name="description"]');if(!description.value.trim())description.value=item.name;});
-    requisitionForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f));const lines=[...f.querySelectorAll("[data-requisition-line]")].map(row=>{const lineType=row.querySelector('[name="line_type"]').value;return {line_type:lineType,inventory_item_id:lineType==="inventory_item"?(row.querySelector('[name="inventory_item_id"]')?.value||null):null,description:row.querySelector('[name="description"]').value.trim(),quantity:Number(row.querySelector('[name="quantity"]').value),unit_code:row.querySelector('[name="unit_code"]').value};});const inventoryIds=lines.filter(line=>line.line_type==="inventory_item").map(line=>line.inventory_item_id);if(new Set(inventoryIds).size!==inventoryIds.length){renderFormFeedback(f,[...f.querySelectorAll("[data-requisition-line]")].filter(row=>{const control=row.querySelector('[name="inventory_item_id"]');return control&&!control.disabled&&inventoryIds.filter(id=>id===control.value).length>1;}).map(row=>({control:row.querySelector('[name="inventory_item_id"]'),message:en?"This item is repeated. Keep one line and combine its quantity.":"Este artículo está repetido. Conserva una sola partida y reúne su cantidad."})),{lang:state.lang});return;}try{const payload={code:d.code,required_date:d.required_date,priority:d.priority,source_type:"manual",lines};if(editing)await updatePurchasingRequisition(editing.id,payload);else await createPurchasingRequisition(payload);state.purchasingRequisitionEditId="";await loadPurchasingApiData();showToast(editing?(en?"Requisition updated.":"Requisicion actualizada."):(en?`${lines.length} requisition lines created.`:`Requisicion creada con ${lines.length} partidas.`));}catch(error){showApiError(error,en?"The requisition could not be saved.":"No se pudo guardar la requisicion.");}});
+    requisitionForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f));const lines=[...f.querySelectorAll("[data-requisition-line]")].map(row=>{const lineType=row.querySelector('[name="line_type"]').value;return {line_type:lineType,inventory_item_id:lineType==="inventory_item"?(row.querySelector('[name="inventory_item_id"]')?.value||null):null,description:row.querySelector('[name="description"]').value.trim(),quantity:row.querySelector('[name="quantity"]').value,unit_code:row.querySelector('[name="unit_code"]').value};});const inventoryIds=lines.filter(line=>line.line_type==="inventory_item").map(line=>line.inventory_item_id);if(new Set(inventoryIds).size!==inventoryIds.length){renderFormFeedback(f,[...f.querySelectorAll("[data-requisition-line]")].filter(row=>{const control=row.querySelector('[name="inventory_item_id"]');return control&&!control.disabled&&inventoryIds.filter(id=>id===control.value).length>1;}).map(row=>({control:row.querySelector('[name="inventory_item_id"]'),message:en?"This item is repeated. Keep one line and combine its quantity.":"Este artículo está repetido. Conserva una sola partida y reúne su cantidad."})),{lang:state.lang});return;}const payload={code:d.code,required_date:d.required_date,priority:d.priority,source_type:"manual",division_ref_id:d.division_ref_id,lines},command=purchasingDraftCommand(f,payload);if(!command)return;try{if(editing)await updatePurchasingRequisition(editing.id,payload,command.key);else await createPurchasingRequisition(payload,command.key);state.purchasingRequisitionEditId="";await loadPurchasingApiData();showToast(editing?(en?"Requisition updated.":"Requisicion actualizada."):(en?`${lines.length} requisition lines created.`:`Requisicion creada con ${lines.length} partidas.`));}catch(error){showApiError(error,en?"The requisition could not be saved.":"No se pudo guardar la requisicion.");}finally{command.finish();}});
     modulePanel.querySelectorAll("[data-edit-requisition]").forEach(button=>button.addEventListener("click",()=>{state.purchasingRequisitionEditId=button.dataset.editRequisition;render();}));
     modulePanel.querySelector("[data-cancel-requisition-edit]")?.addEventListener("click",()=>{state.purchasingRequisitionEditId="";render();});
     modulePanel.querySelectorAll("[data-cancel-requisition]").forEach(button=>button.addEventListener("click",()=>openPurchasingCancellationModal("requisition",button.dataset.cancelRequisition)));
@@ -3185,10 +3354,10 @@ function renderPurchasingSubmodulePanel(module){
   }
   if(id==="ordenes-de-compra"){
     const editing=api.orders.find(x=>x.id===state.purchasingOrderEditId)||null;
-    const pendingRequisitions=api.requisitions.filter(x=>x.status==="approved"),sourceRequisitionId=editing?.requisition_id||state.purchasingOrderSourceRequisitionId||"";
-    const cards=`<div class="purchasing-lines-head"><div><strong>${en?`All purchase orders (${api.orders.length})`:`Todas las ordenes de compra (${api.orders.length})`}</strong><p>${en?"Every status is included: draft, issued, partial, received, closed, or cancelled.":"Se incluyen todos los estatus: borrador, emitida, parcial, recibida, cerrada o cancelada."}</p></div></div>`+(api.orders.map(x=>{const requisition=api.requisitions.find(item=>item.id===x.requisition_id);return `<article class="catalog-card"><span class="muted-label">${escapeHtml(x.code)} · ${x.created_at?new Date(x.created_at).toLocaleDateString():""}</span><strong>${escapeHtml(x.supplier_name_snapshot)}</strong><p>${formatCurrency(x.subtotal)} · ${x.lines?.length||0} ${en?"lines":"partidas"}</p><p>${en?"Origin":"Origen"}: ${escapeHtml(requisition?.code||(x.direct_purchase_reason?(en?"Direct purchase":"Compra directa"):(en?"No requisition":"Sin requisicion")))}</p><span class="chip ${["received","closed"].includes(x.status)?"active":"warning"}">${purchasingStatus(x.status)}</span><div class="row-actions">${x.status==="draft"&&hasPermission("purchasing.order.update")?`<button class="secondary-action small-action" data-edit-order="${escapeAttribute(x.id)}">${en?"Edit":"Editar"}</button>`:""}${x.status==="draft"&&hasPermission("purchasing.order.issue")?`<button class="primary-action small-action" data-issue-order="${escapeAttribute(x.id)}">${en?"Issue order":"Emitir orden"}</button>`:""}${["issued","partially_received"].includes(x.status)&&hasPermission("purchasing.receipt.create")?`<button class="primary-action small-action" data-receive-order="${escapeAttribute(x.id)}">${en?"Register receipt":"Registrar recepcion"}</button>`:""}${["draft","issued","partially_received"].includes(x.status)&&hasPermission("purchasing.order.cancel")?`<button class="secondary-action small-action" data-cancel-order="${escapeAttribute(x.id)}">${en?"Cancel":"Cancelar"}</button>`:""}</div></article>`;}).join("")||`<p class="helper-copy">${en?"No purchase orders have been created yet.":"Aun no se han creado ordenes de compra."}</p>`);
-    const suppliers=api.suppliers.filter(x=>x.status==="active").map(x=>`<option value="${escapeAttribute(x.id)}" ${editing?.supplier_id===x.id?"selected":""}>${escapeHtml(x.code)} &middot; ${escapeHtml(x.commercial_name)}</option>`).join("");const reqs=api.requisitions.filter(x=>x.status==="approved"||x.id===editing?.requisition_id).map(x=>`<option value="${escapeAttribute(x.id)}" ${sourceRequisitionId===x.id?"selected":""}>${escapeHtml(x.code)} &middot; ${x.lines?.length||0} ${en?"lines":"partidas"}</option>`).join("");
-    const orderFields=`<label class="preview-field"><span>${en?"Code":"Codigo"}</span><input name="code" value="${escapeAttribute(editing?.code||"")}" required></label><label class="preview-field"><span>${en?"Approved requisition":"Requisicion aprobada"}</span><select name="requisition_id" data-entity-selector data-search-placeholder="${en?"Search approved requisition":"Buscar requisicion aprobada"}" required ${editing?"disabled":""}><option value="" disabled ${sourceRequisitionId?"":"selected"}>${en?"Choose a requisition":"Selecciona una requisicion"}</option>${reqs}</select></label><label class="preview-field"><span>${en?"Supplier":"Proveedor"}</span><select name="supplier_id" data-entity-selector data-search-placeholder="${en?"Search supplier":"Buscar proveedor"}" required><option value="" disabled ${editing?"":"selected"}>${en?"Choose a supplier":"Selecciona un proveedor"}</option>${suppliers}</select></label><div class="wide-field purchasing-order-prices" id="purchasingOrderPrices"><p class="helper-copy">${en?"Choose a requisition to capture a price for every line.":"Selecciona una requisicion para capturar el precio de cada partida."}</p></div>${editing?`<div class="wide-field"><button class="secondary-action" type="button" data-cancel-order-edit>${en?"Discard edit":"Descartar edicion"}</button></div>`:""}`;
+    const pendingRequisitions=api.requisitions.filter(x=>x.status==="approved"&&x.organization_context),sourceRequisitionId=editing?.requisition_id||state.purchasingOrderSourceRequisitionId||"";
+    const cards=`<div class="purchasing-lines-head"><div><strong>${en?`All purchase orders (${api.orders.length})`:`Todas las ordenes de compra (${api.orders.length})`}</strong><p>${en?"Every status is included: draft, issued, partial, received, closed, or cancelled.":"Se incluyen todos los estatus: borrador, emitida, parcial, recibida, cerrada o cancelada."}</p></div></div>`+(api.orders.map(x=>{const requisition=api.requisitions.find(item=>item.id===x.requisition_id);return `<article class="catalog-card"><span class="muted-label">${escapeHtml(x.code)} · ${x.created_at?new Date(x.created_at).toLocaleDateString():""}</span><strong>${escapeHtml(x.supplier_name_snapshot)}</strong>${purchasingContextSummary(x,state.lang)}<p>${formatCurrency(x.subtotal)} · ${x.lines?.length||0} ${en?"lines":"partidas"}</p><p>${en?"Origin":"Origen"}: ${escapeHtml(requisition?.code||(x.direct_purchase_reason?(en?"Direct purchase":"Compra directa"):(en?"No requisition":"Sin requisicion")))}</p><span class="chip ${["received","closed"].includes(x.status)?"active":"warning"}">${purchasingStatus(x.status)}</span><div class="row-actions">${x.organization_context&&x.status==="draft"&&hasPermission("purchasing.order.update")?`<button class="secondary-action small-action" data-edit-order="${escapeAttribute(x.id)}">${en?"Edit":"Editar"}</button>`:""}${x.organization_context&&x.status==="draft"&&hasPermission("purchasing.order.issue")?`<button class="primary-action small-action" data-issue-order="${escapeAttribute(x.id)}">${en?"Issue order":"Emitir orden"}</button>`:""}${x.organization_context&&["issued","partially_received"].includes(x.status)&&hasPermission("purchasing.receipt.create")?`<button class="primary-action small-action" data-receive-order="${escapeAttribute(x.id)}">${en?"Register receipt":"Registrar recepcion"}</button>`:""}${["draft","issued","partially_received"].includes(x.status)&&hasPermission("purchasing.order.cancel")?`<button class="secondary-action small-action" data-cancel-order="${escapeAttribute(x.id)}">${en?"Cancel":"Cancelar"}</button>`:""}</div></article>`;}).join("")||`<p class="helper-copy">${en?"No purchase orders have been created yet.":"Aun no se han creado ordenes de compra."}</p>`);
+    const suppliers=api.suppliers.filter(x=>x.status==="active").map(x=>`<option value="${escapeAttribute(x.id)}" ${editing?.supplier_id===x.id?"selected":""}>${escapeHtml(x.code)} &middot; ${escapeHtml(x.commercial_name)}</option>`).join("");const reqs=api.requisitions.filter(x=>(x.status==="approved"&&x.organization_context)||x.id===editing?.requisition_id).map(x=>`<option value="${escapeAttribute(x.id)}" ${sourceRequisitionId===x.id?"selected":""}>${escapeHtml(x.code)} &middot; ${x.lines?.length||0} ${en?"lines":"partidas"}</option>`).join("");
+    const orderFields=`<label class="preview-field"><span>${en?"Code":"Codigo"}</span>${ownerCodeInput("purchasing.order",editing?.code,editing?.code_mode)}</label><label class="preview-field"><span>${en?"Approved requisition":"Requisicion aprobada"}</span><select name="requisition_id" data-entity-selector data-search-placeholder="${en?"Search approved requisition":"Buscar requisicion aprobada"}" required ${editing?"disabled":""}><option value="" disabled ${sourceRequisitionId?"":"selected"}>${en?"Choose a requisition":"Selecciona una requisicion"}</option>${reqs}</select></label><label class="preview-field"><span>${en?"Supplier":"Proveedor"}</span><select name="supplier_id" data-entity-selector data-search-placeholder="${en?"Search supplier":"Buscar proveedor"}" required><option value="" disabled ${editing?"":"selected"}>${en?"Choose a supplier":"Selecciona un proveedor"}</option>${suppliers}</select></label><div class="wide-field purchasing-order-prices" id="purchasingOrderPrices"><p class="helper-copy">${en?"Choose a requisition to capture a price for every line.":"Selecciona una requisicion para capturar el precio de cada partida."}</p></div>${editing?`<div class="wide-field"><button class="secondary-action" type="button" data-cancel-order-edit>${en?"Discard edit":"Descartar edicion"}</button></div>`:""}`;
     const creation=editing||pendingRequisitions.length?purchasingForm("purchasingOrderForm",orderFields,editing?(en?"Update purchase order":"Actualizar orden de compra"):(en?"Create purchase order":"Crear orden de compra")):`<section class="section-card"><span class="chip warning">${en?"No pending requisitions":"Sin requisiciones pendientes"}</span><h3>${en?"New purchase order":"Nueva orden de compra"}</h3><p>${en?"There are no approved requisitions pending conversion. Approve a requisition before creating another purchase order.":"No hay requisiciones aprobadas pendientes de convertir. Aprueba una requisicion antes de crear otra orden de compra."}</p>${hasPermission("purchasing.requisition.read")?`<button class="secondary-action" type="button" data-open-pending-purchasing-requisitions>${en?"Review requisitions":"Revisar requisiciones"}</button>`:""}</section>`;
     const form=`<section class="section-card"><div class="purchasing-lines-head"><div><strong>${en?"Purchase orders are operational documents":"Las ordenes de compra son documentos operativos"}</strong><p>${en?"Replenishment is a separate planned feature for automatic reorder suggestions.":"Reabastecimiento es una funcion planeada distinta para sugerencias automaticas por punto de reorden."}</p></div></div></section>`+creation;
     purchasingShell(module,en?"Purchase orders":"Ordenes de compra",en?"Complete history first; create only from approved requisitions pending conversion.":"Primero el historial completo; crea solo desde requisiciones aprobadas pendientes de convertir.",cards,form,true);
@@ -3198,22 +3367,24 @@ function renderPurchasingSubmodulePanel(module){
     const renderOrderPrices=()=>{const req=api.requisitions.find(value=>value.id===(requisitionSelect?.value||editing?.requisition_id));priceContainer.innerHTML=req?`<div class="purchasing-lines-head"><div><strong>${en?"Price by line":"Precio por partida"}</strong><p>${en?"Each requested item keeps its own negotiated price.":"Cada articulo solicitado conserva su precio negociado."}</p></div></div>${req.lines.map((line,index)=>`<label class="resource-input"><span><strong>${escapeHtml(line.description)}</strong><small>${formatNumber(Number(line.quantity))} ${escapeHtml(line.unit_code)}</small></span><input name="unit_price_${index}" data-order-unit-price="${index}" type="number" min="0" step=".01" value="${escapeAttribute(editing?.lines?.[index]?.unit_price??"")}" required aria-label="${en?"Unit price":"Precio unitario"}: ${escapeAttribute(line.description)}"></label>`).join("")}`:`<p class="helper-copy">${en?"Choose a requisition to capture a price for every line.":"Selecciona una requisicion para capturar el precio de cada partida."}</p>`;};
     requisitionSelect?.addEventListener("change",renderOrderPrices);
     if(sourceRequisitionId)renderOrderPrices();
-    orderForm?.addEventListener("submit",async event=>{event.preventDefault();const d=Object.fromEntries(new FormData(event.currentTarget)),req=api.requisitions.find(x=>x.id===(d.requisition_id||editing?.requisition_id)),supplier=api.suppliers.find(x=>x.id===d.supplier_id);if(!req||!supplier)return;const payload={code:d.code,requisition_id:req.id,supplier_id:supplier.id,currency:supplier.currency,payment_terms:supplier.payment_terms,lines:req.lines.map((x,index)=>({line_type:x.line_type,inventory_item_id:x.line_type==="service"?null:x.inventory_item_ref_id,description:x.description,quantity:Number(x.quantity),unit_code:x.unit_code,unit_price:Number(event.currentTarget.querySelector(`[data-order-unit-price="${index}"]`).value)}))};try{if(editing)await updatePurchasingOrder(editing.id,payload);else await createPurchasingOrder(payload);state.purchasingOrderEditId="";state.purchasingOrderSourceRequisitionId="";await loadPurchasingApiData();showToast(editing?(en?"Purchase order updated.":"Orden de compra actualizada."):(en?"Purchase order created. Issue it when it is ready to send to the supplier.":"Orden de compra creada. Emitela cuando este lista para enviarse al proveedor."));}catch(error){showApiError(error,en?"The purchase order could not be saved.":"No se pudo guardar la orden de compra.");}});
+    mountPurchasingOrderContext(orderForm,{record:editing,requisitions:api.requisitions,lang:state.lang});
+    orderForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f)),req=api.requisitions.find(x=>x.id===(d.requisition_id||editing?.requisition_id));if(!req||!d.supplier_id)return;const payload={code:d.code,requisition_id:req.id,supplier_id:d.supplier_id,expected_terms_revision:purchasingOrderTermsRevision(f),lines:req.lines.map((x,index)=>({line_type:x.line_type,inventory_item_id:x.line_type==="service"?null:x.inventory_item_ref_id,description:x.description,quantity:String(x.quantity),unit_code:x.unit_code,unit_price:f.querySelector(`[data-order-unit-price="${index}"]`).value}))};const command=purchasingDraftCommand(f,payload);if(!command)return;try{if(editing)await updatePurchasingOrder(editing.id,payload,command.key);else await createPurchasingOrder(payload,command.key);state.purchasingOrderEditId="";state.purchasingOrderSourceRequisitionId="";await loadPurchasingApiData();showToast(editing?(en?"Purchase order updated.":"Orden de compra actualizada."):(en?"Purchase order created. Issue it when it is ready to send to the supplier.":"Orden de compra creada. Emitela cuando este lista para enviarse al proveedor."));}catch(error){showApiError(error,en?"The purchase order could not be saved.":"No se pudo guardar la orden de compra.");}finally{command.finish();}});
     modulePanel.querySelectorAll("[data-edit-order]").forEach(button=>button.addEventListener("click",()=>{state.purchasingOrderEditId=button.dataset.editOrder;render();}));modulePanel.querySelector("[data-cancel-order-edit]")?.addEventListener("click",()=>{state.purchasingOrderEditId="";render();});
     modulePanel.querySelectorAll("[data-receive-order]").forEach(button=>button.addEventListener("click",()=>{state.purchasingReceiptSourceOrderId=button.dataset.receiveOrder;navigateTo({active:"compras",activeSubmodule:"recepciones",laborArea:""});}));
     modulePanel.querySelectorAll("[data-cancel-order]").forEach(button=>button.addEventListener("click",()=>openPurchasingCancellationModal("order",button.dataset.cancelOrder)));modulePanel.querySelectorAll("[data-issue-order]").forEach(button=>button.addEventListener("click",async()=>{try{await issuePurchasingOrder(button.dataset.issueOrder);await loadPurchasingApiData();if(hasPermission("purchasing.receipt.create")){state.purchasingReceiptSourceOrderId=button.dataset.issueOrder;navigateTo({active:"compras",activeSubmodule:"recepciones",laborArea:""});showToast(en?"Order issued. Register the supplier receipt when goods arrive.":"Orden emitida. Registra la recepción cuando llegue la mercancía.","success");return;}showToast(en?"Order issued.":"Orden emitida.","success");}catch(error){showApiError(error,en?"The purchase order could not be issued.":"No se pudo emitir la orden de compra.");}}));return;
   }
   if(id==="recepciones"){
-    const cards=api.receipts.map(x=>`<article class="catalog-card"><span class="muted-label">${escapeHtml(x.code)}</span><strong>${purchasingStatus(x.status)}</strong><p>${escapeHtml(x.supplier_document_reference||"")} · ${new Date(x.received_at).toLocaleString()}</p><span class="chip ${x.status==="completed"?"active":"warning"}">${purchasingStatus(x.status)}</span></article>`).join("");
-    const sourceOrderId=state.purchasingReceiptSourceOrderId||"",openOrders=api.orders.filter(x=>["issued","partially_received"].includes(x.status)&&x.lines.some(line=>Number(line.received_quantity)<Number(line.quantity))),orderOptions=openOrders.map(order=>`<option value="${escapeAttribute(order.id)}" ${sourceOrderId===order.id?"selected":""}>${escapeHtml(order.code)} · ${order.lines.length} ${en?"lines":"partidas"}</option>`).join("");const warehouses=api.warehouses.filter(x=>x.status==="active").map(x=>`<option value="${escapeAttribute(x.id)}">${escapeHtml(x.code)} · ${escapeHtml(x.name)}</option>`).join("");
-    const form=purchasingForm("purchasingReceiptForm",`<label class="preview-field"><span>${en?"Receipt code":"Codigo de recepcion"}</span><input name="code" required></label><label class="preview-field"><span>${en?"Purchase order":"Orden de compra"}</span><select name="purchase_order_id" required><option value="" disabled ${sourceOrderId?"":"selected"}>${en?"Choose an order":"Selecciona una orden"}</option>${orderOptions}</select></label><label class="preview-field"><span>${en?"Supplier document":"Documento proveedor"}</span><input name="supplier_document_reference"></label><div class="wide-field purchasing-requisition-lines" id="purchasingReceiptLines"><p class="helper-copy">${en?"Choose an order and capture one or more received lines.":"Selecciona una orden y captura una o mas partidas recibidas."}</p></div>`,en?"Register receipt":"Registrar recepcion");
+    const cards=api.receipts.map(x=>`<article class="catalog-card"><span class="muted-label">${escapeHtml(x.code)}</span>${purchasingContextSummary(x,state.lang)}<strong>${purchasingStatus(x.status)}</strong><p>${escapeHtml(x.supplier_document_reference||"")} · ${new Date(x.received_at).toLocaleString()}</p><span class="chip ${x.status==="completed"?"active":"warning"}">${purchasingStatus(x.status)}</span></article>`).join("");
+    const sourceOrderId=state.purchasingReceiptSourceOrderId||"",openOrders=api.orders.filter(x=>x.organization_context&&["issued","partially_received"].includes(x.status)&&x.lines.some(line=>Number(line.received_quantity)<Number(line.quantity))),orderOptions=openOrders.map(order=>`<option value="${escapeAttribute(order.id)}" ${sourceOrderId===order.id?"selected":""}>${escapeHtml(order.code)} · ${order.lines.length} ${en?"lines":"partidas"}</option>`).join("");const warehouses=api.warehouses.filter(x=>x.status==="active").map(x=>`<option value="${escapeAttribute(x.id)}">${escapeHtml(x.code)} · ${escapeHtml(x.name)}</option>`).join("");
+    const form=purchasingForm("purchasingReceiptForm",`<label class="preview-field"><span>${en?"Receipt code":"Codigo de recepcion"}</span>${ownerCodeInput("purchasing.receipt")}</label><label class="preview-field"><span>${en?"Purchase order":"Orden de compra"}</span><select name="purchase_order_id" required><option value="" disabled ${sourceOrderId?"":"selected"}>${en?"Choose an order":"Selecciona una orden"}</option>${orderOptions}</select></label><label class="preview-field"><span>${en?"Supplier document":"Documento proveedor"}</span><input name="supplier_document_reference"></label><div class="wide-field purchasing-requisition-lines" id="purchasingReceiptLines"><p class="helper-copy">${en?"Choose an order and capture one or more received lines.":"Selecciona una orden y captura una o mas partidas recibidas."}</p></div>`,en?"Register receipt":"Registrar recepcion");
     purchasingShell(module,en?"Receipts":"Recepciones",t("handoffPurchaseHelp"),cards,form);
     if(!hasPermission("purchasing.receipt.create"))modulePanel.querySelector("#purchasingReceiptForm")?.closest(".section-card")?.remove();
     const receiptForm=modulePanel.querySelector("#purchasingReceiptForm"),receiptLines=modulePanel.querySelector("#purchasingReceiptLines");
-    const renderReceiptLines=orderId=>{const order=openOrders.find(value=>value.id===orderId);receiptLines.innerHTML=(order?.lines||[]).filter(line=>Number(line.received_quantity)<Number(line.quantity)).map(line=>{const remaining=Number(line.quantity)-Number(line.received_quantity),inventory=line.line_type==="inventory_item";return `<div class="purchasing-requisition-line" data-receipt-line data-line-id="${escapeAttribute(line.id)}" data-remaining="${remaining}"><div class="purchasing-line-item"><strong>${escapeHtml(line.description)}</strong><small>${en?"Remaining":"Pendiente"}: ${formatNumber(remaining)} ${escapeHtml(line.unit_code)}</small></div><label class="preview-field"><span>${en?"Received quantity":"Cantidad recibida"}</span><input name="quantity" type="number" min="0" max="${remaining}" step="any" value="0"></label>${inventory?`<label class="preview-field"><span>${en?"Warehouse":"Almacen"}</span><select name="warehouse_id"><option value="">${en?"Choose a warehouse":"Selecciona un almacen"}</option>${warehouses}</select></label>`:`<input name="warehouse_id" type="hidden" value="">`}</div>`;}).join("")||`<p class="helper-copy">${en?"This order has no pending lines.":"Esta orden no tiene partidas pendientes."}</p>`;};
+    const renderReceiptLines=orderId=>{const order=openOrders.find(value=>value.id===orderId);receiptLines.innerHTML=(order?.lines||[]).filter(line=>Number(line.received_quantity)<Number(line.quantity)).map(line=>{const remaining=Number(line.quantity)-Number(line.received_quantity),inventory=line.line_type==="inventory_item";return `<div class="purchasing-requisition-line" data-receipt-line data-line-id="${escapeAttribute(line.id)}" data-remaining="${remaining}"><div class="purchasing-line-item"><strong>${escapeHtml(line.description)}</strong><small>${en?"Remaining":"Pendiente"}: ${formatNumber(remaining)} ${escapeHtml(line.unit_code)}</small></div><label class="preview-field"><span>${en?"Received quantity":"Cantidad recibida"}</span><input name="quantity" type="number" min="0" max="${remaining}" step="any" value="0"></label>${inventory?`<label class="preview-field"><span>${en?"Warehouse":"Almacen"}</span><select name="warehouse_id"><option value="">${en?"Choose a warehouse":"Selecciona un almacen"}</option>${api.warehouses.filter(warehouse=>warehouse.status==="active"&&(!order.organization_context||warehouse.division_ref_id===order.organization_context.division_ref_id)).map(warehouse=>`<option value="${escapeAttribute(warehouse.id)}">${escapeHtml(warehouse.code)} &middot; ${escapeHtml(warehouse.name)}</option>`).join("")}</select></label>`:`<input name="warehouse_id" type="hidden" value="">`}</div>`;}).join("")||`<p class="helper-copy">${en?"This order has no pending lines.":"Esta orden no tiene partidas pendientes."}</p>`;};
     receiptForm?.elements.purchase_order_id.addEventListener("change",event=>renderReceiptLines(event.target.value));
     if(sourceOrderId&&receiptForm)renderReceiptLines(sourceOrderId);
-    receiptForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f)),lines=[...f.querySelectorAll("[data-receipt-line]")].map(row=>({order_line_id:row.dataset.lineId,quantity:Number(row.querySelector('[name="quantity"]').value),warehouse_id:row.querySelector('[name="warehouse_id"]').value||null,remaining:Number(row.dataset.remaining)})).filter(line=>line.quantity>0);if(!lines.length){renderFormFeedback(f,[...f.querySelectorAll('[data-receipt-line] [name="quantity"]')].map(control=>({control,message:en?"Enter a received quantity on at least one line.":"Captura una cantidad recibida en al menos una partida."})),{lang:state.lang});return;}if(lines.some(line=>line.quantity>line.remaining)){renderFormFeedback(f,[...f.querySelectorAll("[data-receipt-line]")].filter(row=>Number(row.querySelector('[name="quantity"]').value)>Number(row.dataset.remaining)).map(row=>({control:row.querySelector('[name="quantity"]'),message:en?"The quantity exceeds this line’s remaining balance.":"La cantidad supera el saldo pendiente de esta partida."})),{lang:state.lang});return;}const order=openOrders.find(value=>value.id===d.purchase_order_id);if(lines.some(line=>order?.lines.find(value=>value.id===line.order_line_id)?.line_type==="inventory_item"&&!line.warehouse_id)){renderFormFeedback(f,[...f.querySelectorAll("[data-receipt-line]")].filter(row=>Number(row.querySelector('[name="quantity"]').value)>0&&!row.querySelector('[name="warehouse_id"]').value&&row.querySelector('[name="warehouse_id"]').type!=="hidden").map(row=>({control:row.querySelector('[name="warehouse_id"]'),message:en?"Select the warehouse receiving this line.":"Selecciona el almacén que recibe esta partida."})),{lang:state.lang});return;}try{await createPurchasingReceipt({code:d.code,purchase_order_id:d.purchase_order_id,received_at:new Date().toISOString(),supplier_document_reference:d.supplier_document_reference||null,lines:lines.map(({remaining,...line})=>line)});state.purchasingReceiptSourceOrderId="";await loadPurchasingApiData();showToast(t("handoffPrepared"),"success");state.operationalHandoffs={};}catch(error){showApiError(error,en?"The receipt could not be saved.":"No se pudo guardar la recepcion.");}});
+    mountReceiptCostContext(receiptForm,{lang:state.lang,orders:openOrders,warehouses:api.warehouses,scope:state.sessionApi.data?.scope});
+    receiptForm?.addEventListener("submit",async event=>{event.preventDefault();const f=event.currentTarget,d=Object.fromEntries(new FormData(f)),lines=[...f.querySelectorAll("[data-receipt-line]")].map(row=>({order_line_id:row.dataset.lineId,quantity:Number(row.querySelector('[name="quantity"]').value),warehouse_id:row.querySelector('[name="warehouse_id"]').value||null,remaining:Number(row.dataset.remaining)})).filter(line=>line.quantity>0);if(!lines.length){renderFormFeedback(f,[...f.querySelectorAll('[data-receipt-line] [name="quantity"]')].map(control=>({control,message:en?"Enter a received quantity on at least one line.":"Captura una cantidad recibida en al menos una partida."})),{lang:state.lang});return;}if(lines.some(line=>line.quantity>line.remaining)){renderFormFeedback(f,[...f.querySelectorAll("[data-receipt-line]")].filter(row=>Number(row.querySelector('[name="quantity"]').value)>Number(row.dataset.remaining)).map(row=>({control:row.querySelector('[name="quantity"]'),message:en?"The quantity exceeds this line’s remaining balance.":"La cantidad supera el saldo pendiente de esta partida."})),{lang:state.lang});return;}const order=openOrders.find(value=>value.id===d.purchase_order_id);if(lines.some(line=>order?.lines.find(value=>value.id===line.order_line_id)?.line_type==="inventory_item"&&!line.warehouse_id)){renderFormFeedback(f,[...f.querySelectorAll("[data-receipt-line]")].filter(row=>Number(row.querySelector('[name="quantity"]').value)>0&&!row.querySelector('[name="warehouse_id"]').value&&row.querySelector('[name="warehouse_id"]').type!=="hidden").map(row=>({control:row.querySelector('[name="warehouse_id"]'),message:en?"Select the warehouse receiving this line.":"Selecciona el almacén que recibe esta partida."})),{lang:state.lang});return;}try{const command=receiptCommand(f,{code:d.code,purchase_order_id:d.purchase_order_id,...(d.cost_exchange_rate?{cost_exchange_rate:d.cost_exchange_rate}:{}),received_at:new Date().toISOString(),supplier_document_reference:d.supplier_document_reference||null,lines:lines.map(({remaining,...line})=>line)});await createPurchasingReceipt(command.payload,command.key);state.purchasingReceiptSourceOrderId="";await loadPurchasingApiData();showToast(t("handoffPrepared"),"success");state.operationalHandoffs={};}catch(error){showApiError(error,en?"The receipt could not be saved.":"No se pudo guardar la recepcion.");}});
     modulePanel.querySelectorAll("[data-reconcile-receipt]").forEach(button=>button.addEventListener("click",async()=>{try{await reconcilePurchasingReceipt(button.dataset.reconcileReceipt);await loadPurchasingApiData();showToast(en?"Receipt reconciled.":"Recepcion conciliada.");}catch(error){showApiError(error,en?"The receipt could not be reconciled.":"No se pudo conciliar la recepcion.");}}));return;
   }
   if(id==="reabastecimiento"){
@@ -3510,6 +3681,7 @@ function renderWarehouseCard(record) {
       <div class="catalog-card-actions">
         <span class="chip ${record.status === "Activo" ? "active" : record.status === "Bloqueado" ? "warning" : ""}">${translateStatus(record.status)}</span>
         <button class="secondary-action small-action" type="button" data-action="edit-warehouse" data-record-id="${record.id}">${t("edit")}</button>
+        ${getApiMode() === "api" && isInventoryApiEnabled() && getSessionContextData()?.scope?.version === 2 && hasPermission("inventory.warehouse.read") ? `<button class="secondary-action small-action" type="button" data-inventory-assignment="warehouse" data-record-id="${escapeAttribute(record.id)}">${inventoryOrganizationCopy[state.lang === "en" ? "en" : "es"].title}</button>` : ""}
       </div>
     </article>
   `;
@@ -3625,6 +3797,7 @@ function renderInventoryItemCard(record) {
       <div class="catalog-card-actions">
         <span class="chip ${record.status === "Activo" ? "active" : record.status === "Bloqueado" ? "warning" : ""}">${translateStatus(record.status)}</span>
         <button class="secondary-action small-action" type="button" data-action="edit-inventory-item" data-record-id="${record.id}">${t("edit")}</button>
+        ${getApiMode() === "api" && isInventoryApiEnabled() && getSessionContextData()?.scope?.version === 2 && hasPermission("inventory.item.read") ? `<button class="secondary-action small-action" type="button" data-inventory-assignment="item" data-record-id="${escapeAttribute(record.id)}">${inventoryOrganizationCopy[state.lang === "en" ? "en" : "es"].title}</button>` : ""}
       </div>
     </article>
   `;
@@ -4378,6 +4551,7 @@ function renderSalesCustomersPanel(module, submodule) {
   modulePanel.querySelector("[data-action='back-module']").addEventListener("click", () => {
     navigateTo({ active: state.active, activeSubmodule: null, laborArea: "" });
   });
+  bindCommercialOrganizationActions();
   const customerSearch = modulePanel.querySelector("#salesCustomerSearch");
   customerSearch.addEventListener("input", (event) => {
     localStorage.setItem("erclave-sales-customer-search", event.target.value);
@@ -4405,7 +4579,7 @@ function renderSalesCustomerCard(record) {
       </div>
       <div class="catalog-card-actions">
         <span class="chip ${record.status === "Activo" ? "active" : record.status === "Bloqueado" ? "warning" : ""}">${escapeHtml(translateStatus(record.status))}</span>
-        ${hasPermission("sales.customer.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-sales-customer" data-record-id="${escapeAttribute(record.id)}">${t("edit")}</button>` : ""}
+        ${commercialAssignmentButton("customer", record.id)}${hasPermission("sales.customer.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-sales-customer" data-record-id="${escapeAttribute(record.id)}">${t("edit")}</button>` : ""}
       </div>
     </article>
   `;
@@ -4513,6 +4687,7 @@ function renderSalesQuoteCard(record) {
         <span class="muted-label">${t("customer")}: ${escapeHtml(record.fields?.customerName || t("notDefined"))}</span>
         <span class="muted-label">${t("quoteSubtotal")}: ${formatSalesMoney(record.fields?.subtotal,record.fields?.currency)}</span>
         <span class="muted-label">${t("quoteTotal")}: ${formatSalesMoney(record.fields?.total,record.fields?.currency)}</span>
+        <span class="muted-label">${t("estimatedCost")}: ${escapeHtml(salesEstimatedCostText(record.fields))} &middot; ${t("estimatedMargin")}: ${escapeHtml(salesEstimatedMarginText(record.fields))}</span>
         <span class="muted-label">${t("paymentTerms")}: ${escapeHtml(record.fields?.paymentTerms || t("notDefined"))}</span>
       </div>
       <p class="helper-copy sales-quote-next-step">${t(record.status==="Borrador"?(hasPermission("sales.quote.submit")?"quoteDraftNext":"quoteDraftPermissionHelp"):record.status==="Cotizada"?(hasPermission("sales.quote.approve")?"quoteIssuedNext":"quoteApprovalPermissionHelp"):"quoteFinishedHelp")}</p>
@@ -4522,7 +4697,7 @@ function renderSalesQuoteCard(record) {
         ${getApiMode()==="api"&&record.status==="Cotizada"&&hasPermission("sales.quote.approve")?`<button class="secondary-action small-action" type="button" data-action="transition-sales-quote" data-transition="approve" data-record-id="${escapeAttribute(record.id)}">${t("quoteApproveAction")}</button>`:""}
         ${getApiMode()==="api"&&["Borrador","Cotizada"].includes(record.status)&&hasPermission("sales.quote.expire")?`<button class="secondary-action small-action" type="button" data-action="transition-sales-quote" data-transition="expire" data-record-id="${escapeAttribute(record.id)}">${t("quoteExpireAction")}</button>`:""}
         ${getApiMode()==="api"&&["Borrador","Cotizada"].includes(record.status)&&hasPermission("sales.quote.cancel")?`<button class="secondary-action small-action" type="button" data-action="transition-sales-quote" data-transition="cancel" data-record-id="${escapeAttribute(record.id)}">${t("cancel")}</button>`:""}
-        <button class="secondary-action small-action" type="button" data-action="print-sales-quote" data-record-id="${escapeAttribute(record.id)}">${t("quotePdf")}</button>
+        ${getApiMode()==="api"&&getSessionContextData()?.scope?.version===2&&hasPermission("sales.quote.read")?`<button class="secondary-action small-action" type="button" data-quote-context="${escapeAttribute(record.id)}">${quoteContextCopy[state.lang==="en"?"en":"es"].title}</button>`:""}<button class="secondary-action small-action" type="button" data-action="print-sales-quote" data-record-id="${escapeAttribute(record.id)}">${t("quotePdf")}</button>
         ${record.status==="Borrador"&&hasPermission("sales.quote.update")?`<button class="secondary-action small-action" type="button" data-action="edit-sales-quote" data-record-id="${escapeAttribute(record.id)}">${t("edit")}</button>`:""}
       </div>
     </article>
@@ -4629,8 +4804,9 @@ function renderSalesOrderCard(record) {
         <p>${escapeHtml(getQuoteLines(record).map((line) => line.productServiceName).filter(Boolean).slice(0, 2).join(" / ") || t("notDefined"))}</p>
         <span class="muted-label">${t("customer")}: ${escapeHtml(record.fields?.customerName || t("notDefined"))}</span>
         <span class="muted-label">${t("deliveryPromise")}: ${escapeHtml(record.fields?.deliveryPromise || t("notDefined"))} · ${t("fulfillmentMode")}: ${escapeHtml(record.fields?.fulfillmentMode || t("notDefined"))}</span>
-        <span class="muted-label">${t("quoteTotal")}: ${formatCurrency(Number(record.fields?.total || 0))} · ${t("estimatedCost")}: ${formatCurrency(Number(record.fields?.estimatedCost || 0))}</span>
-        <span class="muted-label">${t("estimatedMargin")}: ${formatNumber(Number(record.fields?.estimatedMargin || 0))}%</span>
+        <span class="muted-label">${t("quoteTotal")}: ${escapeHtml(formatSalesMoney(record.fields?.total,record.fields?.currency))} &middot; ${t("estimatedCost")}: ${escapeHtml(salesEstimatedCostText(record.fields))}</span>
+        <span class="muted-label">${t("estimatedMargin")}: ${escapeHtml(salesEstimatedMarginText(record.fields))}</span>
+        ${renderOrderContext(record.fields,state.lang)}
         <div class="product-history">
           <div class="product-history-head">
             <span class="muted-label">${t("orderAdjustments")}</span>
@@ -4641,7 +4817,7 @@ function renderSalesOrderCard(record) {
       </div>
       <div class="catalog-card-actions">
         <span class="chip ${record.status === "Aprobado" ? "active" : record.status === "Cancelado" ? "warning" : ""}">${escapeHtml(translateStatus(record.status))}</span>
-        ${getApiMode() !== "api" || hasPermission("sales.order.fulfill") || hasPermission("sales.order.cancel") ? `<button class="secondary-action small-action" type="button" data-action="edit-sales-order" data-record-id="${escapeAttribute(record.id)}">${getApiMode() === "api" ? "Gestionar surtido" : t("edit")}</button>` : ""}
+        ${getApiMode() !== "api" || hasPermission("sales.order.fulfill") || hasPermission("sales.order.cancel") || (record.fields?.divisionRefId && hasPermission("sales.order.read")) ? `<button class="secondary-action small-action" type="button" data-action="edit-sales-order" data-record-id="${escapeAttribute(record.id)}">${record.fields?.divisionRefId ? quoteContextCopy[state.lang === "en" ? "en" : "es"].title : getApiMode() === "api" ? "Gestionar surtido" : t("edit")}</button>` : ""}
       </div>
     </article>
   `;
@@ -4681,7 +4857,7 @@ function renderSalesServiceOrdersPanel(module,submodule){
   const en=state.lang==="en", label=en?module.titleEn:module.title, search=localStorage.getItem("erclave-service-order-search")||"", statusFilter=localStorage.getItem("erclave-service-order-status")||"all", normalized=search.trim().toLowerCase();
   const all=mockDb.loadModuleRecords(module.id,submodule.id).filter(record=>record.recordType==="serviceOrder");
   const orders=all.filter(record=>(statusFilter==="all"||record.status===statusFilter)&&(!normalized||[record.code,record.fields?.orderCode,record.fields?.customerName,record.fields?.productServiceName,record.owner,salesServiceOrderStatus(record.status)].join(" ").toLowerCase().includes(normalized)));
-  const cards=orders.map(record=>`<article class="catalog-card service-order-card"><div class="catalog-card-main"><span class="muted-label">${escapeHtml(record.code)} &middot; ${escapeHtml(record.fields?.orderCode||"")}</span><strong>${escapeHtml(record.fields?.productServiceName||record.detail)}</strong><p>${escapeHtml(record.fields?.customerName||record.title)}</p><span class="muted-label">${t("serviceOrderSchedule")}: ${escapeHtml(record.fields?.scheduledStartAt||t("notDefined"))} &rarr; ${escapeHtml(record.fields?.scheduledEndAt||t("notDefined"))}</span><span class="muted-label">${t("serviceOrderAssignee")}: ${escapeHtml(record.fields?.responsibleWorkerName||t("notDefined"))}</span><span class="muted-label">${t("serviceOrderActual")}: ${formatNumber(record.fields?.actualMinutes||0)} min &middot; ${formatSalesMoney(record.fields?.actualCost||0)}</span></div><div class="catalog-card-actions"><span class="chip ${salesServiceOrderTone(record.status)}">${escapeHtml(salesServiceOrderStatus(record.status))}</span><button class="secondary-action small-action" type="button" data-open-service-order="${escapeAttribute(record.id)}">${t("serviceOrderManage")}</button></div></article>`).join("");
+  const cards=orders.map(record=>`<article class="catalog-card service-order-card"><div class="catalog-card-main"><span class="muted-label">${escapeHtml(record.code)} &middot; ${escapeHtml(record.fields?.orderCode||"")}</span><strong>${escapeHtml(record.fields?.productServiceName||record.detail)}</strong><p>${escapeHtml(record.fields?.customerName||record.title)}</p><span class="muted-label">${t("serviceOrderSchedule")}: ${escapeHtml(record.fields?.scheduledStartAt||t("notDefined"))} &rarr; ${escapeHtml(record.fields?.scheduledEndAt||t("notDefined"))}</span><span class="muted-label">${t("serviceOrderAssignee")}: ${escapeHtml(record.fields?.responsibleWorkerName||t("notDefined"))}</span><span class="muted-label">${t("serviceOrderActual")}: ${formatNumber(record.fields?.actualMinutes||0)} min &middot; ${formatSalesMoney(record.fields?.actualCost||0)}</span>${renderOrderContext(record.fields,state.lang)}</div><div class="catalog-card-actions"><span class="chip ${salesServiceOrderTone(record.status)}">${escapeHtml(salesServiceOrderStatus(record.status))}</span><button class="secondary-action small-action" type="button" data-open-service-order="${escapeAttribute(record.id)}">${t("serviceOrderManage")}</button></div></article>`).join("");
   modulePanel.innerHTML=`<div class="panel-head"><div><p class="eyebrow">${label} / ${t("submodule")}</p><h2>${submodule.name}</h2></div><button class="secondary-action" type="button" data-action="back-module">${t("overview")}</button></div><section class="submodule-screen service-orders-screen"><div class="submodule-screen-head"><div><h1>${submodule.name}</h1><p>${submodule.detail}</p></div></div><section class="section-card catalog-workspace">${renderFlowGuide(getSalesFlowTitle(submodule),getSalesFlowSteps(submodule))}<div class="catalog-toolbar kardex-toolbar"><label class="search-field catalog-search"><span>S</span><input id="serviceOrderSearch" type="search" value="${escapeAttribute(search)}" placeholder="${escapeAttribute(t("serviceOrderSearch"))}"></label><label class="preview-field compact-filter"><span>${t("status")}</span><select id="serviceOrderStatusFilter"><option value="all">${t("allStatuses")}</option>${[...new Set(all.map(item=>item.status))].map(status=>`<option value="${escapeAttribute(status)}" ${selectedOption(statusFilter,status)}>${escapeHtml(salesServiceOrderStatus(status))}</option>`).join("")}</select></label></div><p class="helper-copy">${t("serviceOrderHelper")}</p><div class="catalog-grid">${cards||`<article class="catalog-card compact-card"><div><strong>${search?t("serviceOrderNoMatches"):t("serviceOrderEmpty")}</strong><p>${search?t("serviceOrderNoMatchesHelp"):t("serviceOrderEmptyHelp")}</p></div></article>`}</div></section></section>`;
   modulePanel.querySelector("[data-action='back-module']")?.addEventListener("click",()=>navigateTo({active:"ventas",activeSubmodule:null,laborArea:""}));
   modulePanel.querySelector("#serviceOrderSearch")?.addEventListener("input",event=>{localStorage.setItem("erclave-service-order-search",event.target.value);render();const next=modulePanel.querySelector("#serviceOrderSearch");next?.focus();next?.setSelectionRange(next.value.length,next.value.length);});
@@ -4696,16 +4872,17 @@ async function openSalesServiceOrderModal(id){
 }
 
 function renderSalesServiceOrderModal(record){
-  const en=state.lang==="en", fields=record.fields||{}, workers=(state.salesApi.workers||[]).filter(worker=>worker.status==="active"||worker.status==="Activo");
+  const en=state.lang==="en", fields=record.fields||{}, workers=(record.fields?.divisionRefId?[]:state.salesApi.workers||[]).filter(worker=>worker.status==="active"||worker.status==="Activo");
   const workerOptions=workers.map(worker=>`<option value="${escapeAttribute(worker.id)}" ${selectedOption(fields.responsibleWorkerId,worker.id)}>${escapeHtml(worker.employee_number||worker.code||"")} &middot; ${escapeHtml(worker.full_name||worker.name||"")} &middot; ${escapeHtml(worker.position_name||"")}</option>`).join("");
   const canPlan=["draft","planned"].includes(record.status)&&hasPermission("sales.service_order.plan");
   const canTime=["in_progress","on_hold"].includes(record.status)&&hasPermission("sales.service_order.time.create");
   const canCost=["in_progress","on_hold"].includes(record.status)&&hasPermission("sales.service_order.cost.create");
   const canEvidence=["in_progress","on_hold","pending_acceptance"].includes(record.status)&&hasPermission("sales.service_order.evidence.create");
-  const timeEntries=(fields.timeEntries||[]).map(entry=>`<li><span>${escapeHtml(entry.worker_name||entry.worker_id||"")} &middot; ${escapeHtml(entry.worked_on||"")}</span><strong>${formatNumber(Number(entry.minutes||0))} min &middot; ${formatSalesMoney(entry.total_cost||0)}</strong></li>`).join("");
-  const costEntries=(fields.costEntries||[]).map(entry=>`<li><span>${escapeHtml(entry.description||entry.cost_type||"")}</span><strong>${formatNumber(entry.quantity||0)} &times; ${formatSalesMoney(entry.unit_cost||0)} = ${formatSalesMoney(entry.total_cost||0)}</strong></li>`).join("");
+  const timeEntries=(fields.timeEntries||[]).map(entry=>`<li><span>${escapeHtml(entry.worker_name||entry.worker_id||"")} &middot; ${escapeHtml(entry.worked_on||"")}</span><strong>${formatNumber(Number(entry.minutes||0))} min &middot; ${renderServiceCostHistory(entry,fields.currency||fields.commercialTermsSnapshot?.values?.currency,state.lang)}</strong></li>`).join("");
+  const costEntries=(fields.costEntries||[]).map(entry=>`<li><span>${escapeHtml(entry.description||entry.cost_type||"")}</span><strong>${entry.cost_currency?`${escapeHtml(entry.quantity||"0")} &times; ${escapeHtml(entry.unit_cost||"0")} ${escapeHtml(entry.cost_currency)} · `:""}${renderServiceCostHistory(entry,fields.currency||fields.commercialTermsSnapshot?.values?.currency,state.lang)}</strong></li>`).join("");
   const evidenceEntries=(fields.evidence||[]).map(entry=>`<li><span>${escapeHtml(entry.description||t("serviceOrderEvidence"))}</span><strong>${escapeHtml(entry.evidence_reference||"")}</strong></li>`).join("");
-  modalContent.innerHTML=`<div class="recipe-form service-order-modal"><div class="modal-head"><div><p class="eyebrow">${t("serviceOrder")}</p><h2>${escapeHtml(record.code)} &middot; ${escapeHtml(fields.productServiceName||record.detail)}</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div><div class="service-order-summary"><article><span>${t("customer")}</span><strong>${escapeHtml(fields.customerName||"")}</strong></article><article><span>${t("salesOrder")}</span><strong>${escapeHtml(fields.orderCode||"")}</strong></article><article><span>${t("status")}</span><strong>${escapeHtml(salesServiceOrderStatus(record.status))}</strong></article><article><span>${t("serviceOrderActual")}</span><strong>${formatNumber(fields.actualMinutes||0)} min &middot; ${formatSalesMoney(fields.actualCost||0)}</strong></article></div>${canPlan?`<form class="form-grid service-order-operation" id="serviceOrderPlanForm"><h3 class="wide-field">${t("serviceOrderPlan")}</h3><label class="preview-field"><span>${t("serviceOrderStartAt")}</span><input name="scheduled_start_at" type="date" value="${escapeAttribute(fields.scheduledStartAt?.slice(0,10)||"")}" required></label><label class="preview-field"><span>${t("serviceOrderEndAt")}</span><input name="scheduled_end_at" type="date" value="${escapeAttribute(fields.scheduledEndAt?.slice(0,10)||"")}" required></label><label class="preview-field wide-field"><span>${t("notes")}</span><textarea name="notes" rows="2">${escapeHtml(fields.notes||"")}</textarea></label><button class="primary-action wide-field" type="submit">${t("serviceOrderSavePlan")}</button></form>`:""}${canTime?`<form class="form-grid service-order-operation" id="serviceOrderTimeForm"><h3 class="wide-field">${t("serviceOrderTime")}</h3><label class="preview-field wide-field"><span>${t("worker")}</span><select name="worker_id" data-entity-selector data-search-placeholder="${escapeAttribute(t("serviceOrderWorkerSearch"))}" required><option value="">${t("choose")}</option>${workerOptions}</select></label><label class="preview-field"><span>${t("serviceOrderTimeStart")}</span><input name="started_at" type="datetime-local" required></label><label class="preview-field"><span>${t("serviceOrderTimeEnd")}</span><input name="ended_at" type="datetime-local" required></label><label class="preview-field wide-field"><span>${t("notes")}</span><input name="notes" maxlength="500"></label><button class="secondary-action wide-field" type="submit">${t("serviceOrderAddTime")}</button></form>`:""}${canCost?`<form class="form-grid service-order-operation" id="serviceOrderCostForm"><h3 class="wide-field">${t("serviceOrderCost")}</h3><label class="preview-field"><span>${t("serviceOrderCostType")}</span><select name="cost_type"><option value="labor">${t("serviceOrderLabor")}</option><option value="materials">${t("serviceOrderMaterials")}</option><option value="external_service">${t("serviceOrderExternal")}</option><option value="other">${t("other")}</option></select></label><label class="preview-field"><span>${t("amount")}</span><input name="amount" type="number" min="0" step="0.01" required></label><label class="preview-field wide-field"><span>${t("description")}</span><input name="description" maxlength="300" required></label><button class="secondary-action wide-field" type="submit">${t("serviceOrderAddCost")}</button></form>`:""}${canEvidence?`<form class="form-grid service-order-operation" id="serviceOrderEvidenceForm"><h3 class="wide-field">${t("serviceOrderEvidence")}</h3><label class="preview-field wide-field"><span>${t("serviceOrderEvidence")}</span><input name="reference" maxlength="300" required></label><label class="preview-field wide-field"><span>${t("description")}</span><input name="description" maxlength="500"></label><button class="secondary-action wide-field" type="submit">${t("serviceOrderAddEvidence")}</button></form>`:""}<section class="service-order-history"><div><h3>${t("serviceOrderTimeEntries")}</h3><ul class="purchasing-line-summary">${timeEntries||`<li>${t("noRecords")}</li>`}</ul></div><div><h3>${t("serviceOrderCostEntries")}</h3><ul class="purchasing-line-summary">${costEntries||`<li>${t("noRecords")}</li>`}</ul></div></section><div class="form-errors" id="formErrors" hidden></div><div class="modal-actions">${serviceOrderTransitionButtons(record)}<button class="secondary-action" type="button" data-close-service-order>${t("close")}</button></div></div>`;
+  modalContent.innerHTML=`<div class="recipe-form service-order-modal"><div class="modal-head"><div><p class="eyebrow">${t("serviceOrder")}</p><h2>${escapeHtml(record.code)} &middot; ${escapeHtml(fields.productServiceName||record.detail)}</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div>${renderOrderContext(fields,state.lang)}<div class="service-order-summary"><article><span>${t("customer")}</span><strong>${escapeHtml(fields.customerName||"")}</strong></article><article><span>${t("salesOrder")}</span><strong>${escapeHtml(fields.orderCode||"")}</strong></article><article><span>${t("status")}</span><strong>${escapeHtml(salesServiceOrderStatus(record.status))}</strong></article><article><span>${t("serviceOrderActual")}</span><strong>${formatNumber(fields.actualMinutes||0)} min &middot; ${formatSalesMoney(fields.actualCost||0,fields.currency||fields.commercialTermsSnapshot?.values?.currency)}</strong></article></div>${canPlan?`<form class="form-grid service-order-operation" id="serviceOrderPlanForm"><h3 class="wide-field">${t("serviceOrderPlan")}</h3><label class="preview-field"><span>${t("serviceOrderStartAt")}</span><input name="scheduled_start_at" type="date" value="${escapeAttribute(fields.scheduledStartAt?.slice(0,10)||"")}" required></label><label class="preview-field"><span>${t("serviceOrderEndAt")}</span><input name="scheduled_end_at" type="date" value="${escapeAttribute(fields.scheduledEndAt?.slice(0,10)||"")}" required></label><label class="preview-field wide-field"><span>${t("notes")}</span><textarea name="notes" rows="2">${escapeHtml(fields.notes||"")}</textarea></label><button class="primary-action wide-field" type="submit">${t("serviceOrderSavePlan")}</button></form>`:""}${canTime?`<form class="form-grid service-order-operation" id="serviceOrderTimeForm"><h3 class="wide-field">${t("serviceOrderTime")}</h3><label class="preview-field wide-field"><span>${t("worker")}</span><select name="worker_id" data-entity-selector data-search-placeholder="${escapeAttribute(t("serviceOrderWorkerSearch"))}" required><option value="">${t("choose")}</option>${workerOptions}</select></label><label class="preview-field"><span>${t("serviceOrderTimeStart")}</span><input name="started_at" type="datetime-local" required></label><label class="preview-field"><span>${t("serviceOrderTimeEnd")}</span><input name="ended_at" type="datetime-local" required></label><label class="preview-field wide-field"><span>${t("notes")}</span><input name="notes" maxlength="500"></label><button class="secondary-action wide-field" type="submit">${t("serviceOrderAddTime")}</button></form>`:""}${canCost?`<form class="form-grid service-order-operation" id="serviceOrderCostForm"><h3 class="wide-field">${t("serviceOrderCost")}</h3><label class="preview-field"><span>${t("serviceOrderCostType")}</span><select name="cost_type"><option value="labor">${t("serviceOrderLabor")}</option><option value="materials">${t("serviceOrderMaterials")}</option><option value="external_service">${t("serviceOrderExternal")}</option><option value="other">${t("other")}</option></select></label><label class="preview-field"><span>${t("amount")}</span><input name="amount" type="number" min="0" step="0.01" required></label><label class="preview-field wide-field"><span>${t("description")}</span><input name="description" maxlength="300" required></label><button class="secondary-action wide-field" type="submit">${t("serviceOrderAddCost")}</button></form>`:""}${canEvidence?`<form class="form-grid service-order-operation" id="serviceOrderEvidenceForm"><h3 class="wide-field">${t("serviceOrderEvidence")}</h3><label class="preview-field wide-field"><span>${t("serviceOrderEvidence")}</span><input name="reference" maxlength="300" required></label><label class="preview-field wide-field"><span>${t("description")}</span><input name="description" maxlength="500"></label><button class="secondary-action wide-field" type="submit">${t("serviceOrderAddEvidence")}</button></form>`:""}<section class="service-order-history"><div><h3>${t("serviceOrderTimeEntries")}</h3><ul class="purchasing-line-summary">${timeEntries||`<li>${t("noRecords")}</li>`}</ul></div><div><h3>${t("serviceOrderCostEntries")}</h3><ul class="purchasing-line-summary">${costEntries||`<li>${t("noRecords")}</li>`}</ul></div></section><div class="form-errors" id="formErrors" hidden></div><div class="modal-actions">${serviceOrderTransitionButtons(record)}<button class="secondary-action" type="button" data-close-service-order>${t("close")}</button></div></div>`;
+  if(fields.divisionRefId)mountServiceWorkerLookup(modalContent.querySelector("[name=worker_id]"),record.id,state.lang);
   modalBackdrop.hidden=false;
   modalContent.querySelector(".service-order-history")?.insertAdjacentHTML("beforeend",`<div><h3>${t("serviceOrderEvidence")}</h3><ul class="purchasing-line-summary">${evidenceEntries||`<li>${t("noRecords")}</li>`}</ul></div>`);
   const timeForm=modalContent.querySelector("#serviceOrderTimeForm");
@@ -4713,20 +4890,32 @@ function renderSalesServiceOrderModal(record){
   const costForm=modalContent.querySelector("#serviceOrderCostForm");
   if(costForm){const type=costForm.elements.cost_type,amount=costForm.elements.amount;[...type.options].forEach(option=>{if(option.value==="materials")option.value="material";if(option.value==="external_service")option.value="external";});amount.name="unit_cost";amount.closest("label").querySelector("span").textContent=t("serviceOrderUnitCost");amount.closest("label").insertAdjacentHTML("beforebegin",`<label class="preview-field"><span>${t("quantity")}</span><input name="quantity" type="number" min="0.000001" step="any" value="1" required></label>`);amount.closest("label").insertAdjacentHTML("afterend",`<label class="preview-field wide-field"><span>${t("serviceOrderEvidenceOptional")}</span><input name="evidence_reference" maxlength="300"></label>`);}
   modalContent.querySelector(".modal-close")?.addEventListener("click",closeModal);modalContent.querySelector("[data-close-service-order]")?.addEventListener("click",closeModal);
-  modalContent.querySelector("#serviceOrderPlanForm")?.addEventListener("submit",event=>runServiceOrderMutation(event,record,async data=>planSalesServiceOrder(record.id,{planned_start_date:data.scheduled_start_at,planned_end_date:data.scheduled_end_at,notes:data.notes?.trim()||null}),t("serviceOrderPlanSaved")));
-  modalContent.querySelector("#serviceOrderTimeForm")?.addEventListener("submit",event=>runServiceOrderMutation(event,record,async data=>addSalesServiceOrderTimeEntry(record.id,{worker_id:data.worker_id,worked_on:data.started_at,minutes:Number(data.minutes),hourly_cost:Number(data.hourly_cost),notes:data.notes?.trim()||null}),t("serviceOrderTimeSaved")));
-  modalContent.querySelector("#serviceOrderCostForm")?.addEventListener("submit",event=>runServiceOrderMutation(event,record,async data=>addSalesServiceOrderCostEntry(record.id,{cost_type:data.cost_type,description:data.description.trim(),quantity:Number(data.quantity),unit_cost:Number(data.unit_cost),evidence_reference:data.evidence_reference?.trim()||null}),t("serviceOrderCostSaved")));
-  modalContent.querySelector("#serviceOrderEvidenceForm")?.addEventListener("submit",event=>runServiceOrderMutation(event,record,async data=>addSalesServiceOrderEvidence(record.id,{evidence_reference:data.reference.trim(),description:data.description?.trim()||null}),t("serviceOrderEvidenceSaved")));
+  mountServiceCostContext(timeForm,record,getSessionContextData(),state.lang);
+  mountServiceCostContext(costForm,record,getSessionContextData(),state.lang);
+  modalContent.querySelector("#serviceOrderPlanForm")?.addEventListener("submit",event=>runServiceOrderMutation(event,record,async (data,key)=>planSalesServiceOrder(record.id,{planned_start_date:data.scheduled_start_at,planned_end_date:data.scheduled_end_at,notes:data.notes?.trim()||null},key),t("serviceOrderPlanSaved")));
+  modalContent.querySelector("#serviceOrderTimeForm")?.addEventListener("submit",event=>runServiceOrderMutation(event,record,async (data,key)=>addSalesServiceOrderTimeEntry(record.id,{worker_id:data.worker_id,worked_on:data.started_at,minutes:Number(data.minutes),hourly_cost:data.hourly_cost,notes:data.notes?.trim()||null,...serviceCostPayload(timeForm)},key),t("serviceOrderTimeSaved")));
+  modalContent.querySelector("#serviceOrderCostForm")?.addEventListener("submit",event=>runServiceOrderMutation(event,record,async (data,key)=>addSalesServiceOrderCostEntry(record.id,{cost_type:data.cost_type,description:data.description.trim(),quantity:data.quantity,unit_cost:data.unit_cost,evidence_reference:data.evidence_reference?.trim()||null,...serviceCostPayload(costForm)},key),t("serviceOrderCostSaved")));
+  modalContent.querySelector("#serviceOrderEvidenceForm")?.addEventListener("submit",event=>runServiceOrderMutation(event,record,async (data,key)=>addSalesServiceOrderEvidence(record.id,{evidence_reference:data.reference.trim(),description:data.description?.trim()||null},key),t("serviceOrderEvidenceSaved")));
   modalContent.querySelectorAll("[data-service-transition]").forEach(button=>button.addEventListener("click",()=>openSalesServiceTransitionModal(record,button.dataset.serviceTransition)));
 }
 
-async function runServiceOrderMutation(event,record,operation,success){event.preventDefault();const confirmed=record.status;try{await operation(Object.fromEntries(new FormData(event.currentTarget)));closeModal();await loadSalesApiData();showToast(success,"success");}catch(error){record.status=confirmed;renderFormErrors([error]);}}
+async function runServiceOrderMutation(event,record,operation,success){
+ event.preventDefault();const form=event.currentTarget;if(form.dataset.busy||!form.reportValidity())return;
+ const data=Object.fromEntries(new FormData(form)),fingerprint=JSON.stringify(data),confirmed=record.status;
+ if(form.dataset.commandFingerprint!==fingerprint){form.dataset.commandFingerprint=fingerprint;form.dataset.commandKey=`service-${crypto.randomUUID()}`;}
+ form.dataset.busy="true";const buttons=[...form.querySelectorAll('[type=submit]')];buttons.forEach(n=>n.disabled=true);
+ try{await operation(data,form.dataset.commandKey);if(!form.isConnected)return;closeModal();await loadSalesApiData();showToast(success,"success");}
+ catch(error){record.status=confirmed;if(form.isConnected)renderFormErrors([error]);}
+ finally{delete form.dataset.busy;buttons.forEach(n=>n.disabled=false);}
+}
 
 function openSalesServiceTransitionModal(record,action){
-  const needsReason=["wait","cancel","accept"].includes(action), needsAcceptance=false, needsEvidence=false, needsWorker=action==="assign", workers=(state.salesApi.workers||[]).filter(worker=>worker.status==="active"||worker.status==="Activo");
+  const needsReason=["wait","cancel","accept"].includes(action), needsAcceptance=false, needsEvidence=false, needsWorker=action==="assign", workers=(record.fields?.divisionRefId?[]:state.salesApi.workers||[]).filter(worker=>worker.status==="active"||worker.status==="Activo");
   modalContent.innerHTML=`<form class="recipe-form" id="serviceTransitionForm"><div class="modal-head"><div><p class="eyebrow">${t("serviceOrder")}</p><h2>${escapeHtml(salesServiceOrderStatus(record.status))} &rarr; ${escapeHtml(t(`serviceOrderAction_${action}`))}</h2></div><button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button></div><div class="form-grid">${needsWorker?`<label class="preview-field wide-field"><span>${t("serviceOrderAssignee")}</span><select name="responsible_worker_id" data-entity-selector required><option value="">${t("choose")}</option>${workers.map(worker=>`<option value="${escapeAttribute(worker.id)}">${escapeHtml(worker.employee_number||worker.code||"")} &middot; ${escapeHtml(worker.full_name||worker.name||"")} &middot; ${escapeHtml(worker.position_name||"")}</option>`).join("")}</select></label>`:""}${needsReason?`<label class="preview-field wide-field"><span>${t("reason")}</span><textarea name="reason" minlength="3" maxlength="500" required></textarea></label>`:""}${needsEvidence?`<label class="preview-field wide-field"><span>${t("serviceOrderEvidence")}</span><input name="evidence_reference" maxlength="300" required></label>`:""}${needsAcceptance?`<label class="preview-field wide-field"><span>${t("serviceOrderAcceptedBy")}</span><input name="accepted_by_name" maxlength="200" required></label>`:""}</div><div class="form-errors" id="formErrors" hidden></div><div class="modal-actions"><button class="secondary-action" type="button" data-close-transition>${t("cancel")}</button><button class="primary-action" type="submit">${t("confirm")}</button></div></form>`;
+  if(record.fields?.divisionRefId)mountServiceWorkerLookup(modalContent.querySelector("[name=responsible_worker_id]"),record.id,state.lang);
   modalContent.querySelector(".modal-close")?.addEventListener("click",()=>renderSalesServiceOrderModal(record));modalContent.querySelector("[data-close-transition]")?.addEventListener("click",()=>renderSalesServiceOrderModal(record));
-  modalContent.querySelector("#serviceTransitionForm")?.addEventListener("submit",async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget)),confirmed=record.status,payload=action==="assign"?{responsible_worker_id:data.responsible_worker_id}:{...(needsReason?{reason:data.reason.trim()}:{})};try{await transitionSalesServiceOrder(record.id,action,payload);closeModal();await loadSalesApiData();showToast(t("serviceOrderTransitionSaved"),"success");}catch(error){record.status=confirmed;renderFormErrors([error]);}});
+  modalContent.querySelector("#serviceTransitionForm")?.addEventListener("submit",event=>runServiceOrderMutation(event,record,async (data,key)=>transitionSalesServiceOrder(record.id,action,action==="assign"?{responsible_worker_id:data.responsible_worker_id}:{...(needsReason?{reason:data.reason.trim()}:{})},key),t("serviceOrderTransitionSaved")));
+
 }
 
 function renderSalesDeliveriesPanel(module, submodule) {
@@ -5028,7 +5217,7 @@ function renderSalesMarginPanel(module, submodule) {
           <span class="muted-label">${escapeHtml(record.code)} &middot; ${escapeHtml(record.fields?.quoteCode || t("notDefined"))}</span>
           <strong>${escapeHtml(record.fields?.customerName || record.title)}</strong>
           <p>${t("salesMarginRevenue")}: ${formatSalesMoney(record.fields?.total, currency)}</p>
-          <span class="muted-label">${t("estimatedCost")}: ${record.fields?.estimatedCost == null ? t("notDefined") : formatSalesMoney(record.fields.estimatedCost, currency)} &middot; ${t("estimatedMargin")}: ${record.fields?.estimatedMargin == null ? t("notDefined") : `${formatNumber(record.fields.estimatedMargin)}%`}</span>
+          <span class="muted-label">${t("estimatedCost")}: ${escapeHtml(salesEstimatedCostText(record.fields))} &middot; ${t("estimatedMargin")}: ${escapeHtml(salesEstimatedMarginText(record.fields))}</span>
           <span class="muted-label">${t("actualCost")}: ${record.fields?.actualCost == null ? t("actualCostPending") : formatSalesMoney(record.fields.actualCost, currency)} &middot; ${t("actualMargin")}: ${hasActualMargin ? `${formatNumber(record.fields.actualMargin)}%` : t("actualMarginPending")}</span>
           <span class="muted-label">${t("actualCostSource")}: ${actualCostSources.length ? escapeHtml(actualCostSources.join(" / ")) : t("actualCostSourcePending")}</span>
         </div>
@@ -5737,6 +5926,7 @@ function renderProductsServicesCatalogScreen() {
           </div>
           <div class="product-catalog-actions">
             <button class="secondary-action small-action" type="button" data-action="edit-product-service" data-product-id="${item.id}">${t("editMasterRecord")}</button>
+              ${getApiMode() === "api" && getSessionContextData()?.active_modules?.includes("production") && getSessionContextData()?.scope?.version === 2 && hasPermission("production.product_service.read") ? `<button class="secondary-action small-action" type="button" data-production-assignment="product_service" data-record-id="${escapeAttribute(item.id)}">${productionOrganizationCopy[state.lang === "en" ? "en" : "es"].title}</button>` : ""}
             ${currentRecipe
               ? `<button class="secondary-action small-action" type="button" data-action="edit-recipe" data-recipe-id="${currentRecipe.id}">${t("editRecipe")}</button>`
               : `<button class="secondary-action small-action" type="button" data-action="go-recipes-product" data-product-id="${item.id}">${t("createRecipe")}</button>`}
@@ -5958,7 +6148,7 @@ function renderLaborAreaDetailScreen(areaId, roles = mockDb.loadLaborRoles(), ar
             </div>
             <div class="catalog-card-actions">
               <span class="chip ${role.status === "Activo" ? "active" : ""}">${translateStatus(role.status)}</span>
-              ${hasPermission("hr.position.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-labor-role" data-role-id="${role.id}">${t("editLaborRole")}</button>` : ""}
+              ${hasPermission("hr.position.update") ? `<button class="secondary-action small-action" type="button" data-action="edit-labor-role" data-role-id="${role.id}">${t("editLaborRole")}</button>` : ""}${getApiMode() === "api" && getSessionContextData()?.active_modules?.includes("hr") && getSessionContextData()?.scope?.version === 2 && hasPermission("hr.position.read") ? `<button class="secondary-action small-action" type="button" data-hr-assignment="position" data-record-id="${escapeAttribute(role.id)}">${hrOrganizationCopy[state.lang === "en" ? "en" : "es"].title}</button>` : ""}
             </div>
           </article>
         `).join("")}
@@ -5973,7 +6163,7 @@ function renderWorkersScreen() {
   return `<section class="section-card catalog-workspace">
     ${renderFlowGuide(t("workerFileFlow"),[{title:t("workerIdentity"),detail:t("workerIdentityHelp")},{title:t("workerPosition"),detail:t("workerPositionHelp")},{title:t("workerEligibility"),detail:t("workerEligibilityHelp")}])}
     <p class="helper-copy">${t("workerPrivacyHelp")}</p>
-    <div class="catalog-grid">${workers.map(worker=>`<article class="catalog-card"><div class="catalog-card-main"><span class="muted-label">${escapeHtml(worker.employee_number)} · ${escapeHtml(worker.position_name)}</span><strong>${escapeHtml(worker.full_name)}</strong><p>${escapeHtml(worker.labor_area_name)} · NSS ••••${escapeHtml(worker.nss.slice(-4))}</p><span class="muted-label">${worker.intervenes_in_production?t("productionEligible"):t("notProductionEligible")}</span></div><div class="catalog-card-actions"><span class="chip ${worker.status==="active"?"active":""}">${translateStatus(worker.status)}</span>${hasPermission("hr.worker.update")?`<button class="secondary-action small-action" data-action="edit-worker" data-worker-id="${worker.id}">${t("editWorker")}</button>`:""}</div></article>`).join("")}</div>
+    <div class="catalog-grid">${workers.map(worker=>`<article class="catalog-card"><div class="catalog-card-main"><span class="muted-label">${escapeHtml(worker.employee_number)} · ${escapeHtml(worker.position_name)}</span><strong>${escapeHtml(worker.full_name)}</strong><p>${escapeHtml(worker.labor_area_name)} · NSS ••••${escapeHtml(worker.nss.slice(-4))}</p><span class="muted-label">${worker.intervenes_in_production?t("productionEligible"):t("notProductionEligible")}</span></div><div class="catalog-card-actions"><span class="chip ${worker.status==="active"?"active":""}">${translateStatus(worker.status)}</span>${hasPermission("hr.worker.update")?`<button class="secondary-action small-action" data-action="edit-worker" data-worker-id="${worker.id}">${t("editWorker")}</button>`:""}${getApiMode() === "api" && getSessionContextData()?.active_modules?.includes("hr") && getSessionContextData()?.scope?.version === 2 && hasPermission("hr.worker.read") ? `<button class="secondary-action small-action" type="button" data-hr-assignment="worker" data-record-id="${escapeAttribute(worker.id)}">${hrOrganizationCopy[state.lang === "en" ? "en" : "es"].title}</button>` : ""}</div></article>`).join("")}</div>
     ${workers.length?"":`<p class="helper-copy">${t("noWorkers")}</p>`}
   </section>`;
 }
@@ -5996,11 +6186,12 @@ function renderMachinesScreen() {
               <span class="muted-label">${machine.id} - ${machine.area}</span>
               <strong>${machine.name}</strong>
               <p>${machine.machineType} - ${formatNumber(machine.available)} ${machine.unit} disponibles por dia.</p>
-              <span class="muted-label">Costo maquina: ${formatCurrency(machine.cost)} por ${machine.unit}</span>
+              <span class="muted-label">${resourceRateCopy[state.lang === "en" ? "en" : "es"].rate}: ${escapeHtml(machine.costExact ?? String(machine.cost))} ${escapeHtml(machine.costCurrency || resourceRateCopy[state.lang === "en" ? "en" : "es"].pending)}</span>
             </div>
             <div class="catalog-card-actions">
               <span class="chip ${machine.status === "Activo" ? "active" : ""}">${machine.status}</span>
               <button class="secondary-action small-action" type="button" data-action="edit-machine" data-machine-id="${machine.id}">Abrir maquina</button>
+              ${getApiMode() === "api" && getSessionContextData()?.active_modules?.includes("production") && getSessionContextData()?.scope?.version === 2 && hasPermission("production.machine.read") ? `<button class="secondary-action small-action" type="button" data-production-assignment="machine" data-record-id="${escapeAttribute(machine.id)}">${productionOrganizationCopy[state.lang === "en" ? "en" : "es"].title}</button>` : ""}
             </div>
           </article>
         `).join("")}
@@ -6121,6 +6312,29 @@ function renderValidationScreen(recipes) {
 }
 
 function bindProductionPanelActions() {
+  if(getApiMode()==="api"&&state.active==="produccion"&&state.activeSubmodule==="ordenes")mountProductionRequestQueue(modulePanel.querySelector(".production-orders-main"),getSessionContextData(),{lang:state.lang,onOpen:openRequestedProductionOrder});
+  modulePanel.querySelectorAll("[data-quote-context]").forEach(button=>button.addEventListener("click",()=>{modalContent.replaceChildren();modalBackdrop.hidden=false;mountQuoteContext(modalContent,button.dataset.quoteContext,getSessionContextData(),state.lang,closeModal,loadSalesApiData);}));
+  modulePanel.querySelectorAll('[data-hr-assignment]').forEach(button => button.addEventListener('click', () => {
+    const records = button.dataset.hrAssignment === 'position' ? mockDb.loadLaborRoles() : (state.hrApi.workers || []);
+    const record = records.find(row => row.id === button.dataset.recordId);
+    if (!record) return;
+    modalContent.replaceChildren(); modalBackdrop.hidden = false;
+    mountHrOrganization(modalContent, button.dataset.hrAssignment, record, getSessionContextData(), state.lang, closeModal);
+  }));
+  modulePanel.querySelectorAll('[data-production-assignment]').forEach(button => button.addEventListener('click', () => {
+    const records = button.dataset.productionAssignment === 'machine' ? mockDb.loadMachines() : mockDb.loadProductsServices();
+    const record = records.find(row => row.id === button.dataset.recordId);
+    if (!record) return;
+    modalContent.replaceChildren(); modalBackdrop.hidden = false;
+    mountProductionOrganization(modalContent, button.dataset.productionAssignment, record, getSessionContextData(), state.lang, closeModal);
+  }));
+  modulePanel.querySelectorAll('[data-inventory-assignment]').forEach(button => button.addEventListener('click', () => {
+    const record = mockDb.findModuleRecord('almacenes', button.dataset.recordId);
+    if (!record) return;
+    modalContent.replaceChildren(); modalBackdrop.hidden = false;
+    mountInventoryOrganization(modalContent, button.dataset.inventoryAssignment, record, getSessionContextData(), state.lang, closeModal);
+  }));
+
   if(state.active==="produccion"&&state.activeSubmodule==="ordenes"&&handoffEnabled("productionRecovery")&&!modulePanel.querySelector('[data-handoff-kind="productionRecovery"]'))modulePanel.querySelector(".production-orders-main")?.insertAdjacentHTML("beforeend",renderOperationalHandoff("productionRecovery"));
   if(state.active==="produccion"&&state.activeSubmodule==="ordenes"&&handoffEnabled("productionReturn")&&!modulePanel.querySelector('[data-handoff-kind="productionReturn"]'))modulePanel.querySelector(".production-orders-main")?.insertAdjacentHTML("beforeend",renderOperationalHandoff("productionReturn"));
   modulePanel.querySelectorAll("[data-action='open-product-service']").forEach((button) => {
@@ -6437,6 +6651,9 @@ function renderRecipeValidationOnly(recipes = mockDb.loadRecipes()) {
   `;
 }
 
+function formatProductionOrderAmount(order, amount, original = null) {
+  return order.organizationContext?.cost_currency ? `${escapeHtml(original ?? String(amount))} ${escapeHtml(order.organizationContext.cost_currency)}` : formatCurrency(amount);
+}
 function renderOrderList(orders, emptyMessage = "") {
   return `
     <section class="section-card recipe-list-card">
@@ -6456,8 +6673,9 @@ function renderOrderList(orders, emptyMessage = "") {
             <article class="recipe-list-row order-list-row">
               <div>
                 <strong>${order.id} · ${order.recipeName}</strong>
+                ${renderProductionOrderContext(order.organizationContext,state.lang)}
                 <span>${order.quantity} ${order.unit} · entrega ${order.dueDate || "sin fecha"} · responsable ${order.responsible} · ${order.releaseStatus || "Liberada"}</span>
-                <span>Avance ${formatNumber(progress)}% · planeado ${formatCurrency(cost.plannedCost)} · real ${cost.actualCost == null ? "Pendiente" : formatCurrency(cost.actualCost)}${cost.variance == null ? "" : ` · variacion ${formatCurrency(cost.variance)} (${formatNumber(cost.variancePct)}%)`}</span>
+                <span>Avance ${formatNumber(progress)}% · planeado ${formatProductionOrderAmount(order,cost.plannedCost,order.originalPlannedCost)} · real ${cost.actualCost == null ? "Pendiente" : formatProductionOrderAmount(order,cost.actualCost,order.originalActualCost)}${cost.variance == null ? "" : ` · variacion ${formatProductionOrderAmount(order,cost.variance)} (${formatNumber(cost.variancePct)}%)`}</span>
                 <div class="stage-progress-list">
                   ${(order.areas || []).map((stage, index) => `
                     <button class="stage-pill ${stage.status === "Terminada" ? "done" : stage.status === "En proceso" ? "active" : ""}" type="button" data-action="advance-order-stage" data-order-id="${order.id}" data-stage-index="${index}" title="Pulsa para avanzar esta fase" ${["production.order_stage.reset","production.order_stage.update","production.order_stage.complete","production.order_stage.block","production.order_stage.skip"].some(hasPermission)?"":"disabled"}>
@@ -7341,6 +7559,7 @@ function openInventoryMovementModal(module, submodule) {
       </div>
 
       <div class="form-grid">
+        ${getApiMode()==="api"?`<label class="preview-field"><span>${t("stableCode")}</span><input name="manualCode" maxlength="60" placeholder="${codeSequenceConfig("inventory.movement")?.mode==="manual"?"MOV-001":escapeAttribute(t("codeAssignedAutomatically"))}" ${codeSequenceConfig("inventory.movement")?.mode==="manual"?"required":"readonly"}></label>`:""}
         <label class="preview-field">
           <span>${t("movementType")}</span>
           <select name="movementType" required>
@@ -7408,6 +7627,7 @@ function openInventoryMovementModal(module, submodule) {
     </form>
   `;
 
+  if(getApiMode()==="api")mountMovementCostContext(modalContent.querySelector("#movementForm"),state.lang);
   modalBackdrop.hidden = false;
   modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
   modalContent.querySelector("[data-action='close-movement']").addEventListener("click", closeModal);
@@ -7431,6 +7651,7 @@ function openInventoryMovementModal(module, submodule) {
   movementTypeSelect.addEventListener("change",syncDestination);
   syncDestination();
   modalContent.querySelector("#movementForm").addEventListener("submit", (event) => saveInventoryMovementForm(event, module, submodule));
+  modalContent.querySelector("#movementForm").addEventListener("input", (event) => { delete event.currentTarget.dataset.codeRequestKey; });
 }
 
 function formatInventoryItemOption(item) {
@@ -7542,16 +7763,18 @@ async function saveInventoryMovementForm(event, module, submodule) {
     const types = { positiveAdjustment: "positive_adjustment", negativeAdjustment: "negative_adjustment" };
     try {
       const savedMovement = await createInventoryMovement({
+        ...(data.manualCode?.trim()?{manual_code:data.manualCode.trim()}:{}),
         movement_type: types[data.movementType] || data.movementType,
         inventory_item_id: data.itemId,
         warehouse_id: data.warehouseId,
         destination_warehouse_id: data.movementType === "transfer" ? data.destinationWarehouseId || null : null,
         quantity: movementQuantity,
+        ...(["entry","positiveAdjustment"].includes(data.movementType)&&data.unitCost!==undefined&&data.unitCost!==""?{unit_cost:data.unitCost}:{}),
         unit: data.unit.trim(),
         reason: data.reason?.trim() || "Movimiento manual",
         source: { type: "manual", id: data.sourceDocument.trim() },
         occurred_at: `${data.movementDate}T12:00:00Z`
-      });
+      },form.dataset.codeRequestKey ||= `web-${crypto.randomUUID()}`);
       state.inventoryMovements = { status: "idle", error: "" };
       state.inventoryBalances = { status: "idle", data: [], page: {}, error: "", queryKey: "", cursor: "", previousCursors: [] };
       closeModal();
@@ -7607,9 +7830,11 @@ function openSalesCustomerModal(module, submodule, recordId = null) {
   const isEditing = Boolean(existingRecord);
   const salesWorkers=state.salesApi.workers||[];const references=state.salesApi.references||{currencies:[],payment_terms:[]};
   if (getApiMode() === "api" && (!salesWorkers.length || !references.currencies.length || !references.payment_terms.length)) {
-    showToast((state.salesApi.referenceWarnings || []).join(" ") || t("salesWorkersUnavailable"));
+    showToast(!salesWorkers.length ? t("salesWorkersUnavailable") : (state.salesApi.referenceWarnings || []).join(" ") || t("salesReferencesUnavailable"));
     return;
   }
+  const customerPaymentTerms=fields.paymentTerms||preferredCommercialReference(references.payment_terms,"cash");
+  const customerCurrency=fields.currency||preferredCommercialReference(references.currencies,"MXN");
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="salesCustomerForm">
@@ -7673,7 +7898,7 @@ function openSalesCustomerModal(module, submodule, recordId = null) {
         </label>
         <label class="preview-field">
           <span>${t("paymentTerms")}</span>
-          <select name="paymentTerms" required>${references.payment_terms.map(item=>`<option value="${item.code}" ${selectedOption(fields.paymentTerms||"cash",item.code)}>${escapeHtml(state.lang==="en"?item.name_en:item.name_es)}</option>`).join("")}</select>
+          <select name="paymentTerms" required>${commercialReferenceOptions(references.payment_terms,customerPaymentTerms)}</select>
         </label>
         <label class="preview-field">
           <span>${t("creditLimit")}</span>
@@ -7681,7 +7906,7 @@ function openSalesCustomerModal(module, submodule, recordId = null) {
         </label>
         <label class="preview-field">
           <span>${t("currency")}</span>
-          <select name="currency" required>${references.currencies.map(item=>`<option value="${item.code}" ${selectedOption(fields.currency||"MXN",item.code)}>${escapeHtml(item.code)} · ${escapeHtml(state.lang==="en"?item.name_en:item.name_es)}</option>`).join("")}</select>
+          <select name="currency" required>${commercialReferenceOptions(references.currencies,customerCurrency,true)}</select>
         </label>
         <label class="preview-field wide-field">
           <span>${t("commercialNotes")}</span>
@@ -7777,6 +8002,8 @@ async function saveSalesCustomerForm(event, module, submodule) {
   if (!data.contactEmail?.trim()) errors.push({ field: "commercialEmail", message: t("commercialEmailRequired") });
   if (!data.contactPhone?.trim()) errors.push({ field: "phone", message: t("phoneRequired") });
   if (!data.responsibleWorkerId) errors.push("Selecciona una persona responsable activa de RH.");
+  if (!data.paymentTerms && !data.recordId) errors.push({ field: "paymentTerms", message: state.lang==="en"?"Choose active payment terms.":"Selecciona condiciones de pago vigentes." });
+  if (!data.currency && !data.recordId) errors.push({ field: "currency", message: state.lang==="en"?"Choose an active currency.":"Selecciona una moneda vigente." });
   const fiscalStarted=[data.billingLegalName,data.taxId,data.taxRegime,data.cfdiUse,data.billingEmail,data.billingStreet,data.billingCity,data.billingState,data.billingZipCode].some(value=>value?.trim());
   if(fiscalStarted&&!data.billingLegalName?.trim()) errors.push({ field: "billingLegalName", message: t("billingLegalNameRequired") });
   if(fiscalStarted&&!data.taxId?.trim()) errors.push({ field: "taxId", message: t("taxIdRequired") });
@@ -7790,7 +8017,7 @@ async function saveSalesCustomerForm(event, module, submodule) {
   let code = data.code.trim().toUpperCase();
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
   if(getApiMode()==="api"){
-    const payload={commercial_name:data.commercialName.trim(),customer_type:data.customerType,status:salesCustomerStatusToApi[data.status]||"prospect",responsible_worker_id:data.responsibleWorkerId,primary_contact:{name:data.contactName.trim(),email:data.contactEmail.trim(),phone:data.contactPhone.trim()},payment_terms:data.paymentTerms,currency:data.currency,credit_limit:Number(data.creditLimit||0),legal_name:data.billingLegalName?.trim()||null,tax_id:data.taxId?.trim().toUpperCase()||null,tax_regime:data.taxRegime?.trim()||null,cfdi_use:data.cfdiUse?.trim()||null,billing_email:data.billingEmail?.trim()||null,billing_phone:data.billingPhone?.trim()||null,billing_address:fiscalStarted?{street:data.billingStreet?.trim()||null,exterior_number:data.billingExterior?.trim()||null,interior_number:data.billingInterior?.trim()||null,neighborhood:data.billingNeighborhood?.trim()||null,city:data.billingCity?.trim()||null,state:data.billingState?.trim()||null,postal_code:data.billingZipCode?.trim()||null,country:data.billingCountry?.trim()||null}:null,notes:data.commercialNotes?.trim()||null};
+    const payload={commercial_name:data.commercialName.trim(),customer_type:data.customerType,status:salesCustomerStatusToApi[data.status]||"prospect",responsible_worker_id:data.responsibleWorkerId,primary_contact:{name:data.contactName.trim(),email:data.contactEmail.trim(),phone:data.contactPhone.trim()},...(data.paymentTerms?{payment_terms:data.paymentTerms}:{}),...(data.currency?{currency:data.currency}:{}),credit_limit:Number(data.creditLimit||0),legal_name:data.billingLegalName?.trim()||null,tax_id:data.taxId?.trim().toUpperCase()||null,tax_regime:data.taxRegime?.trim()||null,cfdi_use:data.cfdiUse?.trim()||null,billing_email:data.billingEmail?.trim()||null,billing_phone:data.billingPhone?.trim()||null,billing_address:fiscalStarted?{street:data.billingStreet?.trim()||null,exterior_number:data.billingExterior?.trim()||null,interior_number:data.billingInterior?.trim()||null,neighborhood:data.billingNeighborhood?.trim()||null,city:data.billingCity?.trim()||null,state:data.billingState?.trim()||null,postal_code:data.billingZipCode?.trim()||null,country:data.billingCountry?.trim()||null}:null,notes:data.commercialNotes?.trim()||null};
     try{if(existingRecord)await updateSalesCustomer(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.customer",code,data.codeRequestKey);await createSalesCustomer({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"customerUpdated":"customerSaved",{code}));}catch(error){renderFormErrors([error]);}return;
   }
   const fields = {
@@ -7867,11 +8094,14 @@ async function openSalesQuoteModal(module, submodule, recordId = null) {
   const selectedCustomer = fields.customerId ? mockDb.findModuleRecord(module.id, fields.customerId) : null;
   const quoteLines = normalizeQuoteLines(fields);
   const isEditing = Boolean(existingRecord);
+  const references=state.salesApi.references||{currencies:[],payment_terms:[]};
 
-  if (!customers.length || !productsServices.length || (getApiMode() === "api" && !getUnitCatalog().length)) {
-    showToast(!customers.length ? t("quoteRequiresCustomers") : t("quoteRequiresProducts"));
+  if (!customers.length || !productsServices.length || (getApiMode() === "api" && (!getUnitCatalog().length||!references.currencies.length||!references.payment_terms.length))) {
+    showToast(!customers.length ? t("quoteRequiresCustomers") : !productsServices.length||!getUnitCatalog().length ? t("quoteRequiresProducts") : (state.salesApi.referenceWarnings||[]).join(" ")||t("salesReferencesUnavailable"));
     return;
   }
+  const quotePaymentTerms=fields.paymentTerms||selectedCustomer?.fields?.paymentTerms||preferredCommercialReference(references.payment_terms,"cash");
+  const quoteCurrency=fields.currency||selectedCustomer?.fields?.currency||preferredCommercialReference(references.currencies,"MXN");
 
   modalContent.innerHTML = `
     <form class="recipe-form" id="salesQuoteForm">
@@ -7924,11 +8154,11 @@ async function openSalesQuoteModal(module, submodule, recordId = null) {
         </label>
         <label class="preview-field">
           <span>${t("paymentTerms")}</span>
-          <select name="paymentTerms">${(state.salesApi.references?.payment_terms||[]).map(item=>`<option value="${item.code}" ${selectedOption(fields.paymentTerms||selectedCustomer?.fields?.paymentTerms||"cash",item.code)}>${escapeHtml(state.lang==="en"?item.name_en:item.name_es)}</option>`).join("")}</select>
+          <select name="paymentTerms" required>${commercialReferenceOptions(references.payment_terms,quotePaymentTerms)}</select>
         </label>
         <label class="preview-field">
           <span>${t("currency")}</span>
-          <select name="currency" required>${(state.salesApi.references?.currencies||[]).map(item=>`<option value="${item.code}" ${selectedOption(fields.currency||selectedCustomer?.fields?.currency||"MXN",item.code)}>${escapeHtml(item.code)} · ${escapeHtml(state.lang==="en"?item.name_en:item.name_es)}</option>`).join("")}</select>
+          <select name="currency" required>${commercialReferenceOptions(references.currencies,quoteCurrency,true)}</select>
         </label>
         <label class="preview-field wide-field">
           <span>${t("notes")}</span>
@@ -7952,6 +8182,7 @@ async function openSalesQuoteModal(module, submodule, recordId = null) {
   modalContent.querySelector("#quoteCustomerResults").addEventListener("click", selectQuoteCustomerFromLookup);
   modalContent.querySelector("[data-action='add-quote-line']").addEventListener("click", addQuoteLineRow);
   modalContent.querySelector("#salesQuoteForm").addEventListener("submit", (event) => saveSalesQuoteForm(event, module, submodule));
+  if (fields.divisionRefId) { modalContent.querySelector("#quoteCustomerSearch").disabled=true; modalContent.querySelector("[name=currency]").disabled=true; modalContent.querySelector("[name=paymentTerms]").disabled=true; }
   bindQuoteLineActions();
 }
 
@@ -8182,6 +8413,8 @@ async function saveSalesQuoteForm(event, module, submodule) {
   if (!data.code?.trim() && getApiMode() !== "api") errors.push({ field: "code", message: t("quoteCodeRequired") });
   if (!data.customerId) errors.push({ field: "customerId", message: t("quoteCustomerRequired") });
   if (!data.validUntil) errors.push({ field: "validUntil", message: t("validUntilRequired") });
+  if (!data.paymentTerms && !data.recordId) errors.push({ field: "paymentTerms", message: state.lang==="en"?"Choose active payment terms.":"Selecciona condiciones de pago vigentes." });
+  if (!data.currency && !data.recordId) errors.push({ field: "currency", message: state.lang==="en"?"Choose an active currency.":"Selecciona una moneda vigente." });
 
   const customer = mockDb.findModuleRecord(module.id, data.customerId);
   if (!customer) errors.push({ field: "customerId", message: t("quoteCustomerRequired") });
@@ -8196,7 +8429,7 @@ async function saveSalesQuoteForm(event, module, submodule) {
   let code = data.code.trim().toUpperCase();
   const existingRecord = data.recordId ? mockDb.findModuleRecord(module.id, data.recordId) : null;
   if(getApiMode()==="api"){
-    const payload={customer_id:customer.id,currency:data.currency,payment_terms:data.paymentTerms,valid_until:data.validUntil,promised_delivery_date:data.deliveryPromise||null,notes:data.notes?.trim()||null,lines:lines.map(line=>({product_service_id:line.productServiceId,quantity:line.quantity,unit:line.unit,unit_price:line.unitPrice,discount_percentage:line.discount}))};
+    const payload={customer_id:customer.id,...(data.currency?{currency:data.currency}:{}),...(data.paymentTerms?{payment_terms:data.paymentTerms}:{}),valid_until:data.validUntil,promised_delivery_date:data.deliveryPromise||null,notes:data.notes?.trim()||null,lines:lines.map(line=>({product_service_id:line.productServiceId,quantity:line.quantity,unit:line.unit,unit_price:line.unitPrice,discount_percentage:line.discount}))};
     try{if(existingRecord)await updateSalesQuote(existingRecord.id,payload);else {code=await resolveBusinessCode("sales.quote",code,data.codeRequestKey);await createSalesQuote({code,...payload});}closeModal();await loadSalesApiData();showToast(t(existingRecord?"quoteUpdated":"quoteSaved",{code}));}catch(error){renderFormErrors([error]);}return;
   }
   const fields = {
@@ -9137,6 +9370,18 @@ function openLaborAreaModal(areaId = null) {
 }
 
 function openSalesOrderFulfillmentModal(module, orderId) {
+  const scopedOrder=mockDb.findModuleRecord(module.id,orderId);
+  if(scopedOrder?.fields?.divisionRefId){
+    const en=state.lang==="en";
+    modalContent.innerHTML=`<form class="recipe-form" data-form="scoped-order-cancel" data-scoped-order><h2>${escapeHtml(scopedOrder.code)}</h2>${renderOrderContext(scopedOrder.fields,state.lang)}${hasPermission("sales.order.cancel")&&scopedOrder.status!=="Cancelado"?`<label class="preview-field"><span>${en?"Cancellation reason":"Motivo de cancelación"}</span><textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button class="secondary-action" type="submit">${en?"Cancel order":"Cancelar pedido"}</button>`:""}<div class="form-errors" id="formErrors" hidden></div><button class="secondary-action" type="button" data-context-close>${t("close")}</button></form>`;
+    modalBackdrop.hidden=false;modalContent.querySelector('[data-context-close]').onclick=closeModal;
+    let cancelKey=null,cancelReason=null;
+    modalContent.querySelector('form').onsubmit=async event=>{event.preventDefault();const button=event.currentTarget.querySelector('[type=submit]');if(!button||button.disabled)return;button.disabled=true;try{const reason=event.currentTarget.elements.reason.value.trim();if(reason!==cancelReason){cancelReason=reason;cancelKey=`order-cancel-${crypto.randomUUID()}`;}await cancelSalesOrder(orderId,reason,cancelKey);closeModal();await loadSalesApiData();}catch(error){renderFormErrors([error]);}finally{button.disabled=false;}};
+    if(hasPermission("sales.order.fulfill")&&scopedOrder.status!=="Cancelado")mountScopedStockFulfillment(modalContent,scopedOrder,{lang:state.lang,onSaved:async()=>{closeModal();await loadSalesApiData();},onError:error=>renderFormErrors([error])});
+    if(scopedOrder.status!=="Cancelado")mountSalesProductionFulfillment(modalContent,scopedOrder,getSessionContextData(),{lang:state.lang,onOpenRequest:openRequestedProductionOrder,onSaved:async()=>{closeModal();await loadSalesApiData();}});
+    return;
+  }
+
   if(getApiMode()==="api"&&(state.inventoryApi.status==="idle"||state.inventoryItems.status==="idle")){loadInventoryApiData().then(()=>loadInventoryItemData()).then(()=>openSalesOrderFulfillmentModal(module,orderId));return;}
   const order=mockDb.findModuleRecord(module.id,orderId); if(!order)return;
   const lines=(order.fields?.lines||[]).filter(line=>line.fulfillmentMode==="pending"&&line.fulfillmentStatus==="pending");
@@ -9250,6 +9495,7 @@ function openLaborRoleModal(roleId = null, defaultAreaId = "") {
         <button class="icon-button modal-close" type="button" aria-label="Cerrar">x</button>
       </div>
       <div class="form-grid">
+        <label class="preview-field"><span>${t("stableCode")}</span>${ownerCodeInput("hr.position",existingRole?.code)}</label>
         <label class="preview-field"><span>${t("laborAreaExisting")}</span><select name="areaId" data-entity-selector required>${selectableAreas.map((area) => `<option value="${area.id}" ${area.id === selectedAreaId ? "selected" : ""}>${area.code} - ${area.name}</option>`).join("")}</select></label>
         <label class="preview-field"><span>${t("laborRolePosition")}</span><input name="position" type="text" value="${existingRole?.position || ""}" placeholder="Ej. Operador" required /></label>
         <label class="preview-field"><span>${t("laborRoleName")}</span><input name="name" type="text" value="${existingRole?.name || ""}" placeholder="Ej. Operador de proceso" required /></label>
@@ -9271,6 +9517,7 @@ function openLaborRoleModal(roleId = null, defaultAreaId = "") {
   modalContent.querySelector(".modal-close").addEventListener("click", closeModal);
   modalContent.querySelector("[data-action='close-labor-role']").addEventListener("click", closeModal);
   modalContent.querySelector("#laborRoleForm").addEventListener("submit", saveLaborRoleForm);
+  modalContent.querySelector("#laborRoleForm").addEventListener("input", (event) => { delete event.currentTarget.dataset.codeRequestKey; });
 }
 
 async function saveLaborRoleForm(event) {
@@ -9322,9 +9569,9 @@ async function saveLaborRoleForm(event) {
   };
   if (getApiMode() === "api") {
     try {
-      const payload={labor_area_id:item.areaId,position:item.position,recipe_name:item.name,resource_quantity:item.quantity,minutes_per_resource:item.minutesPerResource,hourly_cost:item.hourlyCost,intervenes_in_production:item.intervenesInProduction,intervenes_in_maintenance:item.intervenesInMaintenance,status:item.status==="Activo"?"active":"inactive"};
-      if (roleId) await updateHrPosition(roleId,payload);
-      else { const {status,...createPayload}=payload;await createHrPosition(createPayload); }
+      const payload={code:String(data.get("code")||"").trim()||null,labor_area_id:item.areaId,position:item.position,recipe_name:item.name,resource_quantity:item.quantity,minutes_per_resource:item.minutesPerResource,hourly_cost:item.hourlyCost,intervenes_in_production:item.intervenesInProduction,intervenes_in_maintenance:item.intervenesInMaintenance,status:item.status==="Activo"?"active":"inactive"};
+      if (roleId) { const {code:unchangedCode,...updatePayload}=payload;await updateHrPosition(roleId,updatePayload); }
+      else { const {status,...createPayload}=payload;await createHrPosition(createPayload,event.currentTarget.dataset.codeRequestKey ||= `web-${crypto.randomUUID()}`); }
       closeModal();await loadHrApiData();navigateTo({active:"recursos-humanos",activeSubmodule:"areas-puestos",laborArea:item.areaId});showToast(`Puesto ${item.name} ${roleId?"actualizado":"guardado"}.`);
     } catch(error) { renderFormErrors([error]); }
     return;
@@ -9399,7 +9646,7 @@ async function openMachineModal(machineId = null) {
         <label class="preview-field"><span>Tipo de maquina</span><input name="machineType" type="text" value="${existingMachine?.machineType || ""}" placeholder="Ej. Equipo de proceso" required /></label>
         <label class="preview-field"><span>Nombre de maquina</span><input name="name" type="text" value="${existingMachine?.name || ""}" placeholder="Ej. Equipo operativo 02" required /></label>
         <label class="preview-field"><span>Minutos disponibles por dia</span><input name="available" type="number" min="1" value="${existingMachine?.available || 480}" required /></label>
-        <label class="preview-field"><span>Costo hora/minuto maquina</span><input name="cost" type="number" min="0" step="0.01" value="${existingMachine?.cost ?? "1.80"}" required /></label>
+        <label class="preview-field"><span>${resourceRateCopy[state.lang === "en" ? "en" : "es"].rate}</span><input name="cost" type="number" min="0" max="999999999999.999999" step="0.000001" value="${existingMachine?.costExact ?? existingMachine?.cost ?? "1.80"}" ${getApiMode() === "api" && existingMachine?.costCurrency ? "disabled" : "required"} /><small>${resourceRateCopy[state.lang === "en" ? "en" : "es"].editHint}</small></label>
         <label class="preview-field"><span>Estatus</span><select name="status" ${getApiMode() === "api" && !isEditing ? "disabled" : ""}><option ${existingMachine?.status === "Activo" ? "selected" : ""}>Activo</option><option ${existingMachine?.status === "Inactivo" ? "selected" : ""}>Inactivo</option><option ${existingMachine?.status === "Mantenimiento" ? "selected" : ""}>Mantenimiento</option></select></label>
       </div>
       ${hasActiveAreas ? "" : `<div class="validation-card warning machine-area-empty"><strong>${t("machineAreaRequiredFirst")}</strong><span>${t("machineAreaRequiredFirstHelp")}</span><button class="secondary-action" type="button" data-action="open-hr-areas">${t("machineGoToHrAreas")}</button></div>`}
@@ -9452,7 +9699,7 @@ async function saveMachineForm(event) {
   if (getApiMode() === "api") {
     try {
       const status={Activo:"active",Inactivo:"inactive",Mantenimiento:"maintenance"}[item.status];
-      const payload={name:item.name,machine_type:item.machineType,area_ref_id:item.areaId,area_name:item.area,available_minutes_per_day:item.available,cost_per_minute:item.cost,status};
+      const payload={name:item.name,machine_type:item.machineType,area_ref_id:item.areaId,area_name:item.area,available_minutes_per_day:item.available,...(event.currentTarget.elements.cost.disabled ? {} : {cost_per_minute:String(data.get("cost") || "0")}),status};
       if (machineId) await updateProductionMachine(machineId,payload);
       else { const {status:ignored,...createPayload}=payload;const code=await resolveBusinessCode("production.machine",String(data.get("code")||""),String(data.get("codeRequestKey")||""));await createProductionMachine({...createPayload,code}); }
       closeModal();await loadProductionApiData();navigateTo({active:"produccion",activeSubmodule:"maquinaria",laborArea:""});showToast(`Maquina ${item.name} ${machineId?"actualizada":"guardada"} en Production API.`);
@@ -10134,7 +10381,28 @@ function productionEndDate(startValue,durationDays) {
   return localDateValue(current);
 }
 
+async function openRequestedProductionOrder(requestId) {
+  try {
+    const sourceRequest = await getProductionOrderRequest(requestId);
+    modalBackdrop.hidden = false;
+    await mountProductionOrderForm(modalContent,getSessionContextData(),{
+      lang:state.lang,today:localDateValue(),sourceRequest,managedCode:codeSequenceConfig("production.order")?.mode==="managed",
+      resolveCode:(code,key)=>resolveBusinessCode("production.order",code,key),onClose:closeModal,
+      onSaved:async saved=>{closeModal();await Promise.all([loadProductionApiData(),loadSalesApiData()]);showToast(state.lang==="en"?`Order ${saved.code} created.`:`Orden ${saved.code} generada.`);}
+    });
+  } catch(error) { showApiError(error,state.lang==="en"?"Unable to load the production request.":"No se pudo consultar la solicitud de fabricación."); }
+}
+
 async function openOrderModal() {
+  if (getApiMode() === "api") {
+    modalBackdrop.hidden = false;
+    await mountProductionOrderForm(modalContent, getSessionContextData(), {
+      lang: state.lang, today: localDateValue(), managedCode: codeSequenceConfig("production.order")?.mode === "managed",
+      resolveCode: (code, key) => resolveBusinessCode("production.order", code, key), onClose: closeModal,
+      onSaved: async saved => { closeModal(); await loadProductionApiData(); showToast(state.lang === "en" ? `Order ${saved.code} created.` : `Orden ${saved.code} generada.`); if (hasPermission("production.order.read")) openOrderPrintModal(saved.id); }
+    });
+    return;
+  }
   const recipes = mockDb.loadRecipes();
   const selectedRecipeId = localStorage.getItem("erclave-selected-recipe") || recipes[0]?.id;
   const recipe = recipes.find((item) => item.id === selectedRecipeId) || recipes[0] || (shouldUseSeedModuleData() ? defaultRecipes[0] : null);
@@ -10497,10 +10765,11 @@ async function saveOrderStageProgressForm(event){
       if(progress>0&&order.status!=="En produccion"){
         if(!hasPermission(productionOrderTransitionPermission(order.status,"En produccion")))return;
         await updateProductionOrderStatus(order.id,{status:"in_progress",reason:"Actualizacion de avance por etapa"});
+        order.status="En produccion";
       }
       await updateProductionOrderStage(stage.id,{status,progress_percent:progress,notes:"Porcentaje de avance registrado desde Produccion"});
       closeModal();await loadProductionApiData();showToast(t("orderStageProgressUpdated",{stage:stage.area,progress:formatNumber(progress)}));
-    }catch(error){if(error?.payload?.error?.code==="material_consumption_required")showToast(t("orderMaterialIssueFailed"),"danger");else renderFormFeedback(form,[error]);}finally{form.dataset.evidenceSaving="false";saveButton.disabled=false;}
+    }catch(error){if(!order.isService&&error?.payload?.error?.code==="material_consumption_required")showToast(t("orderMaterialIssueFailed"),"danger");else renderFormFeedback(form,serviceEvidencePartialFeedback(order,error,t,{progress:true,started:order.status==="En produccion"}));}finally{form.dataset.evidenceSaving="false";saveButton.disabled=false;}
     return;
   }
   const stages=order.areas.map((item,index)=>index===stageIndex?{...item,status:progress===100?"Terminada":progress===0?"Pendiente":"En proceso",progress}:item);
@@ -10508,14 +10777,16 @@ async function saveOrderStageProgressForm(event){
   mockDb.updateOrder({...order,areas:stages,status:allDone?"En validacion":progress>0?"En produccion":order.status});closeModal();render();showToast(t("orderStageProgressUpdated",{stage:stage.area,progress:formatNumber(progress)}));
 }
 
-function getDocumentBranding(){const value=state.adminApi.data?.documentTemplate||{};return {logo:value.logo_data_url||"",primary:value.primary_color||"#6106A0",accent:value.accent_color||"#F557D3",text:value.text_color||"#190F34",footer:value.footer_text||"",showPage:value.show_page_number!==false,company:state.adminApi.data?.tenant?.commercial_name||"ERClave"};}
-function renderDocumentBrandingHeader(moduleLabel){const brand=getDocumentBranding();return `<div>${brand.logo?`<img class="print-company-logo" src="${escapeAttribute(brand.logo)}" alt="${escapeAttribute(brand.company)}">`:`<strong>${escapeHtml(brand.company)}</strong>`}<span>${escapeHtml(moduleLabel)}</span></div>`;}
-function renderDocumentBrandingFooter(){const brand=getDocumentBranding();return brand.footer||brand.showPage?`<footer class="print-document-footer">${escapeHtml(brand.footer)}${brand.showPage?`<span>${state.lang==="en"?"Page":"Página"} <span class="print-page-number"></span></span>`:""}</footer>`:"";}
+function getDocumentBranding(snapshot=null){const value=snapshot?.template||state.adminApi.data?.documentTemplate||{};return {logo:value.logo_data_url||"",primary:value.primary_color||"#6106A0",accent:value.accent_color||"#F557D3",text:value.text_color||"#190F34",footer:value.footer_text||"",showPage:value.show_page_number!==false,company:snapshot?.issuer_legal_name||state.adminApi.data?.tenant?.commercial_name||"ERClave",snapshot};}
+function renderDocumentBrandingHeader(moduleLabel,brand){const identity=brand.snapshot;return `<div>${brand.logo?`<img class="print-company-logo" src="${escapeAttribute(brand.logo)}" alt="${escapeAttribute(brand.company)}">`:identity?"":`<strong>${escapeHtml(brand.company)}</strong>`}${identity?`<strong>${escapeHtml(brand.company)}</strong><span>${t("documentIssuer")}: ${escapeHtml(identity.issuer_code)}${identity.issuer_tax_id?` · ${escapeHtml(identity.issuer_tax_id)}`:""}</span><span>${t("documentSociety")}: ${escapeHtml(identity.society_name)} · ${t("documentDivision")}: ${escapeHtml(identity.division_name)}</span>${identity.issuer_fiscal_address?`<span>${escapeHtml(identity.issuer_fiscal_address)}</span>`:""}`:""}<span>${escapeHtml(moduleLabel)}</span></div>`;}
+function renderDocumentBrandingFooter(brand){return brand.footer||brand.showPage?`<footer class="print-document-footer">${escapeHtml(brand.footer)}${brand.showPage?`<span>${state.lang==="en"?"Page":"Página"} <span class="print-page-number"></span></span>`:""}</footer>`:"";}
 
 async function openOrderPrintModal(orderId) {
   let order = mockDb.findOrder(orderId);
   if (!order && getApiMode()==="api") { await loadProductionApiData(); order=mockDb.findOrder(orderId); }
   if (!order) { showToast(t("documentRecordUnavailable")); return; }
+  if (getApiMode()==="api" && order.organizationContext?.division_ref_id && !order.presentationSnapshot) { showToast(t("documentPresentationUnavailable")); return; }
+  const brand=getDocumentBranding(order.presentationSnapshot);
   const recipe = getOrderRecipe(order);
   const validation = calculateRecipe(recipe, order.quantity);
   const cost = getOrderCostSnapshot(order, recipe);
@@ -10529,10 +10800,11 @@ async function openOrderPrintModal(orderId) {
         <button class="icon-button modal-close" type="button" aria-label="Cerrar">×</button>
       </div>
 
-      <section class="print-area" id="printArea" style="--document-primary:${getDocumentBranding().primary};--document-accent:${getDocumentBranding().accent};--document-text:${getDocumentBranding().text}">
+      <section class="print-area" id="printArea" style="--document-primary:${brand.primary};--document-accent:${brand.accent};--document-text:${brand.text}">
         <div class="print-header">
-          ${renderDocumentBrandingHeader("Producción · Orden de producción")}
+          ${renderDocumentBrandingHeader("Producción · Orden de producción",brand)}
           <h1>${escapeHtml(order.code||order.id)}</h1>
+          ${renderProductionOrderContext(order.organizationContext,state.lang)}
         </div>
         <div class="print-grid">
           <p><strong>Producto:</strong> ${escapeHtml(order.recipeName)}</p>
@@ -10543,8 +10815,8 @@ async function openOrderPrintModal(orderId) {
           <p><strong>Fecha requerida:</strong> ${escapeHtml(order.dueDate)}</p>
           <p><strong>Responsable:</strong> ${escapeHtml(order.responsible)}</p>
           <p><strong>Centro:</strong> ${escapeHtml(order.center)}</p>
-          <p><strong>Costo planeado:</strong> ${formatCurrency(cost.plannedCost)}</p>
-          <p><strong>Costo real:</strong> ${cost.actualCost == null ? "Pendiente de cierre" : formatCurrency(cost.actualCost)}</p>
+          <p><strong>Costo planeado:</strong> ${formatProductionOrderAmount(order,cost.plannedCost,order.originalPlannedCost)}</p>
+          <p><strong>Costo real:</strong> ${cost.actualCost == null ? "Pendiente de cierre" : formatProductionOrderAmount(order,cost.actualCost,order.originalActualCost)}</p>
         </div>
         ${(order.resources||[]).length?`<h3>Consumo y costo por recurso</h3>
         <table><thead><tr><th>Recurso</th><th>Tipo</th><th>Planeado</th><th>Real</th><th>Costo real</th></tr></thead><tbody>
@@ -10569,7 +10841,7 @@ async function openOrderPrintModal(orderId) {
           </tbody>
         </table>
         <p class="print-total"><strong>Costo estimado:</strong> ${formatCurrency(validation.totalCost)}</p>
-        ${renderDocumentBrandingFooter()}
+        ${renderDocumentBrandingFooter(brand)}
       </section>
 
       <div class="modal-actions no-print">
@@ -10590,6 +10862,13 @@ async function openSalesQuotePrintModal(quoteId) {
   let quote = mockDb.findModuleRecord("ventas", quoteId);
   if (!quote && getApiMode()==="api") { await loadSalesApiData(); quote=mockDb.findModuleRecord("ventas",quoteId); }
   if (!quote) { showToast(t("documentRecordUnavailable")); return; }
+  let presentation=quote.fields?.presentationSnapshot||null;
+  if (getApiMode()==="api" && quote.fields?.divisionRefId && !presentation) {
+    if (quote.status==="Aprobado") { showToast(t("documentPresentationUnavailable")); return; }
+    try { presentation=await getDocumentPresentation(quote.fields.divisionRefId); }
+    catch (error) { showApiError(error); return; }
+  }
+  const brand=getDocumentBranding(presentation);
   const customer = quote.fields?.customerId ? mockDb.findModuleRecord("ventas", quote.fields.customerId) : null;
   const lines = getQuoteLines(quote);
   modalContent.innerHTML = `
@@ -10602,9 +10881,9 @@ async function openSalesQuotePrintModal(quoteId) {
         <button class="icon-button modal-close" type="button" aria-label="${t("close")}">x</button>
       </div>
 
-      <section class="print-area" id="printArea" style="--document-primary:${getDocumentBranding().primary};--document-accent:${getDocumentBranding().accent};--document-text:${getDocumentBranding().text}">
+      <section class="print-area" id="printArea" style="--document-primary:${brand.primary};--document-accent:${brand.accent};--document-text:${brand.text}">
         <div class="print-header">
-          ${renderDocumentBrandingHeader(`${state.lang==="en"?"Sales":"Ventas"} · ${t("quoteDocument")}`)}
+          ${renderDocumentBrandingHeader(`${state.lang==="en"?"Sales":"Ventas"} · ${t("quoteDocument")}`,brand)}
           <h1>${escapeHtml(quote.code)}</h1>
         </div>
         <div class="print-grid">
@@ -10643,7 +10922,7 @@ async function openSalesQuotePrintModal(quoteId) {
         ${quote.fields?.notes ? `<p><strong>${t("notes")}:</strong> ${escapeHtml(quote.fields.notes)}</p>` : ""}
         <p class="print-total"><strong>${t("quoteSubtotal")}:</strong> ${formatSalesMoney(quote.fields?.subtotal,quote.fields?.currency)}</p>
         <p class="print-total"><strong>${t("quoteTotal")}:</strong> ${formatSalesMoney(quote.fields?.total,quote.fields?.currency)}</p>
-        ${renderDocumentBrandingFooter()}
+        ${renderDocumentBrandingFooter(brand)}
       </section>
 
       <div class="modal-actions no-print">
@@ -10917,10 +11196,10 @@ function render() {
   renderPanel();
   applyProductionActionPermissions();
   renderFlow();
-  renderContextBar();
   renderAuthControls();
   renderAuthGate();
   applyI18n();
+  renderContextBar();
   installListPagination(modulePanel, {
     navigation: t("paginationNavigation"),
     previous: t("paginationPrevious"),
@@ -11052,8 +11331,9 @@ function openServiceStartEvidence(order,targetStatus){
     try{
       await saveServiceEvidenceFromForm(form,order,"start",t);
       await updateProductionOrderStatus(order.id,{status:toApiOrderStatus(targetStatus),reason:"Service reception evidence recorded"});
+      order.status=targetStatus;
       closeModal();await loadProductionApiData();showToast(t("serviceEvidenceSaved"));
-    }catch(error){renderFormFeedback(form,[error]);}finally{button.disabled=false;}
+    }catch(error){renderFormFeedback(form,serviceEvidencePartialFeedback(order,error,t));}finally{button.disabled=false;}
   });
   form.querySelector('textarea').focus();
 }

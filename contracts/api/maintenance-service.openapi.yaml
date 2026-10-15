@@ -2,8 +2,8 @@ openapi: 3.1.0
 x-implementation-status: implemented
 info:
   title: ERClave Maintenance Service API
-  version: 1.0.0
-  summary: Corrective maintenance orders, assignments, labor and spare-parts requests.
+  version: 1.1.0
+  summary: 'CC-18 Local: Maintenance order folios allocated by Admin with managed/manual mode; CC-16 scoped orders and labor snapshots remain. Accounting remains off.'
 servers:
 - url: http://127.0.0.1:8012
 security:
@@ -13,219 +13,432 @@ tags:
 - name: Labor
 - name: SpareParts
 paths:
+  /v1/maintenance/orders/{id}/inventory-context:
+    get:
+      tags:
+      - maintenance
+      summary: Inventory Context
+      operationId: inventory_context_v1_maintenance_orders__id__inventory_context_get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: line_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Line Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceMaterialProofResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.material_request.create
+      - maintenance.material_request.reconcile
+      - maintenance.material_request.cancel
+      - maintenance.order.cancel
+      - inventory.movement.create
   /v1/maintenance/warehouse-material-requests:
     get:
       tags:
-      - SpareParts
-      operationId: listWarehouseMaintenanceMaterialRequests
-      summary: Pending spare-parts requests for Warehouse Movements, without technical order evidence.
-      x-required-module: maintenance
-      x-required-modules:
       - maintenance
-      - inventory
-      x-permissions: [inventory.movement.read]
+      summary: Warehouse Material Requests
+      operationId: warehouse_material_requests_v1_maintenance_warehouse_material_requests_get
       parameters:
-      - $ref: '#/components/parameters/TenantId'
       - name: limit
         in: query
+        required: false
         schema:
           type: integer
-          minimum: 1
           maximum: 100
+          minimum: 1
           default: 50
+          title: Limit
       - name: offset
         in: query
+        required: false
         schema:
           type: integer
           minimum: 0
           default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Pending requests ordered by creation and ID; issued and cancelled requests are excluded.
+          description: Successful Response
           content:
             application/json:
               schema:
-                type: object
-                required:
-                - data
-                - page
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WarehouseMaterialRequest'
-                  page:
-                    type: object
-                    required:
-                    - limit
-                    - offset
-                    - has_more
-                    properties:
-                      limit:
-                        type: integer
-                      offset:
-                        type: integer
-                      has_more:
-                        type: boolean
+                $ref: '#/components/schemas/WarehouseMaterialListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-required-modules:
+      - maintenance
+      - inventory
+      x-permissions:
+      - inventory.movement.read
   /v1/maintenance/material-requests/{id}/issue:
     post:
       tags:
-      - SpareParts
-      operationId: issueWarehouseMaintenanceMaterialRequest
-      summary: Warehouse authorizes and confirms delivery of all reserved request lines to the assigned technician.
-      description: Records immutable Inventory exits with the warehouse actor. Retries only unconfirmed lines with stable reservation keys. An
-        issued request is replayed without effects. Partial delivery quantities are not accepted. Resolve never issues materials.
-      x-required-module: maintenance
-      x-required-modules:
       - maintenance
-      - inventory
-      x-permissions: [inventory.movement.create]
-      requestBody:
+      summary: Issue Material Request
+      operationId: issue_material_request_v1_maintenance_material_requests__id__issue_post
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
         required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: false
-      parameters:
-      - $ref: '#/components/parameters/TenantId'
-      - $ref: '#/components/parameters/IdPath'
-      - $ref: '#/components/parameters/IdempotencyKey'
+              anyOf:
+              - $ref: '#/components/schemas/MaterialIssueRequest'
+              - type: 'null'
+              title: P
       responses:
         '200':
-          description: Current request, issued or needs_reconciliation with pending_operation issue; a pending state is not delivery success.
+          description: Successful Response
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/WarehouseMaterialRequest'
-        '403':
-          description: Warehouse movement permission or module is missing.
-        '404':
-          description: Request does not exist in this tenant.
-        '409':
-          description: Request is not issuable or another command owns its lock.
-  /v1/maintenance/material-requests/{id}/reject:
-    post:
-      tags:
-      - SpareParts
-      operationId: rejectWarehouseMaintenanceMaterialRequest
-      summary: Reject an unissued request with an audited reason and release its reservations without an exit.
+                $ref: '#/components/schemas/MaintenanceDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'Records immutable Inventory exits with the warehouse actor. Retries only unconfirmed lines with stable reservation keys. An
+        issued request is replayed without effects. Partial delivery quantities are not accepted. Resolve never issues materials.
+
+        CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and assignment
+        are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review or cancel/recovery
+        only. CC-14 material proofs and recovery are preserved.'
       x-required-module: maintenance
       x-required-modules:
       - maintenance
       - inventory
-      x-permissions: [inventory.movement.create]
+      x-permissions:
+      - inventory.movement.create
+  /v1/maintenance/material-requests/{id}/reject:
+    post:
+      tags:
+      - maintenance
+      summary: Reject Material Request
+      operationId: reject_material_request_v1_maintenance_material_requests__id__reject_post
       parameters:
-      - $ref: '#/components/parameters/TenantId'
-      - $ref: '#/components/parameters/IdPath'
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: false
-              required:
-              - reason
-              properties:
-                reason:
-                  type: string
-                  minLength: 3
-                  maxLength: 500
+              $ref: '#/components/schemas/MaterialRejectRequest'
       responses:
         '200':
-          description: Cancelled request or needs_reconciliation with pending_operation cancel; retry rejection to release remaining lines.
+          description: Successful Response
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/WarehouseMaterialRequest'
-        '403':
-          description: Warehouse movement permission or module is missing.
-        '404':
-          description: Request does not exist in this tenant.
-        '409':
-          description: Delivery has started or another command owns the request lock.
+                $ref: '#/components/schemas/MaintenanceDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-required-modules:
+      - maintenance
+      - inventory
+      x-permissions:
+      - inventory.movement.create
   /v1/maintenance/reports/{report_code}/export:
     get:
       tags:
-      - Reports
-      operationId: exportMaintenanceStandardReport
-      summary: Export a fixed Maintenance report as UTF-8 CSV.
-      x-required-module: maintenance
-      x-permissions: [maintenance.order.read, maintenance.time.read, maintenance.material_request.read]
+      - maintenance
+      summary: Export Report
+      operationId: export_report_v1_maintenance_reports__report_code__export_get
       parameters:
-      - $ref: '#/components/parameters/TenantId'
       - name: report_code
         in: path
         required: true
         schema:
           type: string
+          title: Report Code
       - name: lang
         in: query
+        required: false
         schema:
-          type: string
           enum:
           - es
           - en
+          type: string
           default: es
+          title: Lang
       - name: date_from
         in: query
+        required: false
         schema:
-          type: string
-          format: date
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Date From
       - name: date_to
         in: query
+        required: false
         schema:
-          type: string
-          format: date
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Date To
       - name: status
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
       - name: priority
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Priority
       - name: q
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Q
       - name: target_type
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Target Type
       - name: responsible_worker_id
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Responsible Worker Id
       - name: worker_id
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Worker Id
       - name: warehouse_id
         in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
         schema:
           type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: CSV export.
-        '204':
-          description: No rows matched the filters.
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.order.read
+      - maintenance.time.read
+      - maintenance.material_request.read
   /v1/maintenance/orders:
     get:
       tags:
-      - MaintenanceOrders
-      operationId: searchMaintenanceOrders
+      - maintenance
       summary: Orders
-      x-required-module: maintenance
-      x-permissions: [maintenance.order.read]
+      operationId: orders_v1_maintenance_orders_get
       parameters:
       - name: q
         in: query
@@ -280,27 +493,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ListResponse'
+                $ref: '#/components/schemas/MaintenanceDocumentListResponse'
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.order.read
       x-implementation-status: implemented
     post:
       tags:
-      - MaintenanceOrders
-      operationId: createMaintenanceOrder
+      - maintenance
       summary: Create Order
-      x-required-module: maintenance
-      x-permissions: [maintenance.order.create]
+      operationId: create_order_v1_maintenance_orders_post
       parameters:
       - name: X-Tenant-Id
         in: header
@@ -318,7 +529,7 @@ paths:
           title: Authorization
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -344,27 +555,27 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DataResponse'
+                $ref: '#/components/schemas/MaintenanceDocumentResponse'
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.order.create
       x-implementation-status: implemented
+      x-code-authority: 'CC-18 Local: Admin POST /v1/catalogs/code-sequences/maintenance.order/next after context validation; stable Idempotency-Key, managed or manual allocation, local tenant/code uniqueness. Existing order codes are never renumbered.'
   /v1/maintenance/orders/{id}:
     get:
       tags:
-      - MaintenanceOrders
-      operationId: getMaintenanceOrder
-      x-required-module: maintenance
-      x-permissions: [maintenance.order.read]
+      - maintenance
+      summary: Get Order
+      operationId: get_order_v1_maintenance_orders__id__get
       parameters:
       - name: id
         in: path
@@ -400,28 +611,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DataResponse'
+                $ref: '#/components/schemas/MaintenanceDocumentResponse'
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      summary: Get Order
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.order.read
       x-implementation-status: implemented
     patch:
       tags:
-      - MaintenanceOrders
-      operationId: updateMaintenanceOrder
+      - maintenance
       summary: Update Order
-      x-required-module: maintenance
-      x-permissions: [maintenance.order.update]
+      operationId: update_order_v1_maintenance_orders__id__patch
       parameters:
       - name: id
         in: path
@@ -437,7 +645,7 @@ paths:
           title: X-Tenant-Id
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -471,29 +679,26 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DataResponse'
+                $ref: '#/components/schemas/MaintenanceDocumentResponse'
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.order.update
       x-implementation-status: implemented
   /v1/maintenance/orders/{id}/transitions:
     post:
       tags:
-      - MaintenanceOrders
-      operationId: transitionMaintenanceOrder
+      - maintenance
       summary: Transition Order
-      x-required-module: maintenance
-      x-permissions: [maintenance.order.request, maintenance.order.assign, maintenance.order.start, maintenance.order.wait_for_parts, maintenance.order.resume, maintenance.order.resolve, maintenance.order.close, maintenance.order.reopen, maintenance.order.cancel]
-      x-permission-mode: by-requested-transition
+      operationId: transition_order_v1_maintenance_orders__id__transitions_post
       parameters:
       - name: id
         in: path
@@ -517,7 +722,7 @@ paths:
           title: Authorization
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -543,138 +748,464 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DataResponse'
+                $ref: '#/components/schemas/MaintenanceDocumentResponse'
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.order.request
+      - maintenance.order.assign
+      - maintenance.order.start
+      - maintenance.order.wait_for_parts
+      - maintenance.order.resume
+      - maintenance.order.resolve
+      - maintenance.order.close
+      - maintenance.order.reopen
+      - maintenance.order.cancel
+      x-permission-mode: by-requested-transition
       x-implementation-status: implemented
   /v1/maintenance/orders/{id}/reconcile:
     post:
       tags:
-      - MaintenanceOrders
-      operationId: reconcileMaintenanceOrder
-      summary: Retry the durable pending Production operation; material issues must be reconciled by Warehouse from Movements.
-      x-required-module: maintenance
-      x-permissions: [maintenance.order.reconcile]
+      - maintenance
+      summary: Reconcile Order
+      operationId: reconcile_order_v1_maintenance_orders__id__reconcile_post
       parameters:
-      - $ref: '#/components/parameters/TenantId'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Reconciliation attempted and current durable state returned.
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.order.reconcile
   /v1/maintenance/orders/{id}/time-entries:
     get:
       tags:
-      - Labor
-      operationId: listMaintenanceTimeEntries
-      x-required-module: maintenance
-      x-permissions: [maintenance.time.read]
+      - maintenance
+      summary: Time Entries
+      operationId: time_entries_v1_maintenance_orders__id__time_entries_get
       parameters:
-      - $ref: '#/components/parameters/TenantId'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdPath'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Time entries.
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceDocumentListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.time.read
     post:
       tags:
-      - Labor
-      operationId: createMaintenanceTimeEntry
-      x-required-module: maintenance
-      x-permissions: [maintenance.time.create]
+      - maintenance
+      summary: Create Time
+      operationId: create_time_v1_maintenance_orders__id__time_entries_post
       parameters:
-      - $ref: '#/components/parameters/TenantId'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TimeEntryCreateRequest'
+              $ref: '#/components/schemas/TimeEntryCreate'
       responses:
         '201':
-          description: Time entry created.
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.time.create
   /v1/maintenance/orders/{id}/material-requests:
     get:
       tags:
-      - SpareParts
-      operationId: listMaintenanceMaterialRequests
-      x-required-module: maintenance
-      x-permissions: [maintenance.material_request.read]
+      - maintenance
+      summary: Material Requests
+      operationId: material_requests_v1_maintenance_orders__id__material_requests_get
       parameters:
-      - $ref: '#/components/parameters/TenantId'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdPath'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Material requests and Inventory reconciliation status.
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceDocumentListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.material_request.read
     post:
       tags:
-      - SpareParts
-      operationId: createMaintenanceMaterialRequest
-      summary: Create a multi-line internal request against a spare-parts warehouse.
-      description: Creation and Inventory reservation are serialized with material recovery, cancellation and issue for the same tenant and order. A concurrent command returns command_in_progress.
-      x-required-module: maintenance
-      x-permissions: [maintenance.material_request.create]
+      - maintenance
+      summary: Create Material Request
+      operationId: create_material_request_v1_maintenance_orders__id__material_requests_post
       parameters:
-      - $ref: '#/components/parameters/TenantId'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MaterialRequestCreateRequest'
+              $ref: '#/components/schemas/MaterialRequestCreate'
       responses:
         '201':
-          description: Material request created and ready for Inventory reservation.
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'Creation and Inventory reservation are serialized with material recovery, cancellation and issue for the same tenant and order.
+        A concurrent command returns command_in_progress.
+
+        CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and assignment
+        are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review or cancel/recovery
+        only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.material_request.create
   /v1/maintenance/material-requests/{id}/cancel:
     post:
       tags:
-      - SpareParts
-      operationId: cancelMaintenanceMaterialRequest
-      x-required-module: maintenance
-      x-permissions: [maintenance.material_request.cancel]
+      - maintenance
+      summary: Cancel Material Request
+      operationId: cancel_material_request_v1_maintenance_material_requests__id__cancel_post
       parameters:
-      - $ref: '#/components/parameters/TenantId'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Request cancelled and active reservations released.
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.material_request.cancel
   /v1/maintenance/material-requests/{id}/reconcile:
     post:
       tags:
-      - SpareParts
-      operationId: reconcileMaintenanceMaterialRequest
-      summary: Retry only the pending reservation or release lines using stable Inventory keys.
-      description: Resumes needs_reconciliation, interrupted processing/reserve and cancelling/cancel under order and request locks. The same unfinished idempotency key can resume when no command is running. Completed requests return without Inventory effects. Reservations never issue stock; Warehouse confirms delivery separately.
-      x-required-module: maintenance
-      x-permissions: [maintenance.material_request.reconcile]
+      - maintenance
+      summary: Reconcile Material Request
+      operationId: reconcile_material_request_v1_maintenance_material_requests__id__reconcile_post
       parameters:
-      - $ref: '#/components/parameters/TenantId'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Material reconciliation attempted and current durable state returned.
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'Resumes needs_reconciliation, interrupted processing/reserve and cancelling/cancel under order and request locks. The same
+        unfinished idempotency key can resume when no command is running. Completed requests return without Inventory effects. Reservations never
+        issue stock; Warehouse confirms delivery separately.
+
+        CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and assignment
+        are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review or cancel/recovery
+        only. CC-14 material proofs and recovery are preserved.'
+      x-required-module: maintenance
+      x-permissions:
+      - maintenance.material_request.reconcile
   /v1/maintenance/returnable-materials:
     get:
       tags:
@@ -733,15 +1264,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
       x-implementation-status: implemented
       x-required-module: maintenance
-      x-permissions: [inventory.movement.read, maintenance.material_request.create]
+      x-permissions:
+      - inventory.movement.read
+      - maintenance.material_request.create
       x-required-modules:
       - maintenance
       - inventory
@@ -792,15 +1322,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      description: 'Validates terminal source and remaining quantity against persisted issue; returns source_code, immutable organization_context
+        (null for legacy), and unit_cost_snapshot as an exact decimal string or null. Scope is checked against the source snapshot.
+
+        CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and assignment
+        are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review or cancel/recovery
+        only. CC-14 material proofs and recovery are preserved.'
       x-implementation-status: implemented
       x-required-module: maintenance
-      x-permissions: [inventory.movement.create, maintenance.material_request.create]
+      x-permissions:
+      - inventory.movement.create
+      - maintenance.material_request.create
       x-required-modules:
       - maintenance
       - inventory
@@ -827,7 +1359,7 @@ paths:
           title: Authorization
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -859,18 +1391,88 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
       x-implementation-status: implemented
       x-required-module: maintenance
-      x-permissions: [inventory.movement.create]
+      x-permissions:
+      - inventory.movement.create
       x-required-modules:
       - maintenance
       - inventory
+  /v1/maintenance/document-divisions:
+    get:
+      tags:
+      - maintenance
+      summary: Document Divisions
+      operationId: listMaintenanceDocumentDivisions
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'CC-16 Local: immutable order Division/Society and current scope before reads, mutations and replay; confirmed RH tariff and
+        assignment are frozen for worker/time, exact UTC duration is costed in Society currency. Legacy null contexts remain full-scope review
+        or cancel/recovery only. CC-14 material proofs and recovery are preserved.'
+      x-permissions:
+      - maintenance.order.create
+      x-required-module: maintenance
 components:
   securitySchemes:
     bearerAuth:
@@ -1024,7 +1626,6 @@ components:
     MaintenanceOrderCreateRequest:
       type: object
       required:
-      - code
       - target_type
       - priority
       - title
@@ -1032,9 +1633,12 @@ components:
       - location
       properties:
         code:
-          type: string
+          type:
+          - string
+          - 'null'
           minLength: 1
           maxLength: 60
+          description: Optional manual code; Admin decides whether the effective sequence is managed or manual.
         target_type:
           type: string
           enum:
@@ -1218,6 +1822,17 @@ components:
             id:
               type: string
               maxLength: 40
+            code:
+              type: string
+            code_mode:
+              type:
+              - string
+              - 'null'
+              enum:
+              - managed
+              - manual
+              - null
+              description: Null for orders created before CC-18.
             status:
               type: string
               enum:
@@ -1313,11 +1928,21 @@ components:
       title: ValidationError
     OrderCreate:
       properties:
+        division_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Division Ref Id
         code:
-          type: string
-          maxLength: 60
-          minLength: 1
+          anyOf:
+          - type: string
+            maxLength: 60
+            minLength: 1
+          - type: 'null'
           title: Code
+          description: Optional manual code; managed sequences are assigned by Admin.
         target_type:
           type: string
           enum:
@@ -1374,7 +1999,6 @@ components:
           title: Safety Notes
       type: object
       required:
-      - code
       - target_type
       - title
       - description
@@ -1529,3 +2153,289 @@ components:
       required:
       - return_id
       title: MaterialReturnReconcile
+    MaterialIssueRequest:
+      properties: {}
+      additionalProperties: false
+      type: object
+      title: MaterialIssueRequest
+    MaterialLine:
+      properties:
+        item_id:
+          type: string
+          title: Item Id
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+        unit_code:
+          type: string
+          maxLength: 20
+          minLength: 1
+          title: Unit Code
+      type: object
+      required:
+      - item_id
+      - quantity
+      - unit_code
+      title: MaterialLine
+    MaterialRejectRequest:
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - reason
+      title: MaterialRejectRequest
+    MaterialRequestCreate:
+      properties:
+        warehouse_id:
+          type: string
+          title: Warehouse Id
+        lines:
+          items:
+            $ref: '#/components/schemas/MaterialLine'
+          type: array
+          maxItems: 100
+          minItems: 1
+          title: Lines
+      type: object
+      required:
+      - warehouse_id
+      - lines
+      title: MaterialRequestCreate
+    TimeEntryCreate:
+      properties:
+        expected_position_assignment_revision:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Expected Position Assignment Revision
+        worker_id:
+          type: string
+          title: Worker Id
+        started_at:
+          type: string
+          format: date-time
+          title: Started At
+        ended_at:
+          type: string
+          format: date-time
+          title: Ended At
+        notes:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Notes
+      type: object
+      required:
+      - worker_id
+      - started_at
+      - ended_at
+      title: TimeEntryCreate
+    WarehouseMaterialListResponse:
+      properties:
+        data:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Data
+        page:
+          $ref: '#/components/schemas/WarehouseMaterialPage'
+      type: object
+      required:
+      - data
+      - page
+      title: WarehouseMaterialListResponse
+    WarehouseMaterialPage:
+      properties:
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+        has_more:
+          type: boolean
+          title: Has More
+      type: object
+      required:
+      - limit
+      - offset
+      - has_more
+      title: WarehouseMaterialPage
+    MaintenanceOrganizationContext:
+      additionalProperties: false
+      properties:
+        cost_currency:
+          anyOf:
+          - pattern: ^[A-Z]{3}$
+            type: string
+          - type: 'null'
+          default: null
+          title: Cost Currency
+        division_ref_id:
+          maxLength: 40
+          minLength: 1
+          title: Division Ref Id
+          type: string
+        society_ref_id:
+          maxLength: 40
+          minLength: 1
+          title: Society Ref Id
+          type: string
+        division_code:
+          maxLength: 120
+          minLength: 1
+          title: Division Code
+          type: string
+        division_name:
+          maxLength: 240
+          minLength: 1
+          title: Division Name
+          type: string
+      required:
+      - division_ref_id
+      - society_ref_id
+      - division_code
+      - division_name
+      title: OperationalContext
+      type: object
+    MaintenanceLaborCostSnapshot:
+      type: object
+      required:
+      - worker_id
+      - labor_position_id
+      - hourly_cost
+      - currency
+      - society_ref_id
+      - duration_seconds
+      - labor_cost
+      - rounding_rule
+      properties:
+        worker_id:
+          type: string
+        labor_position_id:
+          type: string
+        position_code:
+          type:
+          - string
+          - 'null'
+          description: RH position code frozen for new time entries; null for historical snapshots.
+        hourly_cost:
+          type: string
+        currency:
+          type: string
+        society_ref_id:
+          type: string
+        duration_seconds:
+          type: string
+        labor_cost:
+          type: string
+        rounding_rule:
+          const: half_up_6
+        worker_assignment_revision:
+          type: integer
+        position_assignment_revision:
+          type: integer
+        tariff_confirmed_at:
+          type: string
+          format: date-time
+        minutes_per_worker:
+          type: integer
+    MaintenanceDocumentRead:
+      type: object
+      additionalProperties: true
+      properties:
+        code:
+          type: string
+        code_mode:
+          type:
+          - string
+          - 'null'
+          enum:
+          - managed
+          - manual
+          - null
+          description: Assigned sequence mode; null for pre-CC-18 history.
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/MaintenanceOrganizationContext'
+          - type: 'null'
+        worker_context_snapshot:
+          type:
+          - object
+          - 'null'
+        labor_cost_snapshot:
+          anyOf:
+          - $ref: '#/components/schemas/MaintenanceLaborCostSnapshot'
+          - type: 'null'
+    MaintenanceDocumentResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          $ref: '#/components/schemas/MaintenanceDocumentRead'
+    MaintenanceDocumentListResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaintenanceDocumentRead'
+    MaintenanceMaterialProofResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          type: object
+          required:
+          - request_id
+          - order_id
+          - organization_context
+          - warehouse_id
+          - inventory_item_id
+          - quantity
+          - unit
+          - line_id
+          - line_status
+          - request_status
+          - order_status
+          - source
+          properties:
+            organization_context:
+              anyOf:
+              - $ref: '#/components/schemas/MaintenanceOrganizationContext'
+              - type: 'null'
+            quantity:
+              type:
+              - number
+              - string
+            unit_cost_snapshot:
+              type:
+              - number
+              - string
+              - 'null'
+            source:
+              type: object
+          additionalProperties: true
+x-transport-policy:
+  implementation-status: local-only
+  operation-budget-seconds: 25
+  budget-enforcement: cooperative-http-steps-not-database-cancellation
+  request-budget-header: X-Request-Timeout-Ms
+  request-budget-unit: milliseconds
+  request-budget-rule: optional-positive-finite-value-can-only-reduce-budget
+  correlation-header: X-Correlation-Id
+  error-dependency-field: error.details.dependency_service
+  automatic-retries: false

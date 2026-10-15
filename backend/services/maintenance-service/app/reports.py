@@ -14,11 +14,16 @@ def _query(repository,sql,params):
 
 def _where(filters,mapping,params,alias="x"):
     where=[f"{alias}.tenant_id=:tenant_id"]
+    if filters.get('divisions') is not None:
+        context_alias=filters.get('scope_alias','x')
+        where.append(f"{context_alias}.organization_context->>'division_ref_id'=any(:divisions)")
+        params['divisions']=filters['divisions']
     for key,expr in mapping.items():
         if filters.get(key) not in (None,""):where.append(expr);params[key]=filters[key]
     return where
 
 def build_report(repository,tenant_id,report_code,filters):
+    filters={**filters,'scope_alias':'o' if report_code=='labor-times' else 'x'}
     if report_code not in REPORT_PERMISSIONS:raise ErclaveError("report_not_found","Maintenance report does not exist.",status_code=404)
     params={"tenant_id":tenant_id};stamp=date.today().isoformat()
     if report_code=="orders":
@@ -37,6 +42,7 @@ def build_report(repository,tenant_id,report_code,filters):
         columns=[C("order_code","Orden","Order"),C("warehouse_name","Almacén","Warehouse"),C("request_status","Estatus de solicitud","Request status"),C("line_number","Partida","Line"),C("item_code","Refacción","Spare part"),C("item_name","Nombre","Name"),C("quantity","Cantidad entregada","Issued quantity"),C("returned_quantity","Cantidad devuelta","Returned quantity"),C("unit_code","Unidad","Unit"),C("unit_cost_snapshot","Costo unitario","Unit cost"),C("line_cost","Costo total","Total cost"),C("line_status","Estatus de partida","Line status"),C("created_at","Solicitada","Requested")]
     else:
         where=_where(filters,{"worker_id":"x.worker_ref_id=:worker_id","date_from":"x.started_at::date>=:date_from","date_to":"x.started_at::date<=:date_to","status":"o.status=:status"},params)
-        rows=_query(repository,f"select o.code order_code,o.title,o.status order_status,x.worker_name_snapshot worker_name,x.started_at,x.ended_at,x.minutes,x.notes,x.created_at from maintenance.time_entries x join maintenance.orders o on o.id=x.order_id and o.tenant_id=x.tenant_id where {' and '.join(where)} order by x.started_at desc",params)
+        rows=_query(repository,f"select o.code order_code,o.title,o.status order_status,x.worker_name_snapshot worker_name,x.started_at,x.ended_at,x.minutes,x.notes,x.created_at,x.labor_cost_snapshot->>'hourly_cost' hourly_cost,x.labor_cost_snapshot->>'currency' cost_currency,x.labor_cost_snapshot->>'labor_cost' labor_cost from maintenance.time_entries x join maintenance.orders o on o.id=x.order_id and o.tenant_id=x.tenant_id where {' and '.join(where)} order by x.started_at desc",params)
         columns=[C("order_code","Orden","Order"),C("title","Título","Title"),C("order_status","Estatus de orden","Order status"),C("worker_name","Trabajador","Worker"),C("started_at","Inicio","Start"),C("ended_at","Fin","End"),C("minutes","Minutos","Minutes"),C("notes","Notas","Notes"),C("created_at","Capturado","Captured")]
+    if report_code=='labor-times':columns.extend([C('hourly_cost','Tarifa por hora','Hourly cost'),C('cost_currency','Moneda de costo','Cost currency'),C('labor_cost','Costo de tiempo','Labor cost')])
     return ReportResult(f"maintenance-{report_code}-{stamp}.csv",columns,rows)

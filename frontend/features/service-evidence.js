@@ -43,3 +43,15 @@ export async function downloadServiceEvidence(orderId,fileId){
   if(!result.blob)return;
   const url=URL.createObjectURL(result.blob),anchor=document.createElement('a');anchor.href=url;anchor.download=result.filename||'evidence';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+
+// Only acknowledge responses already confirmed; a failed later request can be ambiguous.
+export function serviceEvidencePartialFeedback(order, error, t, { progress = false, started = false } = {}) {
+  if (!order.isService) return [error];
+  const messages = [];
+  if (hasServiceEvidence(order, "start")) messages.push(t("serviceEvidenceStartConfirmed"));
+  if (hasServiceEvidence(order, "finish")) messages.push(t("serviceEvidenceFinishConfirmed"));
+  if (!messages.length) return [error];
+  if (started) messages.push(t("serviceEvidenceStateConfirmed"));
+  messages.push(t(progress ? "serviceEvidenceProgressUnconfirmed" : "serviceEvidenceTransitionUnconfirmed"));
+  return [messages.join(" "), error];
+}

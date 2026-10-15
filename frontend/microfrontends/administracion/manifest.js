@@ -6,6 +6,9 @@ export const manifest = {
   service: "admin-service",
   implementationStatus: "implemented",
   permissions: [
+    "admin.society.read", "admin.society.create", "admin.society.update", "admin.society.status",
+    "admin.division.read", "admin.division.create", "admin.division.update", "admin.division.status",
+    "admin.fiscal_issuer.read", "admin.fiscal_issuer.create", "admin.fiscal_issuer.update", "admin.fiscal_issuer.status",
     "admin.tenant.read",
     "admin.entitlement.manage",
     "admin.user.read", "admin.user.invite", "admin.user.update", "admin.user.disable", "admin.user.delete",

@@ -8,9 +8,16 @@ for name in list(sys.modules):
     if name=="app" or name.startswith("app."): del sys.modules[name]
 main=importlib.import_module("app.main"); repos=importlib.import_module("app.repositories"); schemas=importlib.import_module("app.schemas"); auth=importlib.import_module("app.authorization")
 from erclave_common.config import Settings
+from erclave_common.business_codes import derived_manual_code,get_business_code_client
+reservation_context=importlib.import_module("app.reservation_context")
+class LegacyReservationContextClient(reservation_context.ReservationContextClient):
+    def production_context(self,*args): return None
 app=main.app; TENANT="ten_demo"
 
 class FakeRepo:
+    def get_movement(self,t,i):return None
+    def warehouse_dimension(self,t,i):return None
+    def get_reservation(self,t,i): return None
     def list_warehouses(self,t,q=None): return [] if t!=TENANT else [schemas.WarehouseRead(id="whs_1",code="mp",name="Materias primas",type="raw_materials",status="active",business_center="Matriz",location="Nave 1",owner="Almacenes")]
     def create_warehouse(self,t,p,k,h,a): return schemas.WarehouseRead(id="whs_1",status="active",**p.model_dump()) if t==TENANT else None
     def update_warehouse(self,t,i,p,k,h,a): return None
@@ -25,11 +32,11 @@ class FakeRepo:
         if p.suggested_warehouse_id=="whs_other": raise ValueError("suggested_warehouse_invalid")
         return None
     def list_movements(self,t,item=None,warehouse=None): return []
-    def create_movement(self,t,p,k,h,a):
+    def create_movement(self,t,p,k,h,a,**kwargs):
         if p.movement_type=="exit": raise ValueError("insufficient_stock")
         return schemas.MovementRead(id="mov_1",movement_code="MOV-1",movement_type=p.movement_type,inventory_item_id=p.inventory_item_id,warehouse_id=p.warehouse_id,direction="in",quantity=p.quantity,unit=p.unit,reason=p.reason,source_type=p.source.type,source_id=p.source.id,status="recorded",occurred_at=p.occurred_at)
     def list_finished_goods_receipts(self,t): return [schemas.FinishedGoodsReceiptSummaryRead(production_order_id="ord_1",received_quantity=2)] if t==TENANT else []
-    def create_finished_goods_receipt(self,t,p,order,product,k,h,a):
+    def create_finished_goods_receipt(self,t,p,order,product,k,h,a,**kwargs):
         movement=schemas.MovementRead(id="mov_fg",movement_code="MOV-FG",movement_type="entry",inventory_item_id="itm_fg",warehouse_id=p.warehouse_id,direction="in",quantity=p.quantity,unit="H87",unit_cost=20,reason="Recepcion",source_type="production_order_receipt",source_id=order["id"],status="recorded",occurred_at=p.received_at)
         return schemas.FinishedGoodsReceiptRead(production_order_id=order["id"],production_order_code=order["code"],product_service_id=product["id"],product_service_code=product["code"],product_service_name=product["name"],inventory_item_id="itm_fg",inventory_item_code="pt",inventory_item_name="Producto terminado",warehouse_id=p.warehouse_id,unit="H87",ordered_quantity=10,received_quantity=p.quantity,cumulative_received_quantity=p.quantity,remaining_quantity=10-p.quantity,movement=movement)
     def reverse_movement(self,*args): return None
@@ -42,7 +49,7 @@ class FakeRepo:
         return schemas.AvailabilityCheckRead(source=p.source,available=True,items=[row])
     def create_reservation(self,t,p,k,h,a):return schemas.ReservationRead(id="rsv_1",inventory_item_id=p.inventory_item_id,warehouse_id=p.warehouse_id,quantity=p.quantity,unit=p.unit,unit_cost_snapshot=12,source_type=p.source.type,source_id=p.source.id,source_line_id=p.source.line_id,status="active",created_at=datetime.now(timezone.utc))
     def release_reservation(self,t,i,reason,k,h,a,allowed_sources=None):return schemas.ReservationRead(id=i,inventory_item_id="itm_1",warehouse_id="whs_1",quantity=2,unit="kg",unit_cost_snapshot=12,source_type="production_order",source_id="ord_1",source_line_id="line_1",status="released",created_at=datetime.now(timezone.utc))
-    def consume_reservation(self,t,i,reason,k,h,a,quantity=None,allowed_sources=None):return schemas.MovementRead(id="mov_consume",movement_code="MOV-C",movement_type="exit",inventory_item_id="itm_1",warehouse_id="whs_1",direction="out",quantity=quantity or 2,unit="kg",unit_cost=12,reason=reason,source_type="reservation",source_id=i,status="recorded",occurred_at=datetime.now(timezone.utc))
+    def consume_reservation(self,t,i,reason,k,h,a,quantity=None,allowed_sources=None,folio=None):return schemas.MovementRead(id="mov_consume",movement_code="MOV-C",movement_type="exit",inventory_item_id="itm_1",warehouse_id="whs_1",direction="out",quantity=quantity or 2,unit="kg",unit_cost=12,reason=reason,source_type="reservation",source_id=i,status="recorded",occurred_at=datetime.now(timezone.utc))
 
 class FakeUnitCatalogClient:
     def require_active(self,tenant_id,code,authorization=None): return code.upper()
@@ -52,7 +59,7 @@ class FakeUnitCatalogClient:
 class FakeProductionOrderClient:
     status="completed"
     def get_finished_goods_candidate(self,tenant_id,order_id,authorization=None): return {"order":{"id":order_id,"code":"OP-1","product_service_id":"prs_1","quantity":10,"unit":"H87","status":self.status,"unit_cost":20},"product":{"id":"prs_1","code":"VELA","name":"Vela","type":"product","status":"active","base_unit":"H87","inventory_item_id":"itm_fg"}}
-def client(): app.dependency_overrides[repos.get_inventory_repository]=lambda:FakeRepo(); app.dependency_overrides[auth.get_settings]=lambda:Settings(auth_mode="demo"); app.dependency_overrides[auth.get_unit_catalog_client]=lambda:FakeUnitCatalogClient(); app.dependency_overrides[auth.get_production_order_client]=lambda:FakeProductionOrderClient(); return TestClient(app)
+def client(): app.dependency_overrides[reservation_context.get_reservation_context_client]=lambda:LegacyReservationContextClient(Settings()); app.dependency_overrides[repos.get_inventory_repository]=lambda:FakeRepo(); app.dependency_overrides[auth.get_settings]=lambda:Settings(auth_mode="demo"); app.dependency_overrides[auth.get_unit_catalog_client]=lambda:FakeUnitCatalogClient(); app.dependency_overrides[auth.get_production_order_client]=lambda:FakeProductionOrderClient(); return TestClient(app)
 def teardown_function(): app.dependency_overrides.clear()
 def headers(command=False,tenant=TENANT): return {"X-Tenant-Id":tenant,"X-Actor-Id":"usr_demo",**({"Idempotency-Key":"test-1"} if command else {})}
 
@@ -80,6 +87,25 @@ def test_recipe_item_filter_is_tenant_scoped():
     assert client().get("/v1/inventory/items?use_in_recipe=true",headers=headers(tenant="ten_other")).json()["data"]==[]
 def test_negative_stock_is_rejected():
     response=client().post("/v1/inventory/movements",headers=headers(True),json={"movement_type":"exit","inventory_item_id":"itm_1","warehouse_id":"whs_1","quantity":10,"unit":"kg","reason":"Consumo manual","source":{"type":"manual","id":"DOC-1"},"occurred_at":datetime.now(timezone.utc).isoformat()}); assert response.status_code==409; assert response.json()["error"]["code"]=="insufficient_stock"
+def test_manual_movement_passes_stable_code_to_admin_authority():
+    c=client();allocations=[]
+    class Codes:
+        def allocate(self,t,kind,authorization,key,manual_code=None):
+            allocations.append((t,kind,key,manual_code))
+            return manual_code
+    class Repo(FakeRepo):
+        def create_movement(self,t,p,k,h,a,folio=None,**kwargs):
+            code=folio("movement.create",k,p.manual_code)
+            assert code=="MOV-LOCAL-1"
+            return super().create_movement(t,p,k,h,a)
+    app.dependency_overrides[repos.get_inventory_repository]=lambda:Repo()
+    app.dependency_overrides[get_business_code_client]=lambda:Codes()
+    payload={"movement_type":"entry","inventory_item_id":"itm_1","warehouse_id":"whs_1","quantity":2,"unit":"kg","unit_cost":1,"reason":"Entrada manual","source":{"type":"manual","id":"DOC-1"},"occurred_at":datetime.now(timezone.utc).isoformat(),"manual_code":"MOV-LOCAL-1"}
+    response=c.post("/v1/inventory/movements",headers=headers(True),json=payload)
+    assert response.status_code==201
+    assert allocations==[(TENANT,"inventory.movement","inventory.movement.create:test-1","MOV-LOCAL-1")]
+    assert derived_manual_code("REV",TENANT,"original-1")==derived_manual_code("REV",TENANT,"original-1")
+    assert derived_manual_code("REV",TENANT,"original-1")!=derived_manual_code("REV",TENANT,"original-2")
 def test_lists_and_creates_finished_goods_receipts():
     c=client();listed=c.get("/v1/inventory/finished-goods-receipts",headers=headers());assert listed.status_code==200 and listed.json()["data"][0]["production_order_id"]=="ord_1"
     created=c.post("/v1/inventory/finished-goods-receipts",headers={**headers(True),"Idempotency-Key":"fg-1"},json={"production_order_id":"ord_1","warehouse_id":"whs_1","quantity":4,"received_at":datetime.now(timezone.utc).isoformat(),"notes":"Recepcion fisica"})
@@ -125,7 +151,7 @@ def test_only_warehouse_permission_consumes_production_reservations():
         permissions=["production.order.start","production.order.resume"]
         def get_context(self,*args):return {"tenant":{"id":TENANT,"status":"active"},"user":{"id":"usr_warehouse"},"active_modules":["production","inventory"],"permissions":self.permissions}
     class SourceRepo(FakeRepo):
-        def consume_reservation(self,t,i,reason,k,h,a,quantity=None,allowed_sources=None):
+        def consume_reservation(self,t,i,reason,k,h,a,quantity=None,allowed_sources=None,folio=None):
             assert "production_order" in allowed_sources
             assert "sales_order" in allowed_sources
             return super().consume_reservation(t,i,reason,k,h,a,quantity,allowed_sources)

@@ -1,3 +1,7 @@
+> **Clasificación documental: histórico.** Handoff de su corte, sustituido como entrada operativa por [INICIO_SESION.md](INICIO_SESION.md). Consultar [ESTADO_ACTUAL.md](ESTADO_ACTUAL.md) y [PENDIENTES.md](PENDIENTES.md); las versiones, acciones y autorizaciones de abajo no se trasladan automáticamente al presente. Conciliación: 2026-10-07.
+
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](ESTADO_ACTUAL.md).
+
 # Continuidad desde otra computadora — CHG-269
 
 Fecha: 2026-09-09. Repositorio: https://github.com/ChemaPsan/eslaclave-erclave.

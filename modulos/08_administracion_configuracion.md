@@ -1,14 +1,55 @@
 # ERClave — Módulo de Administración y Configuración
 
-## Feedback de formularios Local CHG-272
+## Selector de Sociedad / División · CHG-329 · Local
 
-Alta de rol conserva codigo, nombre y descripcion al fallar. Backoffice integra login, onboarding, editor y filtros; no persiste contrasenas para restaurar la captura. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+La barra superior presenta la Sociedad y División activas en un control dedicado. La lista muestra los nombres completos y código de cada División autorizada; elegir otra revalida la sesión y conserva la preferencia por usuario/tenant. Soporta mouse, foco de teclado y Escape. Centro de costos se consulta y edita desde Administración → Organización → Divisiones → Centros de costos; no forma parte del selector global.
 
-Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+## CC-18 - CHG-323 - Local
+
+Admin controla las secuencias de Puestos RH, movimientos Inventory, proveedor/requisicion/orden/recepcion Purchasing y orden Maintenance. El consumidor autorizado consulta su configuracion y solicita el siguiente folio con clave idempotente. En modo manual el operador captura el codigo; movimientos automaticos Inventory derivan uno estable del origen. Admin filtra tipos por permiso. Los codigos previos permanecen intactos; CC-20 y QA pendientes.
+
+
+## Vigencia y relaciones · conciliación CHG-311
+
+Núcleo administrativo desplegado en QA. Sólo Local: organización normalizada, sesión y alcances por División, plantilla por alcance, catálogo de Centros de costos, presentación histórica CC-17 y consumidores de folios CC-18. CC-19 aún requiere mapeo y asignación de datos reales; CC-20 requiere aceptación integrada.
+
+Estado por ambiente: [ESTADO_ACTUAL](../docs/contexto/ESTADO_ACTUAL.md). Brechas y cierre: [CONTROL_CONTABLE](../docs/contexto/CONTROL_CONTABLE.md). Relación operativa: [06_costos_centros_de_costos](06_costos_centros_de_costos.md). Contrato/regla: [cont_04_configuracion_por_alcance](../docs/arquitectura/cont_04_configuracion_por_alcance.md). Navegación: [índice de módulos](README.md).
+
+Las referencias CHG conservan procedencia; no se suman como pendientes vigentes. La historia de implementación está en [TRAZABILIDAD](../TRAZABILIDAD.md). Costos y tarifas deben usar moneda base de Sociedad (CHG-309); su aplicación se verifica por flujo en el control, sin reinterpretar historia. Centro requerido sólo donde el flujo de imputación esté habilitado.
+
+**CHG-297 Local:** [CONT-05 catálogo básico](../docs/arquitectura/cont_05_catalogo_centros.md) ya permite administrar centros por División desde Administración, con dueño Costing y permisos propios. No habilita cálculos ni Accounting. Centro obligatorio únicamente por flujo de imputación habilitado; asignaciones CONT-07 implementadas y consumidores CONT-08 parciales según CONTROL_CONTABLE.
+
+**CHG-296 Local:** [plantilla por Sociedad/División y disponibilidad de capacidades](../docs/arquitectura/cont_04_configuracion_por_alcance.md). Herencia y ajustes administrativos disponibles. CHG-322 integró la presentación histórica de cotizaciones y órdenes de producción; los demás productores se revisan según su contrato y la aceptación integrada sigue pendiente.
+
+
+**CHG-294 — modularidad opcional:** organización y operación no requieren Accounting. Catálogo básico de centros en Administración, propiedad de Costing; análisis de Costos y ejecución contable tienen activaciones independientes. Diseño y obligatoriedad condicional; autorización puntual del catálogo implementada en CONT-05 en [frontera de capacidades](../docs/arquitectura/contabilidad_opcional_y_capacidades.md). No cambia runtime ni habilita módulos.
+
+
+## CONT-03 / CHG-293 — Sesión y alcance en Local
+
+Administración → Usuarios → Alcance organizacional permite seleccionar Divisiones concretas o todas, incluidas futuras. Consulta requiere `admin.user.read`; guardar usa `admin.user.update`; buscar Divisiones usa `admin.division.read`. La sesión muestra Sociedad/División autorizadas y deriva Emisor. Vacío no fabrica Matriz. Edición versionada, auditoría y reintento idempotente; las invitaciones nuevas tienen alcance vacío y deben asignarse explícitamente. [Contrato y límites](../docs/arquitectura/cont_03_sesion_alcances.md). Configuración por alcance y catálogo de centros están implementados Local; persistencia operativa CONT-07/08 tiene cobertura parcial según CONTROL_CONTABLE.
+
+## CONT-02 / CHG-292 — Organización disponible en Local
+
+Administración → Organización muestra Emisores, Sociedades y Divisiones con búsquedas acotadas, alta/edición, estados, permisos y feedback ES/EN. Cada Sociedad selecciona un único Emisor y moneda activa (MXN inicial); cada División selecciona Sociedad. Los datos corporativos se conservan en un panel desplegable. Los datos fiscales se editan en Emisor y no se duplican en Sociedad. Los dependientes activos impiden desactivar un padre.
+
+Las tablas normalizadas son autoridad tras el switch revisado; los contratos antiguos siguen como adaptadores deprecados. Revisión Local 0038. Contrato de campos, permisos, rutas, recuperación y pruebas: [CONT-02](../docs/arquitectura/cont_02_administracion_organizacional.md). CONT-03 agrega sesión/scopes en CHG-293. Centros de costos están implementados mediante contrato con Costing; Accounting sigue planned.
+
+## Estructura organizacional CHG-289 — etapa previa al switch
+
+El usuario definió un Emisor para varias Sociedades y exactamente un Emisor por Sociedad, con libros a nivel Sociedad. CONT-01 implementa en Local las tablas y la importación compatible; `organization.profile` conservó autoridad operativa durante CONT-01. CONT-02 ya implementa APIs/formularios; scopes siguen en CONT-03. Ver [CONT-01](../docs/arquitectura/cont_01_estructura_organizacional.md).
+
+Administración ofrece en Local el alta de Centros de costos por División (CONT-05); la Sociedad se deriva de División. Costing conserva el catálogo técnico y Admin lo opera mediante contrato. Los formularios de asignaciones admiten centro opcional validado por División; sólo los flujos de imputación habilitados pueden exigirlo (CONT-07/08). La moneda base de Sociedad será configurable, inicialmente MXN; operaciones en otra moneda conservan tipo de cambio e importe convertido. Estas pantallas/afectaciones no se declaran implementadas por existir las tablas. [Plan vigente](../docs/arquitectura/plan_preparacion_contabilidad.md).
+
+## Feedback de formularios — Local y QA
+
+Alta de rol conserva codigo, nombre y descripcion al fallar. Backoffice integra login, onboarding, editor y filtros; no persiste contrasenas para restaurar la captura. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: [.agents/skills/erclave-form-feedback/SKILL.md](../.agents/skills/erclave-form-feedback/SKILL.md). Evidencia: [docs/auditorias/formularios_feedback_2026-09-13.md](../docs/auditorias/formularios_feedback_2026-09-13.md).
+
+Feedback desplegado en Local y QA mediante el release `e57237f`. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del módulo. Estado y pendientes autenticados: [docs/contexto/ESTADO_ACTUAL.md](../docs/contexto/ESTADO_ACTUAL.md) y [docs/operaciones/release_qa_20260914.md](../docs/operaciones/release_qa_20260914.md).
 
 ## Coherencia de consultas Local (CHG-262)
 
-El dashboard consulta solo los recursos permitidos por la sesion: una lectura de Roles no exige permisos de Usuarios, Tenant o Configuracion. Las colecciones omitidas por falta de permiso no conceden autoridad ni fabrican datos. Backoffice conserva el control allowlisted y se verifica en lectura con Firebase Emulator. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+El dashboard consulta solo los recursos permitidos por la sesion: una lectura de Roles no exige permisos de Usuarios, Tenant o Configuracion. Las colecciones omitidas por falta de permiso no conceden autoridad ni fabrican datos. Backoffice conserva el control allowlisted y se verifica en lectura con Firebase Emulator. Evidencia: [docs/auditorias/frontend_backend_2026-09-07.md](../docs/auditorias/frontend_backend_2026-09-07.md).
 
 ## 1. Objetivo
 
@@ -139,11 +180,11 @@ admin.users.create
 
 Los catalogos base son configuraciones transversales que deberan administrarse desde este modulo para evitar valores duplicados o quemados dentro de cada modulo funcional.
 
-La referencia ampliada se documenta en `docs/catalogos_base.md`.
+La referencia ampliada se documenta en [docs/catalogos_base.md](../docs/catalogos_base.md).
 
 En Local, `currencies` y `payment_terms` ya son catalogos tenant-safe administrables desde una vista dedicada. Ventas acepta solo valores activos; los defaults iniciales pueden inactivarse y el cliente puede agregar valores propios. Estados de cotizacion, pedido y entrega no son catalogos editables: son maquinas de estado protegidas por cada backend.
 
-Administracion tambien es propietaria de `document.template`: logo, color primario, acento, texto, pie y numeracion. Cotizaciones y ordenes de Produccion consumen la misma configuracion al imprimir/guardar como PDF; todo generador documental futuro debe leer este contrato. El administrador puede reemplazar o quitar el logo. El data URL de logo (PNG/JPEG/WebP, maximo decodificado de 1 MB y firma binaria validada) es una solucion Local; antes de promover a QA se sustituira por una referencia de object storage sin cambiar el contrato consumidor. La regla transversal vive en [`docs/arquitectura/plantillas_documentales.md`](../docs/arquitectura/plantillas_documentales.md).
+Administracion tambien es propietaria de `document.template`: logo, color primario, acento, texto, pie y numeracion. Cotizaciones y ordenes de Produccion consumen la misma configuracion al imprimir/guardar como PDF; todo generador documental futuro debe leer este contrato. El administrador puede reemplazar o quitar el logo. El data URL de logo (PNG/JPEG/WebP, maximo decodificado de 1 MB y firma binaria validada) es una solucion Local; antes de promover a QA se sustituira por una referencia de object storage sin cambiar el contrato consumidor. La regla transversal vive en [[docs/arquitectura/plantillas_documentales.md](../docs/arquitectura/plantillas_documentales.md)](../docs/arquitectura/plantillas_documentales.md).
 
 | Grupo | Catalogos iniciales |
 |---|---|
@@ -286,9 +327,13 @@ Administración conserva en su primera vista el centro de configuración de orga
 
 Se repusieron en el catálogo Local los cuatro permisos existentes sales.quote.submit/approve/expire/cancel y se asignaron al Owner del tenant permitido mediante API auditada, preservando sus asignaciones y alcances. No se ejecutó el seed completo ni se concedieron a otros roles/tenants; no existe bypass por nombre Owner.
 
-Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
+Evidencia y APIs: [docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md](../docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md).
 
 
 ## Disponibilidad QA CHG-270
 
-Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: [docs/operaciones/release_qa_20260908.md](../docs/operaciones/release_qa_20260908.md).
+
+## CC-17 - presentacion efectiva de documentos - CHG-322 Local
+
+Administracion resuelve plantilla Corporativo > Sociedad > Division e identidad de Emisor, Sociedad y Division por contrato de solo lectura para consumidores autorizados. El editor existente conserva propiedad de los overrides. Sales y Production almacenan snapshots en sus propios documentos; cambios posteriores en Admin no modifican impresiones aprobadas/liberadas. [Contrato](../docs/arquitectura/cont_04_configuracion_por_alcance.md).

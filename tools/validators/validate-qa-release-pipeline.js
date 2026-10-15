@@ -179,6 +179,10 @@ if (!errors.length) {
   ]) {
     if (!release.includes(token)) errors.push(`QA release must include the seven-service runtime: ${token}`);
   }
+  const inventoryEnvironment = release.split(/\r?\n/).find((line) => line.trim().startsWith('inventory_env=')) || '';
+  if (!inventoryEnvironment.includes("ERCLAVE_PURCHASING_SERVICE_URL=${{ vars.QA_PURCHASING_API_URL }}")) {
+    errors.push("Inventory QA runtime must resolve Purchasing receipt proofs through its explicit QA API URL.");
+  }
   const deployerIdentity = identityPlan.serviceAccounts.find(
     (account) => account.accountId === "erclave-github-deployer-qa"
   );

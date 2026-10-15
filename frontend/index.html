@@ -4,9 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ERClave</title>
-    <link rel="stylesheet" href="./styles.css?v=20260827-chg251-error-feedback-chg267-pending-chg268-recovery" />
+    <link rel="stylesheet" href="./styles.css?v=20260827-chg251-error-feedback-chg267-pending-chg268-recovery-chg329-organization-switcher" />
     <link rel="stylesheet" href="./features/form-feedback.css?v=chg272" />
-  </head>
+    <link rel="stylesheet" href="./features/organization.css?v=chg292" />
+    <link rel="stylesheet" href="./features/inventory-organization.css?v=chg298" />
+    <link rel="stylesheet" href="./features/production-organization.css?v=chg299" />
+    <link rel="stylesheet" href="./features/hr-organization.css?v=chg300" />
+    <link rel="stylesheet" href="./features/commercial-organization.css?v=chg301" />
+    <link rel="stylesheet" href="features/production-order-context.css" />
+  <link rel="stylesheet" href="features/service-cost-context.css" />
+<link rel="stylesheet" href="./features/production-fulfillment.css">
+</head>
   <body>
     <a class="skip-link" href="#mainWorkspace" data-i18n="skipToMain">Saltar al contenido principal</a>
     <div class="app-shell" data-theme="light">
@@ -48,7 +56,7 @@
             </div>
             <div class="context-pill branch-context" id="branchContext">
               <span class="context-label" data-i18n="branchLabel">Sucursal</span>
-              <strong id="contextBranch">Matriz</strong>
+              <div id="contextBranch">Matriz</div>
             </div>
             <button class="context-logout" id="authButton" type="button" hidden>Cerrar sesion</button>
           </section>
@@ -93,6 +101,6 @@
     <div class="auth-gate" id="authGate" hidden></div>
 
     <script src="./env.js"></script>
-    <script type="module" src="./app.js?v=20260828-chg252-maintenance-load-chg257-report-filters-chg267-pending-chg268-recovery-chg272-form-feedback"></script>
+    <script type="module" src="./app.js?v=20260828-chg252-maintenance-load-chg257-report-filters-chg267-pending-chg268-recovery-chg272-form-feedback-chg329-organization-switcher"></script>
   </body>
 </html>

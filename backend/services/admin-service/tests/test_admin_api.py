@@ -610,6 +610,33 @@ class FakeAdminRepositoryWithPurchasingUnitConsumer(FakeAdminRepository):
     session_permissions = ["purchasing.requisition.create"]
 
 
+class FakeAdminRepositoryWithPurchasingCatalogConsumer(FakeAdminRepository):
+    session_permissions = ["purchasing.supplier.create"]
+
+    @staticmethod
+    def _currency():
+        return {
+            "id": "cat_mxn",
+            "catalog_code": "currencies",
+            "code": "MXN",
+            "name_es": "Peso mexicano",
+            "name_en": "Mexican peso",
+            "metadata": {},
+            "system_default": True,
+            "status": "active",
+        }
+
+    def list_catalog_items(self, tenant_id, catalog_code, *, include_inactive=False, q=None):
+        return [self._currency()] if tenant_id == TENANT_ID and catalog_code == "currencies" else []
+
+    def get_catalog_item(self, tenant_id, catalog_code, code, *, active_only=False):
+        return self._currency() if tenant_id == TENANT_ID and catalog_code == "currencies" and code == "MXN" else None
+
+
+class FakeAdminRepositoryWithPurchasingOrderCatalogConsumer(FakeAdminRepositoryWithPurchasingCatalogConsumer):
+    session_permissions = ["purchasing.order.update"]
+
+
 class FakeAdminRepositoryWithModuleDependencyError(FakeAdminRepository):
     def set_backoffice_entitlement(self, *args, **kwargs):
         raise ValueError("module_dependencies_required:hr,production")
@@ -672,6 +699,38 @@ def test_unit_catalog_allows_purchasing_command_permission_as_consumer():
 
     assert response.status_code == 200
     assert response.json()["data"]["code"] == "H87"
+
+
+def test_commercial_catalog_list_allows_supplier_permission_as_consumer():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepositoryWithPurchasingCatalogConsumer()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-purchasing", email="admin.qa@erclave.local", name="Purchasing user"
+    )
+
+    response = TestClient(app).get(
+        "/v1/catalogs/commercial/currencies",
+        headers={"X-Tenant-Id": TENANT_ID, "Authorization": "Bearer local-test"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"][0]["code"] == "MXN"
+
+
+def test_commercial_catalog_lookup_allows_order_permission_as_consumer():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepositoryWithPurchasingOrderCatalogConsumer()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-purchasing", email="admin.qa@erclave.local", name="Purchasing user"
+    )
+
+    response = TestClient(app).get(
+        "/v1/catalogs/commercial/currencies/by-code/MXN",
+        headers={"X-Tenant-Id": TENANT_ID, "Authorization": "Bearer local-test"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["code"] == "MXN"
 
 
 def test_unit_catalog_create_requires_idempotency_key():
@@ -1847,6 +1906,21 @@ def test_list_code_sequences_returns_tenant_catalog():
     response = client_with_fake_repo().get("/v1/catalogs/code-sequences", headers={"X-Tenant-Id": TENANT_ID})
     assert response.status_code == 200
     assert response.json()["data"][0]["document_type"] == "production.order"
+
+
+def test_code_sequence_consumer_cannot_read_or_allocate_another_document_type():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepositoryWithPurchasingCatalogConsumer()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="purchasing-user", email="admin.qa@erclave.local", name="Purchasing user"
+    )
+    client = TestClient(app)
+    headers = {"X-Tenant-Id": TENANT_ID, "Authorization": "Bearer local-test"}
+    assert client.get("/v1/catalogs/code-sequences", headers=headers).json()["data"] == []
+    response = client.post("/v1/catalogs/code-sequences/production.order/next",
+        headers={**headers, "Idempotency-Key": "cross-type-allocation-001"}, json={})
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "permission_denied"
 
 
 def test_update_code_sequence_switches_to_manual_mode():

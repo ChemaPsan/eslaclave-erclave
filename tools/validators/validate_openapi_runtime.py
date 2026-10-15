@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "contracts" / "api"
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 SERVICE_APIS = {
+    "costing-service.openapi.yaml": ROOT / "backend" / "services" / "costing-service" / "costing_app" / "api.py",
     "admin-service.openapi.yaml": ROOT / "backend" / "services" / "admin-service" / "app" / "api.py",
     "production-service.openapi.yaml": ROOT / "backend" / "services" / "production-service" / "app" / "api.py",
     "inventory-service.openapi.yaml": ROOT / "backend" / "services" / "inventory-service" / "app" / "api.py",
@@ -68,7 +69,7 @@ def runtime_operations(api_path: Path) -> dict[tuple[str, str], frozenset[str] |
                         name = call.func.id if isinstance(call.func, ast.Name) else ""
                         if not name.startswith("require_"):
                             continue
-                        value_node = call.args[0]
+                        value_node = call.args[1] if name == "require_organization_access" and len(call.args) > 1 else call.args[0]
                         value = constants.get(value_node.id) if isinstance(value_node, ast.Name) else None
                         if value is None:
                             try:
@@ -150,6 +151,17 @@ def main() -> int:
         api_path = SERVICE_APIS.get(contract_path.name)
         if api_path:
             runtime = runtime_operations(api_path)
+            if contract_path.name == "admin-service.openapi.yaml":
+                runtime.update(runtime_operations(api_path.with_name("organization_api.py")))
+                runtime.update(runtime_operations(api_path.with_name("scope_api.py")))
+                runtime.update(runtime_operations(api_path.with_name("configuration_api.py")))
+                runtime.update(runtime_operations(api_path.with_name("cost_center_api.py")))
+            if contract_path.name in {"inventory-service.openapi.yaml", "production-service.openapi.yaml", "hr-service.openapi.yaml", "sales-service.openapi.yaml", "purchasing-service.openapi.yaml"}:
+                runtime.update(runtime_operations(api_path.with_name("organization_api.py")))
+            if contract_path.name == "production-service.openapi.yaml":
+                runtime.update(runtime_operations(api_path.with_name("sales_conversion_api.py")))
+            if contract_path.name == "sales-service.openapi.yaml":
+                runtime.update(runtime_operations(api_path.with_name("production_fulfillment_api.py")))
             implemented = {
                 key
                 for key, operation in contract_operations.items()

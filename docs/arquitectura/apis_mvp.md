@@ -1,8 +1,74 @@
 # ERClave - APIs MVP
 
+## CC-15 · CHG-319 · Local
+
+[Compras por División](cont_08_compras_contexto.md): Purchasing conserva contexto de requisición/OC/recepción y condiciones explícitas del proveedor congeladas. Admin autoriza; Inventory conserva validación/costo/proof CC-14. Migración `20261012_0058` nullable sin backfill, downgrade protegido con historia. Accounting apagado, sin QA; CC-16 implementado Local CHG-320; CC-17/18 y CC-19/20 abiertos.
+
+## CC-14 · CHG-317 · Local
+
+[Productores, transferencias y sobrantes](cont_08_inventario_productores.md) implementados: Inventory conserva contexto/costo de Purchasing/Maintenance y transferencias misma Sociedad; proofs autenticados, alcance y reintentos. Migración `20261012_0057` nullable sin backfill, downgrade protegido con historia. Sin QA ni Accounting; CC-16 integral y CC-19/20 siguen abiertos; CC-15 implementado CHG-319.
+
+
+
+## Estado y fuentes de vigencia
+
+La conciliación por submódulo vive en [CONTROL_CONTABLE](../contexto/CONTROL_CONTABLE.md); [ESTADO_ACTUAL](../contexto/ESTADO_ACTUAL.md) distingue Local de QA y [PENDIENTES](../contexto/PENDIENTES.md) fija la continuación. Evidencia de cada corte en [TRAZABILIDAD](../../TRAZABILIDAD.md). No sumar pendientes históricos como trabajo nuevo.
+
+Organización/sesión, [centros CONT-05](cont_05_catalogo_centros.md), asignaciones CONT-07 y [condiciones explícitas sin herencia](cont_07_commercial_condiciones.md) ya están implementados Local. CONT-04 es parcial y CONT-06 sigue abierto. CONT-08 conserva [cotización](cont_08_cotizaciones_contexto.md) → [pedido](cont_08_pedidos_contexto.md), [servicios](cont_08_servicios_contexto.md), [stock/entrega y movimientos manuales](cont_08_stock_contexto.md). [Producción manual CHG-313](cont_08_produccion_contexto.md) y [fabricación comercial CHG-315](cont_08_fabricacion_contexto.md) conectan contexto, recursos, recepción y entrega/costo; recorrido HTTP Local real aprobado, aceptación transversal CC-20 pendiente.
+
+Política CHG-309 confirmada: costos y tarifas en moneda base de Sociedad; documento en otra moneda conserva original, tasa explícita y convertido. Compras CC-15 implementado Local CHG-319; Mantenimiento CC-16 implementado Local CHG-320; Servicios CHG-314 y productores Inventory CHG-317 se conservan; no reinterpretar historia. Analítica Costing y Accounting permanecen planned. Datos reales y aceptación integrada siguen abiertos; estos cortes no fueron promovidos a QA.
+
+## Integración operativa vigente CHG-313/314
+
+[Tarifas CC-10](cont_08_tarifas_capacidad.md), [orden manual CC-11](cont_08_produccion_contexto.md) y [moneda Servicios CC-08](cont_08_servicios_contexto.md) se conservan. CHG-315 conecta [fabricación comercial CC-12](cont_08_fabricacion_contexto.md): prueba Sales, conversión única, conciliación de recepción real y entrega/costo. Head Local0056, sin backfill; recorrido HTTP real aprobado con 60MXN→3USD y limpieza de fixtures verificada. Cada dueño escribe sus tablas; Admin autoriza. Accounting apagado, datos reales CC-19/aceptación transversal CC-20 y QA pendientes.
+
+## Registro de cortes (evidencia histórica)
+
+Los apartados fechados conservan el alcance de su corte; los números de revisión y pendientes citados no son el estado actual.
+
+## Actualización CHG-308 · 2026-10-07
+
+Production añade prueba mínima de contexto de reserva y scope en órdenes/comandos/evidencia/colas/reportes; request de liberación no cambia ni habilita fabricación dimensionada. Matriz contractual en cont_08_produccion_contexto.md. Ver docs/arquitectura/cont_08_produccion_contexto.md.
+
+
+## Actualización CHG-307 · 2026-10-05
+
+Sales habilita stock/entrega por alcance y lookup de almacenes; Inventory expone contexto/lookup y costo original decimal; Production permite consulta de elegibilidad para sales.order.fulfill. Matriz completa de métodos/rutas/permisos en cont_08_stock_contexto.md. Ver docs/arquitectura/cont_08_stock_contexto.md. Las notas de cortes anteriores son históricas.
+
+
+## Actualización CHG-306 · 2026-10-05
+
+Sales GET orders/{order_id}/execution-context para sales.order.fulfill; Inventory reserva/consume/libera y consultas con contexto/scope. Matriz exacta en cont_08_reservas_contexto.md. Request de reserva no permite capturar Sociedad/División.
+
+
+## Actualización CHG-305 · 2026-10-05
+
+[Contratos de ejecución de servicios CONT-08](cont_08_servicios_contexto.md#apis-afectadas): POST existentes habilitados por contexto, nuevo GET eligible-workers y permisos lectores HR/Production.
+
+
+## Actualización CHG-304 · 2026-10-05
+
+[Matriz de contratos de pedidos CONT-08](cont_08_pedidos_contexto.md#apis-afectadas): conversión, alcance en pedidos/servicios/CSV, fronteras de efectos y permiso consumidor HR/Production.
+
+
+## Actualización CHG-303 · 2026-10-05
+
+Matriz contractual completa en [CONT-08](cont_08_cotizaciones_contexto.md#apis-afectadas): contexto de cotización, alcance de consultas/CSV y lookup exacto HR/Production.
+
+
+
+
+## CONT-03 / CHG-293 — contexto y membresías Local
+
+GET `/v1/session/context` agrega query `division_id` y scope v2 compatible. GET/PUT `/v1/users/{user_id}/organization-scope` consultan/editan concesiones con permisos `admin.user.read/update`, revisión e idempotencia. Invitación y onboarding conservan request/response y cambian sólo reglas de metadata. GET Divisiones se consume sin cambios. [Matriz completa](cont_03_sesion_alcances.md#apis-afectadas); APIs operativas sin cambio por este corte.
+
+## CONT-02 / CHG-292 — APIs organizacionales Local
+
+Admin implementa 18 operaciones: listado/alta, detalle/edición y activación/desactivación de `/v1/organization/fiscal-issuers`, `/societies` y `/divisions`, con permisos puntuales read/create/update/status, idempotencia y proyección compatible. Los ocho comandos legal-entities/branches quedan deprecados con adaptador; `PUT /v1/settings/{key}` protege estructura normalizada y `DELETE /v1/backoffice/tenants/{tenant_id}` protege historial. Matriz completa de métodos, rutas, permisos, requests/responses y consumidores sin cambio: [CONT-02](cont_02_administracion_organizacional.md#apis-afectadas). Sólo Local.
+
 ## Entrega previa de materiales CHG-264
 
-CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+CHG-264 implementa en Local y QA la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
 
 ## Solicitudes de refacciones Local CHG-263
 
@@ -23,8 +89,8 @@ Aplica a:
 - `admin-service`;
 - `production-service`;
 - `inventory-service`;
-- `sales-service` (Local aplica y certifica Ordenes de servicio en `20260901_0030`; QA conserva Clientes, Cotizaciones, Pedidos y Entregas hasta `20260825_0029`);
-- `purchasing-service` (Local y QA cubren proveedor fiscal, requisicion multipardida y recepcion inventariable; Local aplica y certifica recepciones de servicio sin Inventory obligatorio en `20260901_0030`);
+- `sales-service` (Local y QA incluyen Clientes, Cotizaciones, Pedidos, Entregas y Ordenes de servicio);
+- `purchasing-service` (Local y QA cubren proveedor fiscal, requisicion multipardida y recepcion inventariable; Local y QA incluyen recepciones de servicio sin Inventory obligatorio);
 - `maintenance-service` (Local y QA cubren ordenes correctivas, tiempos, refacciones y conciliacion durable);
 - Purchasing expone edicion/cancelacion de requisiciones y ordenes, recepcion multipardida y conciliacion manual durable. Inventory aporta `GET /v1/inventory/warehouses/{id}` para validar tenant, estado y destino de partidas inventariables.
 - `billing-service`;
@@ -992,21 +1058,33 @@ CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confi
 CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
 
 
-## Candidato de continuidad CHG-269
+## Historial de candidato de continuidad CHG-269
 
 CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
 
 
-## Release QA verificado CHG-270
+## Historial de release QA verificado CHG-270
 
-CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
+CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff histórico: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
 
 
 ## Productos y servicios: margen esperado CHG-273
 
-CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración Local `20260913_0035` aplicada; QA conserva `20260908_0034` y release b63cdad. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
+CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración `20260913_0035` aplicada en Local y QA, actualmente en head `20260913_0036`; release QA `e57237f`. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
 
 
 ## Evidencia de servicios CHG-274
 
-CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local y QA head `20260913_0036`; release QA `e57237f`, sin aceptación UAT inferida. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+
+
+### Contrato vigente de evidencia de servicios
+
+`production-service` conserva la autorización por tenant y orden. No se agregaron permisos nuevos. Desplegado en QA `e57237f`; la carga/descarga autenticada positiva y el cierre completo aún requieren smoke.
+
+| Método y ruta | Permiso | Request / response |
+|---|---|---|
+| POST `/v1/production/orders/{order_id}/service-evidence/{phase}` | Inicio: `production.order.start` o `production.order.wait_resources`; cierre: `production.order_stage.complete` | `phase` = `start` o `finish`; descripción de 3–4000 caracteres y hasta 3 archivos opcionales en base64. Devuelve `data` con evidencia e historial de archivos. Misma captura admite reintento; otra captura para la misma fase devuelve 409 porque la evidencia es inmutable. |
+| GET `/v1/production/orders/{order_id}/service-evidence/files/{file_id}` | `production.order.read` | Binario descargable con tipo y nombre normalizados, `private, no-store` y `nosniff`; 410 al vencer, 404 si no pertenece a la orden/tenant o no existe. |
+
+Las lecturas de órdenes incluyen indicadores e historial de evidencia. Los comandos existentes de estatus y avance conservan sus permisos y bloquean inicio/espera sin recepción y avance total al 100 %, validación o término sin cierre, únicamente para recetas de servicio. No se interpreta guardar evidencia como transición automática del backend: el consumidor guarda evidencia y solicita el comando correspondiente.

@@ -61,8 +61,8 @@ export async function approveProductionRecipeVersion(versionId, payload = {}) {
 
 export async function createProductionMachine(payload){return (await productionRequest("/v1/production/machines",{method:"POST",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
 export async function updateProductionMachine(id,payload){return (await productionRequest(`/v1/production/machines/${id}`,{method:"PATCH",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
-export async function validateProductionResources(payload){return (await productionRequest("/v1/production/resource-validations",{method:"POST",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
-export async function createProductionOrder(payload){return (await productionRequest("/v1/production/orders",{method:"POST",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
+export async function validateProductionResources(payload,key){return (await productionRequest("/v1/production/resource-validations",{method:"POST",headers:key?{...commandHeaders(),"Idempotency-Key":key}:commandHeaders(),body:JSON.stringify(payload)})).data;}
+export async function createProductionOrder(payload,key){return (await productionRequest("/v1/production/orders",{method:"POST",headers:key?{...commandHeaders(),"Idempotency-Key":key}:commandHeaders(),body:JSON.stringify(payload)})).data;}
 export async function updateProductionOrderStatus(id,payload){return (await productionRequest(`/v1/production/orders/${id}/status`,{method:"PATCH",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
 export async function updateProductionOrderResource(orderId,resourceId,payload){return (await productionRequest(`/v1/production/orders/${orderId}/resources/${resourceId}`,{method:"PATCH",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
 export async function updateProductionOrderStage(id,payload){return (await productionRequest(`/v1/production/order-stages/${id}`,{method:"PATCH",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
@@ -74,3 +74,11 @@ export async function recoverProductionCreation(id){return (await productionRequ
 
 export async function saveProductionServiceEvidence(orderId,phase,payload){return (await productionRequest(`/v1/production/orders/${encodeURIComponent(orderId)}/service-evidence/${phase}`,{method:"POST",headers:commandHeaders(),body:JSON.stringify(payload)})).data;}
 export function downloadProductionServiceEvidence(orderId,fileId){return apiDownloadAt(getProductionApiBaseUrl(),`/v1/production/orders/${encodeURIComponent(orderId)}/service-evidence/files/${encodeURIComponent(fileId)}`,{headers:{"X-Tenant-Id":getDemoTenantId()}},"Production API");}
+
+export function getDivisionRecipes(division,q="",offset=0){return productionRequest(`/v1/production/division-recipes?${new URLSearchParams({division_id:division,q,offset,limit:20})}`);}
+
+export function getProductionOrderRequests(q="",offset=0){return productionRequest(`/v1/production/order-requests?${new URLSearchParams({q,offset,limit:25})}`);}
+export async function getProductionOrderRequest(id){return (await productionRequest(`/v1/production/order-requests/${encodeURIComponent(id)}`)).data;}
+export function getProductionRequestRecipes(id,q="",offset=0){return productionRequest(`/v1/production/order-requests/${encodeURIComponent(id)}/recipes?${new URLSearchParams({q,offset,limit:20})}`);}
+export async function validateProductionRequestResources(id,payload,key){return (await productionRequest(`/v1/production/order-requests/${encodeURIComponent(id)}/resource-validations`,{method:"POST",headers:{...commandHeaders(),"Idempotency-Key":key},body:JSON.stringify(payload)})).data;}
+export async function createProductionRequestOrder(id,payload,key){return (await productionRequest(`/v1/production/order-requests/${encodeURIComponent(id)}/orders`,{method:"POST",headers:{...commandHeaders(),"Idempotency-Key":key},body:JSON.stringify(payload)})).data;}

@@ -1,5 +1,7 @@
 # Refacciones desde Movimientos de Almacen — CHG-263
 
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](../contexto/ESTADO_ACTUAL.md).
+
 Estado: implementado y verificado en Local. QA conserva el release CHG-254.
 
 ## Criterios de aceptacion

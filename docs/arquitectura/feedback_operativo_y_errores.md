@@ -1,5 +1,13 @@
 # Feedback operativo y errores
 
+## Consumidor CONT-03 — alcance de membresía
+
+El editor de alcance conserva selección ante conflictos, permisos y dependencias; errores `organization_scope_*` son ES/EN. Los arrays de referencias sin control individual corregible usan resumen seguro en lugar de atribuir una ruta inventada. La selección activa rechazada restaura la selección confirmada. Pruebas browser en `tests/e2e/organization-scope.spec.js`; no cubren aislamiento de documentos operativos aún pendiente de CONT-07/08.
+
+## Consumidor CONT-02 — organización
+
+Los formularios de Emisor/Sociedad/División usan `renderFormFeedback`, localizan códigos `organization_*` y vinculan `details.field` sólo contra una lista de campos conocidos del formulario. Errores 422 estructurados se delegan al helper. Reintentos preservan payload/clave; el estado confirmado no cambia ante una transición fallida. ES/EN, captura, foco, ARIA, errores desconocidos y doble envío se ejercitan en `tests/e2e/organization.spec.js`. No implica cobertura exhaustiva de otros módulos.
+
 ## Objetivo
 
 Toda respuesta visible debe explicar qué ocurrió, si hubo un cambio real y qué puede hacer la persona a continuación. El idioma de la interfaz gobierna el feedback; el texto diagnóstico de una API nunca es la fuente directa de copy.
@@ -73,8 +81,13 @@ CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confi
 CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
 
 
-## Formularios Local CHG-272
+## Formularios Local y QA CHG-272
 
 El helper `frontend/features/form-feedback.js`, sus bindings y estilos compartidos resuelven errores de captura en los siete módulos implementados y Backoffice. Se conserva el objeto estructurado, la captura y el formulario propietario; se enlazan rutas explícitas a controles visibles y se evita marcar valores editados después de enviar. Las equivalencias literales de schemas legados se limitan a `VALIDATION_RULES`, verificadas contra el código; no se muestran diagnósticos libres.
 
-Aplicar `.agents/skills/erclave-form-feedback/SKILL.md` y ejecutar `validate:form-feedback` y `test:form-feedback` además de los controles anteriores. El workflow prepara esta suite sin DB; no se ha ejecutado CI remoto en este corte. Inventario, pruebas, límites y APIs consumidas: `docs/auditorias/formularios_feedback_2026-09-13.md`. Solo Local: los manuales CHG-271 y QA no se actualizan por esta implementación.
+Aplicar `.agents/skills/erclave-form-feedback/SKILL.md` y ejecutar `validate:form-feedback` y `test:form-feedback` además de los controles anteriores. El workflow ejecuta esta suite sin DB; CI remoto del release e57237f aprobado. Inventario, pruebas, límites y APIs consumidas: `docs/auditorias/formularios_feedback_2026-09-13.md`. El cambio está desplegado en QA en e57237f; la revisión de manuales y pendientes autenticados se registra en las fuentes vivas de contexto.
+
+
+## Esperas y evidencia parcial Local CHG-281
+
+Consultar [política de transporte y resultados parciales](../auditorias/timeouts_local_2026-09-16.md). El presupuesto no autoriza reintentos ni permite deducir rollback; informar pasos confirmados y resultado pendiente. QA conserva el comportamiento anterior hasta promoción.

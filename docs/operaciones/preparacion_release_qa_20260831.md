@@ -1,5 +1,7 @@
 # Preparacion del candidato QA de siete servicios - 2026-08-31
 
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](../contexto/ESTADO_ACTUAL.md).
+
 ## Alcance
 
 Preparar, sin ejecutar escrituras externas, el siguiente candidato Local a QA con:

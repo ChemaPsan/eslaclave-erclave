@@ -19,7 +19,6 @@ for (const token of [
 
 for (const selector of [
   'name="role_id" data-entity-selector',
-  'id="branchSelector" data-entity-selector',
   'name="legal_entity_id" data-entity-selector',
   'id="stockWarehouseFilter" data-entity-selector',
   'id="kardexItemFilter" data-entity-selector',
@@ -39,6 +38,10 @@ for (const selector of [
   'select[name^="warehouse-"]',
 ]) {
   if (!frontend.includes(selector)) errors.push(`Growing reference is not wired as searchable: ${selector}.`);
+}
+
+for (const token of ['id="branchSelector" class="context-switcher"', 'class="context-switcher-search"', 'getSessionContext(option.dataset.divisionId)']) {
+  if (!frontend.includes(token)) errors.push(`Session organization switcher is missing ${token}.`);
 }
 
 for (const token of ["entitySelectorPlaceholder", "entitySelectorEmpty", "entitySelectorChooseResult"]) {

@@ -1,5 +1,7 @@
 # Preparacion del candidato QA - 2026-08-21
 
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](../contexto/ESTADO_ACTUAL.md).
+
 > Estado: **LISTO PARA SOLICITAR `qa-build` / NO CONSTRUIDO / NO DESPLEGADO**. Este expediente no autoriza migraciones, configuracion del tenant, despliegues, cambios de trafico, Firebase Hosting ni carga de datos en QA.
 
 ## Resultado ejecutivo

@@ -23,6 +23,1516 @@ tags:
   - name: Settings
   - name: Catalogs
 paths:
+  /v1/cost-center-codes/next:
+    post:
+      tags:
+      - Code sequences
+      summary: Allocate Cost Center Code
+      operationId: allocate_cost_center_code_v1_cost_center_codes_next_post
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeSequenceAllocationResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Missing key, access denied or inactive/non-managed numbering.
+        '401':
+          description: Missing key, access denied or inactive/non-managed numbering.
+        '403':
+          description: Missing key, access denied or inactive/non-managed numbering.
+        '409':
+          description: Missing key, access denied or inactive/non-managed numbering.
+      x-required-module: admin
+      x-permissions: [costing.cost_center.create]
+  /v1/users/{user_id}/organization-scope:
+    get:
+      tags:
+      - Users
+      summary: Get User Organization Scope
+      operationId: get_user_organization_scope_v1_users__user_id__organization_scope_get
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopeResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Scope request rejected with a stable error code.
+        '403':
+          description: Scope request rejected with a stable error code.
+        '404':
+          description: Scope request rejected with a stable error code.
+        '409':
+          description: Scope request rejected with a stable error code.
+      x-required-module: admin
+      x-permissions:
+      - admin.user.read
+      description: Version 2 membership scope. Empty lists deny division access. Explicit
+        wildcard includes future divisions. PUT requires expected_revision and Idempotency-Key;
+        permissions unchanged.
+    put:
+      tags:
+      - Users
+      summary: Update User Organization Scope
+      operationId: update_user_organization_scope_v1_users__user_id__organization_scope_put
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScopeUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopeResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Scope request rejected with a stable error code.
+        '403':
+          description: Scope request rejected with a stable error code.
+        '404':
+          description: Scope request rejected with a stable error code.
+        '409':
+          description: Scope request rejected with a stable error code.
+      x-required-module: admin
+      x-permissions:
+      - admin.user.update
+      description: Version 2 membership scope. Empty lists deny division access. Explicit
+        wildcard includes future divisions. PUT requires expected_revision and Idempotency-Key;
+        permissions unchanged.
+  /v1/organization/fiscal-issuers:
+    get:
+      tags:
+      - Organization
+      summary: List Fiscal Issuers
+      operationId: list_fiscal_issuers_v1_organization_fiscal_issuers_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - active
+            - inactive
+            type: string
+          - type: 'null'
+          title: Status
+      - name: parent_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Parent Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalIssuerList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.fiscal_issuer.read]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+    post:
+      tags:
+      - Organization
+      summary: Create Fiscal Issuer
+      operationId: create_fiscal_issuer_v1_organization_fiscal_issuers_post
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalIssuerCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalIssuerResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.fiscal_issuer.create]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+  /v1/organization/fiscal-issuers/{record_id}:
+    get:
+      tags:
+      - Organization
+      summary: Get Fiscal Issuer
+      operationId: get_fiscal_issuer_v1_organization_fiscal_issuers__record_id__get
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalIssuerResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.fiscal_issuer.read]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+    patch:
+      tags:
+      - Organization
+      summary: Update Fiscal Issuer
+      operationId: update_fiscal_issuer_v1_organization_fiscal_issuers__record_id__patch
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalIssuerUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalIssuerResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.fiscal_issuer.update]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+  /v1/organization/fiscal-issuers/{record_id}/activate:
+    post:
+      tags:
+      - Organization
+      summary: Activate Fiscal Issuer
+      operationId: activate_fiscal_issuer_v1_organization_fiscal_issuers__record_id__activate_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalIssuerResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.fiscal_issuer.status]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+  /v1/organization/fiscal-issuers/{record_id}/deactivate:
+    post:
+      tags:
+      - Organization
+      summary: Deactivate Fiscal Issuer
+      operationId: deactivate_fiscal_issuer_v1_organization_fiscal_issuers__record_id__deactivate_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalIssuerResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.fiscal_issuer.status]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+  /v1/organization/societies:
+    get:
+      tags:
+      - Organization
+      summary: List Societys
+      operationId: list_societys_v1_organization_societies_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - active
+            - inactive
+            type: string
+          - type: 'null'
+          title: Status
+      - name: parent_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Parent Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocietyList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.society.read]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+    post:
+      tags:
+      - Organization
+      summary: Create Society
+      operationId: create_society_v1_organization_societies_post
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocietyCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocietyResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.society.create]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+  /v1/organization/societies/{record_id}:
+    get:
+      tags:
+      - Organization
+      summary: Get Society
+      operationId: get_society_v1_organization_societies__record_id__get
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocietyResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.society.read]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+    patch:
+      tags:
+      - Organization
+      summary: Update Society
+      operationId: update_society_v1_organization_societies__record_id__patch
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocietyUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocietyResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.society.update]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+  /v1/organization/societies/{record_id}/activate:
+    post:
+      tags:
+      - Organization
+      summary: Activate Society
+      operationId: activate_society_v1_organization_societies__record_id__activate_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocietyResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.society.status]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+  /v1/organization/societies/{record_id}/deactivate:
+    post:
+      tags:
+      - Organization
+      summary: Deactivate Society
+      operationId: deactivate_society_v1_organization_societies__record_id__deactivate_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocietyResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.society.status]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+  /v1/organization/divisions:
+    get:
+      tags:
+      - Organization
+      summary: List Divisions
+      operationId: list_divisions_v1_organization_divisions_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - active
+            - inactive
+            type: string
+          - type: 'null'
+          title: Status
+      - name: parent_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Parent Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.division.read]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+    post:
+      tags:
+      - Organization
+      summary: Create Division
+      operationId: create_division_v1_organization_divisions_post
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DivisionCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.division.create]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+  /v1/organization/divisions/{record_id}:
+    get:
+      tags:
+      - Organization
+      summary: Get Division
+      operationId: get_division_v1_organization_divisions__record_id__get
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.division.read]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+    patch:
+      tags:
+      - Organization
+      summary: Update Division
+      operationId: update_division_v1_organization_divisions__record_id__patch
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DivisionUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.division.update]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+  /v1/organization/divisions/{record_id}/activate:
+    post:
+      tags:
+      - Organization
+      summary: Activate Division
+      operationId: activate_division_v1_organization_divisions__record_id__activate_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.division.status]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
+  /v1/organization/divisions/{record_id}/deactivate:
+    post:
+      tags:
+      - Organization
+      summary: Deactivate Division
+      operationId: deactivate_division_v1_organization_divisions__record_id__deactivate_post
+      parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Record Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error code and structured field details.
+        '401':
+          description: Stable error code and structured field details.
+        '403':
+          description: Stable error code and structured field details.
+        '404':
+          description: Stable error code and structured field details.
+        '409':
+          description: Stable error code and structured field details.
+      x-required-module: admin
+      x-permissions: [admin.division.status]
+      x-implementation-status: implemented
+      description: Tenant-scoped organization. Audited idempotent commands maintain the legacy projection. Nonempty legacy data requires
+        reviewed activation. Pagination exposes the code mode for create forms.
   /v1/session/context:
     get:
       tags: [Session]
@@ -32,6 +1542,11 @@ paths:
       x-required-module: admin
       x-permissions: [internal.session.context.read]
       parameters:
+        - name: division_id
+          in: query
+          required: false
+          schema: {type: string, minLength: 1, maxLength: 40}
+          description: Validate active Division against the effective membership scope; Society and Issuer are derived.
         - $ref: '#/components/parameters/TenantHeader'
         - $ref: '#/components/parameters/ActorHeader'
         - $ref: '#/components/parameters/CorrelationId'
@@ -291,6 +1806,7 @@ paths:
           content: {application/json: {schema: {$ref: '#/components/schemas/TenantResponse'}}}
         '404': {$ref: '#/components/responses/NotFound'}
     delete:
+      description: Existing Backoffice allowlist applies. An activated or imported organization prevents physical deletion (409 organization_tenant_in_use) to preserve structure and history.
       tags: [Backoffice]
       operationId: deleteBackofficeTenant
       summary: Permanently remove a tenant through the protected internal backoffice.
@@ -749,6 +2265,7 @@ paths:
                 $ref: '#/components/schemas/SettingListResponse'
   /v1/settings/{key}:
     put:
+      description: Upsert tenant configuration. organization.profile merges omitted sections, preserving corporate-only edits; after normalized authority activation its organization arrays cannot be replaced (organization_structure_read_only). Projection drift returns organization_projection_changed.
       tags: [Settings]
       operationId: upsertSetting
       summary: Upsert tenant setting.
@@ -778,6 +2295,8 @@ paths:
                 $ref: '#/components/schemas/SettingResponse'
   /v1/organization/legal-entities:
     post:
+      description: Deprecated compatibility adapter. Once organization authority is activated, commands write normalized tables and their legacy projection atomically. Existing admin.setting.update authorization is retained; shared-issuer fiscal edits, invalid parents, immutable code changes and active dependents return stable conflicts.
+      deprecated: true
       tags: [Settings]
       operationId: createLegalEntity
       summary: Create legal entity inside organization profile.
@@ -802,6 +2321,8 @@ paths:
                 $ref: '#/components/schemas/OrganizationItemResponse'
   /v1/organization/legal-entities/{legal_entity_id}:
     patch:
+      description: Deprecated compatibility adapter. Once organization authority is activated, commands write normalized tables and their legacy projection atomically. Existing admin.setting.update authorization is retained; shared-issuer fiscal edits, invalid parents, immutable code changes and active dependents return stable conflicts.
+      deprecated: true
       tags: [Settings]
       operationId: updateLegalEntity
       summary: Update legal entity inside organization profile.
@@ -831,6 +2352,8 @@ paths:
                 $ref: '#/components/schemas/OrganizationItemResponse'
   /v1/organization/legal-entities/{legal_entity_id}/activate:
     post:
+      description: Deprecated compatibility adapter. Once organization authority is activated, commands write normalized tables and their legacy projection atomically. Existing admin.setting.update authorization is retained; shared-issuer fiscal edits, invalid parents, immutable code changes and active dependents return stable conflicts.
+      deprecated: true
       tags: [Settings]
       operationId: activateLegalEntity
       summary: Activate legal entity.
@@ -854,6 +2377,8 @@ paths:
                 $ref: '#/components/schemas/OrganizationItemResponse'
   /v1/organization/legal-entities/{legal_entity_id}/deactivate:
     post:
+      description: Deprecated compatibility adapter. Once organization authority is activated, commands write normalized tables and their legacy projection atomically. Existing admin.setting.update authorization is retained; shared-issuer fiscal edits, invalid parents, immutable code changes and active dependents return stable conflicts.
+      deprecated: true
       tags: [Settings]
       operationId: deactivateLegalEntity
       summary: Deactivate legal entity.
@@ -877,6 +2402,8 @@ paths:
                 $ref: '#/components/schemas/OrganizationItemResponse'
   /v1/organization/branches:
     post:
+      description: Deprecated compatibility adapter. Once organization authority is activated, commands write normalized tables and their legacy projection atomically. Existing admin.setting.update authorization is retained; shared-issuer fiscal edits, invalid parents, immutable code changes and active dependents return stable conflicts.
+      deprecated: true
       tags: [Settings]
       operationId: createBranch
       summary: Create branch inside organization profile.
@@ -901,6 +2428,8 @@ paths:
                 $ref: '#/components/schemas/OrganizationItemResponse'
   /v1/organization/branches/{branch_id}:
     patch:
+      description: Deprecated compatibility adapter. Once organization authority is activated, commands write normalized tables and their legacy projection atomically. Existing admin.setting.update authorization is retained; shared-issuer fiscal edits, invalid parents, immutable code changes and active dependents return stable conflicts.
+      deprecated: true
       tags: [Settings]
       operationId: updateBranch
       summary: Update branch inside organization profile.
@@ -930,6 +2459,8 @@ paths:
                 $ref: '#/components/schemas/OrganizationItemResponse'
   /v1/organization/branches/{branch_id}/activate:
     post:
+      description: Deprecated compatibility adapter. Once organization authority is activated, commands write normalized tables and their legacy projection atomically. Existing admin.setting.update authorization is retained; shared-issuer fiscal edits, invalid parents, immutable code changes and active dependents return stable conflicts.
+      deprecated: true
       tags: [Settings]
       operationId: activateBranch
       summary: Activate branch.
@@ -953,6 +2484,8 @@ paths:
                 $ref: '#/components/schemas/OrganizationItemResponse'
   /v1/organization/branches/{branch_id}/deactivate:
     post:
+      description: Deprecated compatibility adapter. Once organization authority is activated, commands write normalized tables and their legacy projection atomically. Existing admin.setting.update authorization is retained; shared-issuer fiscal edits, invalid parents, immutable code changes and active dependents return stable conflicts.
+      deprecated: true
       tags: [Settings]
       operationId: deactivateBranch
       summary: Deactivate branch.
@@ -1018,15 +2551,16 @@ paths:
       operationId: listCodeSequences
       summary: List tenant business-code policies and current counters.
       x-required-module: admin
-      x-permissions: [admin.setting.read]
+      x-permissions: [admin.setting.read, production.product_service.create, production.recipe.create, production.order.release, production.machine.create, inventory.warehouse.create, inventory.item.create, inventory.movement.create, inventory.movement.reverse, inventory.finished_goods_receipt.receive, hr.area.create, hr.position.create, hr.worker.create, sales.customer.create, sales.quote.create, sales.order.create, sales.delivery.create, purchasing.supplier.create, purchasing.requisition.create, purchasing.order.create, purchasing.receipt.create, maintenance.order.create]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
       responses:
         '200':
-          description: Tenant code-sequence catalog.
+          description: Tenant code-sequence catalog, filtered to the actor's document types unless admin.setting.read is granted.
           content: {application/json: {schema: {$ref: '#/components/schemas/CodeSequenceListResponse'}}}
   /v1/catalogs/code-sequences/{sequence_id}:
     patch:
+      description: "Cost-center numbering remains managed; attempts to configure manual mode are rejected with 422."
       tags: [Catalogs]
       operationId: updateCodeSequence
       summary: Configure automatic or manual business-code capture.
@@ -1049,11 +2583,12 @@ paths:
         '409': {$ref: '#/components/responses/Conflict'}
   /v1/catalogs/code-sequences/{document_type}/next:
     post:
+      description: "The actor needs the matching document-type create/release permission. Cost centers use the dedicated /v1/cost-center-codes/next authority."
       tags: [Catalogs]
       operationId: allocateBusinessCode
       summary: Atomically allocate the next managed code or validate a manual code.
       x-required-module: admin
-      x-permissions: [production.product_service.create, production.recipe.create, production.order.release, production.machine.create, inventory.warehouse.create, inventory.item.create, inventory.movement.create, hr.area.create, hr.position.create, hr.worker.create, sales.customer.create, sales.quote.create, sales.order.create, sales.delivery.create]
+      x-permissions: [production.product_service.create, production.recipe.create, production.order.release, production.machine.create, inventory.warehouse.create, inventory.item.create, inventory.movement.create, inventory.movement.reverse, inventory.finished_goods_receipt.receive, hr.area.create, hr.position.create, hr.worker.create, sales.customer.create, sales.quote.create, sales.order.create, sales.delivery.create, purchasing.supplier.create, purchasing.requisition.create, purchasing.order.create, purchasing.receipt.create, maintenance.order.create]
       parameters:
         - $ref: '#/components/parameters/TenantHeader'
         - name: document_type
@@ -1116,7 +2651,7 @@ paths:
     get:
       operationId: listCommercialCatalogItems
       x-required-module: admin
-      x-permissions: [admin.catalog.read, sales.customer.read, sales.customer.create, sales.customer.update, sales.quote.read, sales.quote.create, sales.quote.update, sales.order.read, sales.order.create]
+      x-permissions: [admin.catalog.read, sales.customer.read, sales.customer.create, sales.customer.update, sales.quote.read, sales.quote.create, sales.quote.update, sales.order.read, sales.order.create, purchasing.supplier.create, purchasing.supplier.update]
       parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { name: catalog_code, in: path, required: true, schema: { type: string, enum: [currencies, payment_terms] } }, { name: include_inactive, in: query, schema: { type: boolean } }]
       responses: { '200': { description: Tenant commercial catalog. } }
     post:
@@ -1130,7 +2665,7 @@ paths:
     get:
       operationId: getCommercialCatalogItemByCode
       x-required-module: admin
-      x-permissions: [admin.catalog.read, sales.customer.create, sales.customer.update, sales.quote.create, sales.quote.update, sales.order.create]
+      x-permissions: [admin.catalog.read, sales.customer.create, sales.customer.update, sales.quote.create, sales.quote.update, sales.order.create, purchasing.supplier.create, purchasing.supplier.update, purchasing.order.create, purchasing.order.update]
       parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { name: catalog_code, in: path, required: true, schema: { type: string } }, { name: code, in: path, required: true, schema: { type: string } }]
       responses: { '200': { description: Active commercial catalog item. } }
   /v1/catalogs/commercial/{catalog_code}/{item_id}:
@@ -1155,6 +2690,173 @@ paths:
       parameters: [{ $ref: '#/components/parameters/TenantHeader' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [primary_color, accent_color, text_color, show_page_number], properties: { logo_data_url: { type: [string, 'null'], maxLength: 1500000, description: "Local only. Valid PNG, JPEG or WebP data URL whose decoded content is at most 1 MB; null removes the current logo." }, primary_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }, accent_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }, text_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }, footer_text: { type: [string, 'null'], maxLength: 300 }, show_page_number: { type: boolean } } } } } }
       responses: { '200': { description: Tenant PDF identity template updated. } }
+  /v1/configuration/document-presentation/division/{division_id}:
+    get:
+      tags: [Configuration]
+      summary: Resolve document presentation for an authorized Division
+      operationId: readDocumentPresentation
+      x-implementation-status: implemented
+      x-required-module: admin
+      x-permissions: [sales.quote.read, sales.quote.approve, production.order.read, production.order.release]
+      parameters:
+        - { name: division_id, in: path, required: true, schema: { type: string, maxLength: 40 } }
+        - { $ref: '#/components/parameters/TenantHeader' }
+      responses:
+        '200':
+          description: Effective issuer, Society, Division and complete template at the time of resolution.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/DocumentPresentationSnapshot' }
+        '403': { description: Permission or Division scope denied. }
+        '404': { description: Division does not exist in this tenant. }
+        '422': { description: Organization reference is inactive. }
+  /v1/configuration/document-template/{scope_type}/{scope_id}:
+    get:
+      tags:
+      - Configuration
+      summary: Read Scoped Template
+      operationId: read_scoped_template_v1_configuration_document_template__scope_type___scope_id__get
+      parameters:
+      - name: scope_type
+        in: path
+        required: true
+        schema:
+          enum:
+          - society
+          - division
+          type: string
+          title: Scope Type
+      - name: scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Scope Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopedTemplateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Scoped configuration rejected; stable error envelope with correlation.
+        '403':
+          description: Scoped configuration rejected; stable error envelope with correlation.
+        '404':
+          description: Scoped configuration rejected; stable error envelope with correlation.
+        '409':
+          description: Scoped configuration rejected; stable error envelope with correlation.
+      x-required-module: admin
+      x-permissions:
+      - admin.setting.read
+    put:
+      tags:
+      - Configuration
+      summary: Write Scoped Template
+      operationId: write_scoped_template_v1_configuration_document_template__scope_type___scope_id__put
+      parameters:
+      - name: scope_type
+        in: path
+        required: true
+        schema:
+          enum:
+          - society
+          - division
+          type: string
+          title: Scope Type
+      - name: scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Scope Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScopedTemplateCommand'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopedTemplateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Scoped configuration rejected; stable error envelope with correlation.
+        '403':
+          description: Scoped configuration rejected; stable error envelope with correlation.
+        '404':
+          description: Scoped configuration rejected; stable error envelope with correlation.
+        '409':
+          description: Scoped configuration rejected; stable error envelope with correlation.
+      x-required-module: admin
+      x-permissions:
+      - admin.setting.update
+      description: Idempotency-Key required. Revision protects concurrent edits; value
+        null restores inheritance. A complete template override is stored.
 components:
   securitySchemes:
     bearerAuth:
@@ -1265,6 +2967,932 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    CodeSequenceAllocationRead:
+      properties:
+        document_type:
+          type: string
+          title: Document Type
+        mode:
+          type: string
+          enum:
+          - managed
+          - manual
+          title: Mode
+        code:
+          type: string
+          title: Code
+        sequence_number:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sequence Number
+      type: object
+      required:
+      - document_type
+      - mode
+      - code
+      title: CodeSequenceAllocationRead
+    DocumentPresentationSnapshot:
+      type: object
+      required: [division_ref_id, division_code, division_name, society_ref_id, society_code, society_name, issuer_ref_id, issuer_code, issuer_legal_name, template_origin, template_origin_id, template]
+      properties:
+        division_ref_id: { type: string }
+        division_code: { type: string }
+        division_name: { type: string }
+        society_ref_id: { type: string }
+        society_code: { type: string }
+        society_name: { type: string }
+        issuer_ref_id: { type: string }
+        issuer_code: { type: string }
+        issuer_legal_name: { type: string }
+        issuer_tax_id: { type: [string, 'null'] }
+        issuer_fiscal_address: { type: [string, 'null'] }
+        issuer_postal_code: { type: [string, 'null'] }
+        issuer_country_code: { type: [string, 'null'] }
+        template_origin: { type: string, enum: [corporate, society, division] }
+        template_origin_id: { type: string }
+        template: { $ref: '#/components/schemas/DocumentTemplateRead' }
+    DocumentTemplateRead:
+      properties:
+        logo_data_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Logo Data Url
+        primary_color:
+          type: string
+          pattern: ^#[0-9A-Fa-f]{6}$
+          title: Primary Color
+          default: '#6106A0'
+        accent_color:
+          type: string
+          pattern: ^#[0-9A-Fa-f]{6}$
+          title: Accent Color
+          default: '#F557D3'
+        text_color:
+          type: string
+          pattern: ^#[0-9A-Fa-f]{6}$
+          title: Text Color
+          default: '#190F34'
+        footer_text:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Footer Text
+        show_page_number:
+          type: boolean
+          title: Show Page Number
+          default: true
+      type: object
+      title: DocumentTemplateRead
+    ScopedTemplateCommand:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        value:
+          anyOf:
+          - $ref: '#/components/schemas/ScopedTemplateValue'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      - value
+      title: ScopedTemplateCommand
+    ScopedTemplateValue:
+      properties:
+        logo_data_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Logo Data Url
+        primary_color:
+          type: string
+          pattern: ^#[0-9A-Fa-f]{6}$
+          title: Primary Color
+          default: '#6106A0'
+        accent_color:
+          type: string
+          pattern: ^#[0-9A-Fa-f]{6}$
+          title: Accent Color
+          default: '#F557D3'
+        text_color:
+          type: string
+          pattern: ^#[0-9A-Fa-f]{6}$
+          title: Text Color
+          default: '#190F34'
+        footer_text:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Footer Text
+        show_page_number:
+          type: boolean
+          title: Show Page Number
+          default: true
+      additionalProperties: false
+      type: object
+      title: ScopedTemplateValue
+
+    ScopedTemplateRead:
+      properties:
+        scope_type:
+          type: string
+          enum:
+          - society
+          - division
+          title: Scope Type
+        scope_id:
+          type: string
+          title: Scope Id
+        revision:
+          type: integer
+          title: Revision
+        override:
+          type: boolean
+          title: Override
+        resolved_from_scope:
+          type: string
+          enum:
+          - corporate
+          - society
+          - division
+          title: Resolved From Scope
+        resolved_from_id:
+          type: string
+          title: Resolved From Id
+        value:
+          $ref: '#/components/schemas/DocumentTemplateRead'
+      type: object
+      required:
+      - scope_type
+      - scope_id
+      - revision
+      - override
+      - resolved_from_scope
+      - resolved_from_id
+      - value
+      title: ScopedTemplateRead
+    ScopedTemplateResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ScopedTemplateRead'
+      type: object
+      required:
+      - data
+      title: ScopedTemplateResponse
+    ScopeResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ScopeRead'
+      type: object
+      required:
+      - data
+      title: ScopeResponse
+    ScopeRead:
+      properties:
+        version:
+          type: integer
+          const: 2
+          title: Version
+          default: 2
+        society_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 1000
+          title: Society Ids
+        division_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 1000
+          title: Division Ids
+        revision:
+          type: integer
+          title: Revision
+          default: 0
+        divisions:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Divisions
+      additionalProperties: false
+      type: object
+      title: ScopeRead
+    ScopeUpdate:
+      properties:
+        version:
+          type: integer
+          const: 2
+          title: Version
+          default: 2
+        society_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 1000
+          title: Society Ids
+        division_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 1000
+          title: Division Ids
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      title: ScopeUpdate
+    SessionScopeRead:
+      properties:
+        version:
+          type: integer
+          title: Version
+          default: 1
+        revision:
+          type: integer
+          title: Revision
+          default: 0
+        society_ids:
+          items:
+            type: string
+          type: array
+          title: Society Ids
+        division_ids:
+          items:
+            type: string
+          type: array
+          title: Division Ids
+        societies:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Societies
+        divisions:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Divisions
+        issuers:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Issuers
+        all_divisions:
+          type: boolean
+          title: All Divisions
+          default: false
+        active_division_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Active Division Id
+        active_society_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Active Society Id
+        active_issuer_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Active Issuer Id
+        branch_ids:
+          items:
+            type: string
+          type: array
+          title: Branch Ids
+        branches:
+          items:
+            $ref: '#/components/schemas/SessionBranchRead'
+          type: array
+          title: Branches
+        all_branches:
+          type: boolean
+          title: All Branches
+          default: true
+      type: object
+      title: SessionScopeRead
+    SessionBranchRead:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code
+        status:
+          type: string
+          title: Status
+          default: active
+        legal_entity_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Legal Entity Id
+      type: object
+      required:
+      - id
+      - name
+      title: SessionBranchRead
+    DivisionCreate:
+      properties:
+        code:
+          anyOf:
+          - type: string
+            maxLength: 80
+            minLength: 1
+          - type: 'null'
+          title: Code
+        name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Name
+        society_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Society Id
+        address:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Address
+        phone:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Phone
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - society_id
+      title: DivisionCreate
+    DivisionList:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DivisionRead'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+      type: object
+      required:
+      - data
+      - meta
+      title: DivisionList
+    DivisionRead:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Name
+        society_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Society Id
+        address:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Address
+        phone:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Phone
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+        society_name:
+          type: string
+          title: Society Name
+      additionalProperties: false
+      type: object
+      required:
+      - code
+      - name
+      - society_id
+      - id
+      - status
+      - society_name
+      title: DivisionRead
+    DivisionResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/DivisionRead'
+      type: object
+      required:
+      - data
+      title: DivisionResponse
+    DivisionUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 240
+            minLength: 1
+          - type: 'null'
+          title: Name
+        society_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Society Id
+        address:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Address
+        phone:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Phone
+      additionalProperties: false
+      type: object
+      title: DivisionUpdate
+    FiscalIssuerCreate:
+      properties:
+        tax_id:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Tax Id
+        fiscal_regime:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Fiscal Regime
+        cfdi_usage:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Cfdi Usage
+        fiscal_address:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Fiscal Address
+        postal_code:
+          anyOf:
+          - type: string
+            maxLength: 20
+          - type: 'null'
+          title: Postal Code
+        country_code:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z]{2}$
+          - type: 'null'
+          title: Country Code
+        contact_name:
+          anyOf:
+          - type: string
+            maxLength: 240
+          - type: 'null'
+          title: Contact Name
+        contact_email:
+          anyOf:
+          - type: string
+            maxLength: 240
+          - type: 'null'
+          title: Contact Email
+        contact_phone:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Contact Phone
+        contact_position:
+          anyOf:
+          - type: string
+            maxLength: 240
+          - type: 'null'
+          title: Contact Position
+        code:
+          anyOf:
+          - type: string
+            maxLength: 80
+            minLength: 1
+          - type: 'null'
+          title: Code
+        legal_name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Legal Name
+      additionalProperties: false
+      type: object
+      required:
+      - legal_name
+      title: FiscalIssuerCreate
+    FiscalIssuerList:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FiscalIssuerRead'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+      type: object
+      required:
+      - data
+      - meta
+      title: FiscalIssuerList
+    FiscalIssuerRead:
+      properties:
+        tax_id:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Tax Id
+        fiscal_regime:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Fiscal Regime
+        cfdi_usage:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Cfdi Usage
+        fiscal_address:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Fiscal Address
+        postal_code:
+          anyOf:
+          - type: string
+            maxLength: 20
+          - type: 'null'
+          title: Postal Code
+        country_code:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z]{2}$
+          - type: 'null'
+          title: Country Code
+        contact_name:
+          anyOf:
+          - type: string
+            maxLength: 240
+          - type: 'null'
+          title: Contact Name
+        contact_email:
+          anyOf:
+          - type: string
+            maxLength: 240
+          - type: 'null'
+          title: Contact Email
+        contact_phone:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Contact Phone
+        contact_position:
+          anyOf:
+          - type: string
+            maxLength: 240
+          - type: 'null'
+          title: Contact Position
+        code:
+          type: string
+          title: Code
+        legal_name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Legal Name
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+      additionalProperties: false
+      type: object
+      required:
+      - code
+      - legal_name
+      - id
+      - status
+      title: FiscalIssuerRead
+    FiscalIssuerResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/FiscalIssuerRead'
+      type: object
+      required:
+      - data
+      title: FiscalIssuerResponse
+    FiscalIssuerUpdate:
+      properties:
+        tax_id:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Tax Id
+        fiscal_regime:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Fiscal Regime
+        cfdi_usage:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Cfdi Usage
+        fiscal_address:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Fiscal Address
+        postal_code:
+          anyOf:
+          - type: string
+            maxLength: 20
+          - type: 'null'
+          title: Postal Code
+        country_code:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z]{2}$
+          - type: 'null'
+          title: Country Code
+        contact_name:
+          anyOf:
+          - type: string
+            maxLength: 240
+          - type: 'null'
+          title: Contact Name
+        contact_email:
+          anyOf:
+          - type: string
+            maxLength: 240
+          - type: 'null'
+          title: Contact Email
+        contact_phone:
+          anyOf:
+          - type: string
+            maxLength: 80
+          - type: 'null'
+          title: Contact Phone
+        contact_position:
+          anyOf:
+          - type: string
+            maxLength: 240
+          - type: 'null'
+          title: Contact Position
+        legal_name:
+          anyOf:
+          - type: string
+            maxLength: 240
+            minLength: 1
+          - type: 'null'
+          title: Legal Name
+      additionalProperties: false
+      type: object
+      title: FiscalIssuerUpdate
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    PageMeta:
+      properties:
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+        code_mode:
+          type: string
+          enum:
+          - managed
+          - manual
+          title: Code Mode
+          default: managed
+      type: object
+      required:
+      - total
+      - limit
+      - offset
+      title: PageMeta
+    SocietyCreate:
+      properties:
+        code:
+          anyOf:
+          - type: string
+            maxLength: 80
+            minLength: 1
+          - type: 'null'
+          title: Code
+        name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Name
+        issuer_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Issuer Id
+        base_currency:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Base Currency
+          default: MXN
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - issuer_id
+      title: SocietyCreate
+    SocietyList:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SocietyRead'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+      type: object
+      required:
+      - data
+      - meta
+      title: SocietyList
+    SocietyRead:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Name
+        issuer_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Issuer Id
+        base_currency:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Base Currency
+          default: MXN
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+        issuer_name:
+          type: string
+          title: Issuer Name
+      additionalProperties: false
+      type: object
+      required:
+      - code
+      - name
+      - issuer_id
+      - id
+      - status
+      - issuer_name
+      title: SocietyRead
+    SocietyResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/SocietyRead'
+      type: object
+      required:
+      - data
+      title: SocietyResponse
+    SocietyUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 240
+            minLength: 1
+          - type: 'null'
+          title: Name
+        issuer_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Issuer Id
+        base_currency:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Base Currency
+      additionalProperties: false
+      type: object
+      title: SocietyUpdate
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
     CodeSequence:
       type: object
       required: [id, document_type, module_code, name_es, name_en, prefix, separator, next_number, padding, mode, system_default, status]
@@ -1788,8 +4416,36 @@ components:
           type: array
           items:
             type: string
+        capability_policy_version:
+          type: integer
+          enum: [1]
+          description: Version del contrato de disponibilidad; no es un permiso ni prueba de configuracion contable.
+        capabilities:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CapabilityAvailability'
+        cost_center_requirement:
+          type: string
+          enum: [enabled_imputation_flows]
+          description: Centro obligatorio solo en flujos de imputacion habilitados; no exige capturar centros por preparar el sistema.
         scope:
           $ref: '#/components/schemas/SessionScope'
+    CapabilityAvailability:
+      type: object
+      required: [owner_service, availability_module, implemented, available, reason]
+      properties:
+        owner_service:
+          type: string
+        availability_module:
+          type: string
+        implemented:
+          type: boolean
+        available:
+          type: boolean
+          description: Disponibilidad tecnica y del tenant, no autorizacion de una accion ni configuracion lista. Cada consumidor revalida permiso y alcance.
+        reason:
+          type: string
+          enum: [available, not_implemented, module_inactive, identity_inactive]
     SessionBranch:
       type: object
       required: [id, name, status]
@@ -1805,19 +4461,7 @@ components:
         legal_entity_id:
           type: string
     SessionScope:
-      type: object
-      required: [branch_ids, branches, all_branches]
-      properties:
-        branch_ids:
-          type: array
-          items:
-            type: string
-        branches:
-          type: array
-          items:
-            $ref: '#/components/schemas/SessionBranch'
-        all_branches:
-          type: boolean
+      $ref: '#/components/schemas/SessionScopeRead'
     SessionContextResponse:
       type: object
       properties:
@@ -2247,3 +4891,14 @@ components:
           type: string
         phone:
           type: string
+
+x-transport-policy:
+  implementation-status: local-only
+  operation-budget-seconds: 25
+  budget-enforcement: cooperative-http-steps-not-database-cancellation
+  request-budget-header: X-Request-Timeout-Ms
+  request-budget-unit: milliseconds
+  request-budget-rule: optional-positive-finite-value-can-only-reduce-budget
+  correlation-header: X-Correlation-Id
+  error-dependency-field: error.details.dependency_service
+  automatic-retries: false

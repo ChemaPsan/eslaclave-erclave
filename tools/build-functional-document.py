@@ -94,7 +94,7 @@ def build(source: Path, target: Path):
     for name in ['List Bullet','List Number']:
         document.styles[name].paragraph_format.space_after = Pt(4)
     footer = section.footer.paragraphs[0]
-    footer.text = 'ERClave  |  Local / QA pendiente  |  14 septiembre 2026  |  '
+    footer.text = 'ERClave  |  Alcance y revisión en la portada  |  '
     element(footer._p,'w:fldSimple',{'w:instr':'PAGE'})
     for run in footer.runs:
         run.font.size = Pt(8)
@@ -143,7 +143,7 @@ def build(source: Path, target: Path):
             inline(document.add_paragraph(),line.removeprefix('> '))
     document.core_properties.title=title
     document.core_properties.author='ERClave'
-    document.core_properties.subject='Manual operativo: base QA b63cdad y mejoras Local pendientes de promoción'
+    document.core_properties.subject='Documento funcional ERClave; alcance y revisión definidos en la fuente'
     target.parent.mkdir(parents=True,exist_ok=True)
     document.save(target)
     reopened=Document(target)

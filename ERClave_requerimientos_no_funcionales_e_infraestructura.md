@@ -1,5 +1,7 @@
 # ERClave — Requerimientos no funcionales, infraestructura y arquitectura SaaS
 
+> Referencia de diseño y alcance: no demuestra implementación ni despliegue. Consultar [estado vigente](docs/contexto/ESTADO_ACTUAL.md).
+
 ## 1. Objetivo del documento
 
 Este documento complementa el documento base de ERClave con consideraciones no funcionales, arquitectura técnica, infraestructura, seguridad, autenticación, ambientes, modularidad, suscripciones, integraciones y criterios iniciales para operar el sistema como un SSaaS escalable.

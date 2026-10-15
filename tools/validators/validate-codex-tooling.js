@@ -4,7 +4,11 @@ const { fail, fromRoot, ok, readText } = require("./shared");
 
 const errors = [];
 const requiredFiles = [
+  "docs/contexto/CONTROL_CONTABLE.md",
   "AGENTS.md",
+  ".agents/skills/erclave-accounting/SKILL.md",
+  ".agents/skills/erclave-module-boundaries/SKILL.md",
+  "docs/arquitectura/cobertura_agentes_modulos.md",
   ".agents/skills/erclave-feature/SKILL.md",
   ".agents/skills/erclave-feature/agents/openai.yaml",
   ".agents/skills/erclave-db-migration/SKILL.md",
@@ -13,9 +17,13 @@ const requiredFiles = [
   ".agents/skills/erclave-environment-boundaries/agents/openai.yaml",
   ".agents/skills/erclave-qa-release/SKILL.md",
   ".agents/skills/erclave-qa-release/agents/openai.yaml",
+  ".agents/skills/erclave-form-contract/SKILL.md",
+  ".agents/skills/erclave-context-reconcile/SKILL.md",
+  ".agents/skills/erclave-qa-evidence/SKILL.md",
   "tools/verify.js",
   "tools/traceability-draft.js",
   "tools/session-context.js",
+  "tools/context_brief.py",
   "docs/contexto/INICIO_SESION.md"
 ];
 
@@ -58,8 +66,15 @@ if (!errors.length) {
     if (yaml.includes("�")) errors.push(`${name}/agents/openai.yaml contains invalid replacement characters.`);
   }
 
+  for (const name of ["erclave-form-contract", "erclave-context-reconcile", "erclave-qa-evidence", "erclave-accounting", "erclave-module-boundaries"]) {
+    const skill = readText(path.join(".agents", "skills", name, "SKILL.md")).replace(/\r\n/g, "\n");
+    if (!skill.startsWith(`---\nname: ${name}\n`) || !skill.includes("description:")) {
+      errors.push(`${name}/SKILL.md has invalid frontmatter or name.`);
+    }
+  }
+
   const packageJson = JSON.parse(readText("package.json"));
-  for (const script of ["validate:codex-tooling", "validate:environment-boundaries", "validate:local-qa-parity", "validate:session-context", "verify", "traceability:draft", "session:context"]) {
+  for (const script of ["validate:codex-tooling", "validate:environment-boundaries", "validate:local-qa-parity", "validate:session-context", "verify", "traceability:draft", "session:context", "session:brief"]) {
     if (!packageJson.scripts?.[script]) errors.push(`package.json is missing script ${script}.`);
   }
 }

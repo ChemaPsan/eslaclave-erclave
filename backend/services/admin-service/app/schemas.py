@@ -365,9 +365,28 @@ class SessionBranchRead(BaseModel):
 
 
 class SessionScopeRead(BaseModel):
+    version: int = 1
+    revision: int = 0
+    society_ids: list[str] = Field(default_factory=list)
+    division_ids: list[str] = Field(default_factory=list)
+    societies: list[dict[str, Any]] = Field(default_factory=list)
+    divisions: list[dict[str, Any]] = Field(default_factory=list)
+    issuers: list[dict[str, Any]] = Field(default_factory=list)
+    all_divisions: bool = False
+    active_division_id: str | None = None
+    active_society_id: str | None = None
+    active_issuer_id: str | None = None
     branch_ids: list[str] = Field(default_factory=list)
     branches: list[SessionBranchRead] = Field(default_factory=list)
     all_branches: bool = True
+
+
+class CapabilityAvailabilityRead(BaseModel):
+    owner_service: str
+    availability_module: str
+    implemented: bool
+    available: bool
+    reason: Literal["available", "not_implemented", "module_inactive", "identity_inactive"]
 
 
 class SessionContextRead(BaseModel):
@@ -379,6 +398,9 @@ class SessionContextRead(BaseModel):
     permissions: list[str] = Field(default_factory=list)
     active_modules: list[str] = Field(default_factory=list)
     scope: SessionScopeRead = Field(default_factory=SessionScopeRead)
+    capability_policy_version: Literal[1] = 1
+    capabilities: dict[str, CapabilityAvailabilityRead] = Field(default_factory=dict)
+    cost_center_requirement: Literal["enabled_imputation_flows"] = "enabled_imputation_flows"
 
 
 class SessionContextResponse(BaseModel):

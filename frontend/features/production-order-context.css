@@ -1,0 +1,12 @@
+.production-order-context-form { container-type: inline-size; display:grid; gap:16px; min-width:0; max-width:100%; }
+.production-order-context-form * { box-sizing:border-box; }
+.production-order-context-form label { display:grid; gap:6px; min-width:0; }
+.production-order-context-form input, .production-order-context-form select { width:100%; min-width:0; max-width:100%; min-height:42px; padding:8px; border:1px solid var(--line); border-radius:8px; color:var(--text); background:var(--panel,#fff); }
+.production-order-context-form p, .production-order-context-form h2, .production-order-context-form strong, .production-order-context-form button { overflow-wrap:anywhere; }
+.production-order-context-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.production-order-context-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.production-order-context-lookup { display:grid; gap:8px; }
+.production-order-context-lookup [data-options] { display:grid; max-height:240px; overflow:auto; gap:6px; }
+.production-order-context-lookup [data-options] button { white-space:normal; text-align:start; }
+.production-order-context-summary, .production-order-context-form article { padding:12px; border:1px solid var(--line); border-radius:8px; }
+@container (max-width:480px) { .production-order-context-grid { grid-template-columns:minmax(0,1fr); } }

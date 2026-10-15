@@ -1,5 +1,24 @@
 # ERClave — Módulo de Contabilidad
 
+## Vigencia y relaciones · conciliación CHG-311
+
+Planned: libros, cuentas, periodos, eventos económicos, mapeos y pólizas no tienen runtime operativo. Organización, centros y separación parcial de operación no activan Accounting. Las secciones siguientes son diseño objetivo sujeto a los cortes CONT-09–18. Custodio: agente técnico contable y skill erclave-accounting.
+
+Estado por ambiente: [ESTADO_ACTUAL](../docs/contexto/ESTADO_ACTUAL.md). Brechas y cierre: [CONTROL_CONTABLE](../docs/contexto/CONTROL_CONTABLE.md). Relación operativa: [06_costos_centros_de_costos](06_costos_centros_de_costos.md). Contrato/regla: [contabilidad_opcional_y_capacidades](../docs/arquitectura/contabilidad_opcional_y_capacidades.md). Navegación: [índice de módulos](README.md).
+
+Las referencias CHG conservan procedencia; no se suman como pendientes vigentes. La historia de implementación está en [TRAZABILIDAD](../TRAZABILIDAD.md). Costos y tarifas deben usar moneda base de Sociedad (CHG-309); su aplicación se verifica por flujo en el control, sin reinterpretar historia. Centro requerido sólo donde el flujo de imputación esté habilitado.
+
+**CHG-297 Local:** [CONT-05 catálogo básico](../docs/arquitectura/cont_05_catalogo_centros.md) ya permite administrar centros por División desde Administración, con dueño Costing y permisos propios. No habilita cálculos ni Accounting. Centro obligatorio únicamente por flujo de imputación habilitado; asignaciones CONT-07 implementadas y consumidores CONT-08 parciales según CONTROL_CONTABLE.
+
+**CHG-294 — modularidad opcional:** organización y operación no requieren Accounting. Catálogo básico de centros en Administración, propiedad de Costing; análisis de Costos y ejecución contable tienen activaciones independientes. Diseño y obligatoriedad condicional; autorización puntual del catálogo implementada en CONT-05 en [frontera de capacidades](../docs/arquitectura/contabilidad_opcional_y_capacidades.md). No cambia runtime ni habilita módulos.
+
+
+## Decisión CHG-289 — libros por Sociedad, Accounting pendiente
+
+**Gobierno CHG-293:** fichas contables senior y guardianes explícitos en `AGENTES.md`; aplicar [.agents/skills/erclave-accounting/SKILL.md](../.agents/skills/erclave-accounting/SKILL.md) a cambios contables o de imputación. [Matriz de cobertura](../docs/arquitectura/cobertura_agentes_modulos.md). CONT-03 agrega alcance organizacional Local, sin libros/asientos ni certificación fiscal. Los requisitos futuros siguientes se interpretan con libro por Sociedad y Centro de costos obligatorio según el plan vigente.
+
+El usuario definió libros a nivel Sociedad. Cada Sociedad tiene un solo Emisor; un Emisor puede agrupar varias Sociedades. Moneda base configurable, inicialmente MXN; transacciones en otra moneda con tipo de cambio capturado y conservación de importe original/base. Centro de costos obligatorio únicamente en flujos de imputación habilitados dentro de la División. CONT-01 aporta sólo persistencia organizacional Local; eventos, cuentas, periodos, conversiones y pólizas siguen pendientes. [Decisiones](../docs/arquitectura/cont_00_decisiones_y_preflight.md) y [plan](../docs/arquitectura/plan_preparacion_contabilidad.md).
+
 ## 1. Objetivo
 
 El módulo de Contabilidad estará enfocado en registrar, consultar, justificar y analizar los asientos contables generados por la operación de ERClave.

@@ -8,6 +8,9 @@ from sqlalchemy.engine import Engine
 from erclave_common.db import create_database_engine
 
 from .seeds.catalog import MVP_MODULE_SEEDS, get_module_seed
+from .seeds.permissions import BASIC_COST_CENTER_PERMISSIONS
+from .organization_store import OrganizationStore, authority, lock_organization, structure_hash, error as organization_error
+from .organization_scope import resolve_scope
 
 from .schemas import (
     BackofficeTenantRead,
@@ -194,6 +197,8 @@ class AdminRepository:
             replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
             if replay is not None:
                 return CodeSequenceRead.model_validate(replay)
+            if before["document_type"] == "costing.cost_center" and values.get("mode", "managed") != "managed":
+                organization_error("cost_center_managed_code_required", "mode", 422)
             if "next_number" in values and values["next_number"] < before["next_number"]:
                 raise ValueError("code_sequence_cannot_rewind")
             if values:
@@ -215,6 +220,11 @@ class AdminRepository:
             replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
             if replay is not None:
                 return CodeSequenceAllocationRead.model_validate(replay)
+            if normalized_document_type == "costing.cost_center":
+                connection.execute(text("""insert into admin.code_sequences
+                    (id,tenant_id,document_type,module_code,name_es,name_en,prefix,separator,next_number,padding,mode,system_default,status)
+                    values (:id,:tenant,'costing.cost_center','admin','Centro de costos','Cost center','CC','-',1,6,'managed',true,'active')
+                    on conflict (tenant_id,document_type) do nothing"""), {"id": "seq_"+uuid4().hex[:26], "tenant": tenant_id})
             sequence = connection.execute(text("""select id,document_type,prefix,separator,next_number,padding,mode,status
                 from admin.code_sequences where tenant_id=:tenant_id and document_type=:document_type for update"""), {"tenant_id": tenant_id, "document_type": normalized_document_type}).mappings().first()
             if not sequence or sequence["status"] != "active":
@@ -721,6 +731,11 @@ class AdminRepository:
         correlation_id: str,
     ) -> dict | None:
         with self.engine.begin() as connection:
+            lock_organization(connection, tenant_id)
+            if authority(connection, tenant_id) or connection.execute(text(
+                "select 1 from admin.organization_imports where tenant_id=:tenant limit 1"
+            ), {"tenant": tenant_id}).first():
+                organization_error("organization_tenant_in_use")
             before = connection.execute(
                 text(
                     """
@@ -1093,7 +1108,7 @@ class AdminRepository:
                             else admin.memberships.activated_at
                         end,
                         disabled_at = null,
-                        metadata = excluded.metadata,
+                        metadata = (excluded.metadata - 'scope') || admin.memberships.metadata,
                         updated_at = now()
                     returning id, status
                     """
@@ -1247,6 +1262,20 @@ class AdminRepository:
         correlation_id: str,
     ) -> SettingRead | None:
         with self.engine.begin() as connection:
+            if key == "document.template":
+                lock_organization(connection, tenant_id)
+            if key == "organization.profile":
+                lock_organization(connection, tenant_id)
+                active = authority(connection, tenant_id)
+                current = connection.execute(text(
+                    "select value from admin.tenant_settings where tenant_id=:tenant and key='organization.profile' for update"
+                ), {"tenant": tenant_id}).scalar() or {}
+                if active:
+                    if structure_hash(current) != active["projection_hash"]:
+                        organization_error("organization_projection_changed")
+                    if any(name in value and value[name] != current[name] for name in ("legal_entities", "branches")):
+                        organization_error("organization_structure_read_only")
+                value = {**current, **value}
             before = connection.execute(
                 text(
                     """
@@ -1532,10 +1561,11 @@ class AdminRepository:
             ).scalars().all()
 
             organization_profile = self._get_or_create_organization_profile(connection, tenant_id)
+            normalized_scope = resolve_scope(connection, tenant_id, membership["metadata"])
 
         entitlement_reads = [EntitlementRead.model_validate(dict(row)) for row in entitlements]
         role_reads = [RoleRead.model_validate(dict(row)) for row in roles]
-        scope = self._build_session_scope(membership["metadata"], organization_profile)
+        scope = SessionScopeRead.model_validate(normalized_scope) if normalized_scope is not None else self._build_session_scope(membership["metadata"], organization_profile)
         return SessionContextRead(
             tenant=TenantRead.model_validate(dict(tenant)),
             user=UserRead.model_validate(dict(user)),
@@ -1799,8 +1829,8 @@ class AdminRepository:
             membership_row = connection.execute(
                 text(
                     """
-                    insert into admin.memberships (id, tenant_id, user_id, status, invited_at)
-                    values (:membership_id, :tenant_id, :user_id, 'invited', now())
+                    insert into admin.memberships (id, tenant_id, user_id, status, invited_at, metadata)
+                    values (:membership_id, :tenant_id, :user_id, 'invited', now(), cast(:initial_scope as jsonb))
                     on conflict (tenant_id, user_id)
                     do update set
                         status = 'invited',
@@ -1810,7 +1840,8 @@ class AdminRepository:
                     returning id
                     """
                 ),
-                {"membership_id": membership_id, "tenant_id": tenant_id, "user_id": user_id},
+                {"membership_id": membership_id, "tenant_id": tenant_id, "user_id": user_id,
+                 "initial_scope": json.dumps({"scope": {"version": 2, "revision": 0, "society_ids": [], "division_ids": []}})},
             ).mappings().one()
 
             self._replace_membership_roles(connection, tenant_id, membership_row["id"], role_ids)
@@ -2067,6 +2098,10 @@ class AdminRepository:
         correlation_id: str,
     ) -> dict | None:
         with self.engine.begin() as connection:
+            lock_organization(connection, tenant_id)
+            if authority(connection, tenant_id):
+                return OrganizationStore(self).legacy_command(connection, tenant_id, collection_key,
+                    {key: value for key, value in item.items() if key not in ("id", "status")}, None, idempotency_key, correlation_id)
             profile = self._get_or_create_organization_profile(connection, tenant_id)
             if profile is None:
                 return None
@@ -2098,6 +2133,10 @@ class AdminRepository:
         correlation_id: str,
     ) -> dict | None:
         with self.engine.begin() as connection:
+            lock_organization(connection, tenant_id)
+            if authority(connection, tenant_id):
+                return OrganizationStore(self).legacy_command(connection, tenant_id, collection_key,
+                    patch, item_id, idempotency_key, correlation_id)
             profile = self._get_or_create_organization_profile(connection, tenant_id)
             if profile is None:
                 return None
@@ -2824,6 +2863,8 @@ class AdminRepository:
 
     def evaluate_policy(self, tenant_id: str, actor_id: str, module: str, resource: str, action: str) -> PolicyDecision:
         permission_code = f"{module}.{resource}.{action}"
+        if permission_code in BASIC_COST_CENTER_PERMISSIONS:
+            module = "admin"
         with self.engine.connect() as connection:
             tenant_status = connection.execute(
                 text("select status from admin.tenants where id = :tenant_id"),

@@ -5,6 +5,8 @@ import re
 from .catalog import MODULE_CODES
 
 
+BASIC_COST_CENTER_PERMISSIONS = frozenset(f"costing.cost_center.{action}" for action in ("read", "create", "update", "status"))
+
 PERMISSION_LINE_RE = re.compile(r"x-permissions:\s*\[(?P<permissions>[^\]]*)\]")
 REQUIRED_MODULE_RE = re.compile(r"x-required-module:\s*(?P<module>[A-Za-z0-9_-]+)")
 
@@ -35,6 +37,9 @@ MODULE_LABELS = {
 }
 MODULE_ORDER = {"admin": 10, "production": 20, "hr": 25, "inventory": 30, "sales": 40, "purchasing": 45, "maintenance": 47, "billing": 50, "integrations": 70}
 RESOURCE_LABELS = {
+    "cost_center": ("centros de costos", "cost centers"),
+    "society": ("sociedades", "societies"), "division": ("divisiones", "divisions"),
+    "fiscal_issuer": ("emisores fiscales", "fiscal issuers"),
     "business_unit": ("unidades de negocio", "business units"), "entitlement": ("modulos del tenant", "tenant modules"),
     "role": ("roles", "roles"), "role.permissions": ("permisos de roles", "role permissions"),
     "setting": ("configuracion", "settings"), "tenant": ("datos del tenant", "tenant data"), "user": ("usuarios", "users"),
@@ -79,7 +84,9 @@ def derive_permission_seed(code: str, required_module: str, source_file: str) ->
     parts = code.split(".")
     if len(parts) < 3:
         raise ValueError(f"Permission code must have at least 3 segments: {code}")
-    if parts[0] in MODULE_CODES or parts[0] in {"public", "external"}:
+    if code in BASIC_COST_CENTER_PERMISSIONS:
+        module_code, resource_parts = "admin", ["cost_center"]
+    elif parts[0] in MODULE_CODES or parts[0] in {"public", "external"}:
         module_code, resource_parts = parts[0], parts[1:-1]
     elif parts[0] == "internal":
         if len(parts) > 2 and parts[1] in MODULE_CODES:

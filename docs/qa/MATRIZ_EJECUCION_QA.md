@@ -1,6 +1,6 @@
 # Matriz de ejecución de pruebas QA
 
-Base QA: b63cdad. Candidato CHG-272–275 pendiente de SHA y promoción. Revisión documental: 2026-09-14.
+QA desplegado: e57237fe90319f88e1db8ed8d2e686604d2d9c54. Release: 34932659212. Revisión documental: 2026-09-15.
 
 Registre fecha, tester, rol, navegador, evidencia y observaciones por caso. Sin ejecutar no equivale a Pasa. Para variantes, agregue una fila con el mismo ID y su descripción. Consulte las precondiciones y resultados en la guía.
 
@@ -63,16 +63,16 @@ Registre fecha, tester, rol, navegador, evidencia y observaciones por caso. Sin 
 | QA-IDEM-01 | Reintentos y concurrencia | Sin ejecutar | | |
 | QA-NAV-01 | Sesión idioma y navegación | Sin ejecutar | | |
 
-## Casos del candidato (pendientes de promoción)
+## Formularios, margen y evidencia (desplegados; aceptación pendiente)
 
 | Caso | Prueba | Resultado | Fecha y tester | Evidencia y observaciones |
 |---|---|---|---|---|
 | QA-FORM-01 | Campos y filas en conflicto | Sin ejecutar | | |
 | QA-FORM-02 | Errores generales y respuesta tardía | Sin ejecutar | | |
 | QA-MARGIN-01 | Margen mayor a 100% | Sin ejecutar | | |
-| QA-EVID-01 | Recepción antes de espera o inicio | Sin ejecutar | | |
+| QA-EVID-01 | Recepción antes de espera o inicio | Sin ejecutar | Smoke parcial; ver registro de release | OP-000003: formulario nuevo y rechazo de descripción inicial vacía observados. Falta guardado/transición/reintento; no equivale a Pasa. |
 | QA-EVID-02 | Cierre en el formulario de avance | Sin ejecutar | | |
-| QA-EVID-03 | Optimización y límites | Sin ejecutar | | |
+| QA-EVID-03 | Optimización y límites | Bloqueado | Smoke automatizado; ver registro de release | Carga detenida por permiso de archivos locales de la extensión; pendiente reintento autorizado. No hay evidencia guardada ni fallo del producto confirmado. |
 | QA-EVID-04 | Consulta privada y permisos | Sin ejecutar | | |
 | QA-EVID-05 | Caducidad de todos los adjuntos | Sin ejecutar | | |
 | QA-EVID-06 | Productos y reintentos | Sin ejecutar | | |

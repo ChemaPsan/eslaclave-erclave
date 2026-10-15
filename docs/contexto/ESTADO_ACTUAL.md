@@ -1,471 +1,102 @@
 # Estado actual de ERClave
 
-## Datos de prueba autorizados CHG-279
+## Cierre documental Local para Git - CHG-331 - 2026-10-14
 
-El usuario autorizó crear servicio y orden en la sesión QA activa. Consola funcional confirmada como API QA, empresa Es La Clave y sucursal Edo. Mex56495. Se creó servicio `prd-000002` (QA Evidencia servicio e57237f), receta aprobada `rec-000002` / `rec_790f962694ee48cbafca788366` y orden `OP-000003` / `ord_5965211f77a37f8e3220fa8025`. Cantidad1E48, prioridad baja, una etapa Producción, recurso existente Empacador A por6MIN y costo planeado3. No materiales ni movimientos de almacén creados.
+Se regeneraron los siete manuales Word desde sus fuentes vigentes, se comprobó su paridad textual/ZIP/XML/tablas y se revisaron visualmente las 50 páginas renderizadas. Sus huellas se renovaron en el registro documental. Son exportaciones candidatas Local; CC-20 integrado, CC-19 con datos reales y promoción QA permanecen pendientes. La nota CHG-330 siguiente corresponde al estado previo.
 
-Alta mediante formularios/API QA de la sesión autorizada; validación de recursos correcta y persistencia de la orden comprobada tras recarga. Estado Liberada/0%. El identificador técnico del tenant no se mostró en UI; se verificaron empresa, sucursal y cuenta de sesión, sin extraer tokens. Registros quedan disponibles para el smoke, no cancelados ni inactivados todavía. Cierre previsto: conservar referencia de auditoría y cancelar/inactivar los registros de prueba cuando termine la validación.
+## Revisión documental para Git - CHG-330 - 2026-10-14
 
-La página publicada aún sirve el formulario anterior de avance sin campos de evidencia; se abrió y canceló sin guardar. No se cargaron adjuntos ni se comprobó descarga autenticada. El release34932659212 sigue esperando en qa-traffic. La sesión autenticada y fixtures están resueltos; falta habilitar la vía de prueba del candidato sin afirmar que el frontend viejo valida el cambio. No repetir la solicitud de cuenta u orden al usuario.
+La fuente Markdown de Administración ya explica el selector de Sociedad y División comprobado en Local. El diagrama backend refleja el head Local `20261014_0062` y la trazabilidad CHG-322 contiene los campos exigidos. El validador documental sólo mantiene siete discrepancias de paridad fuente/Word de cambios Local acumulados; los DOCX siguen clasificados como exportaciones pendientes y no se deben distribuir como edición vigente. No hubo commit ni publicación de rama por esta revisión.
 
-## Promoción CHG-278 — candidatos verificados, tráfico pendiente
+## Selector de contexto corregido en Local - CHG-329 - 2026-10-14
 
-PR #15 fusionado tras CI34931780981 aprobado. SHA inmutable: `e57237fe90319f88e1db8ed8d2e686604d2d9c54`. Candidato34932158226 aprobado, siete imágenes verificadas; archivo del manifiesto SHA256 `50f6df93bd59f09ce3198cf43f1a64cbbb782888bb23a483c28bc7fb256c8cde`.
+La barra superior permite cambiar Sociedad/División con una lista legible y accesible, sin el buscador genérico comprimido. El cambio consulta `GET /v1/session/context?division_id=...` y guarda la preferencia sólo tras confirmación. Se comprobó en navegador Local con el tenant demo: lista de 3 Divisiones, cambio entre Sociedades, conservación tras recarga y Escape. Centro de costos permanece por División/flujo, no como preferencia global. Sin cambio de API, datos ni QA.
 
-Release34932659212: preflight, migración/configuración y servicios aprobados. Jobs Cloud Run `erclave-migrate-qa-f8hkh` y `erclave-configure-tenant-qa-cj7hz` completados. Migración aprobada hasta `20260913_0036`. Copia automática de erclave-qa-postgres del14 septiembre completada y PITR habilitado con7 días verificados en consola; no se restauró ni copió DB Local.
+## Configuración sintética Local para CC-19/20 - CHG-328 - 2026-10-14
 
-Siete revisiones candidatas al0% de tráfico y smoke health/ready/version aprobado. `qa-traffic` pendiente; frontend no ejecutado. El tráfico público conserva b63cdad, verificado antes de crear candidatos. Falta prueba autenticada de carga/descarga de evidencia con cuenta y orden de prueba autorizadas; solicitadas al usuario, no crear fixtures funcionales QA por inferencia. No declarar paridad/UAT completa. Revisión visual Word pendiente.
+En el tenant demo `ten_739ee59d765d5e14818674800d` de PostgreSQL Local `127.0.0.1:5434/erclave_local` se crearon por APIs dueñas un Emisor, una Sociedad USD, dos Divisiones y tres Centros de costos activos; se conservaron el Emisor, Sociedad MXN y División existentes. La estructura resultante es 2 Sociedades, 3 Divisiones (dos de la Sociedad MXN y una de la USD) y un Centro por División. Los IDs y equivalencias de esta estructura sintética están en `.local/cc19-demo-local-manifest.json` y `.local/cc19-demo-estructura-local.csv`; son artefactos locales ignorados por Git. Un inventario de solo lectura dejó 38 registros legacy sin contexto/División comprobable en `.local/cc19-demo-excepciones-local.csv`. No se hizo backfill, ni se asignaron maestros o documentos históricos, ni se configuraron cuentas o libros: Accounting sigue planned/apagado. CC-19 de datos reales y CC-20 de aceptación integrada siguen abiertos. No hubo acceso a QA/Producción.
 
-Local:360 pruebas aprobadas/cero omitidas con PostgreSQL, incluidas las55 históricas. Bucket privado/lifecycle365/IAM mínimo y variable GitHub ya configurados en CHG-277. El usuario autorizó explícitamente publicar identificadores técnicos en el PR público; no se publicaron credenciales.
+## Preparacion CC-20 - CHG-327 - 2026-10-14
 
-Evidencia y digests en `docs/operaciones/release_qa_20260914.md`. No aprobar tráfico hasta cerrar el smoke autenticado previsto en el plan. Continuar el mismo run/candidato, sin reconstruir ni ejecutar deploys locales.
+[Matriz y procedimiento de aceptación Local](../operaciones/cc20_aceptacion_integrada_local.md) preparados con 16 casos integrados, precondiciones, evidencia y criterio de cierre. El usuario pidió probar después: ningún caso se ejecutó ni se marcó aprobado en este corte. CC-20 sigue pendiente de ejecución Local; QA conserva su propia matriz. CC-19 continúa sin mapeo real y Accounting apagado.
 
-## Preparación QA y manuales CHG-275
+## Preparacion CC-19 - CHG-326 - 2026-10-14
 
-Revisión 2026-09-14: siete manuales y guía actualizados para Local con capacidades pendientes de QA; 65 casos en guía/matriz (56 base +9 nuevos), sin aceptación inferida. Las siete APIs QA reportan b63cdad en /version. Se preparó QA_EVIDENCE_BUCKET en qa-release; bucket/IAM aún requieren aprovisionamiento autorizado y smoke. Local head `20260913_0036`; QA documentado `20260908_0034` sin cambios.
+El usuario confirmo que aun no dispone de la estructura ni del mapeo real. Se preparo [la guia y diagrama](../arquitectura/cc19_mapeos_y_configuracion_contable.md) de equivalencias operativas y configuracion futura de cuentas. CC-19 permanece abierto: no hubo backfill, migracion nueva, escritura de datos, acceso QA ni activacion de Accounting. La operacion debe seguir funcionando sin el modulo contable; el estado implementado Local de CC-21 permanece como se describe abajo.
 
-Verify CHG-275 aprobado:292 backend,58 skips sin DB y validadores completos. Word regenerado/verificado estructuralmente; revisión visual pendiente de renderizador, no distribuir como final.
+## Implementación CC-21 - CHG-325 - 2026-10-14
 
-Selección segura:29 aprobadas sin skips (23 DB históricas,3 schemas históricos,3 DB nuevas). De las55 históricas antes omitidas se verificaron26 y quedan29 bloqueadas por fixtures de otros tenants/limpieza amplia. No lanzar verify:postgres completo. Detalle, rollback, matriz API y gates en `docs/operaciones/release_qa_20260914.md`. Sin publicación de rama/PR, migración o deploy QA.
+CC-21 implementado solo en Local: Production confirma costo estimado unitario por Division en moneda base de Sociedad y Sales calcula vista previa verificable en borrador/envio, congela al aprobar y copia el snapshot al pedido. Tasa explicita cuando la moneda documental difiere; faltantes permiten aprobar con costo/margen nulos. Migracion aditiva `20261014_0062` up/down/up en PostgreSQL Local, sin backfill. Reportes y UI distinguen historia sin procedencia. Accounting apagado; sin QA ni aceptacion integral CC-20. Pendientes CC-19, CC-20 y Word.
 
+## Estado anterior - CHG-324 - 2026-10-14
 
-## Evidencia de servicios CHG-274 — solo Local
+Revision CC-21 documentada: el costo estimado de cotizaciones aun no tiene procedencia monetaria confiable y puede compararse indebidamente con el precio documental. El usuario confirmo que la aprobacion debe permitirse con costo/margen estimados nulos cuando falten costo o tasa confirmados. No hubo cambio de runtime, migracion ni ambiente en CHG-324; CC-21 sigue pendiente de implementacion. CC-18 permanece implementado Local y CC-19/20 pendientes.
 
-Validación CHG-274:185 browser aprobadas;19 focalizadas (14 archivo/optimización,3 API y2 PostgreSQL), verify292 aprobadas/58 omitidas en corrida sin DB. Las2 integraciones nuevas sí se ejecutaron por separado, al igual que la de margen del corte anterior;55 generales siguen pendientes. Reversa y expiración reales en fixtures, permisos y tamaños comprobados; revisión visual390/760/1280 y tema oscuro.
+## Estado anterior - CHG-323 - 2026-10-14
 
-CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+CC-18 implementado solo en Local: Admin asigna folios de Puestos RH, movimientos Inventory, proveedor/requisicion/orden/recepcion Purchasing y orden Maintenance. Modo administrado o manual por tipo; los movimientos internos sin formulario en modo manual usan un codigo estable derivado del origen. Los codigos historicos no se renumeran. Migracion `20261014_0061` up/down/up en PostgreSQL Local. Accounting sigue apagado. No hubo promocion QA ni aceptacion integral CC-20. Continuan revision del costo estimado y datos CC-19.
 
+## Estado anterior - CHG-322 - 2026-10-14
 
-## Margen esperado sin tope CHG-273
+CC-17 implementado solo en Local para la impresion de cotizaciones y ordenes de produccion, con presentacion Admin efectiva por Division y snapshot al aprobar/liberar. Migracion `20261014_0060` up/down/up en PostgreSQL Local. Sin QA, despliegue, datos reales ni activacion de Accounting. CC-18, revision de costo estimado, CC-19 y CC-20 continuan pendientes. La pausa CHG-321 descrita abajo es antecedente y fue levantada por la peticion de implementar CC-17.
 
-Validación CHG-273:14 pruebas focalizadas aprobadas, incluida PostgreSQL real;23 browser de contratos y98 feedback aprobadas; verify275 backend aprobado. En la corrida genérica se omiten56 integraciones;1 (margen) se ejecutó aparte contra DB real,55 generales previas siguen pendientes. API Local8002 reiniciada y esquema servido sin máximo100 comprobado.
+## Corte histórico conciliado · 2026-10-12
 
-CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración Local `20260913_0035` aplicada; QA conserva `20260908_0034` y release b63cdad. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
+**Pausa CHG-321:** por solicitud del usuario se detiene el trabajo tras CC-16 Local. CC-17/18, revisión del costo estimado y CC-19/20 permanecen abiertos; [INICIO_SESION](INICIO_SESION.md) conserva el punto exacto de reanudación. No hubo promoción ni activación contable por esta pausa.
 
+**CHG-320 · CC-16 implementado Local:** contexto fijo de orden Maintenance, técnico RH por División y costo laboral conservado; alcance documental/reportes e integración de máquina reforzados. Migración `20261012_0059` up/down/up comprobada. Maintenance50, RH/Production123 y navegador271 aprobadas sin omisiones; verify final aprobó validadores/compilación y backend738 aprobadas/233 omitidas/1 warning sin DB (chg320-verify-final.log). Sin promoción QA. [Contrato y evidencia](../arquitectura/cont_08_mantenimiento_contexto.md). Conserva todos los cortes cerrados siguientes.
 
-## Feedback de formularios solo Local CHG-272
+Corte anterior conservado: **CHG-319**, CC-15 implementado Local: requisición/OC por División, condiciones explícitas del proveedor, herencia a recepciones incluidas de servicios, alcance e idempotencia. Conserva CC-14 CHG-317 y fabricación CHG-315. La fase sigue abierta: CC-17/18, costo estimado, datos CC-19 y aceptación CC-20. [Punto de reanudación](INICIO_SESION.md).
 
-CHG-272 incorpora errores vinculados a controles, resumen accesible, foco y conservacion de captura en el frontend compartido y Backoffice. Registra 54 variantes de formulario y aliases/partidas; catalogo de 244 codigos ES/EN y 95 reglas schema. La skill `erclave-form-feedback` queda obligatoria para ajustes presentes y futuros. Wiring no equivale a cobertura exhaustiva del negocio.
+[Contrato y evidencia de Compras](../arquitectura/cont_08_compras_contexto.md). PostgreSQL Local y pruebas API; navegador interceptado separado de aceptación integrada. Head `20261012_0059`, Accounting apagado.
 
-Evidencia final: 174 pruebas browser aprobadas sin duplicados (98 offline, incluidos 14 Backoffice; 22 MAIN sobre once formularios reales ES/EN; 54 de regresion general). Offline se ejecuto en grupos complementarios 94 + 4, ambos exit 0. `npm run verify` y validate aprobados (262 backend, 55 omitidas sin DB; sintaxis 79). Skill valida, diff limpio y revision visual claro/oscuro 390 px y CSS zoom2 aprobada; esta ultima no equivale a zoom real del navegador. Detalle reproducible y APIs: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+| Ambiente | Estado documentado | Evidencia y límite |
+|---|---|---|
+| Local | Árbol sobre HEAD `213f75c` con cambios anteriores sin commit; head Alembic `20261012_0059`. Orden manual dimensionada y moneda de servicios implementadas en Local; fabricación Sales CC-12 implementada y ensayada entre servicios reales. | [CONTROL_CONTABLE](CONTROL_CONTABLE.md), [Production CHG-313](../arquitectura/cont_08_produccion_contexto.md), migraciones y trazabilidad. Volver a comprobar Git y DB antes de operar. |
+| QA | Según cierre CHG-280, QA está desplegado en `e57237fe90319f88e1db8ed8d2e686604d2d9c54`, en siete APIs y frontend. La revision vigente de Cloud SQL QA es `20260913_0036`. | [Release 2026-09-14](../operaciones/release_qa_20260914.md). Estado documentado, sin consulta remota en esta conciliación; UAT incompleta. |
+| Produccion | No promovida por estos cortes; infraestructura productiva fuera del trabajo autorizado. | [Fronteras de ambientes](../arquitectura/fronteras_ambientes_local_qa_produccion.md). |
 
-No cambia backend, contratos, DB, permisos ni datos operativos; sin deploy. QA permanece en CHG-270 `b63cdad`; la edición documental CHG-275 agrega las mejoras Local y conserva la distinción de ambiente. UAT y causa exacta del incidente original pendientes.
+La preparación de candidato CONT-01/CHG-290 no se promovió: CHG-291 sustituyó esa siguiente acción por trabajo Local. No existe autorización vigente de despliegue derivada de ese documento.
 
-## Manuales y guía del tester CHG-271
+## Capacidades implementadas y separación organizativa
 
-CHG-271 sincroniza los siete manuales funcionales Markdown/Word y la guía de pruebas con QA `b63cdad`, revisión documental 2026-09-10. Entrega: `docs/qa/ENTREGA_TESTER.md`; generación reproducible de tablas y procedimientos mediante herramientas documentales. No cambia runtime, contratos, migraciones, datos, permisos ni despliegues. No publica documentos en GitHub.
+Las fichas de [módulos](../../modulos/README.md) describen reglas y recorridos. La [matriz CC-01 a CC-20](CONTROL_CONTABLE.md) detalla la relación contable, su dueño, evidencia, brecha y cierre; no debe sustituirse por una suma de notas CHG antiguas.
 
-Incidencia identificada por revisión de código: la bandeja para solicitar sobrantes de Mantenimiento busca `.submodule-screen`, ausente en su render; confirmar/corregir acceso por el agente técnico de Mantenimiento y QA. No se declara disponible el recorrido completo desde pantalla. Compra directa soportada por API pero no expuesta en alta de órdenes de la UI. Ambos límites constan en manuales/guía. UAT autenticada continúa pendiente del tester.
+| Dominio | Implementado y conservado | Límite organizativo vigente en Local |
+|---|---|---|
+| Administración | Tenant, identidad/permisos, catálogos, folios, organización Sociedad/División/Emisor, scope v2 y configuración por alcance. | Consumidores de impresión/folios y datos reales todavía parciales. Organización nueva es Local, no prueba libro ni QA. |
+| Costing | Catálogo básico de centros por División, expuesto por Admin con permisos y estados. | Analítica y Accounting siguen planned, con activación independiente. |
+| RH | Áreas, puestos, trabajadores y asignaciones por División con tarifa explícita. | CHG-312 confirma moneda Sociedad en tarifa por División y entrega capacidad nominal con IDs compartidos. CHG-313 integra compromisos laborales en Production y amplía lookup productivo; gates técnicos aprobados; aceptación integrada pendiente. |
+| Production | Productos/servicios, máquinas, recetas, validación/planificación, órdenes/etapas, recursos, materiales y evidencia de servicios; asignaciones por División. | CHG-312 confirma tarifa de máquina y consulta capacidad neta global por fecha/División. CHG-313 conecta intento durable, alta manual/liberación, compromisos individuales y costo/contexto para recepción. CHG-315 conecta origen comercial CC-12 y su recepción/entrega real. |
+| Inventory | Almacenes/artículos, movimientos inmutables, reversas, saldos/Kardex, reservas, tránsito con recepción/retorno y recepción de terminado/sobrantes. | CHG-307 adapta manuales/reversas y stock de Sales, contexto/costo de Sociedad y filtros. CHG-313 agrega Production/proof, disponibilidad y recepción PT con costo exacto. CHG-317 conecta Maintenance/Purchasing, transferencias misma Sociedad y sobrantes con contexto, costo, alcance y recuperación. |
+| Sales | Clientes, cotizaciones, pedidos, entregas y órdenes propias de servicio. | Asignaciones/condiciones por División, cotización→pedido, ciclo de servicios y stock→entrega ya adaptados Local. CHG-314 adapta moneda original/convertida de Servicios (aceptación integrada pendiente); fabricación CC-12 implementada CHG-315 con prueba autenticada y conciliación durable. |
+| Purchasing | Proveedores, requisiciones, órdenes, recepciones de bienes y servicios, recuperación de efectos parciales. | Maestro/condiciones por División ya Local; CHG-317 adapta recepción física/costo y prueba origen; requisición/OC y separación integral siguen CC-15. Compra directa API sin alta UI documentada. |
+| Maintenance | Correctivos, técnicos, tiempos, bloqueo/liberación de máquina, refacciones/sobrantes y recuperación manual. | CHG-320 implementa contexto, técnicos/tarifas RH, costo laboral y alcance integral; conserva recuperación CC-14. Capacidad sólo Maintenance por persona/día UTC. Resolver no reanuda Production. |
+| Reportes/interfaz | 28 reportes operativos CSV por dueño, feedback ES/EN, formularios corregibles, responsive y paginación visual. | Analítica transversal, cursor contractual y cobertura completa de permisos/volumen siguen pendientes. |
 
+La base operativa anterior a la separación incluye el release QA CHG-280. No inferir que sus ampliaciones organizativas posteriores estén en QA. Ventas de servicios, Compras de servicios y tránsito físico ya existen; no volver a listarlos como funcionalidades ausentes por una nota pre-release.
 
-## Estado vigente tras release QA CHG-270
+## Evidencia y aceptación
 
-CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
+- CHG-314 smoke HTTP: cuatro APIs recargadas; ocho health/login/sesión/contratos aprobados. Una División autorizada con consultas200 vacías de capacidad/máquinas; rechazos401/403/422 esperados. Sin escrituras de negocio; no UAT productiva integrada. Evidencia chg314-http-smoke.log.
 
-Las notas de preparación y cortes anteriores que siguen son evidencia histórica; no deben disparar un release duplicado.
+- CHG-308 registra 231 pruebas focales PostgreSQL/API, verify 532 aprobadas/152 omitidas, migración up/down vacío/up y smoke Local. No hubo UAT nueva de fabricación ni UI nueva en ese corte.
+- CHG-310 registra revisión de implementación y control por submódulo. Los resultados de cada ejecución pertenecen a su corte; [TRAZABILIDAD](../../TRAZABILIDAD.md) conserva esa evidencia.
+- QA CHG-280 promovió correctamente el release. CHG-281 aclaró que el texto de evidencia de `OP-000003` sí se guardó; falló el avance de estado por demora RH. Carga/descarga de adjuntos, cierre y otras pruebas autenticadas siguen sin aceptación completa. [Diagnóstico](../auditorias/timeouts_local_2026-09-16.md).
+- Guía/matriz QA y Word no equivalen a UAT ni a revisión visual aprobada. Consultar [entrega al tester](../qa/ENTREGA_TESTER.md), [matriz QA](../qa/MATRIZ_EJECUCION_QA.md) y [registro de manuales](../manuales_solucion/REGISTRO.md).
 
+## Evidencia CC-12 · CHG-315
 
-## Promoción QA en preparación CHG-269
+Production137 y Sales/Inventory173 pruebas PostgreSQL/API aprobadas sin omisiones. Navegador completo231 aprobado con APIs interceptadas; 16 pruebas focales finales de visibilidad/recorrido aprobadas. Verify final:596 aprobadas196 omitidas1warning sin DB; validadores/compilación aprobados (chg315-verify.log). Ensayo HTTP real completo con servicios Local recargados: solicitud, orden única, consumo4 unidades, recepción2, entrega2 y costo60MXN→3USD; replays sin duplicados, rechazo de cantidad manipulada y limpieza verificada. Logs chg315-production-tests.log, chg315-sales-inventory-final.log y chg315-http.log. Datos sintéticos no sustituyen aceptación con datos reales CC-19/20.
 
-CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
+## Operación y fuentes de autoridad
 
+El [arranque canónico](../../backend/scripts/start_local.ps1) usa PostgreSQL loopback `5434/erclave_local`, Firebase Emulator `demo-erclave` y APIs locales. Ver [inicio de sesión](INICIO_SESION.md), [TENANTS](TENANTS.md) y [fronteras](../arquitectura/fronteras_ambientes_local_qa_produccion.md) antes de escribir. No afirmar disponibilidad actual sin comprobación.
 
-## Continuidad vigente CHG-268
+[DECISIONES](DECISIONES.md) responde por qué; [PENDIENTES](PENDIENTES.md) responde qué falta; [CONTROL_CONTABLE](CONTROL_CONTABLE.md) detalla cada integración; [gobierno documental](../arquitectura/gobierno_documentacion_viva.md) establece mantenimiento.
 
-CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+## Historia y sustituciones
 
+El [snapshot anterior](historico/ESTADO_ACTUAL_PRE_CHG311.md) conserva íntegros los cortes, pruebas y revisiones previos. Sus distintas cabezas Local/QA, afirmaciones de tráfico pendiente, catálogos vacíos y mandatos de reanudación no describen el presente. Los handoffs CHG-255/261/269 son históricos; la entrada vigente es INICIO_SESION.
 
-## Confirmaciones operativas Local CHG-265
-
-CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
-
-Cabeza Alembic Local `20260908_0034`; QA head `20260825_0029`, sin cambios remotos. Migraciones 0032–0034 aplicadas en PostgreSQL loopback `erclave_local`. Verificación Local: 257 pruebas backend (51 omitidas sin DB), 19 integraciones PostgreSQL seleccionadas y 40 pruebas browser aprobadas. Dos smokes HTTP reales y downgrade vacío/upgrade 0034 aprobados; seis APIs Local reiniciadas. Pruebas y limitaciones en el informe CHG-265. Las secciones siguientes conservan evidencia de cortes anteriores.
-
-## Materiales por Almacen antes de iniciar CHG-264
-
-CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
-
-Cabeza Alembic Local `20260908_0031`; QA conserva `20260825_0029` y el release a119ddf. Migracion Local aplicada, reversa vacia y nueva aplicacion verificadas. APIs Production/Inventory reiniciadas en loopback. Verificacion aprobada: verify:local con 33 pruebas de navegador y suite backend, ampliada y repetida con verify:postgres a 297 pruebas sin omisiones. Smoke HTTP real aprobado (bloqueo, entrega, repeticion, inicio, costo y salidas unicas); no desplegado a QA/Produccion. Se preservan CHG-262 y CHG-263.
-
-## Refacciones desde Movimientos Local CHG-263
-
-- Implementacion Local de bandeja paginada, confirmacion completa de entrega, rechazo con motivo y reintento de partidas pendientes por Almacen. Resolver Mantenimiento ya no genera salidas.
-- Contratos Maintenance e Inventory actualizados; permisos existentes, schemas y cabeza Alembic `20260901_0030` conservados. Detalle: `docs/auditorias/refacciones_movimientos_2026-09-07.md`.
-- `npm.cmd run verify:local` aprobado: 290 pruebas backend PostgreSQL sin omisiones y 30 de navegador; contratos, validadores, sintaxis y compilacion aprobados. Smoke HTTP real aprobado con reserva, entrega por Almacen, reintento sin duplicado y cierre. Compras/Mantenimiento ya entran a la coleccion general de pytest.
-- Se preservan los cambios previos CHG-262. Se reiniciaron solo Inventory y Maintenance Local; fixtures sinteticas del tenant autorizado limpiadas por sus propios IDs. Sin migraciones, seeds, escrituras remotas, commit, push, PR ni promocion QA/Produccion.
-
-> Reanudacion vigente: consultar `docs/contexto/REANUDACION_CHG261.md`. El handoff CHG-255 se conserva solo como evidencia historica del corte previo.
-
-## Auditoria frontend/backend Local CHG-262
-
-- Se corrigieron 17 grupos de desajustes de formularios, campos no persistidos, valores iniciales, ramas condicionales y permisos. Detalle y matriz de APIs: `docs/auditorias/frontend_backend_2026-09-07.md`.
-- Produccion, Inventory, RH, Compras, Ventas y Mantenimiento conservan contratos y schemas. Administracion carga consultas por permiso; Backoffice fue recorrido en lectura.
-- Evidencia integral: npm.cmd run verify:local aprobado; 245 pruebas backend PostgreSQL sin omisiones y 25 pruebas de navegador aprobadas, incluidos Backoffice y ES/EN en contenedor estrecho. Validadores, contratos, sintaxis y compilacion aprobados.
-- Cambios sin commit en el working tree sobre `735312b`. No hubo migraciones, seeds, cargas operativas, escrituras QA/Produccion, despliegue, push ni PR.
-
-## Release QA CHG-254
-
-- El workflow gobernado promovio a QA el SHA inmutable `a119ddf5e8d42376b8557b234e15e3681b19c2a7` con Admin, Produccion, Inventory, RH, Ventas, Compras y Mantenimiento.
-- Cloud SQL QA avanzo de `20260821_0023` a `20260825_0029`; la reconciliacion estructural habilito el catalogo real de siete modulos para el tenant `ten_739ee59d765d5e14818674800d`. No se ejecutaron seeds ni se copiaron datos funcionales Local.
-- Las identidades runtime de Compras y Mantenimiento usan minimo privilegio, sin llaves administradas por usuario. El primer intento de servicios se detuvo por falta de `iam.serviceAccounts.actAs`; se concedio `roles/iam.serviceAccountUser` al deployer solo sobre las dos identidades nuevas y el reintento concluyo correctamente.
-- La verificacion externa aprobo `/health`, `/ready` y `/version` en los siete servicios: todos reportan ambiente `qa`, base configurada y el mismo SHA. `https://erclave.web.app` responde `HTTP 200` y publica las siete URL sanitizadas.
-- El candidato fue construido en la ejecucion `33470879111` y promovido en `33473077996`, con aprobaciones independientes para base/configuracion, servicios, trafico y frontend. La evidencia completa esta en `docs/operaciones/resultado_release_qa_20260901.md`.
-- UAT funcional queda en curso con el equipo de pruebas; sus observaciones no se consideran defectos confirmados hasta reproducirlas y clasificarlas.
-
-Ultima actualizacion: 2026-09-07.
-
-- CHG-261 deja `docs/contexto/REANUDACION_CHG261.md` como handoff vigente posterior al reinicio, con Git consolidado hasta CHG-260, limites Local/QA, evidencia de validacion y pasos exactos para levantar y verificar el entorno.
-
-## Ambiente local
-
-- El arranque canonico Local aislado opera mediante `backend/scripts/start_local.ps1`: PostgreSQL `erclave_local`, Firebase Auth Emulator `demo-erclave`, frontend y APIs locales.
-- Una ejecucion local conectada a cualquier recurso QA debe identificarse como `local conectado a QA` y requiere autorizacion explicita.
-
-- Frontend estatico local esperado en `http://127.0.0.1:4173`.
-- CHG-258 presenta la pestana principal como `ERClave` y retira la etiqueta obsoleta `Propuesta Frontend`; Backoffice conserva su titulo propio.
-- Admin API local esperada en `http://127.0.0.1:8000` contra PostgreSQL local. La conexion local a QA usada en una validacion autorizada anterior es evidencia historica, no el modo local canonico.
-- Production API local esperada en `http://127.0.0.1:8002`.
-- Inventory API local esperada en `http://127.0.0.1:8004`.
-- HR API local esperada en `http://127.0.0.1:8006`.
-- Sales API local esperada en `http://127.0.0.1:8008`; cubre Clientes, Cotizaciones, Pedidos, surtido y Entregas. El mismo servicio esta desplegado en QA dentro del release de siete servicios.
-- Purchasing API Local esperada en `http://127.0.0.1:8010`; cubre Proveedores, Requisiciones, Ordenes y Recepciones. El mismo servicio esta desplegado en QA; Produccion permanece fuera de alcance.
-- Maintenance API Local esperada en `http://127.0.0.1:8012`; cubre ordenes correctivas, tiempos y solicitudes de refacciones. El mismo servicio esta desplegado en QA; Produccion permanece fuera de alcance.
-- PostgreSQL portatil aislado para Inventory escucha en `127.0.0.1:5434`, base `erclave_local`.
-- Firebase Auth Emulator escucha en `127.0.0.1:9099` y su UI en `127.0.0.1:4000`; el usuario local `admin.qa@erclave.local` resuelve el tenant demo sin consumir Firebase QA.
-- Firebase autentica; `admin-service /v1/session/context` resuelve tenant, membresia, modulos, permisos y alcance.
-
-### Estabilizacion Local CHG-259
-
-- El working tree previo quedo consolidado en el commit local `8dcff6b`; no se publico ni promovio a otro ambiente.
-- `npm run verify:postgres` exige `127.0.0.1:5434/erclave_local`, ejecuta toda la suite backend y falla si pytest omite una prueba. `npm run verify:local` agrega la regresion E2E de navegador contra el stack Local completo.
-- Playwright cubre autenticacion con Firebase Emulator, resolucion del tenant demo, navegacion de los seis modulos operativos y todos sus submodulos, las 28 tarjetas de reportes y el bloqueo de solicitudes remotas.
-- Inventory demuestra bajo PostgreSQL que dos reservas concurrentes no sobrevenden y que dos confirmaciones de consumo producen un solo movimiento. Sales, Purchasing y Maintenance conservan sus pruebas de claims, locks y reconciliacion.
-- Compras marca como `failed` toda partida sin respuesta de Inventory, incluso cuando la dependencia devuelve menos resultados que el plan; la conciliacion posterior conserva las partidas ya completadas.
-- El frontend inicio la extraccion incremental de `app.js`: estado inicial, feedback de errores y paginacion viven en modulos propios. Los mensajes visibles ya no leen `error.message` directamente.
-- Los listados renderizados con mas de 25 elementos muestran paginacion accesible Anterior/Siguiente. La paginacion contractual server-side para catalogos que puedan superar el limite preventivo sigue pendiente antes de volumen productivo.
-
-## Cortes funcionales relevantes
-
-### Reportes estandar por modulo
-
-- CHG-256 implementa solo en Local 28 exportaciones CSV de portada: 5 de Produccion, 5 de Almacenes, 4 de RH, 6 de Ventas, 4 de Compras y 4 de Mantenimiento.
-- CHG-257 simplifica la interfaz de esos 28 reportes: tarjetas, modal y confirmacion dicen solo **Generar** o **Reporte generado**, sin presentar el formato tecnico. Los catalogos cerrados son buscables por texto y conservan valores validos por reporte; fechas, busqueda libre y categoria mantienen controles apropiados.
-- Cada tarjeta operativa abre un modal bilingue con filtros minimos de periodo, estatus, prioridad, tipo, condicion o busqueda segun aplique. Un resultado sin filas se informa sin descargar archivo.
-- Los seis servicios propietarios exponen `GET /v1/{modulo}/reports/{report_code}/export`; cada codigo es fijo, tenant-safe y exige el permiso de lectura existente del recurso. No se agregaron permisos ni lecturas cruzadas entre schemas.
-- El CSV usa UTF-8 con BOM, encabezados ES/EN, fechas ISO, numeros crudos, proteccion contra formulas y limite de 50 000 filas. Los reportes de RH, clientes y proveedores minimizan PII y datos fiscales/contacto.
-- Administracion conserva su centro de configuracion. El modulo Reportes sigue planeado para XLSX con formato, PDF, cruces entre modulos, tableros, vistas guardadas y distribucion.
-
-### Feedback operativo
-
-- CHG-251 normaliza en Local los errores de API y Firebase mediante un catálogo común ES/EN gobernado por `error.code`; `message` se conserva sólo como diagnóstico y ya no se presenta directamente.
-- Las transiciones sensibles de Producción, Ventas, Compras y Mantenimiento distinguen éxito, warning y error; si una mutación falla, el selector o proyección vuelve al estado confirmado. Los errores inesperados pueden mostrar `correlation_id` como referencia de soporte.
-- Formularios, toasts y errores de carga declaran semántica ARIA, permanecen visibles según severidad y escapan contenido antes de insertarlo en HTML. `validate:error-feedback` protege estas reglas.
-
-### Compras
-
-- CHG-229 implementa en Local el primer corte supplier-to-receipt mediante `purchasing-service` en `http://127.0.0.1:8010` y schema aislado `purchasing`.
-- CHG-230 agrega perfil fiscal editable al maestro de proveedores. Las altas nuevas exigen razon social, RFC, regimen, correo de facturacion y codigo postal fiscal; RFC es unico por tenant y los registros heredados pueden completarse gradualmente.
-- CHG-231 habilita en la UI Local requisiciones con multiples partidas buscables. Backend rechaza articulos repetidos en el mismo documento y la conversion a Orden solicita un precio independiente por partida.
-- Compras es dueno de proveedores, requisiciones, ordenes, recepciones comerciales, idempotencia y auditoria. Inventory conserva la autoridad exclusiva de articulos, almacenes, movimientos, saldos y Kardex.
-- La requisicion transita de borrador a enviada y aprobada/rechazada; una orden solo consume requisicion aprobada o exige motivo de compra directa. Emitir congela la orden para recibir.
-- La recepcion rechaza duplicados y sobre-recepcion, admite parcialidad y solicita entradas idempotentes a Inventory. Si la autoridad fisica falla, conserva `needs_reconciliation` visible sin fingir una recepcion completada.
-- CHG-232 cierra el flujo source-to-receipt: edita borradores, exige coincidencia exacta requisicion/orden, cancela con motivo, recibe varias partidas, reserva saldo concurrentemente y permite conciliar solo lineas fallidas con claves estables. Inventory expone lectura puntual tenant-safe de almacen para validar la recepcion.
-- El catalogo Admin y manifiesto marcan `purchasing` como implementado, con dependencia obligatoria de `inventory`. La UI ofrece flujo bilingue real; reabastecimiento automatico, factura, CxP, pago, devolucion y asiento permanecen planeados.
-- CHG-248 incorpora en los cinco submodulos el riel de ayuda transversal bilingue; resume cada recorrido sin alterar permisos, estados ni contratos.
-- CHG-250 reemplaza los `prompt()` nativos de cancelacion por un modal ERClave bilingue que exige motivo, conserva los comandos y permisos puntuales existentes y presenta errores dentro del flujo.
-
-### Mantenimiento
-
-- CHG-252 corrige en Local la continuidad de carga del frontend: al terminar las consultas autoritativas, Mantenimiento vuelve a renderizar y deja el estado `Cargando Mantenimiento`; un guardrail evita reintroducir el bloqueo.
-- CHG-234 implementa Mantenimiento correctivo en Local: API `8012`, schema `maintenance`, ordenes manuales o ligadas a maquina/Produccion, responsable RH elegible, tiempos y solicitudes multi-linea al almacen de refacciones.
-- Solicitar una orden bloquea la maquina y pausa una orden productiva `in_progress`; resolver consume reservas y libera la maquina sin reanudar Produccion. Backoffice ya permite activar el modulo y el tenant demo Local lo tiene activo.
-- CHG-235 endurece el flujo en Local con revision `20260824_0028`: conciliacion manual durable, compensacion de reservas al cancelar, rebloqueo al reabrir, revalidacion RH al iniciar, asignacion primaria unica e indices de consulta por orden.
-- RH e Inventory son dependencias obligatorias. Production es integracion opcional y sigue siendo autoridad de maquinas y ordenes productivas.
-- La UI tolera fallos de catalogos sin perder la lectura de ordenes, respeta permisos de mutacion y distingue exito de `needs_reconciliation`. Este corte esta desplegado en QA; Produccion permanece sin cambios.
-- CHG-248 agrega el riel de ayuda transversal bilingue a Ordenes y Refacciones, conservando la regla de no reanudar Produccion automaticamente y la autoridad de Inventory sobre reservas y movimientos.
-
-### Administracion y permisos
-
-- CHG-236 implementa solo en Local autorizacion operativa granular: Produccion separa liberar, esperar recursos, iniciar, pausar, reanudar, enviar a validacion, finalizar y cancelar; cada resultado de etapa tiene permiso propio. Mantenimiento separa sus nueve transiciones y Almacenes separa leer de recibir producto terminado. Compras, Ventas y Recetas ya cumplian el patron y fueron auditados sin cambios de flujo.
-- CHG-237 endurece ese corte solo en Local: la autorizacion exacta de Produccion ocurre antes de precondiciones sensibles; Almacenes consume una proyeccion minima de orden terminada en vez de lecturas generales; OpenAPI y runtime comparan tambien sus permisos; y el mapa maestro/manuales quedan sincronizados.
-- El backend exige el permiso derivado de la accion solicitada aunque el usuario posea otra capacidad del mismo endpoint. El editor de Roles recibe los permisos desde OpenAPI y no depende de nombres fijos de puestos.
-
-- En Local y QA, Administracion incluye catalogos tenant-safe de unidades, monedas y condiciones de pago. Cada tarjeta abre una vista dedicada; altas/ediciones son idempotentes, correlacionadas y auditadas. CHG-205 endurecio `document.template` con logo reemplazable/eliminable, colores, pie y numeracion compartidos por los PDF de Ventas y Produccion. La UI es bilingue y permission-aware; el backend verifica formato, Base64, firma binaria y limite decodificado de 1 MB del logo. Ambos generadores recuperan el registro API si falta en cache, informan fallos visibles y escapan el contenido operativo antes de insertarlo en el documento.
-- Backoffice edita datos basicos del tenant y gobierna sus entitlements contractuales. El administrador del tenant solo cambia `tenant_enabled`; `session/context`, policy y permisos operativos exigen entitlement activo mas preferencia encendida. Los modulos planeados no pueden habilitarse y `admin` es obligatorio. Local esta en Alembic `20260901_0030`; QA permanece en `20260825_0029`.
-- En Local y QA, Administracion ofrece el catalogo de folios por tipo documental. Prefijo, separador, siguiente numero, longitud y modo administrado/manual son editables por tenant; la asignacion de un consecutivo es atomica, idempotente y auditada. Los formularios actuales de Produccion, Almacenes, RH y Ventas consumen esa autoridad antes de crear el registro.
-- Los contratos OpenAPI parsean como YAML y un validador compara operaciones `implemented` con las rutas FastAPI. Capacidades futuras se marcan `x-implementation-status: planned`.
-- Los manifiestos de microfrontend distinguen `implemented`/`planned` y usan permisos puntuales con puntos; en los implementados, `permissions` es el inventario exhaustivo de operaciones OpenAPI implementadas del namespace propietario. El runtime visual actual permanece centralizado en `frontend/app.js` hasta una extraccion modular posterior.
-- El editor de permisos de roles trabaja con borrador explicito, busqueda, filtros, agrupacion por modulo/recurso, seleccion masiva visible y resumen de cambios; no incluye plantillas ni presets.
-- Los nombres tecnicos se conservan como identificadores de policy, pero la interfaz usa nombres y descripciones ES/EN mantenidos en `admin.permissions`.
-- El catalogo remoto requiere tenant y `admin.role.read`; solo expone permisos `tenant` asignables y marca disponibilidad segun el entitlement del modulo.
-- Modificar permisos exige `admin.role.permissions.manage`, `expected_revision` e `Idempotency-Key`. El backend aplica diferencias, conserva scopes heredados sin permitir crear nuevos scopes arbitrarios y audita altas/bajas.
-- Los grants historicos internos pueden conservarse como relacion para no perder trazabilidad, pero ya no ingresan a `session/context` ni producen autorizacion efectiva. El owner conserva un piso administrativo y no puede inactivarse.
-- El payload anterior `permission_ids + scope` permanece compatible y esta deprecado; la interfaz nueva usa `assignments + expected_revision`.
-- Mientras un ambiente no tenga `admin.role.permissions.manage`, Roles permite abrir `Ver permisos` en modo de solo lectura y explica por que la edicion permanece bloqueada; no aplica fallback de escritura inseguro.
-- La revision vigente de Cloud SQL QA es `20260913_0036`. Los siete servicios publicos reportan el SHA inmutable `b63cdad2fbac423c24460e55582ccfc0003e9924`; la promocion gobernada no copio datos funcionales Local.
-
-### Produccion
-
-- En Local y QA, las ordenes nuevas ya no aceptan responsables libres: exigen trabajadores activos validados por `hr-service`, tanto para responsable general como por etapa, y conservan ID externo mas nombre snapshot.
-- CHG-260 corrige exclusivamente la interfaz Local de Productos y servicios: al elegir **Servicio**, el selector enriquecido de articulo de Inventario queda oculto, deshabilitado y sin validacion requerida; el alta envia `inventory_item_id: null`, conforme a la regla autoritativa ya vigente en `production-service`. Los productos fisicos conservan la vinculacion obligatoria.
-
-- Productos y servicios se presentan como catalogo maestro antes de consultar ordenes relacionadas.
-- En Local y QA, Productos/Servicios, Recetas/versiones, Maquinaria, Ordenes y etapas persisten mediante `production-service`; la UI recarga PostgreSQL y no degrada silenciosamente a `localStorage` cuando `apiMode=api`. La validacion autoritativa descrita a continuacion esta desplegada en ambos ambientes.
-- La version vigente aprobada y el borrador/pendiente mas reciente se distinguen. Las ordenes siempre usan `current_version_id`, guardan snapshots de receta, recursos y costos autoritativos y conservan sus etapas aunque la receta cambie.
-- El editor API de Recetas consume materiales activos con `use_in_recipe=true` desde Inventory y puestos productivos/areas activas desde HR. No carga seeds; las etapas nuevas conservan ID externo y nombre snapshot del area mediante la revision Local `20260805_0013`.
-- El editor de Recetas separa materiales, mano de obra y maquinaria. Los materiales usan la unidad base de Almacenes; mano de obra y maquinaria se capturan como horas-persona y horas-maquina, con conversion transparente a minutos para el contrato vigente.
-- Las horas-persona y horas-maquina aceptan cualquier fraccion decimal, sin saltos obligatorios de 15 minutos; la UI aclara que `0.5 h = 30 min`.
-- El buscador de producto/servicio en Recetas presenta nombre y codigo comercial; los IDs tecnicos `prs_*` permanecen ocultos y se usan solo para la relacion interna.
-- Las listas, selectores, mensajes y documentos de Recetas ocultan IDs `rec_*`; muestran nombre, codigo del producto y version mientras conservan el ID en relaciones y atributos internos.
-- En Local y QA, la receta tiene folio de negocio propio, enumera sus fases y exige que sus pesos activos sumen 100%. La orden conserva ese snapshot y expone avance general ponderado. La seleccion de una version aprobada ya reconoce correctamente la version aprobada retornada por API aunque la proyeccion de cabecera no incluya `current_version_id`.
-- El alta y edicion de Maquinaria consulta areas activas de `hr-service`; no permite capturar areas libres y dirige a Areas y puestos cuando el catalogo esta vacio.
-- Las transiciones de orden y etapa se validan en backend, son idempotentes y auditadas. Una etapa terminal no vuelve a pendiente; completar todas las etapas lleva la orden a validacion y el cierre es explicito.
-- En Local y QA, la validacion ya no acepta disponibilidad ni costos enviados por el navegador. Produccion consulta Inventarios y RH, descuenta reservas/capacidad comprometida por fecha, bloquea capacidad concurrentemente y crea reservas atomicas por almacen antes de liberar la orden.
-- La primera entrada de una orden a `in_progress` consume sus reservas como salidas inmutables en los almacenes que las otorgaron y fija el costo real de materiales; reanudar o cerrar no duplica movimientos. En el corte vigente, cerrar exige todas las fases al 100%, pero no obliga a capturar minutos reales de mano de obra/maquinaria; esa medicion queda diferida hasta definir el modelo de eficiencia. `actual_cost` conserva el costo material consumido. Cancelar antes del inicio libera reservas; despues del inicio conserva las salidas fisicas y libera los compromisos de capacidad aplicables.
-- Aprobar una receta revalida producto, materiales, unidades, puestos, areas y maquinaria existente no inactiva. Una maquina en mantenimiento puede definir el proceso, pero aporta cero capacidad y bloquea la orden hasta reactivarse. `area_ref_id` sigue recomendado para asignacion/reportes; nombres y costos son snapshots y no se infieren relaciones por texto.
-- Areas y puestos pertenecen al modulo independiente Recursos Humanos, con microfrontend y `hr-service` propios.
-- En Local y QA, RH administra expedientes minimos de trabajadores con un puesto vigente, identificadores CURP/RFC/NSS validados y datos complementarios opcionales. QA conserva la cabeza Alembic `20260825_0029` y Local esta en `20260901_0030`.
-- El entitlement `hr` controla la disponibilidad por tenant; alta y edicion usan permisos separados `hr.area.*` y `hr.position.*`.
-- El esquema `hr` incorpora aislamiento por tenant, FK compuesto area-puesto, idempotencia y auditoria. El 2026-07-31 se creo vacio en QA; posteriormente CHG-182 desplego `hr-service` y activo el entitlement estructural sin cargar areas ni puestos.
-- El corte estructural CHG-182 dejo seis permisos `hr.*` activos y los permisos `production.labor.*` heredados inactivos. Los catalogos partieron vacios; su contenido actual depende exclusivamente de las capturas UAT autorizadas y no se documenta como constante.
-- Produccion consume areas y puestos desde `hr-service`; no los persiste ni escribe su schema.
-- Las recetas en modo API ya no usan el catalogo fijo de materiales: consumen articulos activos marcados `use_in_recipe` y balances reales de Almacenes.
-
-### Almacenes e inventarios
-
-- `inventory-service` es propietario de almacenes, articulos, movimientos, balances y Kardex.
-- En modo API, el formulario de Movimientos persiste exclusivamente mediante `inventory-service`; al completar el comando invalida y recarga movimientos y balances. `localStorage` queda solo como fallback del modo maqueta y nunca representa un movimiento remoto registrado.
-- El submodulo visible `Inventario` conserva el identificador tecnico `existencias`.
-- Inventario consume balances enriquecidos con busqueda, filtros, orden y paginacion server-side.
-- La vista usa container queries: colapsa el flujo por defecto, transforma la tabla en tarjetas cuando el panel central se estrecha y mueve Alertas debajo del contenido en viewports intermedios.
-- Los movimientos registrados y no reversados son la fuente de verdad.
-- En Local y QA, cada articulo expone `default_unit_cost_per_base_unit` con semantica explicita de costo por unidad base y un calculador HTTP para conversiones compatibles (por ejemplo kg/g o L/ml). No inventa equivalencias para empaques o unidades personalizadas.
-- En Local y QA, `available_quantity = max(on_hand_quantity - reserved_quantity, 0)`. Las reservas activas y no vencidas se muestran por ubicacion y se protegen con bloqueos transaccionales por tenant/articulo/almacen.
-- En Local y QA, cada articulo incorpora costo unitario predeterminado; los saldos calculan costo promedio e importe de inventario desde movimientos inmutables. Salidas, transferencias, reversiones y consumos preservan la valuacion y rechazan stock disponible insuficiente.
-- La unidad base queda bloqueada despues del primer movimiento; articulos/almacenes inactivos no aceptan movimientos ni reservas y `maximum_stock` no puede ser menor que `minimum_stock`.
-- La bandera `inventory.items.use_in_recipe` pertenece a la migracion `20260730_0009`. Los catalogos partieron vacios en QA; desde la promocion `0023`, su contenido depende de las capturas UAT autorizadas y no se documenta como constante.
-- Inventario muestra con saldo cero los articulos sin movimientos que tengan almacen sugerido.
-
-### Recursos Humanos
-
-- Areas y puestos son catalogos generales de RH. La bandera `intervenes_in_production=true`, junto con estatus activo, es la unica que hace elegible un puesto y sus trabajadores para recetas y ordenes; crear un puesto nuevo no activa esa bandera por defecto.
-- La validacion local cubrio 10,000 articulos y 10,000 movimientos; consultar `docs/operaciones/validacion_volumen_inventario_local.md`.
-
-### Ventas
-
-- En Local y QA, `sales-service` persiste Clientes, Cotizaciones, Pedidos y Entregas mediante las revisiones `20260818_0018`/`0019`/`0020`. CHG-204 cerro el plan correctivo de CHG-203: alta de Entregas, mapeo producto-articulo, sanitizacion, costo real por fuente y orquestacion durable/concurrente.
-- Clientes exige codigo estable, contacto principal, moneda/condiciones controladas y responsable seleccionado de trabajadores activos de RH. El perfil fiscal es opcional, pero al iniciarse exige razon social, RFC/ID fiscal y correo de facturacion.
-- Cotizaciones exige cliente activo, producto/servicio activo de Produccion y unidad activa de Administracion igual a la unidad base. Backend calcula subtotal, descuentos, total, costo snapshot y margen estimado.
-- Los estados reales son borrador, cotizada, aprobada, vencida y cancelada; solo el borrador es editable y emitir/aprobar revalida referencias autoritativas.
-- CHG-201 audito la sinergia modular: `sales` declara dependencias efectivas `hr`/`production`; Backoffice, onboarding y Administracion bloquean activaciones o apagados que dejen autoridades rotas, bajo bloqueo transaccional. La API sigue validando modulo y permiso aunque se oculte la UI.
-- Los endpoints de lectura no requieren resolver maestros y la UI usa `Promise.allSettled`: una falla de catalogos o autoridades conserva documentos comerciales disponibles y bloquea solamente las mutaciones dependientes.
-- El onboarding inserta entitlements antes de poblar permisos del owner. Seleccionar Ventas desde Backoffice incluye RH y Produccion, evitando un tenant activo sin autorizaciones comerciales.
-- Pedidos nacen una sola vez de una cotizacion aprobada. Cada producto exige el articulo de Inventory mapeado por Production y puede usar reserva o solicitud de Production; servicios quedan listos. Surtido, cancelacion y confirmacion reclaman estado durable bajo locks, reanudan con claves estables y marcan `needs_reconciliation` tras una interrupcion externa. El costo de `stock` proviene del consumo y el de servicio de captura operativa; Production permanece sin costo real hasta su callback. Devoluciones y facturacion permanecen `planned`.
-- QA ya tiene `sales-service` y la cadena comun de migraciones hasta `20260825_0029`; la habilitacion efectiva de Ventas continua dependiendo del entitlement del tenant y de RH/Produccion.
-- CHG-250 alinea la verdad visible de Ventas: Pedidos se cuenta como capacidad implementada, se elimina copy planeado obsoleto y `Margen` queda como consulta de solo lectura derivada de Pedidos/Entregas, sin alta generica ni persistencia local de documentos.
-- CHG-255 esta aplicado y certificado en PostgreSQL Local con `20260901_0030`: cada partida de servicio de un Pedido confirmado crea una Orden de servicio propia con planeacion, responsable RH, tiempos, costos, evidencia, maquina de estados y aceptacion. Las Entregas conservan exclusivamente productos fisicos. QA permanece en `20260825_0029` y no contiene este corte.
-
-### Compras
-
-- CHG-255 permite activar Compras sin Inventory para tenants que solo adquieren servicios. Cada partida valida una unidad activa de Admin; `inventory_item` exige articulo/almacen y conserva la integracion con Inventory, mientras `service` los prohibe y registra solo recepcion comercial. El cambio esta aplicado y probado en Local con `20260901_0030`; QA no contiene esta ampliacion.
-
-### Interfaz transversal
-
-- CHG-249 aplica una jerarquia visual mas sobria a botones y badges operativos: las acciones secundarias usan superficies neutras, las primarias conservan el acento morado y los estados activo/advertencia/error usan color semantico suave con borde y contraste para tema claro/oscuro. El bloque CSS esta aislado para rollback y conserva targets de 44 px.
-- CHG-250 corrige la identidad de los submodulos RH; localiza su guia, resumen de capacidad y estados laborales provenientes de API; completa los nombres ingleses de Mantenimiento y las etiquetas/atributos accesibles del shell. Los nombres y descripciones capturados por el tenant permanecen como datos sin traduccion automatica.
-
-- CHG-227, implementado solo en Local: toda mutacion HTTP iniciada desde el frontend principal o Backoffice muestra una capa de progreso bilingue, marca la pagina con `aria-busy` y bloquea botones, clics y activaciones por teclado mientras la operacion sigue pendiente. Un contador conserva el bloqueo cuando coinciden varias solicitudes y `finally` lo libera ante exito o error, reduciendo comandos duplicados por reintentos del usuario.
-
-- El shell, los modulos activos, los catalogos, formularios y modales comparten reglas responsive basadas en el ancho real de su contenedor.
-- La guia descriptiva conserva el patron compartido de riel vertical izquierdo y compresion; solo pasa a una columna en anchos estrechos o mediante una excepcion explicita de pantalla.
-- En anchos intermedios las colecciones reducen columnas; en anchos estrechos formularios y acciones se apilan sin ocultar su significado.
-- El backoffice transforma sus filas de tenants y consumo en tarjetas etiquetadas cuando su panel se estrecha.
-- La navegacion movil conserva los submodulos activos, foco visible, salto al contenido y anuncios accesibles de notificaciones.
-- `npm.cmd run validate:responsive` protege los contenedores, puntos de accesibilidad y referencias documentales obligatorias.
-
-## Calidad
-
-- La fuente normativa de ambientes es `docs/arquitectura/fronteras_ambientes_local_qa_produccion.md`; la skill `$erclave-environment-boundaries` aplica su preflight.
-
-- La fuente de verdad del resultado automatizado es la ultima ejecucion de `npm.cmd run verify`.
-- En el corte CHG-195: `npm.cmd run verify` aprobo validadores, parseo/paridad OpenAPI, compilacion y `151 passed, 2 skipped`; las dos integraciones PostgreSQL omitidas por el comando general aprobaron aparte contra `erclave_local` con rollback. El smoke autenticado confirmo frontend, cuatro APIs, readiness, sesion y 50 unidades activas en Local.
-- En el corte CHG-197: `npm.cmd run verify` aprobo validadores, parseo/paridad OpenAPI, compilacion y `161 passed, 3 skipped`; Alembic actualizo exclusivamente `127.0.0.1:5434/erclave_local` de `20260818_0016` a `20260818_0017`. No hubo QA ni Produccion.
-- CHG-198 sincronizo fichas de agentes/modulos, ownership, modelo y diagramas con ese corte y agrego guardrails semanticos. No cambio runtime ni ambientes: las capacidades 0017 continúan exclusivas de Local y QA permanece en `20260805_0013`.
-- CHG-199 formalizo el gobierno de documentacion viva y agrego `validate:documentation` al ciclo obligatorio. El control deriva automaticamente la cabeza Alembic, revision QA, ultimo CHG, indice modular y enlaces internos, y verifica que agentes e inicio de sesion mantengan estas reglas.
-- CHG-200 implemento el primer corte real de Ventas solo en Local: Clientes/Cotizaciones y revision `20260818_0018`; su evidencia historica permanece en `TRAZABILIDAD.md`.
-- CHG-201 audito Ventas y su gobierno modular sin agregar migracion: corrigio dependencias `sales -> hr/production`, permisos de owner en onboarding, lectura parcial por permiso, botones/transiciones, busqueda comercial e idempotencia concurrente. `npm.cmd run verify` aprobo `172 passed, 6 skipped`; las integraciones PostgreSQL adicionales aprobaron `6 passed` y el smoke Firebase valido ambos niveles con estado final restaurado. QA no cambio.
-- CHG-202 extiende el runtime Local con la revision `20260818_0019`: Pedidos, surtido por servicio/Inventory/solicitud a Production, Entregas parciales o totales, catalogos comerciales administrables y plantilla documental tenant-safe. `npm.cmd run verify` aprobo `173 passed, 6 skipped`; la integracion PostgreSQL Sales aprobo `11 passed` y el smoke autenticado confirmo frontend/cinco APIs, catalogos, plantilla y lecturas nuevas. Devoluciones permanecen planeadas; QA no cambio.
-- CHG-203 audito ese corte sin cambiar runtime: confirmo pruebas verdes y documento bloqueadores de UI, XSS, validaciones, identidad producto-articulo, costo real y consistencia distribuida. En ese punto el segundo corte quedo condicionado a cerrar la auditoria.
-- CHG-204 aplico el plan de correccion CHG-203 solo en Local y agrego la revision `20260818_0020`, contratos, UI, pruebas y documentacion sincronizada. `npm.cmd run verify` aprobo `177 passed, 8 skipped` y la integracion PostgreSQL Sales `4 passed`. QA permanece sin Sales y en `20260805_0013`.
-- En el corte CHG-164: `npm.cmd run verify` aprobo todos los validadores, compilacion y `121 passed, 1 skipped`; el smoke autenticado del stack local canonico con Firebase Emulator respondio correctamente en los seis modulos activos.
-- En el corte CHG-166: `npm.cmd run verify` aprobo contratos, validadores, sintaxis y `126 passed, 1 skipped`; el smoke local creo y recargo producto, maquinaria, receta vigente, orden con snapshots y su ciclo completo de etapas.
-- El repositorio puede contener cambios locales no confirmados; `session:context` debe mostrar el estado Git real de cada sesion.
-- `npm.cmd run session:context` reconstruye la memoria operativa sin mostrar secretos: Git, trazabilidad, migraciones, estado, decisiones, tenants, pendientes y puertos locales.
-- `validate-session-context.js` protege la presencia de los documentos y guardrails obligatorios.
-- `validate-responsive-ui.js` protege el estandar transversal de interfaz para futuras sesiones.
-- El candidato incorpora un pipeline QA manual en dos fases: construccion inmutable por SHA/digest y promocion con aprobaciones independientes para base, servicios, trafico y frontend.
-- La configuracion backend de QA/Produccion rechaza URLs locales, CORS local, autenticacion demo, Firebase sin proyecto y base ausente antes de arrancar.
-- El build QA del frontend elimina configuracion local, emulador, tenant y actor; `validate-qa-release-pipeline.js` protege estas fronteras.
-- Fuera de localhost, modo API y URLs provienen del artefacto; Firebase identifica al actor y `/v1/session/tenants` resuelve el tenant activo en memoria. Los overrides de `localStorage` no pueden cambiar la frontera QA.
-- En modo API, la representacion temporal de catalogos operativos vive solo en memoria y se repuebla desde Admin, Produccion, Inventory y RH. Los datos operativos del navegador no persisten entre sesiones ni se tratan como fuente de verdad.
-- La configuracion estructural del tenant QA requiere confirmacion separada, sincroniza el catalogo de permisos y deja activos solamente `admin`, `production`, `inventory` y `hr`; no carga datos funcionales.
-- GitHub Pages ya no se publica automaticamente desde `main`; permanece como maqueta manual.
-- El 2026-08-08 se aprovisionaron en GCP QA las seis identidades dedicadas de `infra/qa/identity-plan.json`, Artifact Registry `erclave-qa` y Workload Identity Federation limitado a `ChemaPsan/eslaclave-erclave`; los accesos al secreto, Artifact Registry, Cloud SQL, Cloud Run y `actAs` quedaron delimitados por recurso o identidad.
-- Los GitHub Environments `qa-build`, `qa-database`, `qa-services`, `qa-traffic` y `qa-frontend` exigen aprobacion de `ChemaPsan`; las variables QA del pipeline quedaron configuradas sin llaves JSON ni URL de base de datos.
-- La identidad federada `erclave-github-deployer-qa` tiene `roles/firebasehosting.admin` en el proyecto QA `erclave`; el plan versionado y el validador del pipeline exigen ese permiso minimo para el gate `qa-frontend`.
-- Cloud SQL QA exige conexiones cifradas (`ENCRYPTED_ONLY`), tiene PITR activo con siete dias de logs y conserva el backup manual exitoso `1786227437185`, creado antes del endurecimiento.
-- El candidato CHG-182 fue construido una sola vez por digest y promovido en QA. Tras CHG-191, `admin-service-qa-bo-1-1` recibe 100% del trafico Admin; `inventory-service-qa-00003-zus`, `hr-service-qa-00003-gor` y `production-service-qa-00008-vuv` conservan 100% en sus servicios. Las cuatro URLs estables aprobaron health, readiness con Cloud SQL y version `4e9c6881dab61239f1abd5fff688019fdd697977`.
-- Inventory y RH ya tienen servicio real desplegado en QA y entitlements estructurales activos para `ERClave Demo QA`; sus catalogos permanecen sin carga funcional o dummy. Ventas e Integraciones permanecen inactivos.
-- El frontend sanitizado CHG-182 esta publicado en Firebase Hosting QA mediante el gate `qa-frontend` del run `31647661435`. `https://erclave.web.app` responde HTTP 200 y su configuracion runtime publicada referencia exclusivamente las cuatro APIs Cloud Run QA, Firebase QA y ningun tenant/actor local.
-- CHG-191 configuro `QA_BACKOFFICE_ADMIN_EMAILS` y el run `31661213987` promovio `admin-service-qa-bo-1-1` mediante `qa-services` y `qa-traffic`. La revision reutiliza la imagen Admin certificada, conserva version CHG-182 y separa la allowlist interna de roles owner; rollback: `admin-service-qa-00017-dih`.
-- El 2026-08-12 se repitio una verificacion publica read-only: Admin, Produccion, Inventory y RH respondieron ambiente `qa`, readiness con base configurada y la misma version CHG-182; `https://erclave.web.app/env.js` publica modo API/Firebase y las cuatro URLs QA.
-- El candidato local posterior corrige dos huecos de paridad antes del siguiente release: Settings ya no carga silenciosamente `backend/.env`, Local rechaza bases/URLs/Firebase QA, y el frontend QA conserva en memoria el tenant resuelto desde `/v1/session/tenants` sin caer al tenant/actor demo. Estos cambios aun no estan desplegados en QA.
-- En los cortes CHG-182 a CHG-190, `npm.cmd run verify` aprobo validadores, compilacion y `135 passed, 1 skipped`; el release QA `31647661435` completo migracion, configuracion, despliegue, smoke, promocion de trafico backend y publicacion del frontend. Los cuatro servicios publicos conservan health, readiness y version `4e9c6881dab61239f1abd5fff688019fdd697977`.
-
-Este archivo debe describir hechos comprobados, no planes ni aspiraciones.
-
-## Evidencia historica incorporada
-
-Las entradas siguientes conservan el estado observado al cerrar cada CHG y no sustituyen el inventario vigente de las secciones anteriores.
-
-# Actualizacion CHG-206 (2026-08-20)
-
-En Local quedó implementada la vinculación guiada de producto terminado entre Almacenes, Producción y Ventas. Producción conserva la referencia autoritativa 1:1; el alta crea un artículo `finishedGood` con la misma unidad y admite identidad logística distinta de la comercial. No hubo migración ni promoción a QA/Producción.
-# Actualizacion CHG-207 (2026-08-20)
-
-En Local existe el Custodio de manuales funcionales de la solucion y la skill `$erclave-solution-manuals`. La biblioteca `docs/manuales_solucion/` separa fuentes Markdown revisables de documentos Word generados y registra cobertura, ambiente y dudas funcionales por modulo. CHG-271 mantiene siete manuales funcionales de módulos implementados, sus Word y la guía del tester para QA b63cdad. Los módulos planeados no reciben manual operativo; la cobertura y limitaciones vigentes están en REGISTRO.md.
-# Actualizacion CHG-208 (2026-08-20)
-
-En Local, Entregas de Ventas vuelve a mostrar la fecha programada requerida en modo API. Los vinculos Cotizacion -> Pedido y Pedido -> Entrega sustituyen listas extensas por busqueda acotada sobre folio, cliente, producto/servicio, importe o estado, conservando solo documentos elegibles. No cambia API ni persistencia; la paginacion server-side para volumen mayor a 200 permanece pendiente.
-
-# Actualizacion CHG-209 (2026-08-20)
-
-En Local, las referencias crecientes implementadas en Administracion, Produccion, Almacenes, Ventas y Recursos Humanos usan búsqueda acotada con identidad visible e ID estable. Estatus, tipos, prioridades y otros catálogos cerrados conservan selectores directos. El patrón es accesible por teclado, reacciona a catálogos actualizados y cuenta con un validador transversal; no cambia APIs ni persistencia y la paginación server-side para más de 200 candidatos sigue pendiente.
-
-# Actualizacion CHG-210 (2026-08-20)
-
-En Local, la raíz de cada módulo es un centro de reportes estándar de solo lectura. Producción, Almacenes, Recursos Humanos, Ventas y Administración muestran sus catálogos/reportes propios sin botones de alta, captura rápida ni acciones de negocio; el patrón y catálogo mínimo también quedaron definidos para Compras, Gastos, Costos y Contabilidad antes de su activación. Las mutaciones permanecen en submódulos. Reportes continúa inactivo y se reserva para cruces, tableros configurables y análisis especializados. No cambia APIs ni persistencia.
-
-# Actualizacion CHG-212 (2026-08-21)
-
-En Local, Administracion gobierna folios y consecutivos por tenant; Produccion identifica recetas y ordenes con codigos de negocio, exige fases ponderadas al 100% y calcula avance general ponderado; Entregables por area conserva numero, peso y area de la fase. Almacenes expone costo por unidad base y conversiones estandar compatibles. RH mantiene areas y puestos generales y solo comparte con Produccion los marcados explicitamente. Las revisiones `20260821_0021` y `20260821_0022` estan aplicadas solo en PostgreSQL Local; QA permanece en `20260805_0013`.
-
-# Actualizacion CHG-241 (2026-08-25)
-
-En Local, Produccion ya no exige concentrar todos los minutos de mano de obra y maquinaria en una sola fecha. Recetas guardan una duracion sugerida y las ordenes capturan inicio, dias productivos y fecha requerida. Production distribuye capacidad de lunes a viernes, descuenta compromisos activos por dia, devuelve el desglose autoritativo y persiste compromisos diarios bajo bloqueo transaccional. Los materiales se validan y reservan una sola vez. La revision `20260825_0029` esta aplicada solo en `127.0.0.1:5434/erclave_local`; QA y Produccion permanecen sin cambios. Calendarios tenant, turnos, festivos, ausencias y afectacion automatica por mantenimiento siguen pendientes.
-
-# Actualizacion CHG-242 (2026-08-25)
-
-En Local, el editor de Recetas ofrece maquinaria activa y en mantenimiento, incluso si su area RH sigue pendiente. La receta define que equipo requiere el proceso; el estatus operativo se evalua al validar/liberar la orden. Por ello una maquina en mantenimiento puede guardarse en la receta, pero sigue aportando cero minutos y bloquea la orden hasta volver a activa. Maquinaria inactiva o inexistente permanece rechazada. No hubo migracion ni cambios de maestros; QA y Produccion permanecen sin cambios.
-
-# Actualizacion CHG-243 (2026-08-25)
-
-En Local, **Validar definicion** dentro de Recetas comprueba exclusivamente que cada recurso exista y sea elegible y proyecta cantidades/costo; no compara inventario ni horas disponibles. La duracion sugerida solo precarga la futura orden. **Validar orden** conserva la comprobacion autoritativa de materiales, minutos de puestos y maquinas, compromisos existentes y horizonte multi-dia. No hubo migracion ni cambios de datos; QA y Produccion permanecen sin cambios.
-
-# Actualizacion CHG-244 (2026-08-25)
-
-El frontend Local compacta el shell y elimina la identidad generica **Centro operativo** y los badges tecnicos de persistencia. Los indicadores transversales viven ahora encima de **Alertas operativas** y responden al ancho del panel lateral. Los modales adaptan validaciones de recursos y partidas de Compras por su propio contenedor; Mantenimiento y Compras usan tarjetas operativas que apilan identidad, responsable, estados, partidas y acciones sin comprimir palabras. Los controles operativos pequenos conservan un target minimo de 44 px. La cobertura ES/EN activa incluye tambien Compras, Mantenimiento y Recursos Humanos. No hubo cambio de API, base de datos, datos ni ambientes remotos.
-
-# Actualizacion CHG-245 (2026-08-25)
-
-El frontend Local aprovecha mejor la zona superior en todos los modulos y submodulos. Contexto de sesion, sucursal, busqueda y accion contextual comparten una topbar adaptable en escritorio; en ancho intermedio se compactan antes de apilarse. La cabecera blanca previa al hero funciona solo como breadcrumb y retorno, sin repetir el titulo principal; heroes, workspace y paneles reducen su altura y espaciado compartidos. No hubo cambio de API, base de datos, datos ni ambientes remotos.
-
-# Actualizacion CHG-246 (2026-08-25)
-
-En Local, Resolver y Cancelar ordenes de Mantenimiento ya no usan cuadros `prompt()` del navegador. Ambas acciones abren formularios dentro del modal ERClave; Resolver captura diagnostico, causa raiz opcional, trabajo realizado y verificacion, mientras Cancelar solicita el motivo auditable. Validaciones y errores permanecen dentro del formulario. No hubo cambio de API, base de datos, datos ni ambientes remotos.
-
-# Actualizacion CHG-247 (2026-08-25)
-
-En Local, la captura requerida de tiempo de Mantenimiento ya es visible desde cada tarjeta de orden activa mediante **Registrar tiempo**. Resolver muestra el total acumulado y, cuando la orden tiene cero minutos, integra Inicio, Fin y Notas antes de ejecutar la transicion; si el rol carece de `maintenance.time.create`, explica la autoridad faltante. No hubo cambio de contrato, base de datos, datos ni ambientes remotos.
-
-# Actualizacion CHG-211 (2026-08-20)
-
-En Local se revirtió únicamente la portada de Administración: vuelve a mostrar su centro de configuración de organización, usuarios, roles, permisos, módulos activos y catálogos base. Los módulos operativos conservan las portadas de reportes estándar de CHG-210 y Reportes continúa inactivo. La excepción de Administración quedó documentada y protegida por el validador transversal; no cambia APIs ni persistencia.
-
-# Actualizacion CHG-213 (2026-08-21)
-
-En Local se corrigio la apertura de los selectores buscables para mostrar el catalogo completo antes de filtrar. RH devuelve validaciones de expediente accionables sin repetir CURP, RFC o NSS y el formulario declara sus longitudes. Produccion impide elegir materiales con unidades fuera del catalogo activo y explica faltantes autoritativos por recurso antes de asignar el folio de orden. Una orden en espera puede iniciar solo si conserva reservas materiales; liberar reserva, iniciar no descuenta y completar consume las reservas como salidas de Inventario. Los datos demo heredados `LTS`/`MT` y la falta de trabajadores `Fundidor A` no fueron corregidos automaticamente porque son incidencias operativas de maestros. No hubo migracion, despliegue ni escritura en QA/Produccion.
-
-# Actualizacion CHG-214 (2026-08-21)
-
-En Local, la revision `20260821_0023` normalizo de forma transaccional los alias heredados e inequivocos `LTS -> LTR` y `MT -> MTR` en Inventario, Produccion y snapshots de Ventas. Cada fila corregida conserva evidencia en `admin.audit_events`; el downgrade restaura solo las filas registradas que no hayan cambiado despues. La proteccion que impide cambiar realmente la unidad base de un articulo con movimientos o reservas permanece vigente y ahora se explica en espanol/ingles desde la interfaz. `cera_01` conserva identidad, cantidades, costo e historia y ahora usa `LTR`. QA y Produccion permanecen sin cambios en `20260805_0013`.
-
-# Actualizacion CHG-215 (2026-08-21)
-
-En Local, crear o versionar una receta ya no produce `500` cuando incluye maquinaria activa sin referencia estable a un area de RH. Production responde `422 machine_resource_invalid` con una causa operativa segura; la UI excluye esa maquinaria del selector y muestra que debe abrirse en Maquinaria para vincular un area activa. Se conserva la regla de no relacionar maestros automaticamente por nombre. El dato Local `h_002` sigue sin modificarse: su texto de area existe, pero `area_ref_id` permanece vacio hasta confirmacion del operador.
-
-# Actualizacion CHG-216 (2026-08-21)
-
-En codigo Local, la primera transicion de una orden liberada o en espera hacia **En produccion** consume sus reservas por medio de Inventory. Cada reserva genera una salida inmutable en el almacen que la otorgo y devuelve cantidad/costo para el real de materiales. Reanudar, volver desde validacion o completar no genera otra salida; cancelar antes de iniciar libera reservas y cancelar despues conserva los movimientos fisicos. Iniciar una etapa ya no puede saltarse el comando de estatus. No hubo migracion ni mutacion de ordenes, reservas o movimientos existentes; QA/Produccion permanecen sin cambios.
-
-# Actualizacion CHG-217 (2026-08-21)
-
-En Local, el formulario de nueva orden ya no mezcla faltantes calculados por la maqueta con datos reales. En modo API valida localmente solo campos y responsables, y delega existencia disponible, reservas, capacidad laboral y maquinaria a `POST /v1/production/resource-validations`. El modo mock conserva su calculadora local. No cambia contratos, persistencia ni datos; QA/Produccion permanecen sin cambios.
-
-# Actualizacion CHG-218 (2026-08-21)
-
-En Local, **Validar orden** usa la receta maestra recargada y su `currentVersionId` aprobado, no el snapshot transitorio del formulario. Los snapshots historicos permanecen para ordenes creadas y documentos. `rec-000004` ya estaba correctamente activa/aprobada en PostgreSQL; no se modificaron sus datos. No cambia contratos ni persistencia y QA/Produccion permanecen sin cambios.
-
-# Actualizacion CHG-219 (2026-08-21)
-
-En Local se corrigio el cierre de una reserva al consumirla totalmente: Inventory conserva su ultima cantidad positiva como snapshot historico, cambia el estatus a `consumed` y reporta saldo operativo cero. El intento fallido de iniciar `OP-000003` fue revertido completamente por PostgreSQL; la orden sigue en espera, las reservas siguen activas y no existen salidas parciales. No cambia schema ni contrato y QA/Produccion permanecen sin cambios.
-
-# Actualizacion CHG-220 (2026-08-21)
-
-En Local, una orden solo entra a **En validacion** cuando todas sus fases estan terminadas u omitidas; la ultima fase realiza el cambio automaticamente. El selector solo ofrece transiciones validas y muestra **Terminada** cuando tambien se guardo el uso real de mano de obra y maquinaria desde **Cierre/consumos**. `OP-000003` permanece sin mutacion, en validacion con sus dos fases pendientes, y puede recuperarse volviendo a **En produccion**. No cambia schema y QA/Produccion permanecen sin cambios.
-
-# Actualizacion CHG-221 (2026-08-21)
-
-En Local, el avance de una fase se captura como porcentaje: 0% pendiente, 1-99% en proceso y 100% terminada. Todas las fases deben estar al 100% para validar y cerrar; los minutos y el uso real de mano de obra/maquinaria ya no bloquean este corte y quedan diferidos hasta definir el modelo de eficiencia. `OP-000003` ya conserva sus dos fases al 100% y esta lista para terminar despues de recargar. No hubo mutacion de datos, cambio de schema ni escritura en QA/Produccion.
-
-# Actualizacion CHG-222 (2026-08-21)
-
-En Local, **Almacenes > Movimientos** muestra las ordenes de Produccion terminadas con cantidad pendiente. El almacenista confirma almacen, cantidad, fecha y observaciones; Inventory valida la orden y el vinculo por ID, deriva articulo/unidad/costo, registra una entrada trazable y permite parciales sin exceder lo producido. No se recibieron ordenes automaticamente, no hubo migracion y QA/Produccion permanecen sin cambios.
-
-# Actualizacion CHG-223 (2026-08-21)
-
-El reinicio individual de Inventory Local ahora carga y valida explicitamente la base `127.0.0.1:5434/erclave_local`, Firebase Emulator y dependencias loopback antes de iniciar. Se corrigio el `500` causado por un proceso con health activo pero sin URL efectiva de base. El GET autenticado de almacenes devuelve `200`; no se modificaron datos ni QA/Produccion.
-
-# Actualizacion CHG-224 (2026-08-21)
-
-El repositorio queda preparado, pero no autorizado ni desplegado, para un candidato QA de cinco servicios: Admin, Produccion, Inventory, RH y Ventas. El pipeline construye/promueve las cinco imagenes por digest, entrega a Inventory la URL autoritativa de Produccion para recepciones y publica la URL de Ventas en el frontend sanitizado. QA vigente conserva cuatro servicios, version `4e9c6881dab61239f1abd5fff688019fdd697977` y revision documentada `20260805_0013`. Antes de ejecutar se requieren PR/SHA inmutable, identidad `erclave-sales-qa`, variables Sales y aprobaciones separadas de cada gate. No hubo escritura externa.
-
-# Actualizacion CHG-225 (2026-08-21)
-
-El corte CHG-224 ya esta fusionado en `main` con SHA inmutable `adb134f7ac8b33b4a842d07db10c9b5f88525f2f` y su validacion CI concluyo correctamente. En QA se creo la identidad dedicada `erclave-sales-qa@erclave.iam.gserviceaccount.com` sin llaves administradas por usuario; conserva solo `roles/cloudsql.client`, acceso al secreto `erclave-database-url-qa` y `roles/run.invoker` sobre Admin, RH, Produccion e Inventory. GitHub Actions ya contiene las variables no secretas `QA_SALES_RUNTIME_SERVICE_ACCOUNT` y `QA_SALES_API_URL`. No se construyo candidato, no se leyo el secreto, no se ejecuto migracion/configuracion de tenant, no se desplego Cloud Run, no se movio trafico y no se publico frontend.
-
-# Actualizacion CHG-226 (2026-08-23)
-
-El workflow gobernado `32621200718` promovio a QA el SHA inmutable `7aa5c674b605d8268b6bfe00e0812b6a300277cb`, ejecuto Alembic hasta `20260821_0023`, llevo a 100% las revisiones certificadas de cinco servicios y publico el frontend sanitizado en `https://erclave.web.app`. Despues del ajuste de configuracion CHG-226, el trafico actual de Admin apunta a `admin-service-qa-00021-669`; Inventory permanece en `inventory-service-qa-00006-ceb`, RH en `hr-service-qa-00006-xey`, Produccion en `production-service-qa-00011-naj` y Ventas en `sales-service-qa-00001-gez`. Todos conservan el mismo SHA certificado.
-
-Durante UAT, crear y eliminar tenants devolvio `500`. Cloud Logging demostro `INSUFFICIENT_PERMISSION` del Admin SDK de Firebase en la identidad runtime `erclave-admin-qa@erclave.iam.gserviceaccount.com`; no fue un error operativo. Con autorizacion explicita se concedio solamente `roles/firebaseauth.admin` a esa cuenta. El tenant que se intento eliminar ya habia sido borrado en PostgreSQL antes del fallo de limpieza; la identidad Firebase asociada tampoco existia, comprobado con un job efimero sobre la misma imagen, eliminado al terminar. No se cargaron datos ni se modificaron otros tenants.
-
-El primer onboarding posterior respondio `201`, pero no envio correo porque la clave web publica solo llegaba al frontend. Con autorizacion explicita se agrego `ERCLAVE_FIREBASE_WEB_API_KEY` al runtime Admin, se valido la revision `admin-service-qa-00021-669` por URL etiquetada y se promovio al 100% conservando imagen y SHA. El workflow ahora deriva siempre esa variable desde `QA_FIREBASE_API_KEY`; los siguientes onboardings solicitan el correo de restablecimiento a Firebase en vez de devolver solo un enlace manual.
-
-En la rama CHG-226, aun pendiente de una nueva promocion gobernada, Admin traduce fallos Firebase a errores seguros y separa el resultado principal del seguimiento de invitacion/limpieza. El onboarding puede responder `invitation.delivery=pending` si el tenant ya persistio pero la invitacion fallo; el borrado responde `firebase_identity_cleanup.status=completed|pending` sin exponer correos internos ni presentar una limpieza secundaria como fracaso total.
-
-# Actualizacion CHG-238 (2026-08-24)
-
-En Local, Compras expone de forma continua el ciclo ya implementado por API: aprobar una requisicion abre la creacion de orden con la requisicion precargada; crear conserva la orden en borrador; emitir abre la recepcion con la orden seleccionada. Las tarjetas conservan accesos explicitos para retomar el siguiente paso. Formularios y comandos de proveedor, requisicion, orden y recepcion se muestran solo con su permiso puntual. No hubo migracion, cambio de contrato, escritura operativa ni modificacion en QA/Produccion.
-
-# Actualizacion CHG-239 (2026-08-24)
-
-En Local, Mantenimiento hace visible el tecnico asignado y conserva su seleccion al reasignar. Las ordenes elegibles enlazan directamente a **Solicitar refacciones** con el folio precargado; las solicitudes muestran sus partidas y estados. El diagnostico Local confirma que la base vigente no contiene un almacen `spare_parts`, por lo que la UI ahora ofrece abrir su alta en Inventario, preseleccionada correctamente y sujeta a `inventory.warehouse.create`, en vez de ocultar el recorrido. No se crearon maestros automaticamente, no hubo migracion ni cambios en QA/Produccion.
-
-# Actualizacion CHG-240 (2026-08-24)
-
-En Local, **Compras > Ordenes de compra** muestra primero el historial completo sin filtrar estatus y solo presenta el alta cuando hay requisiciones aprobadas pendientes de conversion. El diagnostico autenticado encontro dos OC emitidas (`OC_0001`, `OC_0002`) y ninguna requisicion elegible: `REQ_001`/`REQ_003` ya estan convertidas y `REQ_002` cancelada. **Reabastecimiento** queda visual y semánticamente separado como capacidad planeada; no contiene OC. No hubo escritura operativa, migracion ni cambios en QA/Produccion.
-
-
-## Ajustes UAT Local CHG-266
-
-CHG-266 implementado solo en Local: Proveedores listado/modal; Requisiciones legible en contenedores estrechos; Control de orden fuera del riel colapsado; acciones y mensajes del ciclo de cotizaciones. Reparación acotada del catálogo y cuatro asignaciones al Owner del tenant ten_739ee59d765d5e14818674800d, por API auditada. Local continúa en 20260908_0034, sin migración de este corte ni promoción QA.
-
-Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
-
-
-## Solicitudes compactas Local CHG-267
-
-CHG-267 implementado solo en Local: Movimientos abre con resumen desplegable cerrado para las siete bandejas y aviso de pendientes; historial visible debajo. Sin contratos, migraciones, permisos ni datos persistentes modificados. Cabeza Local 20260908_0034; QA permanece igual.
-
-Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.
+Referencia histórica exigida por el guardrail heredado: CHG-191 registró `admin-service-qa-bo-1-1`, `inventory-service-qa` y `hr-service-qa`. Se conserva para rastreo, **no como revisión desplegada vigente**.

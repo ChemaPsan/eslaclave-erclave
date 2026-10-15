@@ -1,6 +1,10 @@
 # ERClave
 
-ERClave es una propuesta SaaS modular bajo la marca EsLaClave para gestionar producción, inventarios, compras, ventas, gastos, costos, contabilidad y reportes.
+ERClave es un producto SaaS modular en desarrollo bajo la marca EsLaClave para gestionar producción, inventarios, compras, ventas, gastos, costos, contabilidad y reportes.
+
+## Documentación y Obsidian
+
+Entrar por el [portal documental](docs/INICIO.md) y el [índice completo clasificado](docs/INDICE_DOCUMENTAL.md). El portal separa estado vigente, decisiones, pendientes, contratos e historia; el grafo de Obsidian reconoce sus enlaces Markdown relativos.
 
 ## Contenido actual
 
@@ -26,6 +30,8 @@ npm.cmd run session:context
 backend\scripts\start_local.ps1
 ```
 
+Si Node/npm no está disponible para recuperar contexto, `python tools/context_brief.py` muestra un resumen local de rama, cambios, último CHG, QA documentado y herramientas. No consulta servicios remotos. Para auditar campos, catálogos y formularios usar `$erclave-form-contract`; para registrar resultados funcionales usar `$erclave-qa-evidence`.
+
 Abrir `http://127.0.0.1:4173/`. No abrir Cloud SQL Auth Proxy ni reutilizar un `.env` QA para este flujo. Un proceso local que consume cualquier recurso QA se clasifica como `local conectado a QA` y requiere autorizacion explicita.
 
 ## Validaciones automaticas
@@ -42,6 +48,7 @@ npm run validate
 Validaciones disponibles:
 
 ```bash
+npm run validate:documentation
 npm run validate:agents
 npm run validate:local-qa-parity
 npm run validate:i18n
@@ -81,7 +88,7 @@ En GitHub, el workflow `.github/workflows/validate.yml` ejecuta estas validacion
 
 ## Desarrollo y liberacion
 
-El script canonico prepara `admin-service`, `production-service`, `inventory-service`, `hr-service`, frontend, base local y usuario del Emulator sin depender de QA. Para una liberacion usar `$erclave-qa-release` y [flujo_local_a_qa.md](docs/operaciones/flujo_local_a_qa.md); no desplegar desde una terminal local como sustituto del pipeline.
+El script canonico prepara ocho APIs: Administración, Producción, Inventario, RH, Ventas, Compras, Mantenimiento y catálogo de centros de Costing; frontend, base local y usuario del Emulator sin depender de QA. Para una liberacion usar `$erclave-qa-release` y [flujo_local_a_qa.md](docs/operaciones/flujo_local_a_qa.md); no desplegar desde una terminal local como sustituto del pipeline.
 
 El consumo HTTP del frontend debe vivir en `frontend/api/`; las pantallas no deben llamar `fetch` directamente.
 

@@ -1,3 +1,4 @@
+from erclave_common.transport import open_dependency
 from dataclasses import dataclass
 import json
 from urllib import error, request
@@ -33,7 +34,7 @@ class AdminSessionClient:
             method="GET",
         )
         try:
-            with request.urlopen(call, timeout=self.timeout) as response:
+            with open_dependency(call, timeout=self.timeout, opener=request.urlopen) as response:
                 return json.loads(response.read().decode("utf-8"))["data"]
         except error.HTTPError as exc:
             status = 401 if exc.code == 401 else 403 if exc.code in (403, 404) else 503

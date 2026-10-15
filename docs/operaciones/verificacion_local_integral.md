@@ -1,5 +1,7 @@
 # Verificacion Local integral
 
+**CC-20 CHG-327:** [matriz de aceptación integrada Local](cc20_aceptacion_integrada_local.md) preparada para ejecución posterior. Esta verificación técnica no cambia casos CC-20 a `Pasa` por sí sola. `verify:postgres`/`verify:local` abarcan pruebas de repositorio que crean tenants temporales; omitirlas hasta contar con autorización explícita y `ERCLAVE_TEST_ALLOW_TEMP_TENANTS=1`, o seleccionar únicamente casos focales compatibles con el tenant autorizado. No se ejecutaron esos comandos en CHG-327.
+
 ## Objetivo
 
 Certificar los flujos actuales sin consumir QA o Produccion. La verificacion usa exclusivamente PostgreSQL `127.0.0.1:5434/erclave_local`, Firebase Auth Emulator y las siete APIs Local.

@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy import create_engine,text
 from sqlalchemy.pool import NullPool
 from erclave_common.errors import ErclaveError
+from erclave_common.organization_client import OrganizationAccess
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 for name in list(sys.modules):
@@ -22,27 +23,31 @@ repositories=importlib.import_module('app.repositories')
 schemas=importlib.import_module('app.schemas')
 api=importlib.import_module('app.api')
 authorities=importlib.import_module('app.authorities')
+inventory_context=importlib.import_module('app.inventory_context')
 TENANT='ten_739ee59d765d5e14818674800d'
 
 @pytest.fixture
-def material():
+def material(request,monkeypatch):
     url=os.getenv('ERCLAVE_TEST_DATABASE_URL')
     if not url:pytest.skip('ERCLAVE_TEST_DATABASE_URL required')
     parsed=urlparse(url.replace('postgresql+psycopg','postgresql',1))
     assert parsed.hostname=='127.0.0.1' and parsed.port==5434 and parsed.path=='/erclave_local'
     repo=repositories.MaintenanceRepository(url);repo.engine.dispose();repo.engine=create_engine(url,poolclass=NullPool)
     prefix='recovery-'+uuid4().hex[:16];actor=prefix;oid=None;rid=None
+    # These are deliberately pre-CC16 documents; recovery needs explicit fullscope.
+    monkeypatch.setattr(inventory_context,'organization_access',lambda *args:OrganizationAccess(TENANT,actor,(),({'id':'div_cc14','code':'D14','name':'Synthetic CC14','society_id':'soc_cc14'},),True,False))
     try:
         order=repo.create_order(TENANT,schemas.OrderCreate(code=prefix,target_type='facility',priority='medium',title='Recovery test',description='Synthetic',location='Local'),{'machine_code_snapshot':None,'machine_name_snapshot':None,'source_production_order_code_snapshot':None},prefix+'-order','order',actor);oid=order['id']
         repo.transition(TENANT,oid,schemas.TransitionRequest(transition='request'),None,prefix+'-request','request',actor)
         worker={'id':'hrw_recovery_test','full_name':'Recovery test'}
         repo.transition(TENANT,oid,schemas.TransitionRequest(transition='assign',assigned_worker_id=worker['id']),worker,prefix+'-assign','assign',actor)
         payload=schemas.MaterialRequestCreate(warehouse_id='wh_recovery_test',lines=[schemas.MaterialLine(item_id='item_a',quantity=1.125,unit_code='H87'),schemas.MaterialLine(item_id='item_b',quantity=2,unit_code='H87')])
-        row,_=repo.prepare_material_request(TENANT,oid,payload,{'warehouse_name':'Test','items':[{'code':'A','name':'A'},{'code':'B','name':'B'}]},prefix+'-parts','parts',actor);rid=row['id']
+        row,_=repo.prepare_material_request(TENANT,oid,payload,{'warehouse_name':'Test','items':[{'code':'A','name':'A'},{'code':'B','name':'B'}],'organization_context':getattr(request,'param',None)},prefix+'-parts','parts',actor);rid=row['id']
         repo.complete_material_request(TENANT,rid,prefix+'-parts',[],'insufficient_available_stock',actor)
         yield repo,oid,rid,prefix,SimpleNamespace(actor_id=actor)
     finally:
         with repo.engine.begin() as c:
+            if oid:c.execute(text('delete from maintenance.material_return_adjustments where tenant_id=:t and order_id=:o'),{'t':TENANT,'o':oid})
             if rid:
                 c.execute(text('delete from maintenance.material_request_lines where tenant_id=:t and material_request_id=:r'),{'t':TENANT,'r':rid})
                 c.execute(text('delete from maintenance.material_requests where tenant_id=:t and id=:r'),{'t':TENANT,'r':rid})
@@ -51,9 +56,71 @@ def material():
             c.execute(text('delete from maintenance.idempotency_records where tenant_id=:t and idempotency_key like :k'),{'t':TENANT,'k':prefix+'%'})
         repo.engine.dispose()
 
+
+DIMENSION={'division_ref_id':'div_cc14','society_ref_id':'soc_cc14','division_code':'D14','division_name':'Synthetic CC14','cost_currency':'MXN'}
+
+@pytest.mark.parametrize('material',[DIMENSION],indirect=True)
+@pytest.mark.parametrize('original',['999999999999.123456','0'])
+def test_reservation_recovery_and_http_return_preserve_original_decimal(material,original,monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from erclave_common.config import Settings,get_settings
+    repo,oid,rid,prefix,access=material
+    exact=Decimal(original)
+    legacy=float(exact) if exact else 42.0
+    assert Decimal(str(legacy))!=exact
+    # First confirmed line uses normal completion, second uses durable recovery.
+    repo.complete_material_request(TENANT,rid,prefix+'-parts',[{'id':prefix+'-res-a','original_unit_cost':original,'unit_cost_snapshot':legacy}],'retry-required',access.actor_id)
+    with repo.material_command_lock(TENANT,rid):
+        _,plan=repo.prepare_material_reconciliation(TENANT,rid,prefix+'-exact','exact',access.actor_id)
+    assert len(plan)==1
+    result=repo.complete_material_reconciliation(TENANT,rid,prefix+'-exact',[{'id':prefix+'-res-b','original_unit_cost':original,'unit_cost_snapshot':legacy}],None,access.actor_id)
+    assert all(line['unit_cost_snapshot']==exact for line in result['lines'])
+    _,plan=repo.prepare_warehouse_issue(TENANT,rid,access.actor_id)
+    repo.complete_warehouse_issue(TENANT,rid,[(line['id'],{'id':prefix+'-move-'+str(index)}) for index,line in enumerate(plan)],None,access.actor_id)
+    with repo.engine.begin() as c:c.execute(text("update maintenance.orders set status='resolved' where tenant_id=:t and id=:id"),{'t':TENANT,'id':oid})
+    payload={'source_id':oid,'reservation_id':prefix+'-res-a','original_movement_id':prefix+'-move-0','quantity':'1'}
+    application=FastAPI();application.include_router(api.router)
+    application.dependency_overrides[api.get_maintenance_repository]=lambda:repo
+    application.dependency_overrides[get_settings]=lambda:Settings(auth_mode='demo')
+    monkeypatch.setattr(api,'guard_material',lambda *args,**kwargs:DIMENSION)
+    response=TestClient(application).post('/v1/maintenance/material-returns/validate',headers={'X-Tenant-Id':TENANT,'X-Actor-Id':access.actor_id},json=payload)
+    assert response.status_code==200,response.text
+    snapshot=response.json()['data']['unit_cost_snapshot']
+    assert isinstance(snapshot,str) and Decimal(snapshot)==exact
+    confirmed={**payload,'id':prefix+'-return','source_type':'maintenance_order','status':'received_pending_reconciliation','movement_id':prefix+'-return-move','unit_cost':snapshot,'organization_context':DIMENSION}
+    assert repo.reconcile_material_return(TENANT,confirmed,access.actor_id)['status']=='completed'
+    assert repo.reconcile_material_return(TENANT,confirmed,access.actor_id)['status']=='completed'
+    with repo.engine.connect() as c:
+        costs=c.execute(text('select unit_cost from maintenance.material_return_adjustments where tenant_id=:t and order_id=:id'),{'t':TENANT,'id':oid}).scalars().all()
+    assert costs==[exact]
+
+@pytest.mark.parametrize('material',[DIMENSION],indirect=True)
+def test_durable_material_proof_and_scoped_queue_survive_reconciliation(material):
+    repo,oid,rid,prefix,access=material
+    request=repo.get_material_request(TENANT,rid)
+    proof=repo.inventory_context(TENANT,oid,request['lines'][0]['id'])
+    assert proof['organization_context']==DIMENSION
+    assert proof['quantity']==Decimal('1.125') and proof['inventory_item_id']=='item_a'
+    assert proof['source']=={'type':'maintenance_order','id':oid,'line_id':request['lines'][0]['id']}
+    with pytest.raises(ErclaveError):repo.inventory_context('other-tenant',oid,request['lines'][0]['id'])
+    with pytest.raises(ErclaveError):repo.inventory_context(TENANT,'other-order',request['lines'][0]['id'])
+    rows,_=repo.list_warehouse_material_requests(TENANT,100,0,divisions=[])
+    assert rid not in [row['id'] for row in rows]
+    with repo.material_command_lock(TENANT,rid):
+        value,plan=repo.prepare_material_reconciliation(TENANT,rid,prefix+'-scoped','scoped',access.actor_id)
+    assert value['organization_context']==DIMENSION
+    assert all(line['organization_context']==DIMENSION for line in plan)
+    repo.complete_material_reconciliation(TENANT,rid,prefix+'-scoped',[{'id':'scoped-res-a','unit_cost_snapshot':'4.123456'}],'retry-required',access.actor_id)
+    with repo.material_command_lock(TENANT,rid):
+        value,plan=repo.prepare_material_reconciliation(TENANT,rid,prefix+'-scoped2','scoped2',access.actor_id)
+    assert len(plan)==1 and plan[0]['item_id']=='item_b' and plan[0]['organization_context']==DIMENSION
+    proof=repo.inventory_context(TENANT,oid,request['lines'][0]['id'])
+    assert proof['unit_cost_snapshot']==Decimal('4.123456') and proof['reservation_id']=='scoped-res-a'
+
 def test_interrupted_reconciliation_resumes_same_key_with_real_decimal_client(material,monkeypatch):
     repo,oid,rid,prefix,access=material
-    client=authorities.MaintenanceAuthorityClient(SimpleNamespace(hr_service_url='http://127.0.0.1:8006',inventory_service_url='http://127.0.0.1:8004',production_service_url='http://127.0.0.1:8002',authorization_timeout_seconds=5))
+    client=authorities.MaintenanceAuthorityClient(SimpleNamespace(hr_service_url='http://127.0.0.1:8006',inventory_service_url='http://127.0.0.1:8004',production_service_url='http://127.0.0.1:8002',admin_service_url='http://127.0.0.1:8000',authorization_timeout_seconds=5))
     reservations={};calls=[]
     def inventory(request,timeout):
         assert request.full_url=='http://127.0.0.1:8004/v1/inventory/reservation-requests'

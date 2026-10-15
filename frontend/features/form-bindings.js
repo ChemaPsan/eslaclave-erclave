@@ -1,6 +1,6 @@
 /** Explicit request-to-control bindings. Indices describe submitted payloads, never DOM guesses. */
 export const FORM_BINDING_COVERAGE = Object.freeze([
-  'standardReportForm', 'admin-invite-user', 'admin-create-role', 'admin-update-corporate',
+  'scoped-stock-fulfillment', 'standardReportForm', 'admin-invite-user', 'admin-create-role', 'admin-update-corporate',
   'admin-create-legal-entity', 'admin-create-branch', 'admin-code-sequence', 'admin-create-unit',
   'admin-create-commercial-item', 'admin-document-template', 'maintenanceTimeModalForm',
   'maintenanceActionForm', 'maintenanceOrderForm', 'maintenanceMaterialForm', 'maintenanceTimeForm',
@@ -10,14 +10,15 @@ export const FORM_BINDING_COVERAGE = Object.freeze([
   'warehouseProductionIssueForm', 'warehousePartsIssueForm', 'genericRecordForm', 'warehouseForm',
   'inventoryItemForm', 'movementForm', 'salesCustomerForm', 'salesQuoteForm', 'finishedGoodsReceiptForm',
   'salesOrderForm', 'salesOrderEditForm', 'salesDeliveryForm', 'productServiceForm', 'laborAreaForm',
-  'salesOrderFulfillmentForm', 'adminUnitForm', 'laborRoleForm', 'workerForm', 'machineForm',
+  'scoped-order-cancel', 'salesOrderFulfillmentForm', 'adminUnitForm', 'laborRoleForm', 'workerForm', 'machineForm',
   'productionServiceEvidenceForm', 'recipeForm', 'orderForm', 'order-stage-progress', 'auth-email', 'operational-handoff-dialog',
   'login', 'tenant-onboarding', 'tenant-search', 'usage-search', 'tenant-editor'
 ]);
 
 const ALIASES = {
+  'scoped-order-cancel': { reason: 'reason' },
   productionServiceEvidenceForm: { description: 'startDescription', files: 'startFiles' },
-  movementForm: { movement_type: 'movementType', inventory_item_id: 'itemId', warehouse_id: 'warehouseId', destination_warehouse_id: 'destinationWarehouseId', 'source.id': 'sourceDocument', occurred_at: 'movementDate' },
+  movementForm: { unit_cost: 'unitCost', movement_type: 'movementType', inventory_item_id: 'itemId', warehouse_id: 'warehouseId', destination_warehouse_id: 'destinationWarehouseId', 'source.id': 'sourceDocument', occurred_at: 'movementDate' },
   warehouseForm: { business_center: 'businessCenter', inventory_policy: 'policy' },
   inventoryItemForm: { base_unit: 'unit', suggested_warehouse_id: 'defaultWarehouseId', minimum_stock: 'minStock', maximum_stock: 'maxStock', default_unit_cost: 'defaultUnitCost', use_in_recipe: 'useInRecipe', inventory_policy: 'policy' },
   salesCustomerForm: { commercial_name: 'commercialName', customer_type: 'customerType', responsible_worker_id: 'responsibleWorkerId', 'primary_contact.name': 'contactName', 'primary_contact.email': 'contactEmail', 'primary_contact.phone': 'contactPhone', payment_terms: 'paymentTerms', credit_limit: 'creditLimit', legal_name: 'billingLegalName', tax_id: 'taxId', tax_regime: 'taxRegime', cfdi_use: 'cfdiUse', billing_email: 'billingEmail', billing_phone: 'billingPhone', 'billing_address.street': 'billingStreet', 'billing_address.exterior_number': 'billingExterior', 'billing_address.interior_number': 'billingInterior', 'billing_address.neighborhood': 'billingNeighborhood', 'billing_address.city': 'billingCity', 'billing_address.state': 'billingState', 'billing_address.postal_code': 'billingZipCode', 'billing_address.country': 'billingCountry', notes: 'commercialNotes' },
@@ -77,6 +78,9 @@ export function captureFormBindings(form, request = {}) {
   }
   if (key === 'admin-update-corporate') {
     for (const name of Object.keys(body.value?.corporate || {})) bind(`value.corporate.${name}`, named(form, name));
+  }
+  if (key === 'scoped-stock-fulfillment') {
+    for (const path of paths) bind(path, named(form, path.replace(/\.(\d+)(?=\.|$)/g, '[$1]')));
   }
   const rows = selector => [...form.querySelectorAll(selector)];
   const rowFields = (row, prefix, fields) => {

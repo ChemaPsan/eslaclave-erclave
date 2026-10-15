@@ -37,16 +37,22 @@ export async function approveSalesQuote(id){return (await request(`/v1/sales/quo
 export async function expireSalesQuote(id){return (await request(`/v1/sales/quotes/${id}/expire`,{method:"POST"})).data;}
 export async function cancelSalesQuote(id){return (await request(`/v1/sales/quotes/${id}/cancel`,{method:"POST"})).data;}
 export async function createSalesOrder(payload){return (await request("/v1/sales/orders",{method:"POST",body:JSON.stringify(payload)})).data;}
-export async function configureSalesOrderFulfillment(id,payload){return (await request(`/v1/sales/orders/${id}/fulfillment`,{method:"POST",body:JSON.stringify(payload)})).data;}
-export async function cancelSalesOrder(id,reason){return (await request(`/v1/sales/orders/${id}/cancel`,{method:"POST",body:JSON.stringify({reason})})).data;}
+export async function configureSalesOrderFulfillment(id,payload,key){return (await request(`/v1/sales/orders/${id}/fulfillment`,{method:"POST",headers:key?{"Idempotency-Key":key}:{},body:JSON.stringify(payload)})).data;}
+export async function cancelSalesOrder(id,reason,key){return (await request(`/v1/sales/orders/${id}/cancel`,{method:"POST",headers:key?{"Idempotency-Key":key}:{},body:JSON.stringify({reason})})).data;}
 export async function createSalesDelivery(payload){return (await request("/v1/sales/deliveries",{method:"POST",body:JSON.stringify(payload)})).data;}
 export async function confirmSalesDelivery(id,reason){return (await request(`/v1/sales/deliveries/${id}/confirm`,{method:"POST",body:JSON.stringify({reason})})).data;}
 export async function cancelSalesDelivery(id,reason){return (await request(`/v1/sales/deliveries/${id}/cancel`,{method:"POST",body:JSON.stringify({reason})})).data;}
 export async function getSalesServiceOrder(id){return (await request(`/v1/sales/service-orders/${id}`)).data;}
-export async function planSalesServiceOrder(id,payload){return (await request(`/v1/sales/service-orders/${id}/plan`,{method:"POST",body:JSON.stringify(payload)})).data;}
-export async function addSalesServiceOrderTimeEntry(id,payload){return (await request(`/v1/sales/service-orders/${id}/time-entries`,{method:"POST",body:JSON.stringify(payload)})).data;}
-export async function addSalesServiceOrderCostEntry(id,payload){return (await request(`/v1/sales/service-orders/${id}/cost-entries`,{method:"POST",body:JSON.stringify(payload)})).data;}
-export async function addSalesServiceOrderEvidence(id,payload){return (await request(`/v1/sales/service-orders/${id}/evidence`,{method:"POST",body:JSON.stringify(payload)})).data;}
-export async function transitionSalesServiceOrder(id,action,payload={}){return (await request(`/v1/sales/service-orders/${id}/transitions/${action}`,{method:"POST",body:JSON.stringify(payload)})).data;}
+export async function planSalesServiceOrder(id,payload,key){return (await request(`/v1/sales/service-orders/${id}/plan`,{method:"POST",headers:key?{"Idempotency-Key":key}:{},body:JSON.stringify(payload)})).data;}
+export async function addSalesServiceOrderTimeEntry(id,payload,key){return (await request(`/v1/sales/service-orders/${id}/time-entries`,{method:"POST",headers:key?{"Idempotency-Key":key}:{},body:JSON.stringify(payload)})).data;}
+export async function addSalesServiceOrderCostEntry(id,payload,key){return (await request(`/v1/sales/service-orders/${id}/cost-entries`,{method:"POST",headers:key?{"Idempotency-Key":key}:{},body:JSON.stringify(payload)})).data;}
+export async function addSalesServiceOrderEvidence(id,payload,key){return (await request(`/v1/sales/service-orders/${id}/evidence`,{method:"POST",headers:key?{"Idempotency-Key":key}:{},body:JSON.stringify(payload)})).data;}
+export async function transitionSalesServiceOrder(id,action,payload={},key){return (await request(`/v1/sales/service-orders/${id}/transitions/${action}`,{method:"POST",headers:key?{"Idempotency-Key":key}:{},body:JSON.stringify(payload)})).data;}
 
 export function getWarehouseSalesDeliveries(offset=0){return request(`/v1/sales/warehouse-deliveries?limit=26&offset=${offset}`);}
+export function findServiceWorkers(id,q="",offset=0){return request(`/v1/sales/service-orders/${encodeURIComponent(id)}/eligible-workers?${new URLSearchParams({q,offset})}`);}
+
+export async function findStockOptions(orderId,lineId,q="",offset=0){return (await request(`/v1/sales/orders/${encodeURIComponent(orderId)}/stock-options?${new URLSearchParams({line_id:lineId,q,offset:String(offset)})}`)).data;}
+
+export async function getSalesProductionStatus(orderId,lineId){return (await request(`/v1/sales/orders/${encodeURIComponent(orderId)}/production-status?${new URLSearchParams({line_id:lineId})}`)).data;}
+export async function reconcileSalesProduction(orderId,payload,key){return (await request(`/v1/sales/orders/${encodeURIComponent(orderId)}/production-reconciliations`,{method:"POST",headers:{"Idempotency-Key":key},body:JSON.stringify(payload)})).data;}

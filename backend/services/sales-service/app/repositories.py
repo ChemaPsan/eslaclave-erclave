@@ -1,9 +1,13 @@
+from .production_reconciliation import ProductionReconciliationRepository
+from .service_money import entry_money
+from .stock_context import cost_rate, convert_cost
+from .quote_context import local_customer_context, quote_cost_rate, pending_cost_snapshot
 from contextlib import contextmanager
 from erclave_common.errors import ErclaveError
 import json
 import hashlib
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -16,7 +20,7 @@ from .schemas import CustomerRead, DeliveryRead, QuoteRead, ResolvedQuoteLine, S
 MONEY = Decimal("0.01")
 
 
-class SalesRepository:
+class SalesRepository(ProductionReconciliationRepository):
     def __init__(self, engine):
         self.engine = engine
 
@@ -127,14 +131,18 @@ class SalesRepository:
     def _quote(self, connection, tenant_id, quote_id):
         row = connection.execute(text("""select id,code,customer_id,customer_code_snapshot customer_code,customer_name_snapshot customer_name,
             responsible_worker_ref_id responsible_worker_id,responsible_worker_name,status,currency,payment_terms,valid_until,promised_delivery_date,
-            subtotal,discount_total,total,estimated_cost,estimated_margin,notes,submitted_at,approved_at,created_at,updated_at
+            subtotal,discount_total,total,estimated_cost,estimated_margin,estimated_cost_snapshot,notes,submitted_at,approved_at,created_at,updated_at,division_ref_id,society_ref_id,organization_revision,commercial_terms_snapshot,presentation_snapshot
             from sales.quotes where tenant_id=:tenant and id=:id"""), {"tenant": tenant_id, "id": quote_id}).mappings().first()
         if not row:
             return None
         lines = connection.execute(text("""select id,line_number,product_service_ref_id product_service_id,product_service_code,product_service_name,
-            product_service_type,unit,quantity,unit_price,discount_percentage,subtotal,discount_amount,total,standard_unit_cost_snapshot,estimated_cost
+            product_service_type,unit,quantity,unit_price,discount_percentage,subtotal,discount_amount,total,standard_unit_cost_snapshot,estimated_cost,estimated_cost_snapshot
             from sales.quote_lines where tenant_id=:tenant and quote_id=:id order by line_number"""), {"tenant": tenant_id, "id": quote_id}).mappings().all()
         return QuoteRead.model_validate({**dict(row), "lines": [dict(item) for item in lines]})
+
+    def has_scoped_quotes(self, tenant_id):
+        with self.engine.connect() as conn:
+            return bool(conn.execute(text('select exists(select 1 from sales.quotes where tenant_id=:t and division_ref_id is not null)'), {'t':tenant_id}).scalar())
 
     def list_quotes(self, tenant_id, status=None, customer_id=None):
         where = ["tenant_id=:tenant"]
@@ -149,19 +157,19 @@ class SalesRepository:
         with self.engine.connect() as connection:
             return self._quote(connection, tenant_id, quote_id)
 
-    def _write_lines(self, connection, tenant_id, quote_id, lines: list[ResolvedQuoteLine]):
+    def _write_lines(self, connection, tenant_id, quote_id, lines: list[ResolvedQuoteLine], scoped=False):
         subtotal_total = Decimal("0"); discount_total = Decimal("0"); total = Decimal("0"); estimated_cost = Decimal("0"); cost_complete = True
         for number, line in enumerate(lines, start=1):
             subtotal = (line.quantity * line.unit_price).quantize(MONEY, rounding=ROUND_HALF_UP)
             discount = (subtotal * line.discount_percentage / Decimal("100")).quantize(MONEY, rounding=ROUND_HALF_UP)
             line_total = subtotal - discount
-            cost = None if line.product.standard_cost is None else (line.quantity * line.product.standard_cost).quantize(MONEY, rounding=ROUND_HALF_UP)
+            cost = None if scoped or line.product.standard_cost is None else (line.quantity * line.product.standard_cost).quantize(MONEY, rounding=ROUND_HALF_UP)
             cost_complete = cost_complete and cost is not None
             if cost is not None: estimated_cost += cost
             connection.execute(text("""insert into sales.quote_lines(id,tenant_id,quote_id,line_number,product_service_ref_id,product_service_code,product_service_name,
                 product_service_type,unit,quantity,unit_price,discount_percentage,subtotal,discount_amount,total,standard_unit_cost_snapshot,estimated_cost)
                 values(:id,:tenant,:quote,:number,:product_id,:code,:name,:type,:unit,:quantity,:unit_price,:discount_percentage,:subtotal,:discount,:total,:unit_cost,:cost)"""),
-                {"id": f"sql_{uuid4().hex[:26]}", "tenant": tenant_id, "quote": quote_id, "number": number, "product_id": line.product.id, "code": line.product.code, "name": line.product.name, "type": line.product.type, "unit": line.unit, "quantity": line.quantity, "unit_price": line.unit_price, "discount_percentage": line.discount_percentage, "subtotal": subtotal, "discount": discount, "total": line_total, "unit_cost": line.product.standard_cost, "cost": cost})
+                {"id": f"sql_{uuid4().hex[:26]}", "tenant": tenant_id, "quote": quote_id, "number": number, "product_id": line.product.id, "code": line.product.code, "name": line.product.name, "type": line.product.type, "unit": line.unit, "quantity": line.quantity, "unit_price": line.unit_price, "discount_percentage": line.discount_percentage, "subtotal": subtotal, "discount": discount, "total": line_total, "unit_cost": None if scoped else line.product.standard_cost, "cost": cost})
             subtotal_total += subtotal; discount_total += discount; total += line_total
         margin = None if not cost_complete or total == 0 else ((total - estimated_cost) / total * Decimal("100")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
         return subtotal_total, discount_total, total, estimated_cost if cost_complete else None, margin
@@ -179,16 +187,22 @@ class SalesRepository:
                 {"id": quote_id, "tenant": tenant_id, "code": payload.code, "customer_id": customer.id, "customer_code": customer.code, "customer_name": customer.commercial_name, "worker_id": worker.id, "worker_name": worker.full_name, "currency": payload.currency or customer.currency, "payment_terms": payload.payment_terms or customer.payment_terms, "valid_until": payload.valid_until, "delivery": payload.promised_delivery_date, "notes": payload.notes}).first()
             if not inserted:
                 self._release(connection, tenant_id, operation, key); return None
-            totals = self._write_lines(connection, tenant_id, quote_id, lines)
+            totals = self._write_lines(connection, tenant_id, quote_id, lines, scoped=True)
             connection.execute(text("update sales.quotes set subtotal=:subtotal,discount_total=:discount,total=:total,estimated_cost=:cost,estimated_margin=:margin where tenant_id=:tenant and id=:id"), {"tenant": tenant_id, "id": quote_id, "subtotal": totals[0], "discount": totals[1], "total": totals[2], "cost": totals[3], "margin": totals[4]})
             value = self._quote(connection, tenant_id, quote_id)
             self._audit(connection, tenant_id, actor_id, operation, "quote", quote_id, {"code": value.code, "total": value.total})
             self._finish(connection, tenant_id, operation, key, value)
             return value
 
-    def update_quote(self, tenant_id, quote_id, payload, customer, worker, lines, key, fingerprint, actor_id):
+    def update_quote(self, tenant_id, quote_id, payload, customer, worker, lines, key, fingerprint, actor_id, organization_revision=0, cost_currency=None, estimated_costs=None):
         operation = "quote.update"
         with self.engine.begin() as connection:
+            connection.execute(text('select id from sales.quotes where tenant_id=:t and id=:i for update'),{'t':tenant_id,'i':quote_id})
+            guarded=self._quote(connection,tenant_id,quote_id)
+            if guarded and guarded.organization_revision != organization_revision: raise ErclaveError('assignment_revision_conflict','Quote context changed.',409)
+            if guarded and guarded.division_ref_id:
+                local_customer_context(connection,tenant_id,guarded)
+                if (payload.customer_id and payload.customer_id != guarded.customer_id) or (payload.currency and payload.currency != guarded.currency) or (payload.payment_terms and payload.payment_terms != guarded.payment_terms): raise ErclaveError('quote_context_locked','Quote commercial context is fixed.',409)
             replay = self._claim(connection, tenant_id, operation, key, fingerprint)
             if replay: return QuoteRead.model_validate(replay)
             before = self._quote(connection, tenant_id, quote_id)
@@ -196,26 +210,76 @@ class SalesRepository:
                 self._release(connection, tenant_id, operation, key); return None
             if before.status != "draft":
                 self._release(connection, tenant_id, operation, key); raise ValueError("quote_not_editable")
-            data = payload.model_dump(mode="json", exclude_unset=True, exclude={"lines", "customer_id", "responsible_worker_id"})
+            data = payload.model_dump(mode="json", exclude_unset=True, exclude={"lines", "customer_id", "responsible_worker_id", "cost_exchange_rate"})
             if customer:
                 data.update(customer_id=customer.id, customer_code_snapshot=customer.code, customer_name_snapshot=customer.commercial_name)
             if worker:
                 data.update(responsible_worker_ref_id=worker.id, responsible_worker_name=worker.full_name)
             if lines is not None:
                 connection.execute(text("delete from sales.quote_lines where tenant_id=:tenant and quote_id=:id"), {"tenant": tenant_id, "id": quote_id})
-                totals = self._write_lines(connection, tenant_id, quote_id, lines)
+                totals = self._write_lines(connection, tenant_id, quote_id, lines, scoped=True)
                 data.update(subtotal=totals[0], discount_total=totals[1], total=totals[2], estimated_cost=totals[3], estimated_margin=totals[4])
+            if before.division_ref_id:
+                if not cost_currency:raise ValueError('operational_cost_currency_unavailable')
+                previous=(before.estimated_cost_snapshot or {}).get('cost_exchange_rate')
+                requested=payload.cost_exchange_rate if 'cost_exchange_rate' in payload.model_fields_set else Decimal(str(previous)) if previous is not None else None
+                rate=quote_cost_rate(cost_currency,before.currency,requested)
+                data['estimated_cost_snapshot']=json.dumps(pending_cost_snapshot(cost_currency,before.currency,rate))
+                data['estimated_cost']=None
+                data['estimated_margin']=None
+                connection.execute(text('update sales.quote_lines set standard_unit_cost_snapshot=null,estimated_cost=null,estimated_cost_snapshot=null where tenant_id=:tenant and quote_id=:id'),{'tenant':tenant_id,'id':quote_id})
+            elif 'cost_exchange_rate' in payload.model_fields_set:
+                raise ValueError('quote_context_required')
             if data:
-                connection.execute(text("update sales.quotes set " + ",".join(f"{name}=:{name}" for name in data) + ",updated_at=now() where tenant_id=:tenant and id=:id"), {"tenant": tenant_id, "id": quote_id, **data})
+                assignments=",".join(f"{name}=cast(:{name} as jsonb)" if name=='estimated_cost_snapshot' else f"{name}=:{name}" for name in data)
+                connection.execute(text("update sales.quotes set " + assignments + ",updated_at=now() where tenant_id=:tenant and id=:id"), {"tenant": tenant_id, "id": quote_id, **data})
+            if before.division_ref_id:
+                self._write_estimated_cost(connection,tenant_id,self._quote(connection,tenant_id,quote_id),cost_currency,estimated_costs)
             value = self._quote(connection, tenant_id, quote_id)
             self._audit(connection, tenant_id, actor_id, operation, "quote", quote_id, {"total": value.total})
             self._finish(connection, tenant_id, operation, key, value)
             return value
 
-    def transition_quote(self, tenant_id, quote_id, target, key, fingerprint, actor_id):
+    def _write_estimated_cost(self, connection, tenant_id, quote, cost_currency, estimated_costs, phase='preview'):
+        if not cost_currency or estimated_costs is None or set(estimated_costs)!=set(line.product_service_id for line in quote.lines):
+            raise ValueError('estimated_cost_authority_mismatch')
+        previous=quote.estimated_cost_snapshot or {}
+        requested=previous.get('cost_exchange_rate')
+        rate=quote_cost_rate(cost_currency,quote.currency,Decimal(str(requested)) if requested is not None else None)
+        original_total=Decimal('0');converted_total=Decimal('0');sources_complete=True
+        for line in quote.lines:
+            source=estimated_costs[line.product_service_id]
+            original_unit=None;original_cost=None;converted=None
+            if source is not None:
+                if not isinstance(source,dict) or source.get('product_service_id')!=line.product_service_id or source.get('division_ref_id')!=quote.division_ref_id or source.get('society_ref_id')!=quote.society_ref_id or source.get('cost_currency')!=cost_currency:
+                    raise ValueError('estimated_cost_authority_mismatch')
+                try:original_unit=Decimal(str(source['estimated_unit_cost']))
+                except (KeyError,ValueError,TypeError,InvalidOperation):raise ValueError('estimated_cost_authority_mismatch') from None
+                if not original_unit.is_finite() or original_unit<0 or original_unit.as_tuple().exponent < -6:
+                    raise ValueError('estimated_cost_authority_mismatch')
+                original_cost=(line.quantity*original_unit).quantize(Decimal('0.000001'),rounding=ROUND_HALF_UP)
+                original_total+=original_cost
+                if rate is not None:
+                    converted=(original_cost*rate).quantize(MONEY,rounding=ROUND_HALF_UP)
+                    converted_total+=converted
+            else:sources_complete=False
+            status='cost_unavailable' if source is None else 'exchange_rate_required' if rate is None else 'complete'
+            snapshot={'status':status,'phase':phase,'product_service_id':line.product_service_id,'division_ref_id':quote.division_ref_id,'society_ref_id':quote.society_ref_id,'cost_currency':cost_currency,'document_currency':quote.currency,'cost_exchange_rate':str(rate) if rate is not None else None,'original_unit_cost':str(original_unit) if original_unit is not None else None,'original_cost':str(original_cost) if original_cost is not None else None,'converted_cost':str(converted) if converted is not None else None,'assignment_revision':source.get('assignment_revision') if source else None,'confirmed_at':source.get('confirmed_at') if source else None}
+            connection.execute(text('update sales.quote_lines set standard_unit_cost_snapshot=null,estimated_cost=:cost,estimated_cost_snapshot=cast(:snapshot as jsonb) where tenant_id=:tenant and quote_id=:quote and id=:id'),{'tenant':tenant_id,'quote':quote.id,'id':line.id,'cost':converted,'snapshot':json.dumps(snapshot,default=str)})
+        complete=sources_complete and rate is not None
+        estimated_cost=converted_total if complete else None
+        margin=None if estimated_cost is None or not quote.total else ((quote.total-estimated_cost)/quote.total*Decimal('100')).quantize(Decimal('0.0001'),rounding=ROUND_HALF_UP)
+        snapshot={'status':'complete' if complete else 'incomplete','phase':phase,'division_ref_id':quote.division_ref_id,'society_ref_id':quote.society_ref_id,'cost_currency':cost_currency,'document_currency':quote.currency,'cost_exchange_rate':str(rate) if rate is not None else None,'original_total_cost':str(original_total) if sources_complete else None,'converted_total_cost':str(estimated_cost) if estimated_cost is not None else None}
+        connection.execute(text('update sales.quotes set estimated_cost=:cost,estimated_margin=:margin,estimated_cost_snapshot=cast(:snapshot as jsonb) where tenant_id=:tenant and id=:id'),{'tenant':tenant_id,'id':quote.id,'cost':estimated_cost,'margin':margin,'snapshot':json.dumps(snapshot)})
+
+    def transition_quote(self, tenant_id, quote_id, target, key, fingerprint, actor_id, organization_revision=0, presentation_snapshot=None, estimated_costs=None, cost_currency=None):
         operation = f"quote.{target}"
         allowed = {"quoted": {"draft"}, "approved": {"quoted"}, "expired": {"draft", "quoted"}, "cancelled": {"draft", "quoted"}}
         with self.engine.begin() as connection:
+            connection.execute(text('select id from sales.quotes where tenant_id=:t and id=:i for update'),{'t':tenant_id,'i':quote_id})
+            guarded=self._quote(connection,tenant_id,quote_id)
+            if guarded and guarded.organization_revision != organization_revision: raise ErclaveError('assignment_revision_conflict','Quote context changed.',409)
+            if guarded and target in {'quoted','approved'}:local_customer_context(connection,tenant_id,guarded)
             replay = self._claim(connection, tenant_id, operation, key, fingerprint)
             if replay: return QuoteRead.model_validate(replay)
             before = self._quote(connection, tenant_id, quote_id)
@@ -223,8 +287,15 @@ class SalesRepository:
                 self._release(connection, tenant_id, operation, key); return None
             if before.status not in allowed[target] or (target in {"quoted", "approved"} and before.valid_until < date.today()):
                 self._release(connection, tenant_id, operation, key); raise ValueError("invalid_quote_transition")
+            if target in {'quoted','approved'} and before.division_ref_id:
+                if target=='approved' and (not presentation_snapshot or presentation_snapshot.division_ref_id != before.division_ref_id or presentation_snapshot.society_ref_id != before.society_ref_id):
+                    raise ValueError("document_presentation_unavailable")
+                self._write_estimated_cost(connection,tenant_id,before,cost_currency,estimated_costs,phase='approved' if target=='approved' else 'preview')
             timestamp = ",submitted_at=now()" if target == "quoted" else ",approved_at=now()" if target == "approved" else ""
             connection.execute(text(f"update sales.quotes set status=:target,updated_at=now(){timestamp} where tenant_id=:tenant and id=:id"), {"target": target, "tenant": tenant_id, "id": quote_id})
+            if target == "approved" and presentation_snapshot:
+                connection.execute(text("update sales.quotes set presentation_snapshot=cast(:snapshot as jsonb) where tenant_id=:tenant and id=:id"),
+                    {"snapshot": presentation_snapshot.model_dump_json(), "tenant": tenant_id, "id": quote_id})
             value = self._quote(connection, tenant_id, quote_id)
             self._audit(connection, tenant_id, actor_id, operation, "quote", quote_id, {"before": before.status, "after": target})
             self._finish(connection, tenant_id, operation, key, value)
@@ -234,13 +305,13 @@ class SalesRepository:
         row = connection.execute(text("""select id,code,quote_id,quote_code_snapshot quote_code,customer_id,
             customer_code_snapshot customer_code,customer_name_snapshot customer_name,
             responsible_worker_ref_id responsible_worker_id,responsible_worker_name,status,currency,payment_terms,
-            promised_delivery_date,subtotal,discount_total,total,estimated_cost,estimated_margin,actual_cost,actual_margin,
-            notes,fulfillment_state,cancellation_state,created_at,updated_at from sales.orders where tenant_id=:tenant and id=:id"""), {"tenant": tenant_id, "id": order_id}).mappings().first()
+            promised_delivery_date,subtotal,discount_total,total,estimated_cost,estimated_margin,estimated_cost_snapshot,actual_cost,actual_margin,
+            notes,fulfillment_state,cancellation_state,created_at,updated_at,division_ref_id,society_ref_id,quote_organization_revision,commercial_terms_snapshot,cost_currency,cost_exchange_rate from sales.orders where tenant_id=:tenant and id=:id"""), {"tenant": tenant_id, "id": order_id}).mappings().first()
         if not row:
             return None
         lines = connection.execute(text("""select id,quote_line_id,line_number,product_service_ref_id product_service_id,
             product_service_code,product_service_name,product_service_type,unit,ordered_quantity,delivered_quantity,
-            unit_price,discount_percentage,total,standard_unit_cost_snapshot,estimated_cost,fulfillment_mode,
+            unit_price,discount_percentage,total,standard_unit_cost_snapshot,estimated_cost,estimated_cost_snapshot,fulfillment_mode,
             fulfillment_status,inventory_item_ref_id inventory_item_id,inventory_item_code_snapshot inventory_item_code,
             inventory_item_name_snapshot inventory_item_name,production_request_ref_id production_request_id
             from sales.order_lines where tenant_id=:tenant and order_id=:id order by line_number"""), {"tenant": tenant_id, "id": order_id}).mappings().all()
@@ -251,6 +322,10 @@ class SalesRepository:
                 where tenant_id=:tenant and order_line_id=:line order by created_at,id"""), {"tenant": tenant_id, "line": line["id"]}).mappings().all()
             line_values.append({**dict(line), "reservations": [dict(item) for item in reservations]})
         return SalesOrderRead.model_validate({**dict(row), "lines": line_values})
+
+    def has_scoped_orders(self,tenant_id):
+        with self.engine.connect() as connection:
+            return connection.execute(text('select exists(select 1 from sales.orders where tenant_id=:t and division_ref_id is not null)'),{'t':tenant_id}).scalar()
 
     def list_orders(self, tenant_id, status=None, customer_id=None):
         filters = ["tenant_id=:tenant"]
@@ -267,15 +342,20 @@ class SalesRepository:
         with self.engine.connect() as connection:
             return self._order(connection, tenant_id, order_id)
 
-    def prepare_order_fulfillment(self, tenant_id, order_id, payload, key, request_hash):
+    def prepare_order_fulfillment(self, tenant_id, order_id, payload, key, request_hash, cost_currency=None, exchange_rate=None):
         with self.engine.begin() as connection:
+            scoped=self._order(connection,tenant_id,order_id)
+            if scoped and scoped.division_ref_id and (not cost_currency or exchange_rate is None):raise ValueError('order_context_downstream_pending')
             row = connection.execute(text("""select status,fulfillment_state,fulfillment_key,fulfillment_hash,cancellation_state
                 from sales.orders where tenant_id=:tenant and id=:id for update"""), {"tenant": tenant_id, "id": order_id}).mappings().first()
             if not row:
                 return None
-            if row["fulfillment_state"] == "completed":
-                if row["fulfillment_hash"] != request_hash:
-                    raise ValueError("sales_order_line_already_configured")
+            if scoped.division_ref_id:
+                local_customer_context(connection,tenant_id,scoped)
+                cost_rate(cost_currency,scoped.currency,exchange_rate)
+                if scoped.cost_currency and (scoped.cost_currency!=cost_currency or scoped.cost_exchange_rate!=exchange_rate):raise ValueError('operational_exchange_rate_locked')
+                connection.execute(text('update sales.orders set cost_currency=:currency,cost_exchange_rate=:rate where tenant_id=:t and id=:id'),{'currency':cost_currency,'rate':exchange_rate,'t':tenant_id,'id':order_id})
+            if row["fulfillment_state"] == "completed" and row["fulfillment_hash"] == request_hash:
                 return self._order(connection, tenant_id, order_id), row["fulfillment_key"] or key
             if row["status"] in {"cancelled", "delivered"} or row["cancellation_state"] in {"processing", "needs_reconciliation"}:
                 raise ValueError("sales_order_not_fulfillable")
@@ -292,8 +372,8 @@ class SalesRepository:
             if any(item["fulfillment_mode"] != "pending" or item["delivered_quantity"] > 0 for item in locked):
                 raise ValueError("sales_order_line_already_configured")
             connection.execute(text("""update sales.orders set fulfillment_state='processing',fulfillment_key=:key,
-                fulfillment_hash=:hash,updated_at=now() where tenant_id=:tenant and id=:id"""),
-                {"key": key, "hash": request_hash, "tenant": tenant_id, "id": order_id})
+                fulfillment_hash=:hash,fulfillment_plan=cast(:plan as jsonb),updated_at=now() where tenant_id=:tenant and id=:id"""),
+                {"key": key, "hash": request_hash, "plan":json.dumps(payload.model_dump(mode="json")), "tenant": tenant_id, "id": order_id})
             return self._order(connection, tenant_id, order_id), key
 
     def mark_fulfillment_reconciliation(self, tenant_id, order_id):
@@ -304,9 +384,15 @@ class SalesRepository:
     def create_order(self, tenant_id, payload, quote, key, request_hash, actor_id, service_order_codes=None):
         operation = "order.create"
         with self.engine.begin() as connection:
+            connection.execute(text('select id from sales.quotes where tenant_id=:t and id=:i for update'),{'t':tenant_id,'i':quote.id})
+            current=self._quote(connection,tenant_id,quote.id)
+            if not current or current.status!='approved':raise ValueError('approved_quote_required')
+            if current.organization_revision!=quote.organization_revision:raise ValueError('assignment_revision_conflict')
+            quote=current
             replay = self._claim(connection, tenant_id, operation, key, request_hash)
             if replay:
                 return SalesOrderRead.model_validate(replay)
+            local_customer_context(connection,tenant_id,quote)
             order_id = f"sor_{uuid4().hex[:26]}"
             inserted = connection.execute(text("""insert into sales.orders(id,tenant_id,code,quote_id,quote_code_snapshot,
                 customer_id,customer_code_snapshot,customer_name_snapshot,responsible_worker_ref_id,responsible_worker_name,
@@ -322,20 +408,23 @@ class SalesRepository:
             if not inserted:
                 self._release(connection, tenant_id, operation, key)
                 return None
+            if quote.division_ref_id:
+                connection.execute(text('update sales.orders set division_ref_id=:d,society_ref_id=:s,quote_organization_revision=:r,commercial_terms_snapshot=cast(:v as jsonb),estimated_cost_snapshot=cast(:cost_snapshot as jsonb) where tenant_id=:t and id=:i'),{'t':tenant_id,'i':order_id,'d':quote.division_ref_id,'s':quote.society_ref_id,'r':quote.organization_revision,'v':json.dumps(quote.commercial_terms_snapshot),'cost_snapshot':json.dumps(quote.estimated_cost_snapshot) if quote.estimated_cost_snapshot else None})
+                self._audit(connection,tenant_id,actor_id,'order.context','sales_order',order_id,{'quote_id':quote.id,'quote_organization_revision':quote.organization_revision,'snapshot':quote.commercial_terms_snapshot})
             for line in quote.lines:
                 mode = "service" if line.product_service_type == "service" else "pending"
                 line_status = "pending"
                 order_line_id = f"sol_{uuid4().hex[:26]}"
                 connection.execute(text("""insert into sales.order_lines(id,tenant_id,order_id,quote_line_id,line_number,
                     product_service_ref_id,product_service_code,product_service_name,product_service_type,unit,ordered_quantity,
-                    delivered_quantity,unit_price,discount_percentage,total,standard_unit_cost_snapshot,estimated_cost,
+                    delivered_quantity,unit_price,discount_percentage,total,standard_unit_cost_snapshot,estimated_cost,estimated_cost_snapshot,
                     fulfillment_mode,fulfillment_status)
                     values(:id,:tenant,:order_id,:quote_line_id,:number,:product_id,:code,:name,:type,:unit,:quantity,0,
-                    :unit_price,:discount,:total,:unit_cost,:estimated_cost,:mode,:status)"""), {"id": order_line_id, "tenant": tenant_id,
+                    :unit_price,:discount,:total,:unit_cost,:estimated_cost,cast(:estimated_cost_snapshot as jsonb),:mode,:status)"""), {"id": order_line_id, "tenant": tenant_id,
                     "order_id": order_id, "quote_line_id": line.id, "number": line.line_number, "product_id": line.product_service_id,
                     "code": line.product_service_code, "name": line.product_service_name, "type": line.product_service_type,
                     "unit": line.unit, "quantity": line.quantity, "unit_price": line.unit_price, "discount": line.discount_percentage,
-                    "total": line.total, "unit_cost": line.standard_unit_cost_snapshot, "estimated_cost": line.estimated_cost,
+                    "total": line.total, "unit_cost": line.standard_unit_cost_snapshot, "estimated_cost": line.estimated_cost,"estimated_cost_snapshot":json.dumps(line.estimated_cost_snapshot) if line.estimated_cost_snapshot else None,
                     "mode": mode, "status": line_status})
                 if mode == "service":
                     # Runtime callers allocate the tenant sequence through Admin. This bounded,
@@ -414,6 +503,8 @@ class SalesRepository:
                 raise ValueError("sales_order_not_cancellable")
             if row["fulfillment_state"] in {"processing", "needs_reconciliation"}:
                 raise ValueError("sales_order_fulfillment_in_progress")
+            manufacturing=connection.execute(text("select 1 from sales.production_reconciliations where tenant_id=:t and order_id=:o and status in ('processing','needs_reconciliation') limit 1"),{'t':tenant_id,'o':order_id}).first()
+            if manufacturing:raise ValueError('production_reconciliation_in_progress')
             delivery_in_progress = connection.execute(text("""select 1 from sales.deliveries where tenant_id=:tenant
                 and order_id=:id and confirmation_state in ('processing','needs_reconciliation') limit 1"""),
                 {"tenant": tenant_id, "id": order_id}).first()
@@ -463,9 +554,11 @@ class SalesRepository:
         if not row:
             return None
         lines = connection.execute(text("""select id,order_line_id,line_number,product_service_ref_id product_service_id,
-            product_service_code,product_service_name,unit,quantity,actual_cost,actual_cost_source from sales.delivery_lines
+            product_service_code,product_service_name,unit,quantity,actual_cost,actual_cost_source,original_actual_cost from sales.delivery_lines
             where tenant_id=:tenant and delivery_id=:id order by line_number"""), {"tenant": tenant_id, "id": delivery_id}).mappings().all()
-        return DeliveryRead.model_validate({**dict(row), "lines": [dict(item) for item in lines]})
+        parent=self._order(connection,tenant_id,row['order_id'])
+        context={key:getattr(parent,key) for key in ('division_ref_id','society_ref_id','cost_currency','cost_exchange_rate','currency')}
+        return DeliveryRead.model_validate({**dict(row), **context, "lines": [dict(item) for item in lines]})
 
     @contextmanager
     def delivery_command_lock(self,tenant,id):
@@ -478,9 +571,14 @@ class SalesRepository:
             finally:
                 c.execute(text("select pg_advisory_unlock(hashtextextended(:k,0))"),{"k":key});c.commit()
 
-    def list_warehouse_deliveries(self,tenant,limit=25,offset=0):
+    def list_warehouse_deliveries(self,tenant,limit=25,offset=0,scope=None):
         with self.engine.connect() as c:
-            ids=c.execute(text("select id from sales.deliveries where tenant_id=:t and status='draft' order by created_at,id limit :limit offset :offset"),{"t":tenant,"limit":limit,"offset":offset}).scalars().all()
+            condition=""
+            params={"t":tenant,"limit":limit,"offset":offset}
+            if scope and not scope.all_divisions:
+                condition=" and order_id in (select id from sales.orders where tenant_id=:t and (division_ref_id is null or division_ref_id=any(:divisions)))"
+                params['divisions']=[row['id'] for row in scope.divisions]
+            ids=c.execute(text("select id from sales.deliveries where tenant_id=:t and status='draft'"+condition+" order by created_at,id limit :limit offset :offset"),params).scalars().all()
             result=[]
             for id in ids:
                 delivery=self._delivery(c,tenant,id)
@@ -517,6 +615,8 @@ class SalesRepository:
     def create_delivery(self, tenant_id, payload, key, request_hash, actor_id):
         operation = "delivery.create"
         with self.engine.begin() as connection:
+            scoped=self._order(connection,tenant_id,payload.order_id)
+            if scoped and scoped.division_ref_id and not scoped.cost_currency:raise ValueError('order_context_downstream_pending')
             replay = self._claim(connection, tenant_id, operation, key, request_hash)
             if replay:
                 return DeliveryRead.model_validate(replay)
@@ -543,7 +643,7 @@ class SalesRepository:
                     self._release(connection, tenant_id, operation, key); raise ValueError("delivery_quantity_exceeds_uncommitted")
                 if source.fulfillment_mode == "pending" or source.fulfillment_status in {"pending", "production_requested", "cancelled"}:
                     self._release(connection, tenant_id, operation, key); raise ValueError("order_line_not_ready_for_delivery")
-                if source.fulfillment_mode == "stock":
+                if source.fulfillment_mode in {"stock", "production"}:
                     available_reserved = sum(item.reserved_quantity - item.consumed_quantity for item in source.reservations if item.status == "active")
                     if line.quantity > available_reserved:
                         self._release(connection, tenant_id, operation, key); raise ValueError("delivery_exceeds_reserved_quantity")
@@ -573,8 +673,19 @@ class SalesRepository:
             self._finish(connection, tenant_id, operation, key, value)
             return value
 
+    def _lock_delivery(self, connection, tenant_id, delivery_id):
+        # Same parent -> child order used by order cancellation and service execution.
+        parent = connection.execute(text("select order_id from sales.deliveries where tenant_id=:tenant and id=:id"), {"tenant": tenant_id, "id": delivery_id}).scalar()
+        if parent is None:
+            return None
+        connection.execute(text("select id from sales.orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": parent})
+        connection.execute(text("select id from sales.deliveries where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": delivery_id})
+        return parent
+
     def prepare_delivery_confirmation(self, tenant_id, delivery_id, key, request_hash):
         with self.engine.begin() as connection:
+            if self._lock_delivery(connection, tenant_id, delivery_id) is None:
+                return None
             state = connection.execute(text("""select status,confirmation_state,confirmation_key,confirmation_hash,order_id
                 from sales.deliveries where tenant_id=:tenant and id=:id for update"""), {"tenant": tenant_id, "id": delivery_id}).mappings().first()
             if not state:
@@ -603,7 +714,7 @@ class SalesRepository:
             by_id = {line.id: line for line in order.lines}
             for delivery_line in delivery.lines:
                 order_line = by_id[delivery_line.order_line_id]
-                if order_line.fulfillment_mode != "stock":
+                if order_line.fulfillment_mode not in {"stock", "production"}:
                     raise ValueError("order_line_not_ready_for_delivery")
                 pending = delivery_line.quantity
                 for reservation in order_line.reservations:
@@ -631,6 +742,8 @@ class SalesRepository:
     def confirm_delivery(self, tenant_id, delivery_id, consumptions, key, request_hash, actor_id):
         operation = "delivery.confirm"
         with self.engine.begin() as connection:
+            if self._lock_delivery(connection, tenant_id, delivery_id) is None:
+                return None
             replay = self._claim(connection, tenant_id, operation, key, request_hash)
             if replay:
                 return DeliveryRead.model_validate(replay)
@@ -647,10 +760,15 @@ class SalesRepository:
                 connection.execute(text("""update sales.order_line_reservations set consumed_quantity=consumed_quantity+:quantity,
                     status=case when consumed_quantity+:quantity>=reserved_quantity then 'consumed' else 'active' end,updated_at=now()
                     where tenant_id=:tenant and reservation_ref_id=:reservation"""), {"quantity": item["quantity"], "tenant": tenant_id, "reservation": item["reservation_ref_id"]})
+            original_costs=dict(costs_by_line)
+            if delivery.division_ref_id:
+                if not delivery.cost_currency or delivery.cost_exchange_rate is None:raise ValueError('operational_cost_currency_unavailable')
+                original_costs={id_:Decimal(str(cost)).quantize(Decimal('0.000001'),rounding=ROUND_HALF_UP) for id_,cost in original_costs.items()}
+                costs_by_line={id_:convert_cost(cost,delivery.cost_exchange_rate) for id_,cost in original_costs.items()}
             for line in delivery.lines:
                 cost = costs_by_line.get(line.id)
                 source = "inventory_consumption" if any(item["delivery_line_id"] == line.id for item in consumptions) else line.actual_cost_source
-                connection.execute(text("update sales.delivery_lines set actual_cost=:cost,actual_cost_source=:source where tenant_id=:tenant and id=:id"), {"cost": cost, "source": source, "tenant": tenant_id, "id": line.id})
+                connection.execute(text("update sales.delivery_lines set actual_cost=:cost,actual_cost_source=:source,original_actual_cost=:original where tenant_id=:tenant and id=:id"), {"cost": cost, "source": source, "original":original_costs.get(line.id) if delivery.division_ref_id else None, "tenant": tenant_id, "id": line.id})
                 updated = connection.execute(text("""update sales.order_lines set delivered_quantity=delivered_quantity+:quantity,
                     fulfillment_status=case when delivered_quantity+:quantity>=ordered_quantity then 'delivered' else 'partially_delivered' end,
                     updated_at=now() where tenant_id=:tenant and id=:id and delivered_quantity+:quantity<=ordered_quantity"""), {"quantity": line.quantity, "tenant": tenant_id, "id": line.order_line_id})
@@ -660,6 +778,7 @@ class SalesRepository:
             order_status = "delivered" if all(item == "delivered" for item in statuses) else "partially_delivered"
             actual_cost = connection.execute(text("select coalesce(sum(actual_cost),0) from sales.delivery_lines where tenant_id=:tenant and delivery_id in (select id from sales.deliveries where tenant_id=:tenant and order_id=:order and status='confirmed')"), {"tenant": tenant_id, "order": delivery.order_id}).scalar_one() or Decimal("0")
             actual_cost += sum(costs_by_line.values())
+            actual_cost += connection.execute(text("select coalesce(sum(actual_cost),0) from sales.service_orders where tenant_id=:tenant and order_id=:order and status='accepted'"),{"tenant":tenant_id,"order":delivery.order_id}).scalar_one() or Decimal("0")
             total = connection.execute(text("select total from sales.orders where tenant_id=:tenant and id=:order"), {"tenant": tenant_id, "order": delivery.order_id}).scalar_one()
             margin = None if not total else ((Decimal(str(total)) - Decimal(str(actual_cost))) / Decimal(str(total)) * Decimal("100")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
             connection.execute(text("""update sales.orders set status=:status,actual_cost=:cost,actual_margin=:margin,
@@ -675,13 +794,15 @@ class SalesRepository:
     def cancel_delivery(self, tenant_id, delivery_id, reason, key, request_hash, actor_id):
         operation = "delivery.cancel"
         with self.engine.begin() as connection:
+            if self._lock_delivery(connection, tenant_id, delivery_id) is None:
+                return None
             replay = self._claim(connection, tenant_id, operation, key, request_hash)
             if replay:
                 return DeliveryRead.model_validate(replay)
             before = self._delivery(connection, tenant_id, delivery_id)
             if not before:
                 self._release(connection, tenant_id, operation, key); return None
-            if before.status != "draft":
+            if before.status != "draft" or before.confirmation_state in {"processing", "needs_reconciliation"}:
                 self._release(connection, tenant_id, operation, key); raise ValueError("delivery_not_cancellable")
             connection.execute(text("update sales.deliveries set status='cancelled',updated_at=now() where tenant_id=:tenant and id=:id"), {"tenant": tenant_id, "id": delivery_id})
             value = self._delivery(connection, tenant_id, delivery_id)
@@ -698,13 +819,14 @@ class SalesRepository:
             from sales.service_orders where tenant_id=:tenant and id=:id"""), {"tenant": tenant_id, "id": service_order_id}).mappings().first()
         if not row:
             return None
-        time_entries = connection.execute(text("""select id,worker_ref_id worker_id,worker_name,worked_on,minutes,hourly_cost,total_cost,notes,created_at
+        time_entries = connection.execute(text("""select id,worker_ref_id worker_id,worker_name,worked_on,minutes,hourly_cost,total_cost,cost_currency,document_currency,cost_exchange_rate,original_total_cost,notes,created_at
             from sales.service_time_entries where tenant_id=:tenant and service_order_id=:id order by worked_on,created_at,id"""), {"tenant": tenant_id, "id": service_order_id}).mappings().all()
-        cost_entries = connection.execute(text("""select id,cost_type,description,quantity,unit_cost,total_cost,evidence_reference,created_at
+        cost_entries = connection.execute(text("""select id,cost_type,description,quantity,unit_cost,total_cost,cost_currency,document_currency,cost_exchange_rate,original_total_cost,evidence_reference,created_at
             from sales.service_cost_entries where tenant_id=:tenant and service_order_id=:id order by created_at,id"""), {"tenant": tenant_id, "id": service_order_id}).mappings().all()
         evidence = connection.execute(text("""select id,evidence_reference,description,created_at from sales.service_evidence
             where tenant_id=:tenant and service_order_id=:id order by created_at,id"""), {"tenant": tenant_id, "id": service_order_id}).mappings().all()
-        return ServiceOrderRead.model_validate({**dict(row), "time_entries": [dict(item) for item in time_entries],
+        context=connection.execute(text('select division_ref_id,society_ref_id,quote_organization_revision,commercial_terms_snapshot,currency from sales.orders where tenant_id=:t and id=:i'),{'t':tenant_id,'i':row['order_id']}).mappings().one()
+        return ServiceOrderRead.model_validate({**dict(row),**dict(context), "time_entries": [dict(item) for item in time_entries],
             "cost_entries": [dict(item) for item in cost_entries], "evidence": [dict(item) for item in evidence]})
 
     def list_service_orders(self, tenant_id, status=None, order_id=None, customer_id=None):
@@ -721,9 +843,17 @@ class SalesRepository:
         with self.engine.connect() as connection:
             return self._service_order(connection, tenant_id, service_order_id)
 
+    def _lock_service_context(self,connection,tenant_id,service_order_id,stopping=False):
+        row=connection.execute(text("select o.id,o.status,o.cancellation_state,o.division_ref_id from sales.orders o join sales.service_orders s on s.tenant_id=o.tenant_id and s.order_id=o.id where s.tenant_id=:t and s.id=:i and o.division_ref_id is not null for update of o"),{'t':tenant_id,'i':service_order_id}).mappings().first()
+        if not row:return
+        if row['status']=='cancelled' or row['cancellation_state']!='idle':raise ValueError('service_context_order_unavailable')
+        connection.execute(text('select id from sales.service_orders where tenant_id=:t and id=:i for update'),{'t':tenant_id,'i':service_order_id})
+        if not stopping:local_customer_context(connection,tenant_id,self._service_order(connection,tenant_id,service_order_id))
+
     def plan_service_order(self, tenant_id, service_order_id, payload, key, request_hash, actor_id):
         operation = f"service_order.plan:{service_order_id}"
         with self.engine.begin() as connection:
+            self._lock_service_context(connection,tenant_id,service_order_id)
             replay = self._claim(connection, tenant_id, operation, key, request_hash)
             if replay: return ServiceOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
@@ -742,6 +872,7 @@ class SalesRepository:
     def assign_service_order(self, tenant_id, service_order_id, worker, key, request_hash, actor_id):
         operation = f"service_order.assign:{service_order_id}"
         with self.engine.begin() as connection:
+            self._lock_service_context(connection,tenant_id,service_order_id)
             replay = self._claim(connection, tenant_id, operation, key, request_hash)
             if replay: return ServiceOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
@@ -757,9 +888,10 @@ class SalesRepository:
             self._audit(connection, tenant_id, actor_id, operation, "service_order", service_order_id, {"before": before.status, "after": value.status, "responsible_worker_id": worker.id})
             self._finish(connection, tenant_id, operation, key, value); return value
 
-    def add_service_time_entry(self, tenant_id, service_order_id, payload, worker, key, request_hash, actor_id):
+    def add_service_time_entry(self, tenant_id, service_order_id, payload, worker, key, request_hash, actor_id, base_currency=None):
         operation = f"service_order.time.create:{service_order_id}"
         with self.engine.begin() as connection:
+            self._lock_service_context(connection,tenant_id,service_order_id)
             replay = self._claim(connection, tenant_id, operation, key, request_hash)
             if replay: return ServiceOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
@@ -768,19 +900,21 @@ class SalesRepository:
                 self._release(connection, tenant_id, operation, key); return None
             if before.status not in {"in_progress", "on_hold", "pending_acceptance"}:
                 self._release(connection, tenant_id, operation, key); raise ValueError("service_order_entries_not_allowed")
-            total = (Decimal(payload.minutes) / Decimal(60) * payload.hourly_cost).quantize(MONEY, rounding=ROUND_HALF_UP)
+            money = entry_money(before,payload,Decimal(payload.minutes) / Decimal(60) * payload.hourly_cost,base_currency)
+            total = money["total_cost"]
             connection.execute(text("""insert into sales.service_time_entries(id,tenant_id,service_order_id,worker_ref_id,worker_name,
-                worked_on,minutes,hourly_cost,total_cost,notes,created_by_actor_id) values(:id,:tenant,:order,:worker,:name,:date,:minutes,:rate,:total,:notes,:actor)"""),
+                worked_on,minutes,hourly_cost,total_cost,cost_currency,document_currency,cost_exchange_rate,original_total_cost,notes,created_by_actor_id) values(:id,:tenant,:order,:worker,:name,:date,:minutes,:rate,:total,:cost_currency,:document_currency,:cost_exchange_rate,:original_total_cost,:notes,:actor)"""),
                 {"id": f"ste_{uuid4().hex[:26]}", "tenant": tenant_id, "order": service_order_id, "worker": worker.id,
                  "name": worker.full_name, "date": payload.worked_on, "minutes": payload.minutes, "rate": payload.hourly_cost,
-                 "total": total, "notes": payload.notes, "actor": actor_id})
+                 "total": total, "notes": payload.notes, "actor": actor_id, **money})
             value = self._service_order(connection, tenant_id, service_order_id)
-            self._audit(connection, tenant_id, actor_id, operation, "service_order", service_order_id, {"worker_id": worker.id, "minutes": payload.minutes, "total_cost": total})
+            self._audit(connection, tenant_id, actor_id, operation, "service_order", service_order_id, {"worker_id": worker.id, "minutes": payload.minutes, **money})
             self._finish(connection, tenant_id, operation, key, value); return value
 
-    def add_service_cost_entry(self, tenant_id, service_order_id, payload, key, request_hash, actor_id):
+    def add_service_cost_entry(self, tenant_id, service_order_id, payload, key, request_hash, actor_id, base_currency=None):
         operation = f"service_order.cost.create:{service_order_id}"
         with self.engine.begin() as connection:
+            self._lock_service_context(connection,tenant_id,service_order_id)
             replay = self._claim(connection, tenant_id, operation, key, request_hash)
             if replay: return ServiceOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
@@ -789,19 +923,21 @@ class SalesRepository:
                 self._release(connection, tenant_id, operation, key); return None
             if before.status not in {"in_progress", "on_hold", "pending_acceptance"}:
                 self._release(connection, tenant_id, operation, key); raise ValueError("service_order_entries_not_allowed")
-            total = (payload.quantity * payload.unit_cost).quantize(MONEY, rounding=ROUND_HALF_UP)
+            money = entry_money(before,payload,payload.quantity * payload.unit_cost,base_currency)
+            total = money["total_cost"]
             connection.execute(text("""insert into sales.service_cost_entries(id,tenant_id,service_order_id,cost_type,description,
-                quantity,unit_cost,total_cost,evidence_reference,created_by_actor_id) values(:id,:tenant,:order,:type,:description,:quantity,:cost,:total,:evidence,:actor)"""),
+                quantity,unit_cost,total_cost,cost_currency,document_currency,cost_exchange_rate,original_total_cost,evidence_reference,created_by_actor_id) values(:id,:tenant,:order,:type,:description,:quantity,:cost,:total,:cost_currency,:document_currency,:cost_exchange_rate,:original_total_cost,:evidence,:actor)"""),
                 {"id": f"sce_{uuid4().hex[:26]}", "tenant": tenant_id, "order": service_order_id, "type": payload.cost_type,
                  "description": payload.description, "quantity": payload.quantity, "cost": payload.unit_cost, "total": total,
-                 "evidence": payload.evidence_reference, "actor": actor_id})
+                 "evidence": payload.evidence_reference, "actor": actor_id, **money})
             value = self._service_order(connection, tenant_id, service_order_id)
-            self._audit(connection, tenant_id, actor_id, operation, "service_order", service_order_id, {"cost_type": payload.cost_type, "total_cost": total})
+            self._audit(connection, tenant_id, actor_id, operation, "service_order", service_order_id, {"cost_type": payload.cost_type, **money})
             self._finish(connection, tenant_id, operation, key, value); return value
 
     def add_service_evidence(self, tenant_id, service_order_id, payload, key, request_hash, actor_id):
         operation = f"service_order.evidence.create:{service_order_id}"
         with self.engine.begin() as connection:
+            self._lock_service_context(connection,tenant_id,service_order_id)
             replay = self._claim(connection, tenant_id, operation, key, request_hash)
             if replay: return ServiceOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
@@ -823,6 +959,7 @@ class SalesRepository:
             "resume": ("on_hold", "in_progress"), "submit_acceptance": ("in_progress", "pending_acceptance"),
             "cancel": ({"draft", "planned", "assigned", "in_progress", "on_hold", "pending_acceptance"}, "cancelled")}
         with self.engine.begin() as connection:
+            self._lock_service_context(connection,tenant_id,service_order_id,stopping=action in {"cancel","wait"})
             replay = self._claim(connection, tenant_id, operation, key, request_hash)
             if replay: return ServiceOrderRead.model_validate(replay)
             if action in {"wait", "cancel"} and not reason:
@@ -838,6 +975,8 @@ class SalesRepository:
                     self._release(connection, tenant_id, operation, key); raise ValueError("service_order_evidence_required")
                 if not before.time_entries and not before.cost_entries:
                     self._release(connection, tenant_id, operation, key); raise ValueError("service_order_cost_required")
+                if before.division_ref_id and any(entry.cost_currency is None or entry.document_currency != before.currency for entry in [*before.time_entries, *before.cost_entries]):
+                    raise ValueError('operational_cost_history_review_required')
                 actual_cost = sum((item.total_cost for item in before.time_entries), Decimal("0")) + sum((item.total_cost for item in before.cost_entries), Decimal("0"))
                 connection.execute(text("update sales.service_orders set status='accepted',actual_cost=:cost,accepted_at=now(),updated_at=now() where tenant_id=:tenant and id=:id"), {"cost": actual_cost, "tenant": tenant_id, "id": service_order_id})
                 connection.execute(text("""update sales.order_lines set delivered_quantity=ordered_quantity,fulfillment_status='delivered',updated_at=now()

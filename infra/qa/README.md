@@ -8,7 +8,7 @@ Esta carpeta declara la configuracion necesaria para preparar el candidato. No a
 
 Antes de aprovisionar se debe revisar el plan con el usuario aprobador y conceder cada rol mediante una actividad `qa-write` independiente.
 
-Estado comprobado el 2026-08-23: las siete cuentas originales, Artifact Registry `erclave-qa` y el provider WIF limitado a `ChemaPsan/eslaclave-erclave` estan aprovisionados. Las identidades nuevas `erclave-purchasing-qa` y `erclave-maintenance-qa` estan declaradas, pero deben aprovisionarse y verificarse mediante una actividad `qa-write` independiente antes del candidato de siete servicios. Admin runtime conserva `roles/firebaseauth.admin` porque Backoffice crea, actualiza y elimina identidades Firebase durante el ciclo de vida de tenants; no concede autorizacion ERClave ni acceso a datos operativos. La identidad desplegadora cuenta con `roles/firebasehosting.admin` para publicar exclusivamente mediante el gate `qa-frontend`. No se permiten llaves JSON del pipeline.
+Antecedente histórico del 2026-08-23 (no inventario vigente): las siete cuentas originales, Artifact Registry `erclave-qa` y el provider WIF limitado a `ChemaPsan/eslaclave-erclave` estan aprovisionados. Compras y Mantenimiento ya forman parte del release documentado de siete servicios; consultar [ESTADO_ACTUAL](../../docs/contexto/ESTADO_ACTUAL.md). Cualquier cambio de IAM se verifica y autoriza por separado. Admin runtime conserva `roles/firebaseauth.admin` porque Backoffice crea, actualiza y elimina identidades Firebase durante el ciclo de vida de tenants; no concede autorizacion ERClave ni acceso a datos operativos. La identidad desplegadora cuenta con `roles/firebasehosting.admin` para publicar exclusivamente mediante el gate `qa-frontend`. No se permiten llaves JSON del pipeline.
 
 ## GitHub Environments obligatorios
 
@@ -68,7 +68,7 @@ El procedimiento transversal y la matriz de autorizaciones viven en `docs/operac
 8. `qa-frontend` construye un artefacto sin localhost/emulador, lo conserva y despliega exactamente ese directorio.
 9. `qa-admin-backoffice-config.yml` corrige la allowlist de Admin sin reconstruir imagenes: `qa-services` crea una revision sin trafico sobre la imagen certificada y `qa-traffic` la promueve solamente si imagen, version, configuracion y revision de rollback siguen coincidiendo.
 
-Estado comprobado CHG-191: la variable esta configurada y el run `31661213987` promovio `admin-service-qa-bo-1-1` al 100%; rollback `admin-service-qa-00017-dih`. La prueba funcional autenticada administrador permitido/owner ordinario `403` debe repetirse con sesion renovada y sin almacenar credenciales.
+Evidencia histórica CHG-191, sustituida por releases posteriores: la variable esta configurada y el run `31661213987` promovio `admin-service-qa-bo-1-1` al 100%; rollback `admin-service-qa-00017-dih`. La prueba funcional autenticada administrador permitido/owner ordinario `403` debe repetirse con sesion renovada y sin almacenar credenciales.
 
 GitHub Pages queda como maqueta manual y ya no se publica automaticamente al cambiar `main`.
 
@@ -80,15 +80,19 @@ GitHub Pages queda como maqueta manual y ya no se publica automaticamente al cam
 - Datos: usar restauracion o `forward-fix`; no ejecutar downgrade despues de admitir escrituras sin una decision explicita.
 
 
-## Candidato de continuidad CHG-269
+## Historia de releases (no instrucciones pendientes)
+
+Los cortes siguientes se conservan como antecedentes. El [estado vigente documentado](../../docs/contexto/ESTADO_ACTUAL.md) prevalece; esta revisión no consultó infraestructura remota.
+
+### Candidato de continuidad CHG-269
 
 CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
 
 
-## Release QA verificado CHG-270
+### Release QA verificado CHG-270
 
-CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
+CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff de ese corte: `docs/contexto/REANUDACION_CHG269.md`; retomar hoy desde [INICIO_SESION](../../docs/contexto/INICIO_SESION.md). Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
 
-## Preparación CHG-275
+### Preparación histórica CHG-275
 
-Candidato Local CHG-271–275: manuales/formularios, margen sin tope de 100% y evidencia de servicios. Plan vigente: `docs/operaciones/release_qa_20260914.md`. QA sigue en b63cdad; destino Alembic 0036. Configurar y verificar bucket privado dedicado y QA_EVIDENCE_BUCKET antes de promover Production. 29 integraciones históricas requieren corregir fixtures/autorización; no declarar certificación completa ni ejecutar la suite DB indiscriminadamente. Sin despliegue remoto en esta preparación.
+Candidato Local CHG-271–275: manuales/formularios, margen sin tope de 100% y evidencia de servicios. Plan de ese corte: `docs/operaciones/release_qa_20260914.md`. En ese corte QA seguía en b63cdad; destino Alembic 0036. Configurar y verificar bucket privado dedicado y QA_EVIDENCE_BUCKET antes de promover Production. 29 integraciones históricas requieren corregir fixtures/autorización; no declarar certificación completa ni ejecutar la suite DB indiscriminadamente. Sin despliegue remoto en esta preparación.

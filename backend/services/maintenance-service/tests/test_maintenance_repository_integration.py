@@ -1,8 +1,10 @@
 import importlib
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from threading import Barrier
 from uuid import uuid4, uuid5
 from sqlalchemy.engine import make_url
 
@@ -116,6 +118,27 @@ def test_idempotency_and_tenant_isolation(repository):
     assert repo.get_order("ten_other", first["id"]) is None
     with pytest.raises(ValueError, match="idempotency_key_reused"):
         repo.create_order(tenant, payload, snapshots, repo.fixture_id("create-idempotent-1"), "different", repo.fixture_id("usr_test"))
+
+
+def test_concurrent_order_retry_keeps_one_code_and_order(repository):
+    repo, tenant = repository
+    payload = facility("MT-RACE")
+    snapshots = {"machine_code_snapshot": None, "machine_name_snapshot": None, "source_production_order_code_snapshot": None, "code_mode": "managed"}
+    command_key = repo.fixture_id("create-race-1")
+    actor = repo.fixture_id("usr_test")
+    start = Barrier(2)
+
+    def create(_):
+        start.wait(timeout=10)
+        return repo.create_order(tenant, payload, snapshots, command_key, "same-request", actor)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = list(pool.map(create, (0, 1)))
+    assert first["id"] == second["id"]
+    assert first["code"] == second["code"] == payload.code.upper()
+    assert first["code_mode"] == second["code_mode"] == "managed"
+    with repo.engine.connect() as connection:
+        assert connection.execute(text("select count(*) from maintenance.orders where tenant_id=:tenant and id=:id"), {"tenant": tenant, "id": first["id"]}).scalar_one() == 1
 
 
 def test_only_one_active_order_can_block_a_machine(repository):

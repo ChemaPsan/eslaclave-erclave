@@ -1,7 +1,39 @@
 # ERClave - Lista de agentes por modulo
 
-CHG-276 en curso: QA release requiere política única Delete age365 en bucket dedicado. Fixtures multitenant de Admin/Sales/Purchasing requieren autorización explícita y ERCLAVE_TEST_ALLOW_TEMP_TENANTS=1; no basta ERCLAVE_TEST_TENANT_ID. Maintenance ahora limpia solo sus IDs/actores. Estado/gates: docs/operaciones/release_qa_20260914.md.
+## Preparacion CC-20 - CHG-327
 
+[Matriz Local de aceptación integrada](docs/operaciones/cc20_aceptacion_integrada_local.md) preparada con casos y evidencia esperada por dueño. QA/Seguridad/Sinergia y los dueños deben registrar ejecución real antes de declarar cierre; ninguno pasó todavía por esta preparación. Accounting apagado, tenant Local exclusivo y datos sintéticos acotados. El uso de APIs interceptadas sólo prueba UI, y la matriz QA remota conserva su estado independiente.
+
+## Preparacion CC-19 - CHG-326
+
+El usuario aun no dispone de padron/equivalencias reales. [Guia y diagrama](docs/arquitectura/cc19_mapeos_y_configuracion_contable.md) separan backfill operativo por dueño de la configuracion futura de Accounting. CC-19 sigue abierto sin escritura de datos; operacion sin Accounting debe continuar. No inventar Sociedad/Division, moneda, costos ni cuentas de la empresa. Preflight, evidencia por ID y autorizacion del ambiente preceden la migracion.
+
+## Custodia CC-21 - CHG-325
+
+Costo estimado de cotizaciones implementado solo en Local con migracion 0062. Production confirma costo unitario por producto/Division en moneda base de Sociedad; Sales calcula la vista previa con tasa explicita y congela origen, costo y conversion al aprobar la cotizacion. Pedido hereda el snapshot. Si falta costo confirmado o tasa, aprobar sigue permitido con estimado y margen nulos. Historia sin snapshot conserva sus importes sin reinterpretacion y los reportes no presentan margen estimado no verificable. Consultar [contrato CC-21](docs/arquitectura/cont_08_costo_estimado_cotizaciones.md). QA, datos CC-19, aceptacion CC-20 y Word siguen pendientes.
+
+## Custodia CC-18 - CHG-323
+
+Admin asigna folios para Puestos RH, movimientos Inventory, proveedor/requisicion/orden/recepcion Purchasing y orden Maintenance. En modo manual, movimientos internos sin formulario usan codigo estable derivado del origen. Conservar historia sin renumerar y permisos del consumidor por tipo. Implementado y probado solo en Local con migracion 0061; QA, CC-19/20 y Word quedan pendientes.
+
+## Custodia CC-15 · CHG-319
+
+Compras conserva [contexto documental y condiciones explícitas](docs/arquitectura/cont_08_compras_contexto.md) implementados Local: División fija, snapshots de condiciones, herencia a recepciones, scope antes de replays y conversión completa. Preservar historia nullable, recuperación CC-14 y servicios sin Inventory. CC-16 implementado CHG-320; CC-17 implementado Local para cotizacion y orden de produccion CHG-322; CC-18 y CC-19/20 permanecen abiertos.
+
+## Custodia CC-14 · CHG-317
+
+Inventory/Purchasing/Maintenance conservan [productores, transferencias y sobrantes](docs/arquitectura/cont_08_inventario_productores.md) implementados Local. Delegación real de dueños, pruebas y revisión; Arquitectura/API, Datos, Seguridad y Contabilidad como perspectivas transversales. Preservar proofs, snapshots monetarios, alcance antes de replay y no reactivación Maintenance terminal. CC-16 integral implementado Local CHG-320; CC-15 se implementó CHG-319; no reabrir CC-14 por faltar datos CC-19 o aceptación CC-20.
+
+
+## Custodia documental vigente · CHG-311
+
+Consultar el [portal documental](docs/INICIO.md) antes de recuperar contexto. [ESTADO_ACTUAL](docs/contexto/ESTADO_ACTUAL.md) define ambientes; [CONTROL_CONTABLE](docs/contexto/CONTROL_CONTABLE.md) define separación implementada y pendientes. Los [cortes previos de revisión](docs/contexto/historico/AGENTES_cortes_hasta_CHG310.md) son historia, no mandatos actuales.
+
+El custodio de manuales coordina con Arquitectura y cada agente de módulo la documentacion viva: clasificar toda fuente en el registro, corregir su cuerpo, enlazar decisión/contrato/evidencia, y ejecutar validate:documentation. Ningún agente usa una fuente histórica o exportación sin verificar como autoridad; aplicar $erclave-context-reconcile. El control automático corre con verify y CI; la revisión semántica sigue siendo responsabilidad de los dueños.
+
+Política CHG-309: costos y tarifas en moneda base de Sociedad; preservar original, tipo de cambio y convertido cuando corresponda. Implementación parcial según CONTROL_CONTABLE; no repetir la consulta al usuario. Fabricación manual dimensionada se integra Local en CHG-313 con recursos/capacidad y moneda confirmados; la originada en Sales se integra Local en CHG-315 (CC-12) mediante planificación, recepción y conciliación explícitas.
+
+Reglas persistentes: bucket privado con Delete age 365; fixtures multitenant requieren autorización explícita y ERCLAVE_TEST_ALLOW_TEMP_TENANTS=1.
 
 Este documento define los agentes especializados que acompanaran la evolucion funcional y tecnica de ERClave.
 
@@ -10,7 +42,27 @@ La regla base es simple: cada modulo debe tener dos agentes.
 - Agente de negocio: entiende procesos reales, reglas operativas, casos de uso, excepciones, metricas y criterios de aceptacion.
 - Agente tecnico: entiende la implementacion del modulo, dependencias, datos, integraciones, frontend, API futura, riesgos y pendientes de conexion.
 
+## Corte funcional CHG-313/314/315
+
+RH y Production custodian [tarifas confirmadas y capacidad por División](docs/arquitectura/cont_08_tarifas_capacidad.md). Moneda Sociedad explícitamente confirmada, Decimal6 e historia nullable; no inferir moneda desde importe legado. RH informa capacidad nominal/IDs compartidos; Production descuenta compromisos globales máquina/fecha. UI exige confirmación sin casilla precargada y conserva precisión/reintentos. CHG-313 conecta CC-11 manual: Production conserva compromisos por persona/día e intento durable; Inventory valida la prueba del origen y recibe terminado con costo original exacto. Inicio/reanudación revalidan elegibilidad sin recostear historia. CHG-314 Servicios conserva original en moneda Sociedad, tasa explícita y convertido documental; aceptar entradas históricas sin moneda requiere revisión. CHG-315 integra fabricación Sales (CC-12): solicitud probada, origen inmutable, orden única, recepción Inventory y conciliación comercial durable; la entrega conserva costo original exacto y convertido. Accounting sigue opcional. Los dueños consultan los contratos [Producción](docs/arquitectura/cont_08_produccion_contexto.md) y [Servicios](docs/arquitectura/cont_08_servicios_contexto.md); estas ampliaciones son Local y no acreditan UAT ni despliegue QA.
+
 ## Uso esperado
+
+**Revisión de formularios:** el agente de negocio del módulo explica la decisión o tarea que justifica cada campo; el técnico contrasta create/update/read, serialización, persistencia y catálogo dueño; Diseño/i18n revisa carga de captura y claridad; QA prueba el recorrido. Usar `$erclave-form-contract` para la matriz concreta y `$erclave-form-feedback` para errores y conservación de captura. Ningún rol deduce que un campo adicional es necesario solo porque existe en una tabla.
+
+**Evidencia y contexto:** usar `$erclave-context-reconcile` para distinguir estado vigente de notas históricas y `$erclave-qa-evidence` para registrar ejecución funcional. Las fichas de agentes son perspectivas de revisión, no resultados de pruebas ni autorización de escrituras remotas.
+
+**Preparación contable vigente:** usar [CONTROL_CONTABLE](docs/contexto/CONTROL_CONTABLE.md), [capacidades organizacionales](docs/arquitectura/matriz_capacidades_organizacionales.md) y $erclave-accounting. El centro es obligatorio sólo por flujo habilitado; CONT-02/03/05 y asignaciones CONT-07 ya tienen implementación Local. CONT-08 es parcial. No confundir normalización, aislamiento de documentos y libros contables futuros.
+
+| Tipo de cambio | Fichas que se consultan primero |
+|---|---|
+| Campo o formulario de un módulo | Negocio y técnico del módulo, API, Diseño/i18n y QA; Datos si persiste un campo nuevo. |
+| Integración entre servicios | Técnicos de ambos módulos, Sinergia, API y Seguridad; Datos si cambia ownership o persistencia. |
+| Migración o permisos | Datos/Custodio DB o Seguridad según el caso, más técnico del módulo y QA. |
+| Release QA | Arquitectura, Seguridad y QA/Release; sumar dueños del delta real. |
+| Manual o guía funcional | Negocio/técnico del módulo, Custodio de manuales y QA para el estado probado. |
+
+Esta ruta reduce lectura repetida; no exime consultar otras fichas cuando el impacto lo requiera.
 
 Antes de cambiar un modulo, se debe consultar al agente de negocio para validar si el flujo tiene sentido operativo y al agente tecnico para revisar impacto en codigo, datos, integraciones y trazabilidad.
 
@@ -78,7 +130,7 @@ Responsabilidades:
 - validar que `session/context` incluya roles, permisos, limites de entitlements y alcance de sucursales antes de que el frontend habilite navegacion o acciones por modulo;
 - validar que todo tenant tenga perfil corporativo inicial en `admin.tenant_settings` con key `organization.profile`;
 - proteger que corporativo, razones sociales, sucursales y contactos administrativos pertenezcan al tenant y no a Firebase, frontend ni servicios operativos;
-- exigir que altas, actualizaciones, activaciones e inactivaciones de razones sociales y sucursales usen los endpoints finos de `admin-service` (`/v1/organization/legal-entities` y `/v1/organization/branches`) mientras sigan persistiendo en `organization.profile`;
+- exigir que altas, actualizaciones, activaciones e inactivaciones de razones sociales y sucursales usen los endpoints finos de `admin-service` (`/v1/organization/legal-entities` y `/v1/organization/branches`) como adaptadores de compatibilidad; con autoridad CONT-02 activa, las tablas normalizadas de Admin gobiernan y `organization.profile` es proyección;
 - definir estrategia de despliegue y promocion entre ambientes;
 - definir estandares de API, eventos, versionamiento, errores y trazabilidad;
 - revisar que Produccion, Almacenes y Ventas puedan migrar a servicios reales sin acoplarse;
@@ -181,7 +233,7 @@ Responsabilidades:
 - validar que cada tabla tenga dueno, `tenant_id` o justificacion explicita para no tenerlo;
 - validar que identidad global, membresia, roles, permisos, entitlements y auditoria no se mezclen en tablas operativas de otros servicios;
 - validar que la estructura corporativa del tenant se modele como configuracion administrada por `admin-service`: corporativo, razones sociales, sucursales y contactos;
-- validar que razones sociales y sucursales se creen, actualicen, activen e inactiven mediante endpoints finos auditables aunque el almacenamiento inicial siga siendo `organization.profile`;
+- validar que razones sociales y sucursales se creen, actualicen, activen e inactiven mediante endpoints finos auditables respetando la autoridad normalizada CONT-02 y su proyección compatible `organization.profile`;
 - validar que `organization.profile` exista para cada tenant creado por seed, provisioning o API interna;
 - revisar que no existan relaciones que rompan fronteras entre servicios;
 - definir claves, indices, constraints, estados, auditoria y politica de borrado;
@@ -195,7 +247,7 @@ Responsabilidades:
 Preguntas obligatorias antes de aprobar un modelo:
 
 - Cual es la fuente de verdad de este dato?
-- Si el dato describe corporativo, razon social, sucursal o contacto administrativo, vive en `admin.tenant_settings` key `organization.profile` o existe una decision documentada para promoverlo a tabla dedicada?
+- Si el dato describe organización, respeta la autoridad normalizada Admin de CONT-02 y la proyección compatible `admin.tenant_settings` key `organization.profile`, sin tratar JSON como autoridad tras activación?
 - Si el cambio modifica listas dentro de `organization.profile`, usa endpoints especificos con idempotencia y auditoria en lugar de reemplazos opacos?
 - Que servicio es dueno de esta entidad?
 - Que modulo puede crearla, editarla, consultarla o solicitar cambios?
@@ -771,7 +823,7 @@ El agente tecnico debe dominar:
 - Estructuras de receta, orden, recurso, etapa, area, puesto, maquinaria y producto/servicio.
 - Calculo de requerimientos por cantidad, reserva de insumos, consumo real, cierre de etapa y generacion de producto terminado.
 - Integraciones con inventario, compras, costos, ventas y contabilidad.
-- Estados tecnicos de orden: borrador, validada, liberada, en proceso, pausada, terminada, cerrada, cancelada.
+- Estados técnicos de orden y transiciones exactos del contrato Production vigente. No convertir estados conceptuales como borrador o validada en capacidades existentes; el borrador separado de liberación sigue pendiente.
 
 Criterios de dominio:
 
@@ -792,7 +844,7 @@ El agente de negocio debe dominar:
 El agente tecnico debe dominar:
 
 - Modelo de movimientos inmutables: cada ajuste debe crear movimiento, no editar historia sin rastro.
-- Calculo disponible = existencia - reservas - bloqueos + entradas confirmadas pendientes de surtir, segun definicion aprobada.
+- Cálculo vigente disponible = max(existencia física - reservas activas, 0). Bloqueos/cuarentena futuros no se agregan al cálculo por analogía; entradas sólo cuentan por movimiento confirmado.
 - Transacciones para evitar sobre-reserva y salidas sin existencia.
 - Relaciones con documento origen: compra, produccion, venta, ajuste, devolucion o transferencia.
 
@@ -808,7 +860,7 @@ El agente de negocio debe dominar:
 
 - Areas y puestos como catalogos separados, con identidad estable y sin altas implicitas por texto libre.
 - Capacidad nominal, minutos disponibles, costo por hora y elegibilidad para intervenir en produccion.
-- Limite del MVP: no incluye nomina, reclutamiento, expedientes ni datos personales.
+- Límite vigente: RH incluye expediente mínimo y datos personales protegidos; nómina y reclutamiento siguen fuera. No confundir expediente operativo con gestión integral de personal.
 - Impacto de inactivar un area o puesto ya referenciado por una receta: no rompe snapshots historicos y evita nuevas selecciones.
 
 El agente tecnico debe dominar:
@@ -822,10 +874,14 @@ Criterios de dominio:
 
 - Puede impedir la creacion de un puesto sin area activa del mismo tenant.
 - Puede separar acceso al modulo, lectura, creacion y edicion por recurso.
-- Puede detectar PII o alcance de nomina introducido accidentalmente en este MVP.
+- Puede exigir minimización/autorización de PII y detectar ampliaciones de nómina no aprobadas.
 - Puede explicar que ocurre con recetas existentes cuando cambia el costo o estatus de un puesto.
 
 ### Compras y abastecimiento
+
+CHG-302: decisión aprobada de [condiciones explícitas por División](docs/arquitectura/cont_07_commercial_condiciones.md), sin herencia/copia/defaults del maestro. Preservar propiedad por servicio, campos completos, códigos activos, Sociedad confirmada y condiciones históricas al desactivar. No convertir disponibilidad en configuración comercial completa ni límite capturado en control de exposición. CONT-08 debe validar configuración/contexto y congelar snapshots al operar; no recalcular documentos. Sin Contabilidad implícita. Fichas consultadas sin delegación.
+
+CHG-301 Local: custodiar [disponibilidad comercial por División](docs/arquitectura/cont_07_commercial_asignaciones.md). Maestro único, asociaciones propias, Sociedad derivada de Admin y estado explícito. Sin herencia automática a todas las Divisiones. Las condiciones comerciales por alcance ya tienen implementación Local CHG-302; no reabrirlas por el alcance histórico CHG-301. No activar Accounting ni agregar centros sin flujo. Admin autoriza; cada servicio guarda y audita su dominio. Consultar Arquitectura/API, Datos/Custodio DB, Seguridad, Contabilidad, Sinergia, Diseño/i18n, Manuales y QA. CONT-08 es parcial: Sales conserva cotización/pedido, servicios y stock; Purchasing conserva condiciones y documentos por División implementados CC-15 CHG-319. Consultar CC-07–09/12/15 en CONTROL_CONTABLE antes de asignar trabajo.
 
 El agente de negocio debe dominar:
 
@@ -849,6 +905,10 @@ Criterios de dominio:
 - Puede listar endpoints necesarios para requisiciones, proveedores, ordenes, recepciones y discrepancias.
 
 ### Ventas y clientes
+
+CHG-302: decisión aprobada de [condiciones explícitas por División](docs/arquitectura/cont_07_commercial_condiciones.md), sin herencia/copia/defaults del maestro. Preservar propiedad por servicio, campos completos, códigos activos, Sociedad confirmada y condiciones históricas al desactivar. No convertir disponibilidad en configuración comercial completa ni límite capturado en control de exposición. CONT-08 debe validar configuración/contexto y congelar snapshots al operar; no recalcular documentos. Sin Contabilidad implícita. Fichas consultadas sin delegación.
+
+CHG-301 Local: custodiar [disponibilidad comercial por División](docs/arquitectura/cont_07_commercial_asignaciones.md). Maestro único, asociaciones propias, Sociedad derivada de Admin y estado explícito. Sin herencia automática a todas las Divisiones. Las condiciones comerciales por alcance ya tienen implementación Local CHG-302; no reabrirlas por el alcance histórico CHG-301. No activar Accounting ni agregar centros sin flujo. Admin autoriza; cada servicio guarda y audita su dominio. Consultar Arquitectura/API, Datos/Custodio DB, Seguridad, Contabilidad, Sinergia, Diseño/i18n, Manuales y QA. CONT-08 es parcial: Sales conserva cotización/pedido, servicios y stock; Purchasing conserva condiciones y documentos por División implementados CC-15 CHG-319. Consultar CC-07–09/12/15 en CONTROL_CONTABLE antes de asignar trabajo.
 
 El agente de negocio debe dominar:
 
@@ -1162,7 +1222,7 @@ Dependencias principales:
 Responsabilidad:
 
 - Revisar modelo de permisos, tenants, configuraciones y banderas de modulo.
-- Revisar que `organization.profile` sea la fuente de verdad inicial para corporativo, razones sociales, sucursales y contactos dentro de `admin.tenant_settings`.
+- Revisar autoridad normalizada de Sociedad/Emisor/División en Admin (CONT-02); `organization.profile` dentro de `admin.tenant_settings` conserva compatibilidad y perfil corporativo, sin sustituir tablas autoritativas cuando estén activadas.
 - Revisar que razones sociales y sucursales se modifiquen desde `/v1/organization/legal-entities` y `/v1/organization/branches` para conservar idempotencia, auditoria y validaciones backend.
 - Revisar que todo flujo de creacion de tenant por seed, provisioning o API inicialice `organization.profile` con estructura valida.
 - Revisar que `session/context` cargue tenant, usuario, roles, permisos, entitlements, limites y estados comerciales desde backend.
@@ -1181,7 +1241,7 @@ Preguntas que responde:
 - Que componentes dependen de permisos?
 - Que configuracion debe cargarse al iniciar sesion?
 - Como se lee, actualiza y audita `organization.profile`?
-- Que operaciones deben usar `PUT /v1/settings/organization.profile` y cuales deben usar endpoints finos de organizacion?
+- Que operaciones usan el adaptador compatible `PUT /v1/settings/organization.profile` y cuáles los endpoints organizacionales normalizados, preservando el bloqueo de escrituras incompatibles cuando CONT-02 tiene autoridad?
 - Que defaults de corporativo, razones sociales y sucursales necesita una empresa nueva?
 - Como se invalida o refresca el contexto cuando cambian roles, modulos, membresia o estado de suscripcion?
 - Como se preservan datos y permisos al retirar temporalmente un entitlement sin conceder acceso efectivo?
@@ -1252,6 +1312,8 @@ Entregables:
 ## Agentes por modulo operativo
 
 ### Produccion
+
+CHG-299 Local: custodiar [asignaciones por División](docs/arquitectura/cont_07_production_asignaciones.md). Máquina fija con alcance completo para asignación inicial; producto/servicio conserva identidad y centro opcional por asignación. No convertir area_name/cost_center heredados en IDs ni propagar cambios a recetas/órdenes históricas. Production escribe sólo sus tablas; Admin autoriza y Costing valida por HTTP. Consultar Contabilidad negocio/técnica y guardianes de Arquitectura, Datos/Custodio DB, API, Seguridad, Sinergia, Diseño/i18n, Manuales y QA. CONT-08 es parcial: CHG-308 ya prepara contexto/intento durable; CHG-312 implementa fuentes de tarifas y consultas de capacidad; CHG-313 conecta consumo laboral/liberación CC-11 y CHG-315 integra fabricación comercial CC-12 con su recepción/conciliación explícitas. Las fichas no equivalen a ejecución de subagentes.
 
 CHG-264 Local: verificar entrega de materiales por Almacen antes de in_progress para productos y servicios con receta; lock compartido con cancelacion, registro durable, actor/receptor, recuperacion y costo Inventory. Consultar `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
 
@@ -1356,6 +1418,8 @@ Entregables:
 
 ### Recursos Humanos
 
+CHG-300 Local: custodiar [asignaciones RH por División](docs/arquitectura/cont_07_hr_asignaciones.md). Puesto compartido con tarifa explícita Decimal y centro opcional; trabajador conserva puesto confirmado por asignación. Cambio de puesto requiere reconfirmación, no heredar elegibilidad automáticamente. Consultas minimizan datos personales y respetan flags productivo/mantenimiento. No sumar capacidad entre Divisiones ni alterar compromisos existentes en CONT-07. CHG-312 implementa moneda confirmada y consulta nominal por División; el consumidor productivo concilia compromisos globales desde CHG-313 (CC-11), también usados en fabricación de solicitudes Sales CHG-315. No sumar capacidad nominal de Divisiones que compartan persona. HR es dueño; Admin autoriza y Costing valida por HTTP. Consultar Contabilidad, Arquitectura/API, Datos/Custodio DB, Seguridad, Sinergia, Diseño/i18n, Manuales y QA. Fichas consultadas sin delegación.
+
 #### Agente de negocio: Especialista en estructura organizacional y capacidad laboral
 
 Responsabilidad:
@@ -1403,6 +1467,10 @@ Entregables:
 - Registro de impactos sobre Produccion, Costos, Reportes y Administracion.
 
 ### Compras y abastecimiento
+
+CHG-302: decisión aprobada de [condiciones explícitas por División](docs/arquitectura/cont_07_commercial_condiciones.md), sin herencia/copia/defaults del maestro. Preservar propiedad por servicio, campos completos, códigos activos, Sociedad confirmada y condiciones históricas al desactivar. No convertir disponibilidad en configuración comercial completa ni límite capturado en control de exposición. CONT-08 debe validar configuración/contexto y congelar snapshots al operar; no recalcular documentos. Sin Contabilidad implícita. Fichas consultadas sin delegación.
+
+CHG-301 Local: custodiar [disponibilidad comercial por División](docs/arquitectura/cont_07_commercial_asignaciones.md). Maestro único, asociaciones propias, Sociedad derivada de Admin y estado explícito. Sin herencia automática a todas las Divisiones. Las condiciones comerciales por alcance ya tienen implementación Local CHG-302; no reabrirlas por el alcance histórico CHG-301. No activar Accounting ni agregar centros sin flujo. Admin autoriza; cada servicio guarda y audita su dominio. Consultar Arquitectura/API, Datos/Custodio DB, Seguridad, Contabilidad, Sinergia, Diseño/i18n, Manuales y QA. CONT-08 es parcial: Sales conserva cotización/pedido, servicios y stock; Purchasing conserva condiciones y documentos por División implementados CC-15 CHG-319. Consultar CC-07–09/12/15 en CONTROL_CONTABLE antes de asignar trabajo.
 
 #### Agente de negocio: Especialista en abastecimiento
 
@@ -1464,6 +1532,10 @@ Entregables:
 - Pruebas negativas de tenant, permiso, dependencia, sobre-recepcion, reintento y concurrencia.
 
 ### Ventas y clientes
+
+CHG-302: decisión aprobada de [condiciones explícitas por División](docs/arquitectura/cont_07_commercial_condiciones.md), sin herencia/copia/defaults del maestro. Preservar propiedad por servicio, campos completos, códigos activos, Sociedad confirmada y condiciones históricas al desactivar. No convertir disponibilidad en configuración comercial completa ni límite capturado en control de exposición. CONT-08 debe validar configuración/contexto y congelar snapshots al operar; no recalcular documentos. Sin Contabilidad implícita. Fichas consultadas sin delegación.
+
+CHG-301 Local: custodiar [disponibilidad comercial por División](docs/arquitectura/cont_07_commercial_asignaciones.md). Maestro único, asociaciones propias, Sociedad derivada de Admin y estado explícito. Sin herencia automática a todas las Divisiones. Las condiciones comerciales por alcance ya tienen implementación Local CHG-302; no reabrirlas por el alcance histórico CHG-301. No activar Accounting ni agregar centros sin flujo. Admin autoriza; cada servicio guarda y audita su dominio. Consultar Arquitectura/API, Datos/Custodio DB, Seguridad, Contabilidad, Sinergia, Diseño/i18n, Manuales y QA. CONT-08 es parcial: Sales conserva cotización/pedido, servicios y stock; Purchasing conserva condiciones y documentos por División implementados CC-15 CHG-319. Consultar CC-07–09/12/15 en CONTROL_CONTABLE antes de asignar trabajo.
 
 #### Agente de negocio: Especialista comercial
 
@@ -1668,6 +1740,17 @@ Entregables:
 
 #### Agente de negocio: Especialista contable
 
+**Especialización senior:** diseño funcional de ERP contable por Sociedad, control interno, integración de costos, conciliación de auxiliares, multimoneda y cierre. Su criterio se materializa en casos de negocio comprobables; no inventa políticas fiscales ni confunde una orden comercial con ingreso reconocido. Aplicar `$erclave-accounting`.
+
+- Mantener libro por Sociedad, Emisor único derivado, División operativa y Centro de costos perteneciente a esa División. Moneda base configurable inicialmente MXN; moneda original, tasa e importe base preservados.
+- Definir momento económico, documento/línea fuente, cuentas, naturaleza, cargo/abono, dimensiones y evidencia de cada mapeo. Una regla ausente o ambigua queda pendiente visible, nunca se sustituye con una cuenta arbitraria.
+- Separar compromiso, recepción/entrega, factura, cobro/pago y reversa. Nómina, fiscal e intercompañía se implementan sólo en sus cortes; una transferencia simple no cruza Sociedades.
+- Diseñar cierre, reapertura y reversas con permisos propios, justificación y auditoría. Proponer segregación de funciones explícita sin hardcodear nombres de roles.
+- Exigir conciliación de documentos, eventos y pólizas, antigüedad de pendientes y conservación de soportes. Los reportes históricos no se recalculan con una configuración posterior.
+- Contrastar decisiones normativas concretas con fuentes oficiales vigentes y jurisdicción aplicable antes de convertirlas en reglas. No presentar el módulo como certificación fiscal.
+
+Entregables adicionales: matriz de reconocimiento por evento, ejemplos balanceados por libro, casos de multimoneda/redondeo y catálogo de rechazos/recuperación. La aprobación funcional no sustituye pruebas de datos y permisos.
+
 Responsabilidad:
 
 - Definir catalogo de cuentas, periodos, asientos, polizas, mapeos, anexos y cierres.
@@ -1689,7 +1772,34 @@ Dependencias principales:
 - Costos: variaciones y producto en proceso.
 - Compras: proveedores e impuestos.
 
+**Custodia de activación opcional (CHG-294):** junto con Administración, Costos, Arquitectura y Sinergia, separar preparación organizacional de ejecución contable. Aplicar [organización y Contabilidad opcional](docs/arquitectura/contabilidad_opcional_y_capacidades.md). Accounting apagado no bloquea operación ni genera pólizas; activación requiere configuración/fecha y no contabiliza historia automáticamente. Seguridad revisa API/jobs, Datos conserva historia y QA prueba módulos parcialmente activos. El catálogo básico de centros tiene autorización puntual implementada en CONT-05 (CHG-297); no activa analítica ni Accounting por aparecer en Admin.
+
 #### Agente tecnico: Especialista tecnico contable
+
+**Función de seguimiento: Custodio de preparación e integración contable.** Mantiene [CONTROL_CONTABLE.md](docs/contexto/CONTROL_CONTABLE.md), detalle vigente de PENDIENTES por submódulo. Usa `$erclave-accounting`, `$erclave-context-reconcile` y `$erclave-module-boundaries`; cada dueño operativo conserva implementación/datos/pruebas, negocio contable valida reglas y QA valida evidencia por ambiente. Antes de asignar trabajo contrasta código y contratos, preserva recorridos cerrados y separa brechas de moneda, consumidores, datos y aceptación. Al cambiar una fila registra dueño, corte CONT, evidencia, dependencia y criterio de cierre, reconcilia PENDIENTES/ESTADO y referencia el CHG. No declara Accounting implementado por catálogo, snapshot o plan, ni activa módulos o migra datos por mantener esta matriz.
+
+
+**Especialización senior:** arquitectura de ledger, ingesta idempotente, integridad transaccional, concurrencia de periodos y trazabilidad reproducible. Accounting posee cuentas, libros, periodos, mapeos y pólizas; Admin posee organización; Costing posee Centros de costos y cálculo de costos. No leer ni escribir tablas ajenas como integración.
+
+- Aplicar `$erclave-accounting` y `$erclave-module-boundaries`; mantener contratos API/eventos versionados, `tenant_id`, Sociedad/libro y referencias externas sin FK cruzadas.
+- Usar Decimal y política versionada de redondeo; congelar tasas, importes, dimensiones y versión del mapeo. Balancear cada asiento en su libro, no sumar diferencias entre Sociedades.
+- Guardar asiento/líneas y estado de ingesta atómicamente; restricción única por identidad de evento y rechazo si cambia contenido. Definir reentrega, fallos parciales y reconciliación sin dobles efectos.
+- Bloquear contabilización en periodo cerrado y proteger la carrera cierre/registro. No editar ni borrar pólizas contabilizadas: reversa vinculada e idempotente.
+- Probar referencias de otro tenant/libro/División, permisos, centros inactivos, mapeo ambiguo, desbalance, redondeo, duplicados, concurrencia, reversa e historia. Distinguir pruebas previstas de ejecutadas.
+- Mantener migraciones, constraints, índices, recuperación y observabilidad sin diagnósticos sensibles en UI. No activar runtime/entitlements de Accounting por existir un schema o contrato planned.
+
+Guardianes obligatorios según impacto:
+
+| Guardián transversal existente | Protección contable concreta |
+|---|---|
+| Arquitectura SaaS y Sinergia | Fronteras Admin–Costing–Accounting–operación; dependencia y compensación explícitas. |
+| Arquitectura de datos y Custodio DB | Libro/Sociedad, aislamiento, constraints, migración compatible, historia e índices; sin FK entre servicios. |
+| Arquitectura API | Eventos/request/response versionados, origen, dimensiones, idempotencia y contratos consumidores. |
+| Seguridad/IAM | Membresía, alcances, permisos puntuales, cierre/reapertura, auditoría y ausencia de privilegios por nombre de rol. |
+| QA/Release | Pruebas negativas, carreras de cierre, balance/reversa, reconciliación y evidencia por ambiente. |
+| Diseño/i18n y Manuales | Captura mínima, importes explicables, errores ES/EN y disponibilidad documentada sin anticipar runtime. |
+
+La matriz completa por módulo está en `docs/arquitectura/cobertura_agentes_modulos.md`. Estos guardianes se consultan como fichas de revisión; no se atribuyen revisiones de subagentes ni pruebas inexistentes.
 
 Responsabilidad:
 
@@ -1765,7 +1875,7 @@ Estas referencias sirven como base conceptual para entrenar a los agentes. No su
 
 ### Mantenimiento
 
-CHG-263 Local: solicitar reserva; Almacen confirma o rechaza desde Movimientos. Resolver requiere solicitudes entregadas/canceladas y nunca consume. Validar aislamiento, lock compartido entrega/cancelacion, reintentos por partida y auditoria de actor/receptor/motivo. QA conserva el flujo previo hasta promocion aprobada.
+CHG-263 Local: solicitar reserva; Almacen confirma o rechaza desde Movimientos. Resolver requiere solicitudes entregadas/canceladas y nunca consume. Validar aislamiento, lock compartido entrega/cancelacion, reintentos por partida y auditoria de actor/receptor/motivo. El flujo está desplegado en QA; consultar el estado vigente y la evidencia de release.
 
 #### Agente de negocio: mantenimiento y confiabilidad
 
@@ -1785,7 +1895,7 @@ Debe validar ownership exclusivo de `maintenance-service`, referencias por ID y 
 
 Para autorizar una conciliacion debe existir una operacion pendiente explicita, claves externas estables por entidad/partida, conteo de intentos y una accion manual permission-aware. Cancelar compensa reservas antes de cambiar la orden; reabrir vuelve a bloquear la maquina; cerrar queda prohibido mientras cualquier autoridad siga pendiente.
 
-No debe autorizar runtime hasta existir contrato complementario propietario en RH, Inventory y Production, pruebas de concurrencia y flujo extremo a extremo.
+El runtime correctivo existente se conserva; toda ampliación exige contrato complementario propietario en RH, Inventory y Production, pruebas de concurrencia y flujo extremo a extremo. Su separación por División está implementada Local CC-16 CHG-320: contexto fijo, RH con tarifa confirmada, costo laboral y alcance antes de efectos/replay. Capacidad por persona/día UTC sólo Maintenance, sin agenda transversal Sales/Production. Ver docs/arquitectura/cont_08_mantenimiento_contexto.md.
 
 ## Pendientes
 
@@ -1795,53 +1905,6 @@ No debe autorizar runtime hasta existir contrato complementario propietario en R
 - No asignar responsables humanos adicionales mientras el usuario propietario conserve la aprobacion directa de releases.
 
 
-## Actualización de fichas operativas CHG-265
+## Historial de revisión de fichas
 
-Consultados documentalmente agentes de negocio/técnicos Producción, Inventarios, Compras, Ventas, Mantenimiento y RH; transversales Arquitectura/API/Datos, Custodio DB, Seguridad, Sinergia, UX/i18n, QA y Gobierno documental. Sin delegación.
-
-CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
-
-Fichas de Inventarios y Sinergia deben conservar recepción/expedición explícitas, transferencia en tránsito y ajustes mediante propietarios HTTP. Compras distingue recepción física de aceptación por solicitante. Producción/Mantenimiento conservan salida original y costo neto de retornos. Seguridad verifica actor/origen/tenant y locks; UX muestra mensajes estables ES/EN. QA usa Local aislado y limpieza por IDs propios; no ejecutar suites históricas que escriban otros tenants.
-
-
-## Ajustes UAT Local CHG-266
-
-Fichas de Producción/Compras y UX/frontend: conservar contenido operativo fuera del riel colapsable; listado inicial de Proveedores, formulario modal y búsqueda de requisición legible por ancho real. Ventas/Administración/Seguridad: emitir y aprobar son permisos independientes; orientar cuando falten y diagnosticar catálogo/asignación efectivos sin bypass por nombre de rol. La reparación del Owner demo CHG-266 solo aplica a Local; no autoriza grants o seeds remotos. QA/Gobierno documental: contrastar ES/EN, rechazo sin pérdida de captura y evidencia Local antes de promoción.
-
-Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
-
-
-## Solicitudes compactas Local CHG-267
-
-Inventarios/Sinergia y UX/frontend deben mantener las solicitudes antes del historial, cerradas al entrar y con resumen de pendientes. Seguridad/QA deben comprobar que ocultar detalles no cambia autorización ni efectos, que errores/carga no aparentan ausencia de trabajo y que cada actualización parcial refresca el resumen. Gobierno documental conserva evidencia Local y contratos/diagramas sin cambios.
-
-Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.
-
-
-## Recuperación de refacciones Local CHG-268
-
-CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
-
-
-## Candidato de continuidad CHG-269
-
-CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
-
-
-## Release QA verificado CHG-270
-
-CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
-
-## Documentación funcional QA CHG-271
-
-El Custodio de manuales y los agentes de negocio/técnicos de los siete módulos revisan los manuales contra el release QA b63cdad. Se regeneran Word y guía del tester; APIs sin cambios. Incidencia por verificar: montaje de bandeja de sobrantes de Mantenimiento. Compras directas: API disponible, alta UI no expuesta. El estado desplegado no equivale a UAT aprobada. Registro en docs/manuales_solucion/REGISTRO.md y entrega en docs/qa/ENTREGA_TESTER.md.
-
-
-## Productos y servicios: margen esperado CHG-273
-
-CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración Local `20260913_0035` aplicada; QA conserva `20260908_0034` y release b63cdad. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
-
-
-## Evidencia de servicios CHG-274
-
-CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+Los cortes de revisión previos se conservan en [historia de agentes](docs/contexto/historico/AGENTES_cortes_hasta_CHG310.md). Para trabajar hoy consultar el portal, el control contable y las fichas vigentes de este documento.

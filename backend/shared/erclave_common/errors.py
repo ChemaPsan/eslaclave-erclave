@@ -13,6 +13,14 @@ class ErclaveError(Exception):
 
 async def erclave_error_handler(request: Request, exc: ErclaveError) -> JSONResponse:
     correlation_id = getattr(request.state, "correlation_id", None)
+    details = dict(exc.details)
+    cause = exc
+    while cause is not None:
+        service = getattr(cause, "dependency_service", None)
+        if service in {"admin", "hr", "inventory", "production", "maintenance", "external"}:
+            details.setdefault("dependency_service", service)
+            break
+        cause = cause.__cause__
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -20,8 +28,7 @@ async def erclave_error_handler(request: Request, exc: ErclaveError) -> JSONResp
                 "code": exc.code,
                 "message": exc.message,
                 "correlation_id": correlation_id,
-                "details": exc.details,
+                "details": details,
             }
         },
     )
-

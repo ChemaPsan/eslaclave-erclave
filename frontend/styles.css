@@ -357,15 +357,84 @@ button {
   white-space: nowrap;
 }
 
-.branch-context select {
-  max-width: min(280px, 38vw);
-  border: 0;
-  outline: 0;
+.branch-context { position: relative; }
+.branch-context #contextBranch { min-width: 0; max-width: min(300px, 30vw); color: var(--text); }
+.context-switcher {
+  width: min(300px, 30vw);
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.context-switcher:hover, .context-switcher[aria-expanded="true"] { border-color: var(--brand-strong); }
+.context-switcher:focus-visible, .context-switcher-option:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 2px; }
+.context-switcher-value { min-width: 0; display: grid; gap: 1px; }
+.context-switcher-parent, .context-switcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.context-switcher-parent { color: var(--muted); font-size: 0.68rem; font-weight: 700; }
+.context-switcher-parent:empty, .context-switcher-option-parent:empty, .context-switcher-option-code:empty { display: none; }
+.context-switcher-name { font-size: 0.82rem; font-weight: 850; }
+.context-switcher-chevron { flex: 0 0 auto; color: var(--brand-strong); font-size: 1rem; }
+.context-switcher-menu {
+  position: absolute;
+  z-index: 1000;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(400px, calc(100vw - 28px));
+  max-height: min(360px, 60vh);
+  overflow-y: auto;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.context-switcher-menu[hidden] { display: none; }
+.context-switcher-search {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  background: var(--surface-soft);
+  font: inherit;
+}
+.context-switcher-search:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 1px; }
+.context-switcher-option {
+  min-width: 0;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
   color: var(--text);
   background: transparent;
   font: inherit;
-  font-weight: 900;
+  text-align: left;
+  cursor: pointer;
 }
+.context-switcher-option:hover, .context-switcher-option[aria-current="true"] { border-color: var(--line); background: var(--surface-soft); }
+.context-switcher-option[hidden], .context-switcher-empty[hidden] { display: none; }
+.context-switcher-option-text { min-width: 0; display: grid; gap: 2px; }
+.context-switcher-option-parent, .context-switcher-option-code { color: var(--muted); font-size: 0.7rem; }
+.context-switcher-option-name { font-size: 0.86rem; font-weight: 800; overflow-wrap: anywhere; }
+.context-switcher-check { color: var(--brand-strong); font-size: 1rem; }
+.context-switcher-empty { margin: 4px 8px; color: var(--muted); }
+.context-switcher-menu[aria-busy="true"] { opacity: 0.65; pointer-events: none; }
 
 .context-logout {
   min-height: 28px;
@@ -4585,9 +4654,8 @@ h3 {
     max-width: 160px;
   }
 
-  .branch-context select {
-    max-width: 190px;
-  }
+  .branch-context #contextBranch { max-width: 220px; }
+  .context-switcher { width: 220px; }
 
   .search-field {
     width: min(240px, 25vw);
@@ -4724,9 +4792,11 @@ h3 {
   }
 
   .context-pill strong,
-  .branch-context select {
+  .branch-context #contextBranch {
     max-width: 100%;
   }
+
+  .branch-context, .context-switcher { width: 100%; }
 
   .topbar {
     align-items: stretch;
@@ -5029,6 +5099,38 @@ h3 {
 .sales-quote-card .catalog-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; min-width: 0; }
 .sales-quote-card .catalog-card-actions button { white-space: normal; overflow-wrap: normal; min-height: 44px; }
 .sales-quote-next-step { margin: 0; }
+.maintenance-context-lookup { min-width: 0; }
+.maintenance-context-lookup select, .maintenance-context-lookup input { width: 100%; min-width: 0; }
+.maintenance-lookup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.maintenance-time-context, [data-maintenance-context], [data-maintenance-rate] { min-width: 0; overflow-wrap: anywhere; }
+.maintenance-assignment-form { min-width: 0; display: grid; gap: 10px; }
+#maintenanceOrderForm, #maintenanceTimeForm, #maintenanceMaterialForm { container: maintenance-form / inline-size; min-width: 0; }
+#maintenanceOrderForm > *, #maintenanceTimeForm > *, #maintenanceMaterialForm > * { min-width: 0; }
+.maintenance-workspace [hidden] { display: none; }
+@container module-panel (max-width: 720px) {
+ .maintenance-workspace.maintenance-workspace { grid-template-columns: minmax(0, 1fr); }
+ .maintenance-workspace.maintenance-workspace > * { grid-column: 1; grid-row: auto; }
+}
+@container maintenance-form (max-width: 480px) {
+ #maintenanceOrderForm > *, #maintenanceTimeForm > *, #maintenanceMaterialForm > * { grid-column: 1 / -1; }
+}
+/* Purchasing order capture must fit after the workflow rail is deducted. */
+#purchasingOrderForm { container: purchasing-order / inline-size; min-width: 0; }
+#purchasingOrderForm > *,
+#purchasingOrderForm .preview-field,
+#purchasingOrderForm .entity-select-lookup { min-width: 0; }
+#purchasingOrderForm .entity-select-lookup { width: 100%; }
+#purchasingOrderForm .entity-source-select { width: 1px; min-width: 0; padding: 0; border: 0; inset-inline-start: 0; top: 0; }
+@container module-panel (max-width: 720px) {
+  .flow-guided-layout:has(#purchasingOrderForm) { grid-template-columns: minmax(0, 1fr); }
+  .flow-guided-layout:has(#purchasingOrderForm) > * { grid-column: 1; grid-row: auto; }
+}
+@container purchasing-order (max-width: 480px) {
+  #purchasingOrderForm > * { grid-column: 1 / -1; }
+  #purchasingOrderForm .resource-input { grid-template-columns: minmax(0, 1fr); }
+  #purchasingOrderForm .resource-input > * { min-width: 0; }
+  #purchasingOrderForm .inline-actions { flex-wrap: wrap; }
+}
 @container (max-width: 560px) {
   .operational-handoff-queue .record-card { grid-template-columns: minmax(0, 1fr); }
   .operational-handoff-queue .panel-head { flex-wrap: wrap; }

@@ -57,9 +57,7 @@ if (!errors.length) {
   }
 
   const currentState = readText("docs/contexto/ESTADO_ACTUAL.md");
-  for (const token of ["admin-service-qa-bo-1-1", "inventory-service-qa", "hr-service-qa", "CHG-191"]) {
-    if (!currentState.includes(token)) errors.push(`Current state is missing verified QA fact: ${token}`);
-  }
+  if (!/QA está desplegado en `[a-f0-9]{40}`/.test(currentState)) errors.push("Current state must declare the documented QA SHA; a historical revision name is not current release evidence.");
   if (currentState.includes("su configuracion y promocion QA permanecen pendientes")) {
     errors.push("Current state still marks the completed Backoffice promotion as pending.");
   }
