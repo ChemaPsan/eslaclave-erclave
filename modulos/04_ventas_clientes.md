@@ -46,7 +46,7 @@ Ventas conecta la relacion comercial con los maestros autoritativos de ERClave. 
 | Ambiente | Alcance comprobado |
 |---|---|
 | Local | API, schema `sales` y migracion `20260901_0030` aplicados y certificados para Clientes, Cotizaciones, Pedidos, Ordenes de servicio y Entregas, con permisos, idempotencia, auditoria y pruebas de integracion. |
-| QA | `sales-service` desplegado en QA e57237f; cadena común aplicada hasta `20260913_0036`, incluidos servicios comerciales CHG-255 y confirmaciones posteriores. La disponibilidad efectiva depende del entitlement del tenant y de RH/Produccion. |
+| QA | `sales-service` estable mantiene e57237f; 0036 corresponde al release certificado anterior. Head DB QA actual `20261014_0062` observado CHG-336 tras migracion/configuracion; candidato Sales6312 a0% con smoke tecnico, sin promocion estable ni UAT funcional nueva. Disponibilidad efectiva depende del entitlement y RH/Production. [Registro](../docs/operaciones/promocion_qa_20261019.md). |
 | Produccion | No aprovisionado. |
 
 Devoluciones permanecen `planned`. Pedidos y Entregas ya no escriben mock cuando la interfaz opera en modo API.

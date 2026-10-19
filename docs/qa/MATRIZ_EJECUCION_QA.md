@@ -1,5 +1,15 @@
 # Matriz de ejecución de pruebas QA
 
+## CHG-336: estado de ambiente separado de resultados funcionales
+
+La guia QA y su Word conservan la referencia e57237f/Alembic0036 del ultimo release certificado previo. No se editaron ni regeneraron por este seguimiento. El head DB QA actual es `20261014_0062`, observado por inspector39212276418 tras migracion/configuracion; es evidencia de esquema, no promocion conjunta ni aceptacion funcional.
+
+Los siete runtimes estables previos mantienen e57237f y Hosting anterior; Costing nuevo usa6312fc8 con bootstrap100% aprobado. Ocho candidatos6312fc8 pasaron smoke tecnico. El guard operativo no alcanzo SQL por monedas vacias y qa-traffic/frontend se omitieron. Login Owner appQA, estructura nueva, monedas por IDs y UAT del corte siguen pendientes.
+
+[Acta CHG-336](../operaciones/promocion_qa_20261019.md) y [ESTADO_ACTUAL](../contexto/ESTADO_ACTUAL.md) son autoridad para el avance efectivo actual. Las filas siguientes conservan resultados existentes; no se marcaron Pasa por DDL, smoke ni pruebas Local.
+
+## Matriz y referencia del release previo
+
 QA desplegado: e57237fe90319f88e1db8ed8d2e686604d2d9c54. Release: 34932659212. Revisión documental: 2026-09-15.
 
 Registre fecha, tester, rol, navegador, evidencia y observaciones por caso. Sin ejecutar no equivale a Pasa. Para variantes, agregue una fila con el mismo ID y su descripción. Consulte las precondiciones y resultados en la guía.

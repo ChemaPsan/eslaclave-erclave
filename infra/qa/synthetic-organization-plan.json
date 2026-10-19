@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "status": "owner-confirmed-execution-requested-baseline-pending",
+  "status": "owner-confirmed-post-migration-baseline-verified-owner-login-pending",
   "requestedAt": "2026-10-18",
   "environment": "qa",
   "tenantId": "ten_739ee59d765d5e14818674800d",
@@ -19,13 +19,19 @@
     ]
   },
   "baselineRequiredBeforeApproval": {
-    "candidateReleaseSha": null,
-    "organizationProfileSha256": null,
-    "authorityAndProjectionSha256": null,
-    "existingEntityIdsAndCurrencies": null,
-    "reviewedLegacyMappingsSha256": null,
-    "authorizedTesterMembershipIds": null,
-    "note": "Resolve through authorized read-only APIs/job; retain hashes/counts/IDs, no credentials or personal data. Stop if the baseline changes. A nonempty legacy profile requires a separately reviewed transition; never erase it or activate it with an assumed MXN currency."
+    "candidateReleaseSha": "6312fc8e43efa90a82dc84b161abe47d6bab7ad8",
+    "organizationProfileSha256": "93a4ac936447cdca533ad11bc2fd1f094ba6eb9518bd2fe2e0f8cc14e630e2cf",
+    "authorityAndProjectionSha256": "da7e1262f5fa7c3bea11322400be3c9ba1ac59715d7ff1dd2f2481cd3daa1c79",
+    "existingEntityIdsAndCurrencies": [],
+    "reviewedLegacyMappingsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "authorizedTesterMembershipIds": [],
+    "note": "Verified after migration and before organization writes: original profile unchanged and empty; normalized tables empty; one existing active Owner with unchanged legacy unrestricted scope. Preserve this membership; no tester grants authorized or added. No existing societies or currencies require mapping. The approved new MXN/USD society IDs must come from owner API responses before configuring release currencies. Revalidate before applying.",
+    "existingOwnerMembershipId": "mem_c221afc467d65083a8ed730d35",
+    "existingOwnerScopeSha256": "710ba9304ee30af68f147beae8ba1f3d0edf72044f81a8c7e7929296ecd7efa8",
+    "verifiedHead": "20261014_0062",
+    "inspectionRunId": 39212276418,
+    "inspectionExecution": "erclave-inspect-baseline-qa-f2c2x",
+    "verifiedAt": "2026-10-19T06:57:54.287661Z"
   },
   "proposedEntities": {
     "fiscalIssuers": [
