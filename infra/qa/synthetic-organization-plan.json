@@ -1,14 +1,22 @@
 {
   "version": 1,
-  "status": "draft-for-owner-review-not-authorized-to-apply",
+  "status": "owner-confirmed-execution-requested-baseline-pending",
   "requestedAt": "2026-10-18",
   "environment": "qa",
   "tenantId": "ten_739ee59d765d5e14818674800d",
   "tenantName": "ERClave Demo QA",
   "purpose": "Certify the same enabled organizational and operational capabilities as Local using dedicated synthetic QA configuration, preserving existing QA data.",
   "authorization": {
-    "granted": "Prepare a synthetic QA structure plan for review",
-    "notYetGranted": ["apply this configuration", "change IAM or variables", "create or merge PR", "build or deploy candidate", "migrate QA", "move traffic", "publish Hosting", "create operational UAT documents or another tenant"]
+    "granted": "Owner confirmed the synthetic structure and MXN/USD on 2026-10-19 and requested the listed next steps: PR/checks, validated merge, Costing identity/configuration, immutable candidate/promotion and QA acceptance.",
+    "userInstruction": "si sirven haz los siguientes pasos",
+    "executionConditions": "Preserve GitHub environment protections. Verify the exact QA tenant, existing organization/currencies/scopes, reviewed legacy mappings if needed, recovery baseline and immutable release before each dependent write. Stop on drift or unreviewed existing business mappings. Do not ask again for the actions already authorized.",
+    "notYetGranted": [
+      "production changes",
+      "copy Local database or credentials into QA",
+      "destructive data reset or invented mappings of existing QA masters/history",
+      "create a second tenant",
+      "unreviewed changes to existing tester memberships or scopes"
+    ]
   },
   "baselineRequiredBeforeApproval": {
     "candidateReleaseSha": null,
@@ -21,25 +29,68 @@
   },
   "proposedEntities": {
     "fiscalIssuers": [
-      {"key": "qa-cert-issuer", "legal_name": "QA CERTIFICACION SINTETICA - SIN VALIDEZ FISCAL", "tax_id": null}
+      {
+        "key": "qa-cert-issuer",
+        "legal_name": "QA CERTIFICACION SINTETICA - SIN VALIDEZ FISCAL",
+        "tax_id": null
+      }
     ],
     "societies": [
-      {"key": "qa-cert-mxn", "name": "QA Certificacion MXN", "issuerKey": "qa-cert-issuer", "base_currency": "MXN"},
-      {"key": "qa-cert-usd", "name": "QA Certificacion USD", "issuerKey": "qa-cert-issuer", "base_currency": "USD"}
+      {
+        "key": "qa-cert-mxn",
+        "name": "QA Certificacion MXN",
+        "issuerKey": "qa-cert-issuer",
+        "base_currency": "MXN"
+      },
+      {
+        "key": "qa-cert-usd",
+        "name": "QA Certificacion USD",
+        "issuerKey": "qa-cert-issuer",
+        "base_currency": "USD"
+      }
     ],
     "divisions": [
-      {"key": "qa-cert-mxn-a", "name": "QA Certificacion MXN A", "societyKey": "qa-cert-mxn"},
-      {"key": "qa-cert-mxn-b", "name": "QA Certificacion MXN B", "societyKey": "qa-cert-mxn"},
-      {"key": "qa-cert-usd-a", "name": "QA Certificacion USD A", "societyKey": "qa-cert-usd"}
+      {
+        "key": "qa-cert-mxn-a",
+        "name": "QA Certificacion MXN A",
+        "societyKey": "qa-cert-mxn"
+      },
+      {
+        "key": "qa-cert-mxn-b",
+        "name": "QA Certificacion MXN B",
+        "societyKey": "qa-cert-mxn"
+      },
+      {
+        "key": "qa-cert-usd-a",
+        "name": "QA Certificacion USD A",
+        "societyKey": "qa-cert-usd"
+      }
     ],
     "costCenters": [
-      {"key": "qa-cert-center-mxn-a", "name": "QA Certificacion Centro MXN A", "divisionKey": "qa-cert-mxn-a"},
-      {"key": "qa-cert-center-mxn-b", "name": "QA Certificacion Centro MXN B", "divisionKey": "qa-cert-mxn-b"},
-      {"key": "qa-cert-center-usd-a", "name": "QA Certificacion Centro USD A", "divisionKey": "qa-cert-usd-a"}
+      {
+        "key": "qa-cert-center-mxn-a",
+        "name": "QA Certificacion Centro MXN A",
+        "divisionKey": "qa-cert-mxn-a"
+      },
+      {
+        "key": "qa-cert-center-mxn-b",
+        "name": "QA Certificacion Centro MXN B",
+        "divisionKey": "qa-cert-mxn-b"
+      },
+      {
+        "key": "qa-cert-center-usd-a",
+        "name": "QA Certificacion Centro USD A",
+        "divisionKey": "qa-cert-usd-a"
+      }
     ]
   },
   "applicationContractAfterApproval": {
-    "ownerApis": ["POST /v1/organization/fiscal-issuers", "POST /v1/organization/societies", "POST /v1/organization/divisions", "POST /v1/cost-centers"],
+    "ownerApis": [
+      "POST /v1/organization/fiscal-issuers",
+      "POST /v1/organization/societies",
+      "POST /v1/organization/divisions",
+      "POST /v1/cost-centers"
+    ],
     "target": "Tagged immutable Admin/Costing candidate revisions while the seven existing services retain stable traffic",
     "idsAndCodes": "Resolve fresh IDs and authoritative codes from owner API responses; logical keys above are not database IDs. Never copy IDs or code sequence counters from Local.",
     "idempotency": "Persist an execution manifest per approved plan hash, tenant, logical key, command key and authenticated actor; retries of the same command use the same key and must not create a second entity.",

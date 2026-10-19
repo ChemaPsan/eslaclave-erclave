@@ -184,6 +184,7 @@ Vigente significa fuente mantenida; no certifica despliegue ni pruebas. Diseño 
 | [docs/operaciones/preparacion_release_qa_20260806.md](operaciones/preparacion_release_qa_20260806.md) | Arquitectura y dueño del módulo | [Fuente](contexto/ESTADO_ACTUAL.md) |
 | [docs/operaciones/preparacion_release_qa_20260821.md](operaciones/preparacion_release_qa_20260821.md) | Arquitectura y dueño del módulo | [Fuente](contexto/ESTADO_ACTUAL.md) |
 | [docs/operaciones/preparacion_release_qa_20260831.md](operaciones/preparacion_release_qa_20260831.md) | Arquitectura y dueño del módulo | [Fuente](contexto/ESTADO_ACTUAL.md) |
+| [docs/operaciones/promocion_qa_20261019.md](operaciones/promocion_qa_20261019.md) | Arquitectura, Seguridad, QA/Release y Datos | [Fuente](contexto/ESTADO_ACTUAL.md) |
 | [docs/operaciones/release_qa_20260908.md](operaciones/release_qa_20260908.md) | Arquitectura y dueño del módulo | [Fuente](contexto/ESTADO_ACTUAL.md) |
 | [docs/operaciones/release_qa_20260914.md](operaciones/release_qa_20260914.md) | Arquitectura y dueño del módulo | [Fuente](contexto/ESTADO_ACTUAL.md) |
 | [docs/operaciones/release_qa_20260923_cont01.md](operaciones/release_qa_20260923_cont01.md) | Arquitectura y dueño del módulo | [Fuente](contexto/ESTADO_ACTUAL.md) |

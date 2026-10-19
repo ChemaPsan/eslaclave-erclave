@@ -5427,3 +5427,18 @@ La conciliacion del 18 de octubre preserva el contenido original de CHG-323-331 
 | APIs afectadas | GET /ready compartido añade database_ready y HTTP503 remoto DB/head incompatible. Actor/idempotencia/recovery en RH/Inventory/Sales/Purchasing/Maintenance y POST de evidencia Production:76 rutas/acciones, métodos y permisos enumerados en docs/operaciones/paridad_local_qa_20261018.md. Payloads operativos sin cambios, Purchasing normaliza timestamps ISO. Admin/Costing consumidas sin cambio de negocio; Backoffice/Accounting no tocadas funcionalmente. |
 | Validacion | Verify final833 aprobadas/351 omitidas sin DB/1 advertencia existente, log .local/chg335-verify-complete.log. Focales API/PG autorizadas con rollback separadas: configuración63, guard30, Maintenance44+compatibilidad4, Purchasing31, Production25, Inventory API21 y repositorios actor; acta conserva conteos/logs sin sumar suites superpuestas. HTTP/Chrome reales por variantes; folios100+8 previos, transporte real11, pausa Production15, scopes/listas/CSV30. Smoke+12 escenarios tráfico con proveedor sustituido; YAML2/Bash20, builder/verificador106 hashes con fetch sustituido,16 huellas fuente/Word exactas. No equivalen a UAT QA ni GCS real. |
 | Observaciones | QA observado e57237f en siete APIs, sin Costing configurado en variables consultadas. Plan propone1emisor/2Sociedades MXN-USD/3Divisiones/3centros; faltan baseline privado, confirmación de monedas, visibilidad wildcard y actores. PR/merge/build/IAM/migración26/configuración/revisiones/tráfico/Hosting conservan autorizaciones separadas. Legacy CC-19 sin procedencia y variantes UI no alcanzables quedan delimitadas; stock propio de compras y documentos congelados se conservan sin SQL destructivo/rewind/downgrade. |
+
+### CHG-336
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-19 |
+| Cambio | Registrar autorización y ejecutar promoción QA por etapas conservando datos y gates. |
+| Autor | Codex |
+| Archivos | Plan sintético QA, README infra, registro de promoción, contexto, agentes, índice/registro documental, corrección literal de código de error en acta CHG-335 y trazabilidad. |
+| Agentes consultados | Arquitectura, Seguridad/IAM, QA/Release, Datos/Custodio DB y dueños API/Admin/Costing; ejecutados manuales_paridad y trazabilidad, raíz integración/GitHub/gobierno. |
+| Descripcion | Usuario confirma estructura MXN/USD y pide PR/checks, merge, identidad/configuración, build/promoción y aceptación. Autorización sustituye estado preparatorio; se preservan protecciones, baseline previo y datos. PR16 abierto sobremain e57237f; alcance inicial503archivos/26migraciones, no sólo78del último commit. |
+| Impacto | Mutación GitHub: apertura PR16 e inicioCI. Este registro todavía no ejecuta IAM, migración, datos, servicios, tráfico ni Hosting QA. Producción excluida. |
+| APIs afectadas | Sin cambio de contrato de negocio. GitHub PR/CI consumidas; merge/workflows y APIs Google/organización/Costing pendientes según baseline y gates; detalle progresivo en acta. |
+| Validacion | Evidencia previa Local833 aprobadas/351omitidas sinDB/1advertencia; CI de PR iniciado y resultado del head definitivo pendiente. Documentación e índice se validan antes de publicar este registro. No repetir pruebas de producto por cambios sólo documentales. |
+| Observaciones | Confirmadas MXN/USD nuevas, no inferir moneda legacy. Si QA tiene perfil no vacío requiere mapping y comando QA gobernado: OrganizationStore rechaza activación automática y CLI disponible sóloLocal. Conservar estado efectivo por etapa, ocho digests/artefacto único, revisiones previas y rollback sin downgrade. |

@@ -1,5 +1,13 @@
 # Pendientes priorizados de ERClave
 
+## Prioridad vigente · CHG-336 · ejecutar QA por etapas
+
+- Verificar CI del PR16 y fusionar el head validado; registrar mergeSHA inmutable.
+- Completar baseline Google/QA, IAM/variables mínimos Costing y recovery/PITR; identificar tenant, monedas existentes y actores.
+- Ejecutar candidate/release por gates protegidos, sin deshabilitar controles ni reconstruir artefactos aprobados.
+- Aplicar la estructura sintética MXN/USD confirmada cuando baseline permita su ejecución; perfil legacy no vacío exige mapping/comando QA gobernado.
+- Crear centros con Admin estable V2, verificar bytes Hosting y aceptación funcional QA. No inventar CC-19 real ni un segundo tenant. [Registro](../operaciones/promocion_qa_20261019.md).
+
 ## Prioridad vigente · CHG-335 · paridad Local/QA
 
 - Revisar el [plan sintético QA](../../infra/qa/synthetic-organization-plan.json) antes de aplicar: propuesta de monedas MXN/USD, baseline de estructura existente y actores/scopes exactos. El permiso recibido cubre preparación; no aplicación.

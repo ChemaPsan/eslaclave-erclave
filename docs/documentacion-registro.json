@@ -1113,6 +1113,12 @@
       "status": "historico",
       "owner": "Arquitectura, Seguridad, QA y dueños de servicios",
       "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/promocion_qa_20261019.md",
+      "status": "historico",
+      "owner": "Arquitectura, Seguridad, QA/Release y Datos",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
     }
   ]
 }

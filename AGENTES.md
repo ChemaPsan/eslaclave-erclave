@@ -1,5 +1,9 @@
 # ERClave - Lista de agentes por modulo
 
+## Promoción QA autorizada · CHG-336
+
+El usuario confirmó estructura/monedas MXN-USD y pidió PR/checks, merge, identidad/configuración Costing, candidato/promoción y aceptación. Agentes manuales_paridad y trazabilidad revisan orden viable, identidad, baseline y evidencia; raíz gestiona GitHub/integración. [Registro](docs/operaciones/promocion_qa_20261019.md). Se conservan protecciones y datos previos; no repetir autorizaciones concedidas, no usar CLI Local para transición legacy QA.
+
 ## Paridad Local/QA preparada · CHG-335
 
 [Acta](docs/operaciones/paridad_local_qa_20261018.md). Agentes ejecutados manuales_paridad (pipeline, Purchasing y evidencia Production), trazabilidad (config, identidades, Maintenance, UI y revisión independiente), cc20_integracion (Costing/RH/Inventory/Sales y folios), raíz (configuración preservadora, readiness, guard, aceptación comercial y gobierno). INC-CC20-13-ACTOR-01 corregida y reprobada Local; otros dueños conservan actor, scope actual e intents antes de efectos. Ocho runtimes preparados, catálogo básico sin analítica/Accounting. Usuario autorizó preparar plan sintético QA para revisión, no aplicarlo. Sin promoción remota; no afirmar aceptación completa de variantes históricas sin CC-19 ni UI no ejecutada.

@@ -1,5 +1,9 @@
 # Inicio de sesion ERClave
 
+## Punto vigente · CHG-336 · ejecutar promoción autorizada
+
+Usuario confirmó estructura/monedas MXN-USD y todos los siguientes pasos enumerados. Continuar [registro](../operaciones/promocion_qa_20261019.md): PR16 abierto, comprobar CI del head definitivo y merge; luego IAM/variables mínimos, baseline QA, candidato inmutable y gates protegidos. No pedir otra vez permisos ya otorgados. Datos previos se preservan; sin mapping no inventar transición legacy ni scopes. Las notas CHG-335 siguientes describen el estado anterior a esta nueva instrucción.
+
 ## Punto vigente · CHG-335 · plan QA listo para revisión
 
 Continuar desde [acta](../operaciones/paridad_local_qa_20261018.md), [estado](ESTADO_ACTUAL.md) y [pendientes](PENDIENTES.md). Ocho runtimes preparados, frontend inmutable, configuración preservadora, readiness de esquema y guard organizacional READ ONLY. Replay entre actores y recuperaciones parciales corregidos/reprobados Local; consultar evidencia por variante, sin inventar aceptación histórica CC-19 o UI no ejecutada. El usuario eligió preparar estructura sintética QA **para revisión antes de aplicar**; [plan](../../infra/qa/synthetic-organization-plan.json) y monedas MXN/USD aún propuestas. No escribir datos QA ni IAM, PR/merge o gates sin la autorización correspondiente de erclave-qa-release. QA observado sigue e57237f. Fixtures se limpian exclusivamente por IDs propios, sin rebobinar folios ni borrar historia.

@@ -1,5 +1,9 @@
 # Estado actual de ERClave
 
+## Promoción QA solicitada · CHG-336 · 2026-10-19
+
+El usuario confirmó estructura sintética MXN/USD y pidió ejecutar PR/checks, merge, identidad/configuración Costing, candidato/promoción y aceptación. [Registro de ejecución](../operaciones/promocion_qa_20261019.md). PR#16 abierto; CI/head definitivo y baseline privado QA pendientes. Proceder sin repetir permisos concedidos, preservando protecciones y datos existentes. No declarar build/migración/deploy/estructura ejecutados por autorización. Perfil legacy no vacío requiere mapping y transición QA gobernada; CLI Local no se usa en QA.
+
 ## Correcciones de paridad preparadas · CHG-335 · 2026-10-18
 
 El corte Local incluye ocho runtimes en el pipeline (Costing básico), dependencias HTTPS completas, frontend construido una vez y verificado por bytes, readiness DB/head y guard operativo READ ONLY. La configuración conserva usuarios, membresías, perfil, roles personalizados y entitlements. Se corrigieron replay entre actores, intents parciales, retry de código manual y responsive; aceptación HTTP/Chrome real por variantes en [acta](../operaciones/paridad_local_qa_20261018.md). INC-CC20-13-ACTOR-01 está corregida y reprobada en Local. No confundir las variantes comprobadas con aceptación de históricos CC-19 sin procedencia ni UAT QA.

@@ -222,7 +222,7 @@ Evidencia nueva `.local/cc20-16-code-consumers-*`: lotes2026-10-19T05-49-25-376Z
 
 Consolidado `.local/cc20-16-code-consumer-regression-summary.json`: nueve browser.json,22 casos y66 assertions,23 snapshots de configuración restaurados (mode/prefix/separator/padding/status; next nunca disminuye) y huella app.js. Persistencia comprobada por recarga/API; en lotes mixtos algunas PNG conservan sólo el último idioma, mientras DOM/HTTP registran ambos.
 
-La mayoría de duplicados devuelve409; Production order conserva su contrato: primer rechazo422 `production_order_code_already_exists`, retry idéntico409 `production_order_creation_attempt_failed` con misma CreateKey/payload y sin segunda allocation. Corregir código genera allocation/CreateKey nuevas y crea201; no se cambió esa política de errores.
+La mayoría de duplicados devuelve409; Production order conserva su contrato: primer rechazo422 `production_order_code_already_exists`, retry idéntico409 `production_creation_attempt_failed` con misma CreateKey/payload y sin segunda allocation. Corregir código genera allocation/CreateKey nuevas y crea201; no se cambió esa política de errores.
 
 Límites: Product/Service se ensayó como servicio; la rama Inventory `finished-good-link` requiere producto legado sin vínculo y no puede prepararse mediante las APIs actuales de alta, que exigen mapping. No se fabricó estado inválido por SQL. El formulario de orden Production compartido no certifica por inferencia todas las variantes de solicitud comercial ni la rama antigua inaccesible en modo API; sus recorridos API y límites se conservan separados.
 
