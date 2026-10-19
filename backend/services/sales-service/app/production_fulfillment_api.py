@@ -116,7 +116,7 @@ def reconcile_production(payload:ProductionReconcileRequest,order_id:str=Path(ma
     order,line,context=source_order(repository,access,order_id,payload.order_line_id,active=False)
     existing=repository.production_reconciliation(access.tenant_id,order_id,line.id)
     if existing:
-        if existing['request_hash']!=digest:deny('production_reconciliation_in_progress',409)
+        repository.validate_production_reconciliation_actor(access.tenant_id,existing,digest,access.actor_id)
         if existing['status']=='completed':return {'data':order}
         if order.status in ('cancelled','delivered') or order.cancellation_state!='idle':deny('sales_order_not_fulfillable',409)
         record=existing
@@ -128,7 +128,7 @@ def reconcile_production(payload:ProductionReconcileRequest,order_id:str=Path(ma
         warehouse=next((row for row in status['warehouses'] if row['warehouse_id']==payload.warehouse_id and row['eligible_for_reconciliation']),None)
         if not warehouse:deny('sales_production_receipt_required',409,'warehouse_id')
         product=authority.get_inventory_item(access.tenant_id,warehouse['inventory_item_id'],access.authorization)
-        record=repository.prepare_production_reconciliation(access.tenant_id,order_id,line.id,payload.warehouse_id,product,source,key,digest)
+        record=repository.prepare_production_reconciliation(access.tenant_id,order_id,line.id,payload.warehouse_id,product,source,key,digest,actor_id=access.actor_id)
     try:
         reservation=authority.reserve_stock(access.tenant_id,order_id,line.id,record['inventory_item_id'],record['warehouse_id'],record['quantity'],record['unit'],access.authorization,record['command_key']+'-production-reserve')
         expected=context.model_dump(mode='json') if context else None

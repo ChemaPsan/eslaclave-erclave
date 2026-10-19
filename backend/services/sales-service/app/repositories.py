@@ -24,21 +24,40 @@ class SalesRepository(ProductionReconciliationRepository):
     def __init__(self, engine):
         self.engine = engine
 
-    def _claim(self, connection, tenant_id, operation, key, fingerprint):
+    @staticmethod
+    def _actor_hash(fingerprint, actor_id):
+        return hashlib.sha256(json.dumps({'request_hash':fingerprint,'actor_id':actor_id},sort_keys=True,separators=(',',':')).encode()).hexdigest() if actor_id is not None else fingerprint
+
+    def _validate_receipt(self, connection, tenant_id, operation, row, fingerprint, actor_id=None):
+        if row['request_hash']==self._actor_hash(fingerprint,actor_id):return
+        if actor_id is not None and row['request_hash']==fingerprint:
+            actors=connection.execute(text('select distinct actor_id from sales.audit_events where tenant_id=:t and action=:o and occurred_at=:created'),{'t':tenant_id,'o':operation,'created':row['created_at']}).scalars().all()
+            if actors==[actor_id]:return
+        raise ValueError('idempotency_key_reused')
+
+    def _intent_matches(self, connection, tenant_id, operation, key, stored_hash, fingerprint, actor_id):
+        if stored_hash==self._actor_hash(fingerprint,actor_id):return True
+        if actor_id is None or stored_hash!=fingerprint:return False
+        row=connection.execute(text('select request_hash,response_payload,created_at from sales.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k'),{'t':tenant_id,'o':operation,'k':key}).mappings().first()
+        if not row or not row['response_payload']:return False
+        try:self._validate_receipt(connection,tenant_id,operation,row,fingerprint,actor_id)
+        except ValueError:return False
+        return True
+
+    def _claim(self, connection, tenant_id, operation, key, fingerprint, actor_id=None):
         inserted = connection.execute(
             text("""insert into sales.idempotency_records(id,tenant_id,operation,idempotency_key,request_hash)
                 values(:id,:tenant,:operation,:key,:fingerprint)
                 on conflict(tenant_id,operation,idempotency_key) do nothing returning id"""),
-            {"id": f"sid_{uuid4().hex[:26]}", "tenant": tenant_id, "operation": operation, "key": key, "fingerprint": fingerprint},
+            {"id": f"sid_{uuid4().hex[:26]}", "tenant": tenant_id, "operation": operation, "key": key, "fingerprint": self._actor_hash(fingerprint,actor_id)},
         ).scalar_one_or_none()
         if inserted:
             return None
         row = connection.execute(
-            text("select request_hash,response_payload from sales.idempotency_records where tenant_id=:tenant and operation=:operation and idempotency_key=:key for update"),
+            text("select request_hash,response_payload,created_at from sales.idempotency_records where tenant_id=:tenant and operation=:operation and idempotency_key=:key for update"),
             {"tenant": tenant_id, "operation": operation, "key": key},
         ).mappings().one()
-        if row["request_hash"] != fingerprint:
-            raise ValueError("idempotency_key_reused")
+        self._validate_receipt(connection,tenant_id,operation,row,fingerprint,actor_id)
         return row["response_payload"]
 
     def _finish(self, connection, tenant_id, operation, key, value):
@@ -81,7 +100,7 @@ class SalesRepository(ProductionReconciliationRepository):
     def create_customer(self, tenant_id, payload, worker, key, fingerprint, actor_id):
         operation = "customer.create"
         with self.engine.begin() as connection:
-            replay = self._claim(connection, tenant_id, operation, key, fingerprint)
+            replay = self._claim(connection, tenant_id, operation, key, fingerprint, actor_id)
             if replay:
                 return CustomerRead.model_validate(replay)
             customer_id = f"cus_{uuid4().hex[:26]}"
@@ -105,7 +124,7 @@ class SalesRepository(ProductionReconciliationRepository):
     def update_customer(self, tenant_id, customer_id, payload, worker, key, fingerprint, actor_id):
         operation = "customer.update"
         with self.engine.begin() as connection:
-            replay = self._claim(connection, tenant_id, operation, key, fingerprint)
+            replay = self._claim(connection, tenant_id, operation, key, fingerprint, actor_id)
             if replay:
                 return CustomerRead.model_validate(replay)
             before = self._customer(connection, tenant_id, customer_id)
@@ -177,7 +196,7 @@ class SalesRepository(ProductionReconciliationRepository):
     def create_quote(self, tenant_id, payload, customer, worker, lines, key, fingerprint, actor_id):
         operation = "quote.create"
         with self.engine.begin() as connection:
-            replay = self._claim(connection, tenant_id, operation, key, fingerprint)
+            replay = self._claim(connection, tenant_id, operation, key, fingerprint, actor_id)
             if replay: return QuoteRead.model_validate(replay)
             quote_id = f"quo_{uuid4().hex[:26]}"
             inserted = connection.execute(text("""insert into sales.quotes(id,tenant_id,code,customer_id,customer_code_snapshot,customer_name_snapshot,responsible_worker_ref_id,
@@ -203,7 +222,7 @@ class SalesRepository(ProductionReconciliationRepository):
             if guarded and guarded.division_ref_id:
                 local_customer_context(connection,tenant_id,guarded)
                 if (payload.customer_id and payload.customer_id != guarded.customer_id) or (payload.currency and payload.currency != guarded.currency) or (payload.payment_terms and payload.payment_terms != guarded.payment_terms): raise ErclaveError('quote_context_locked','Quote commercial context is fixed.',409)
-            replay = self._claim(connection, tenant_id, operation, key, fingerprint)
+            replay = self._claim(connection, tenant_id, operation, key, fingerprint, actor_id)
             if replay: return QuoteRead.model_validate(replay)
             before = self._quote(connection, tenant_id, quote_id)
             if not before:
@@ -280,7 +299,7 @@ class SalesRepository(ProductionReconciliationRepository):
             guarded=self._quote(connection,tenant_id,quote_id)
             if guarded and guarded.organization_revision != organization_revision: raise ErclaveError('assignment_revision_conflict','Quote context changed.',409)
             if guarded and target in {'quoted','approved'}:local_customer_context(connection,tenant_id,guarded)
-            replay = self._claim(connection, tenant_id, operation, key, fingerprint)
+            replay = self._claim(connection, tenant_id, operation, key, fingerprint, actor_id)
             if replay: return QuoteRead.model_validate(replay)
             before = self._quote(connection, tenant_id, quote_id)
             if not before:
@@ -342,7 +361,7 @@ class SalesRepository(ProductionReconciliationRepository):
         with self.engine.connect() as connection:
             return self._order(connection, tenant_id, order_id)
 
-    def prepare_order_fulfillment(self, tenant_id, order_id, payload, key, request_hash, cost_currency=None, exchange_rate=None):
+    def prepare_order_fulfillment(self, tenant_id, order_id, payload, key, request_hash, cost_currency=None, exchange_rate=None, actor_id=None):
         with self.engine.begin() as connection:
             scoped=self._order(connection,tenant_id,order_id)
             if scoped and scoped.division_ref_id and (not cost_currency or exchange_rate is None):raise ValueError('order_context_downstream_pending')
@@ -355,12 +374,12 @@ class SalesRepository(ProductionReconciliationRepository):
                 cost_rate(cost_currency,scoped.currency,exchange_rate)
                 if scoped.cost_currency and (scoped.cost_currency!=cost_currency or scoped.cost_exchange_rate!=exchange_rate):raise ValueError('operational_exchange_rate_locked')
                 connection.execute(text('update sales.orders set cost_currency=:currency,cost_exchange_rate=:rate where tenant_id=:t and id=:id'),{'currency':cost_currency,'rate':exchange_rate,'t':tenant_id,'id':order_id})
-            if row["fulfillment_state"] == "completed" and row["fulfillment_hash"] == request_hash:
+            if row["fulfillment_state"] == "completed" and self._intent_matches(connection,tenant_id,f"order.fulfillment:{order_id}",row["fulfillment_key"] or key,row["fulfillment_hash"],request_hash,actor_id):
                 return self._order(connection, tenant_id, order_id), row["fulfillment_key"] or key
             if row["status"] in {"cancelled", "delivered"} or row["cancellation_state"] in {"processing", "needs_reconciliation"}:
                 raise ValueError("sales_order_not_fulfillable")
             if row["fulfillment_state"] in {"processing", "needs_reconciliation"}:
-                if row["fulfillment_hash"] != request_hash:
+                if not self._intent_matches(connection,tenant_id,f"order.fulfillment:{order_id}",row["fulfillment_key"] or key,row["fulfillment_hash"],request_hash,actor_id):
                     raise ValueError("sales_order_fulfillment_in_progress")
                 return self._order(connection, tenant_id, order_id), row["fulfillment_key"]
             line_ids = {line.order_line_id for line in payload.lines}
@@ -373,7 +392,8 @@ class SalesRepository(ProductionReconciliationRepository):
                 raise ValueError("sales_order_line_already_configured")
             connection.execute(text("""update sales.orders set fulfillment_state='processing',fulfillment_key=:key,
                 fulfillment_hash=:hash,fulfillment_plan=cast(:plan as jsonb),updated_at=now() where tenant_id=:tenant and id=:id"""),
-                {"key": key, "hash": request_hash, "plan":json.dumps(payload.model_dump(mode="json")), "tenant": tenant_id, "id": order_id})
+                {"key": key, "hash": self._actor_hash(request_hash,actor_id), "plan":json.dumps(payload.model_dump(mode="json")), "tenant": tenant_id, "id": order_id})
+            if actor_id is not None:self._audit(connection,tenant_id,actor_id,'order.fulfillment.prepare','intent',order_id,{'idempotency_key':key})
             return self._order(connection, tenant_id, order_id), key
 
     def mark_fulfillment_reconciliation(self, tenant_id, order_id):
@@ -389,7 +409,7 @@ class SalesRepository(ProductionReconciliationRepository):
             if not current or current.status!='approved':raise ValueError('approved_quote_required')
             if current.organization_revision!=quote.organization_revision:raise ValueError('assignment_revision_conflict')
             quote=current
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay:
                 return SalesOrderRead.model_validate(replay)
             local_customer_context(connection,tenant_id,quote)
@@ -447,7 +467,7 @@ class SalesRepository(ProductionReconciliationRepository):
     def configure_order_fulfillment(self, tenant_id, order_id, resolved_lines, key, request_hash, actor_id):
         operation = f"order.fulfillment:{order_id}"
         with self.engine.begin() as connection:
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay:
                 return SalesOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": order_id})
@@ -489,14 +509,14 @@ class SalesRepository(ProductionReconciliationRepository):
             self._finish(connection, tenant_id, operation, key, value)
             return value
 
-    def prepare_cancel_order(self, tenant_id, order_id, key, request_hash):
+    def prepare_cancel_order(self, tenant_id, order_id, key, request_hash, actor_id=None):
         with self.engine.begin() as connection:
             row = connection.execute(text("""select status,cancellation_state,cancellation_key,cancellation_hash,fulfillment_state
                 from sales.orders where tenant_id=:tenant and id=:id for update"""), {"tenant": tenant_id, "id": order_id}).mappings().first()
             if not row:
                 return None
             if row["status"] == "cancelled" and row["cancellation_state"] == "completed":
-                if row["cancellation_hash"] != request_hash:
+                if not self._intent_matches(connection,tenant_id,"order.cancel",row["cancellation_key"] or key,row["cancellation_hash"],request_hash,actor_id):
                     raise ValueError("sales_order_not_cancellable")
                 return self._order(connection, tenant_id, order_id), row["cancellation_key"] or key
             if row["status"] in {"partially_delivered", "delivered", "cancelled"}:
@@ -511,12 +531,13 @@ class SalesRepository(ProductionReconciliationRepository):
             if delivery_in_progress:
                 raise ValueError("delivery_confirmation_in_progress")
             if row["cancellation_state"] in {"processing", "needs_reconciliation"}:
-                if row["cancellation_hash"] != request_hash:
+                if not self._intent_matches(connection,tenant_id,"order.cancel",row["cancellation_key"] or key,row["cancellation_hash"],request_hash,actor_id):
                     raise ValueError("sales_order_cancellation_in_progress")
                 return self._order(connection, tenant_id, order_id), row["cancellation_key"]
             connection.execute(text("""update sales.orders set cancellation_state='processing',cancellation_key=:key,
                 cancellation_hash=:hash,updated_at=now() where tenant_id=:tenant and id=:id"""),
-                {"key": key, "hash": request_hash, "tenant": tenant_id, "id": order_id})
+                {"key": key, "hash": self._actor_hash(request_hash,actor_id), "tenant": tenant_id, "id": order_id})
+            if actor_id is not None:self._audit(connection,tenant_id,actor_id,'order.cancel.prepare','intent',order_id,{'idempotency_key':key})
             return self._order(connection, tenant_id, order_id), key
 
     def mark_cancellation_reconciliation(self, tenant_id, order_id):
@@ -527,7 +548,7 @@ class SalesRepository(ProductionReconciliationRepository):
     def cancel_order(self, tenant_id, order_id, reason, key, request_hash, actor_id):
         operation = "order.cancel"
         with self.engine.begin() as connection:
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay:
                 return SalesOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": order_id})
@@ -617,7 +638,7 @@ class SalesRepository(ProductionReconciliationRepository):
         with self.engine.begin() as connection:
             scoped=self._order(connection,tenant_id,payload.order_id)
             if scoped and scoped.division_ref_id and not scoped.cost_currency:raise ValueError('order_context_downstream_pending')
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay:
                 return DeliveryRead.model_validate(replay)
             connection.execute(text("select id from sales.orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": payload.order_id})
@@ -682,7 +703,7 @@ class SalesRepository(ProductionReconciliationRepository):
         connection.execute(text("select id from sales.deliveries where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": delivery_id})
         return parent
 
-    def prepare_delivery_confirmation(self, tenant_id, delivery_id, key, request_hash):
+    def prepare_delivery_confirmation(self, tenant_id, delivery_id, key, request_hash, actor_id=None):
         with self.engine.begin() as connection:
             if self._lock_delivery(connection, tenant_id, delivery_id) is None:
                 return None
@@ -691,7 +712,7 @@ class SalesRepository(ProductionReconciliationRepository):
             if not state:
                 return None
             if state["status"] == "confirmed":
-                if state["confirmation_hash"] and state["confirmation_hash"] != request_hash:
+                if state["confirmation_hash"] and not self._intent_matches(connection,tenant_id,"delivery.confirm",state["confirmation_key"] or key,state["confirmation_hash"],request_hash,actor_id):
                     raise ValueError("delivery_not_confirmable")
                 return self._delivery(connection, tenant_id, delivery_id), [], state["confirmation_key"] or key
             if state["status"] != "draft":
@@ -701,13 +722,14 @@ class SalesRepository(ProductionReconciliationRepository):
                 raise ValueError("sales_order_not_deliverable")
             effective_key = key
             if state["confirmation_state"] in {"processing", "needs_reconciliation"}:
-                if state["confirmation_hash"] != request_hash:
+                if not self._intent_matches(connection,tenant_id,"delivery.confirm",state["confirmation_key"] or key,state["confirmation_hash"],request_hash,actor_id):
                     raise ValueError("delivery_confirmation_in_progress")
                 effective_key = state["confirmation_key"]
             else:
                 connection.execute(text("""update sales.deliveries set confirmation_state='processing',confirmation_key=:key,
                     confirmation_hash=:hash,updated_at=now() where tenant_id=:tenant and id=:id"""),
-                    {"key": key, "hash": request_hash, "tenant": tenant_id, "id": delivery_id})
+                    {"key": key, "hash": self._actor_hash(request_hash,actor_id), "tenant": tenant_id, "id": delivery_id})
+                if actor_id is not None:self._audit(connection,tenant_id,actor_id,'delivery.confirm.prepare','intent',delivery_id,{'idempotency_key':key})
             delivery = self._delivery(connection, tenant_id, delivery_id)
             plan = []
             order = self._order(connection, tenant_id, delivery.order_id)
@@ -744,7 +766,7 @@ class SalesRepository(ProductionReconciliationRepository):
         with self.engine.begin() as connection:
             if self._lock_delivery(connection, tenant_id, delivery_id) is None:
                 return None
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay:
                 return DeliveryRead.model_validate(replay)
             connection.execute(text("select id from sales.deliveries where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": delivery_id})
@@ -796,7 +818,7 @@ class SalesRepository(ProductionReconciliationRepository):
         with self.engine.begin() as connection:
             if self._lock_delivery(connection, tenant_id, delivery_id) is None:
                 return None
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay:
                 return DeliveryRead.model_validate(replay)
             before = self._delivery(connection, tenant_id, delivery_id)
@@ -854,7 +876,7 @@ class SalesRepository(ProductionReconciliationRepository):
         operation = f"service_order.plan:{service_order_id}"
         with self.engine.begin() as connection:
             self._lock_service_context(connection,tenant_id,service_order_id)
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay: return ServiceOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
             before = self._service_order(connection, tenant_id, service_order_id)
@@ -873,7 +895,7 @@ class SalesRepository(ProductionReconciliationRepository):
         operation = f"service_order.assign:{service_order_id}"
         with self.engine.begin() as connection:
             self._lock_service_context(connection,tenant_id,service_order_id)
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay: return ServiceOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
             before = self._service_order(connection, tenant_id, service_order_id)
@@ -892,7 +914,7 @@ class SalesRepository(ProductionReconciliationRepository):
         operation = f"service_order.time.create:{service_order_id}"
         with self.engine.begin() as connection:
             self._lock_service_context(connection,tenant_id,service_order_id)
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay: return ServiceOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
             before = self._service_order(connection, tenant_id, service_order_id)
@@ -915,7 +937,7 @@ class SalesRepository(ProductionReconciliationRepository):
         operation = f"service_order.cost.create:{service_order_id}"
         with self.engine.begin() as connection:
             self._lock_service_context(connection,tenant_id,service_order_id)
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay: return ServiceOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
             before = self._service_order(connection, tenant_id, service_order_id)
@@ -938,7 +960,7 @@ class SalesRepository(ProductionReconciliationRepository):
         operation = f"service_order.evidence.create:{service_order_id}"
         with self.engine.begin() as connection:
             self._lock_service_context(connection,tenant_id,service_order_id)
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay: return ServiceOrderRead.model_validate(replay)
             connection.execute(text("select id from sales.service_orders where tenant_id=:tenant and id=:id for update"), {"tenant": tenant_id, "id": service_order_id})
             before = self._service_order(connection, tenant_id, service_order_id)
@@ -960,7 +982,7 @@ class SalesRepository(ProductionReconciliationRepository):
             "cancel": ({"draft", "planned", "assigned", "in_progress", "on_hold", "pending_acceptance"}, "cancelled")}
         with self.engine.begin() as connection:
             self._lock_service_context(connection,tenant_id,service_order_id,stopping=action in {"cancel","wait"})
-            replay = self._claim(connection, tenant_id, operation, key, request_hash)
+            replay = self._claim(connection, tenant_id, operation, key, request_hash, actor_id)
             if replay: return ServiceOrderRead.model_validate(replay)
             if action in {"wait", "cancel"} and not reason:
                 self._release(connection, tenant_id, operation, key); raise ValueError("service_order_reason_required")

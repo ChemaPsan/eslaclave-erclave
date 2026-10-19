@@ -1,5 +1,13 @@
 # Pendientes priorizados de ERClave
 
+## Prioridad vigente · CHG-335 · paridad Local/QA
+
+- Revisar el [plan sintético QA](../../infra/qa/synthetic-organization-plan.json) antes de aplicar: propuesta de monedas MXN/USD, baseline de estructura existente y actores/scopes exactos. El permiso recibido cubre preparación; no aplicación.
+- Completar gates independientes con SHA final: PR/merge, IAM/variables Costing, build de ocho imágenes/frontend, migración 0036→0062, reconciliación de permisos si se aprueba, configuración organizacional y revisiones; guard READ ONLY antes de tráfico y verificación real de Hosting. No inferir permiso conjunto.
+- Ejecutar aceptación autenticada QA, con datos/identidades expresamente autorizados, después de los gates. Preservar maestros, documentos y dinero histórico; estructura sintética no asigna por defecto maestros antiguos ni prueba procedencia CC-19.
+- Correcciones Local comprobadas de actor/idempotencia, recuperación, folios, retry manual y responsive en [acta](../operaciones/paridad_local_qa_20261018.md). Mantener sus regresiones y límites UI/legacy; no sustituirlos por verify.
+- CC-19 real sin mapeo inventado; segundo tenant no autorizado, UAT QA e integración remota de evidencias GCS pendientes. Accounting y analítica Costing apagados. QA no promovido por estas correcciones.
+
 ## Publicación del candidato Local · CHG-334
 
 Subida de rama autorizada por el usuario; preparar commit y comprobar que las huellas fuente/Word también coinciden con los blobs del índice Git. .gitattributes conserva los bytes aprobados de manuales y evita divergencia al clonar. CC20-02–16 y mapeo real CC-19 permanecen pendientes; la publicación Git no es promoción QA.

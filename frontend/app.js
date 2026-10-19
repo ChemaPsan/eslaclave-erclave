@@ -112,7 +112,15 @@ function unitOptions(selected=""){const units=getUnitCatalog();const normalized=
 function codeSequenceConfig(documentType){return (state.adminApi.data?.codeSequences||[]).find((item)=>item.document_type===documentType&&item.status==="active")||null;}
 function ownerCodeInput(documentType,value="",historicalMode=null,maxlength=60){const managed=historicalMode==="managed"||(!historicalMode&&codeSequenceConfig(documentType)?.mode==="managed");return `<input name="code" maxlength="${maxlength}" value="${escapeAttribute(value||"")}" placeholder="${managed?escapeAttribute(t("codeAssignedAutomatically")):""}" ${managed?"readonly":"required"}>`;}
 function codeRequestKey(documentType){const value=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;return `web-code-${documentType}-${value}`;}
-async function resolveBusinessCode(documentType,manualCode,requestKey){if(getApiMode()!=="api")return String(manualCode||"").trim().toUpperCase();const allocation=await allocateBusinessCode(documentType,String(manualCode||"").trim()||null,requestKey);return allocation.code;}
+async function resolveBusinessCode(documentType, manualCode, requestKey) {
+  const normalizedCode = String(manualCode || "").trim().toUpperCase();
+  if (getApiMode() !== "api") return normalizedCode;
+  // A corrected manual code is a new allocation command. Repeated submissions
+  // of the same capture retain the same key, including after a rejected create.
+  const allocationKey = requestKey && normalizedCode ? `${requestKey}:${normalizedCode}` : requestKey;
+  const allocation = await allocateBusinessCode(documentType, normalizedCode || null, allocationKey);
+  return allocation.code;
+}
 function unitSelect(name,selected="",attributes="required"){return `<select name="${name}" ${attributes}>${unitOptions(selected||"H87")}</select>`;}
 function preferredCommercialReference(items=[],preferred=""){return items.some(item=>item.code===preferred)?preferred:(items[0]?.code||"");}
 function commercialReferenceOptions(items=[],selected="",showCode=false){
@@ -870,7 +878,7 @@ function renderPanel() {
       </section>
     </div>
 
-    <div class="records module-records">
+    <div class="records module-records module-overview-records">
       ${moduleRecords
         .map(
           ([code, desc, status]) => `

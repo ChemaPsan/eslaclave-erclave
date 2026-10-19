@@ -83,6 +83,18 @@ class FakeRepository:
             self.order["assigned_worker_id"] = worker["id"]
         return self.order
 
+    def prepare_order_transition(self, tenant, order_id, key, request_hash, actor):
+        return None, False
+
+    def complete_order_transition(self, tenant, order_id, key, request_hash, actor):
+        return self.order
+
+    def prepare_order_reconciliation(self, tenant, order_id, key, request_hash, actor):
+        return self.order, False
+
+    def complete_order_reconciliation(self, tenant, order_id, key, actor):
+        return self.order
+
     def set_order_integration(self, tenant, order_id, status, error=None, actor="system"):
         self.order["integration_status"] = status
         self.order["integration_error"] = error
@@ -116,7 +128,7 @@ class FakeRepository:
         self.material["status"]="needs_reconciliation" if error else "cancelled"
         return self.material
 
-    def prepare_warehouse_issue(self, tenant, request_id, actor):
+    def prepare_warehouse_issue(self, tenant, request_id, actor, key=None, request_hash=None):
         value = self.material if tenant == TENANT and self.material and self.material["id"] == request_id else None
         if not value: return None, None
         if value["status"] == "issued": return value, None
@@ -125,7 +137,7 @@ class FakeRepository:
         value["pending_operation"] = "issue"
         return value, [line for line in value["lines"] if line["line_status"] == "reserved"]
 
-    def complete_warehouse_issue(self, tenant, request_id, results, error, actor):
+    def complete_warehouse_issue(self, tenant, request_id, results, error, actor, key=None):
         for line_id, movement in results:
             line = next(line for line in self.material["lines"] if line["id"] == line_id)
             line.update(line_status="issued", inventory_movement_id=movement["id"])
@@ -165,7 +177,7 @@ class FakeAuthority:
 
     def division_workers(self, tenant, division, token, *, worker_id=None, limit=20):
         assert tenant == TENANT and division == "div_test"
-        worker = {"id":"hrw_1","full_name":"Ana Garcia","labor_position_id":"pos_test","position_name":"Técnico",
+        worker = {"id":"hrw_1","full_name":"Ana Garcia","labor_position_id":"pos_test","position_name":"TÃƒÂ©cnico",
                   "division_ref_id":"div_test","society_ref_id":"soc_test","hourly_cost":"120.123456",
                   "hourly_cost_currency_code":"MXN","hourly_cost_confirmed_at":"2026-01-01T00:00:00Z",
                   "minutes_per_worker":480,"worker_assignment_revision":1,"position_assignment_revision":1}

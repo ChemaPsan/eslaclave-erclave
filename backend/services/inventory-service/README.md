@@ -14,6 +14,8 @@ La recepcion consulta exclusivamente `production-service /v1/production/finished
 - Toda consulta y escritura filtra por `tenant_id`.
 - Firebase identifica; `admin-service /v1/session/context` valida tenant, modulo `inventory` y permiso exacto.
 - Las escrituras requieren `Idempotency-Key` y generan `inventory.audit_events`.
+- Los recibos durables de almacenes, articulos, movimientos/reversas, reservas, recepcion de terminado, acciones de transferencia y solicitud de sobrante vinculan tambien el actor autenticado. Otro actor con la misma clave recibe `409 idempotency_key_reused`; el actor original conserva su recuperacion. Los recibos anteriores solo se recuperan cuando la auditoria de su transaccion identifica un actor unico coincidente. No se cambia el payload publico ni se migran datos para este control.
+- Recibir/cancelar sobrantes revalida alcance antes del recibo y persiste un intent vinculado a actor, recurso y payload antes de efectos externos. Si falla la conciliacion, mantiene pendiente el intent para permitir reintento del mismo actor; solo guarda respuesta final al completar/cancelar. Un recurso historico ya terminal sin recibo de clave puede consultarse mediante un comando autorizado nuevo sin repetir efectos; ello no atribuye autoria de la operacion historica.
 - Los movimientos no se editan ni eliminan. Una correccion genera un movimiento inverso y marca el original como reversado.
 - Salidas, transferencias, ajustes negativos y reversas de entradas no pueden producir saldo negativo.
 - Existencias y Kardex se calculan desde movimientos registrados; no tienen formularios de captura.

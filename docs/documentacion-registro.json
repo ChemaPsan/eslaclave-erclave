@@ -1107,6 +1107,12 @@
       "status": "historico",
       "owner": "Admin, Seguridad, QA y custodio documental",
       "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/paridad_local_qa_20261018.md",
+      "status": "historico",
+      "owner": "Arquitectura, Seguridad, QA y dueños de servicios",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
     }
   ]
 }

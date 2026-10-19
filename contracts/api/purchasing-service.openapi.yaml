@@ -1,5 +1,6 @@
 openapi: 3.1.0
 x-implementation-status: implemented
+x-idempotency-actor-binding: 'Local: command receipts bind tenant, operation, key, authenticated actor and request. Actor/payload conflicts or unprovable legacy authorship return 409 before replay/effects; current document scope is revalidated. Reconciliation intents are recorded before external effects. No request/response fields change.'
 info:
   title: ERClave Purchasing Service API
   version: 1.7.0

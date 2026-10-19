@@ -97,6 +97,7 @@ $env:ERCLAVE_ADMIN_SERVICE_URL = "http://127.0.0.1:8000"
 $env:ERCLAVE_HR_SERVICE_URL = "http://127.0.0.1:8006"
 $env:ERCLAVE_INVENTORY_SERVICE_URL = "http://127.0.0.1:8004"
 $env:ERCLAVE_PRODUCTION_SERVICE_URL = "http://127.0.0.1:8002"
+$env:ERCLAVE_SALES_SERVICE_URL = "http://127.0.0.1:8008"
 $env:ERCLAVE_MAINTENANCE_SERVICE_URL = "http://127.0.0.1:8012"
 $env:ERCLAVE_PURCHASING_SERVICE_URL = "http://127.0.0.1:8010"
 $env:ERCLAVE_BACKOFFICE_ADMIN_EMAILS = $localEmail
@@ -132,8 +133,17 @@ $services = @(
     @{ Adapter = "services.maintenance_service_adapter:app"; Port = 8012; Name = "maintenance-local" },
     @{ Adapter = "services.costing_service_adapter:app"; Port = 8014; Name = "costing-local" }
 )
-foreach ($service in $services) {
-    Start-Process -FilePath $pythonPath -ArgumentList "-m", "uvicorn", $service.Adapter, "--host", "127.0.0.1", "--port", "$($service.Port)" -WorkingDirectory $backendRoot -RedirectStandardOutput (Join-Path $backendRoot "$($service.Name).out.log") -RedirectStandardError (Join-Path $backendRoot "$($service.Name).err.log") -WindowStyle Hidden
+$previousServiceName = [Environment]::GetEnvironmentVariable("ERCLAVE_SERVICE_NAME", "Process")
+$previousPublicBaseUrl = [Environment]::GetEnvironmentVariable("ERCLAVE_API_PUBLIC_BASE_URL", "Process")
+try {
+    foreach ($service in $services) {
+        $env:ERCLAVE_SERVICE_NAME = $service.Name -replace '-local$', '-service'
+        $env:ERCLAVE_API_PUBLIC_BASE_URL = "http://127.0.0.1:$($service.Port)"
+        Start-Process -FilePath $pythonPath -ArgumentList "-m", "uvicorn", $service.Adapter, "--host", "127.0.0.1", "--port", "$($service.Port)" -WorkingDirectory $backendRoot -RedirectStandardOutput (Join-Path $backendRoot "$($service.Name).out.log") -RedirectStandardError (Join-Path $backendRoot "$($service.Name).err.log") -WindowStyle Hidden
+    }
+} finally {
+    [Environment]::SetEnvironmentVariable("ERCLAVE_SERVICE_NAME", $previousServiceName, "Process")
+    [Environment]::SetEnvironmentVariable("ERCLAVE_API_PUBLIC_BASE_URL", $previousPublicBaseUrl, "Process")
 }
 Start-Process -FilePath $pythonPath -ArgumentList "-m", "http.server", "4173", "--bind", "127.0.0.1" -WorkingDirectory $frontendRoot -RedirectStandardOutput (Join-Path $frontendRoot "frontend-local.out.log") -RedirectStandardError (Join-Path $frontendRoot "frontend-local.err.log") -WindowStyle Hidden
 

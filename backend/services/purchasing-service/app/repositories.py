@@ -1,5 +1,6 @@
-import json
+import hashlib,json
 from contextlib import contextmanager
+from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
 from fastapi import Depends
@@ -19,29 +20,58 @@ class PurchasingRepository:
         with self.engine.begin() as c:return supplier_terms(c,t,supplier_id,context)
     def document_replay(self,t,operation,key,digest,access,legacy=False):
         with self.engine.connect() as c:
-            row=c.execute(text('select request_hash,response_payload from purchasing.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k'),{'t':t,'o':operation,'k':key}).mappings().first()
-        if row:
-            if row['request_hash']!=digest:raise ValueError('idempotency_key_reused')
-            if row['response_payload'] is None:raise ValueError('command_in_progress')
-            authorize_document(row['response_payload'],access,legacy=legacy,active=not legacy)
-            return row['response_payload']
+            row=c.execute(text('select request_hash,response_payload,created_at from purchasing.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k'),{'t':t,'o':operation,'k':key}).mappings().first()
+            if row:
+                self._validate_receipt(c,t,operation,row,digest,getattr(access,'actor_id',None))
+                if row['response_payload'] is None:raise ValueError('command_in_progress')
+                authorize_document(row['response_payload'],access,legacy=legacy,active=not legacy)
+                return self._normalize_response(row['response_payload'])
         return None
-    def _document_claim(self,c,t,operation,key,digest,access,current=None,legacy=False):
+    def _document_claim(self,c,t,operation,key,digest,access,current=None,legacy=False,actor=None):
         authorize_document(current,access,legacy=legacy,active=not legacy)
-        replay=self._claim(c,t,operation,key,digest)
+        replay=self._claim(c,t,operation,key,digest,actor if actor is not None else getattr(access,'actor_id',None))
         if replay:authorize_document(replay,access,legacy=legacy,active=not legacy)
         return replay
     def __init__(self,database_url):
         if not database_url: raise RuntimeError("Purchasing database URL is required.")
         self.engine=create_engine(database_url,pool_pre_ping=True)
-    def _claim(self,c,tenant,operation,key,digest):
-        row=c.execute(text("select request_hash,response_payload from purchasing.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k for update"),{"t":tenant,"o":operation,"k":key}).mappings().first()
-        if row:
-            if row["request_hash"]!=digest: raise ValueError("idempotency_key_reused")
-            if row["response_payload"] is None: raise ValueError("command_in_progress")
-            return row["response_payload"]
-        c.execute(text("insert into purchasing.idempotency_records(id,tenant_id,operation,idempotency_key,request_hash) values(:id,:t,:o,:k,:h)"),{"id":f"pid_{uuid4().hex[:26]}","t":tenant,"o":operation,"k":key,"h":digest}); return None
-    def _finish(self,c,tenant,operation,key,value): c.execute(text("update purchasing.idempotency_records set response_payload=cast(:p as jsonb) where tenant_id=:t and operation=:o and idempotency_key=:k"),{"p":json.dumps(value,default=str),"t":tenant,"o":operation,"k":key})
+    @staticmethod
+    def _actor_hash(digest,actor):
+        return hashlib.sha256(json.dumps({'request_hash':digest,'actor_id':actor},sort_keys=True,separators=(',',':')).encode()).hexdigest() if actor is not None else digest
+    @classmethod
+    def _normalize_response(cls,value):
+        if isinstance(value,list):return [cls._normalize_response(item) for item in value]
+        if not isinstance(value,dict):return value
+        result={key:cls._normalize_response(item) for key,item in value.items()}
+        for key in ('created_at','updated_at','received_at','submitted_at','approved_at','cancelled_at','issued_at','last_reconciliation_at'):
+            item=result.get(key)
+            if isinstance(item,str) and ('T' in item or ' ' in item):
+                try:result[key]=datetime.fromisoformat(item).isoformat()
+                except ValueError:pass
+        return result
+    def _validate_receipt(self,c,t,operation,row,digest,actor=None):
+        if row['request_hash']==self._actor_hash(digest,actor):return
+        if actor is not None and row['request_hash']==digest and row['response_payload'] is not None:
+            actors=c.execute(text('select distinct actor_id from purchasing.audit_events where tenant_id=:t and action=:o and occurred_at=:created'),{'t':t,'o':operation,'created':row['created_at']}).scalars().all()
+            if actors==[actor]:return
+            # Receipt confirmation commits its intent before the external call.
+            # Its frozen response identifies the actual reconciler, not the creator.
+            payload=row['response_payload']
+            if operation=='receipt.reconcile' and isinstance(payload,dict) and payload.get('reconciled_by_actor_id')==actor and payload.get('id'):
+                try:prepared=datetime.fromisoformat(str(payload.get('last_reconciliation_at')))
+                except (TypeError,ValueError):prepared=None
+                if prepared==row['created_at']:
+                    actors=c.execute(text('select distinct actor_id from purchasing.audit_events where tenant_id=:t and action=:o and entity_id=:id and occurred_at>=:created'),{'t':t,'o':operation,'id':payload['id'],'created':row['created_at']}).scalars().all()
+                    if actors==[actor]:return
+        raise ValueError('idempotency_key_reused')
+    def _claim(self,c,tenant,operation,key,digest,actor=None,resume=False):
+        claimed=c.execute(text("insert into purchasing.idempotency_records(id,tenant_id,operation,idempotency_key,request_hash) values(:id,:t,:o,:k,:h) on conflict(tenant_id,operation,idempotency_key) do nothing returning id"),{'id':f'pid_{uuid4().hex[:26]}','t':tenant,'o':operation,'k':key,'h':self._actor_hash(digest,actor)}).scalar_one_or_none()
+        if claimed is not None:return None
+        row=c.execute(text("select request_hash,response_payload,created_at from purchasing.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k for update"),{'t':tenant,'o':operation,'k':key}).mappings().one()
+        self._validate_receipt(c,tenant,operation,row,digest,actor)
+        if row['response_payload'] is None and not resume:raise ValueError('command_in_progress')
+        return self._normalize_response(row['response_payload'])
+    def _finish(self,c,tenant,operation,key,value): c.execute(text("update purchasing.idempotency_records set response_payload=cast(:p as jsonb) where tenant_id=:t and operation=:o and idempotency_key=:k"),{"p":json.dumps(self._normalize_response(value),default=lambda item:item.isoformat() if isinstance(item,datetime) else str(item)),"t":tenant,"o":operation,"k":key})
     def _audit(self,c,tenant,actor,action,kind,entity,payload): c.execute(text("insert into purchasing.audit_events(id,tenant_id,actor_id,action,entity_type,entity_id,payload) values(:id,:t,:a,:x,:y,:e,cast(:p as jsonb))"),{"id":f"pae_{uuid4().hex[:26]}","t":tenant,"a":actor,"x":action,"y":kind,"e":entity,"p":json.dumps(payload,default=str)})
     def _supplier(self,c,t,id):
         row=c.execute(text("select id,code,code_mode,commercial_name,legal_name,tax_id,tax_regime,billing_email,contact_name,email,phone,website,fiscal_street,fiscal_exterior_number,fiscal_interior_number,fiscal_neighborhood,fiscal_municipality,fiscal_state,fiscal_postal_code,fiscal_country,currency,payment_terms,lead_time_days,status,created_at,updated_at from purchasing.suppliers where tenant_id=:t and id=:id"),{"t":t,"id":id}).mappings().first(); return dict(row) if row else None
@@ -49,16 +79,16 @@ class PurchasingRepository:
         with self.engine.connect() as c:return [dict(x) for x in c.execute(text("select id,code,code_mode,commercial_name,legal_name,tax_id,tax_regime,billing_email,contact_name,email,phone,website,fiscal_street,fiscal_exterior_number,fiscal_interior_number,fiscal_neighborhood,fiscal_municipality,fiscal_state,fiscal_postal_code,fiscal_country,currency,payment_terms,lead_time_days,status,created_at,updated_at from purchasing.suppliers where tenant_id=:t order by commercial_name"),{"t":t}).mappings()]
     def get_supplier(self,t,id):
         with self.engine.connect() as c:return self._supplier(c,t,id)
-    def supplier_replay(self,t,key,digest):
+    def supplier_replay(self,t,key,digest,actor=None):
         with self.engine.connect() as c:
-            row=c.execute(text("select request_hash,response_payload from purchasing.idempotency_records where tenant_id=:t and operation='supplier.create' and idempotency_key=:k"),{"t":t,"k":key}).mappings().first()
-        if not row:return None
-        if row["request_hash"]!=digest:raise ValueError("idempotency_key_reused")
-        if row["response_payload"] is None:raise ValueError("command_in_progress")
-        return row["response_payload"]
+            row=c.execute(text("select request_hash,response_payload,created_at from purchasing.idempotency_records where tenant_id=:t and operation='supplier.create' and idempotency_key=:k"),{"t":t,"k":key}).mappings().first()
+            if not row:return None
+            self._validate_receipt(c,t,'supplier.create',row,digest,actor)
+            if row['response_payload'] is None:raise ValueError('command_in_progress')
+            return self._normalize_response(row['response_payload'])
     def create_supplier(self,t,p,key,digest,actor,code_mode=None):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"supplier.create",key,digest)
+            replay=self._claim(c,t,"supplier.create",key,digest,actor)
             if replay:return replay
             id=f"sup_{uuid4().hex[:26]}"; d=p.model_dump()
             try:c.execute(text("insert into purchasing.suppliers(id,tenant_id,code,code_mode,commercial_name,legal_name,tax_id,tax_regime,billing_email,contact_name,email,phone,website,fiscal_street,fiscal_exterior_number,fiscal_interior_number,fiscal_neighborhood,fiscal_municipality,fiscal_state,fiscal_postal_code,fiscal_country,currency,payment_terms,lead_time_days,status) values(:id,:t,:code,:code_mode,:commercial_name,:legal_name,:tax_id,:tax_regime,:billing_email,:contact_name,:email,:phone,:website,:fiscal_street,:fiscal_exterior_number,:fiscal_interior_number,:fiscal_neighborhood,:fiscal_municipality,:fiscal_state,:fiscal_postal_code,:fiscal_country,:currency,:payment_terms,:lead_time_days,:status)"),{"id":id,"t":t,"code_mode":code_mode,**d})
@@ -66,7 +96,7 @@ class PurchasingRepository:
             value=self._supplier(c,t,id); self._audit(c,t,actor,"supplier.create","supplier",id,{"code":p.code}); self._finish(c,t,"supplier.create",key,value); return value
     def update_supplier(self,t,id,p,key,digest,actor):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"supplier.update",key,digest)
+            replay=self._claim(c,t,"supplier.update",key,digest,actor)
             if replay:return replay
             before=self._supplier(c,t,id)
             if not before:return None
@@ -92,7 +122,7 @@ class PurchasingRepository:
             c.execute(text("insert into purchasing.requisition_lines(id,tenant_id,requisition_id,line_number,line_type,inventory_item_ref_id,item_code_snapshot,item_name_snapshot,description,quantity,unit_code) values(:id,:t,:parent,:n,:line_type,:inventory_item_id,:item_code,:item_name,:description,:quantity,:unit_code)"),{"id":f"prl_{uuid4().hex[:26]}","t":t,"parent":id,"n":n,"item_code":item.get("code"),"item_name":item.get("name"),**d})
     def create_requisition(self,t,p,key,digest,actor,snapshots=None,context=None,organization_access=None,code_mode=None):
         with self.engine.begin() as c:
-            replay=self._document_claim(c,t,"requisition.create",key,digest,organization_access,{"organization_context":context})
+            replay=self._document_claim(c,t,"requisition.create",key,digest,organization_access,{"organization_context":context},actor=actor)
             if replay:return replay
             id=f"pre_{uuid4().hex[:26]}"; d=p.model_dump(exclude={"lines"})
             try:c.execute(text("insert into purchasing.requisitions(id,tenant_id,code,code_mode,required_date,priority,source_type,source_id,requested_by_actor_id) values(:id,:t,:code,:code_mode,:required_date,:priority,:source_type,:source_id,:actor)"),{"id":id,"t":t,"actor":actor,"code_mode":code_mode,**d})
@@ -102,7 +132,7 @@ class PurchasingRepository:
     def update_requisition(self,t,id,p,key,digest,actor,snapshots=None,organization_access=None):
         with self.engine.begin() as c:
             current=self._req(c,t,id,True)
-            replay=self._document_claim(c,t,"requisition.update",key,digest,organization_access,current)
+            replay=self._document_claim(c,t,"requisition.update",key,digest,organization_access,current,actor=actor)
             if replay:return replay
             if not current:return None
             if organization_access is not None:fixed_context(current,p.division_ref_id,organization_access)
@@ -114,7 +144,7 @@ class PurchasingRepository:
         allowed={"draft":{"submitted"},"submitted":{"approved","rejected"}}
         with self.engine.begin() as c:
             value=self._req(c,t,id,True)
-            replay=self._document_claim(c,t,f"requisition.{target}",key,digest,organization_access,value)
+            replay=self._document_claim(c,t,f"requisition.{target}",key,digest,organization_access,value,actor=actor)
             if replay:return replay
             value=self._req(c,t,id,True)
             if not value:return None
@@ -124,7 +154,7 @@ class PurchasingRepository:
     def cancel_requisition(self,t,id,reason,key,digest,actor,organization_access=None):
         with self.engine.begin() as c:
             value=self._req(c,t,id,True)
-            replay=self._document_claim(c,t,"requisition.cancel",key,digest,organization_access,value,legacy=True)
+            replay=self._document_claim(c,t,"requisition.cancel",key,digest,organization_access,value,legacy=True,actor=actor)
             if replay:return replay
             value=self._req(c,t,id,True)
             if not value:return None
@@ -153,7 +183,7 @@ class PurchasingRepository:
             req=self._req(c,t,p.requisition_id,True) if p.requisition_id else None
             if req and organization_access is not None:
                 context=fixed_context(req,p.division_ref_id,organization_access)
-            replay=self._document_claim(c,t,"order.create",key,digest,organization_access,{"organization_context":context})
+            replay=self._document_claim(c,t,"order.create",key,digest,organization_access,{"organization_context":context},actor=actor)
             if replay:return replay
             if context:
                 terms=supplier_terms(c,t,p.supplier_id,context,expected=terms)
@@ -175,7 +205,7 @@ class PurchasingRepository:
     def update_order(self,t,id,p,key,digest,actor,snapshots=None,terms=None,organization_access=None):
         with self.engine.begin() as c:
             current=self._order(c,t,id,True)
-            replay=self._document_claim(c,t,"order.update",key,digest,organization_access,current)
+            replay=self._document_claim(c,t,"order.update",key,digest,organization_access,current,actor=actor)
             if replay:return replay
             if not current:return None
             context=fixed_context(current,p.division_ref_id,organization_access) if organization_access is not None else current.get('organization_context')
@@ -202,7 +232,7 @@ class PurchasingRepository:
     def issue_order(self,t,id,key,digest,actor,organization_access=None):
         with self.engine.begin() as c:
             value=self._order(c,t,id,True)
-            replay=self._document_claim(c,t,"order.issue",key,digest,organization_access,value)
+            replay=self._document_claim(c,t,"order.issue",key,digest,organization_access,value,actor=actor)
             if replay:return replay
             if not value:return None
             if value.get('organization_context'):require_supplier(c,t,value['supplier_id'],OperationalContext.model_validate(value['organization_context']))
@@ -213,7 +243,7 @@ class PurchasingRepository:
     def cancel_order(self,t,id,reason,key,digest,actor,organization_access=None):
         with self.engine.begin() as c:
             value=self._order(c,t,id,True)
-            replay=self._document_claim(c,t,"order.cancel",key,digest,organization_access,value,legacy=True)
+            replay=self._document_claim(c,t,"order.cancel",key,digest,organization_access,value,legacy=True,actor=actor)
             if replay:return replay
             value=self._order(c,t,id,True)
             if not value:return None
@@ -248,18 +278,18 @@ class PurchasingRepository:
     def list_receipts(self,t,allowed_divisions=None):
         with self.engine.connect() as c:
             ids=c.execute(text("select r.id from purchasing.purchase_receipts r where r.tenant_id=:t"+self.receipt_scope_sql(allowed_divisions)+" order by r.received_at desc"),{"t":t,"divisions":allowed_divisions or []}).scalars();return [self._receipt(c,t,id) for id in ids]
-    def receipt_replay(self,t,key,digest):
+    def receipt_replay(self,t,key,digest,actor=None):
         with self.engine.connect() as c:
-            row=c.execute(text("select request_hash,response_payload from purchasing.idempotency_records where tenant_id=:t and operation='receipt.create' and idempotency_key=:k"),{"t":t,"k":key}).mappings().first()
-        if row:
-            if row["request_hash"]!=digest:raise ValueError("idempotency_key_reused")
-            if row["response_payload"] is None:raise ValueError("command_in_progress")
-            return row["response_payload"]
+            row=c.execute(text("select request_hash,response_payload,created_at from purchasing.idempotency_records where tenant_id=:t and operation='receipt.create' and idempotency_key=:k"),{"t":t,"k":key}).mappings().first()
+            if row:
+                self._validate_receipt(c,t,'receipt.create',row,digest,actor)
+                if row['response_payload'] is None:raise ValueError('command_in_progress')
+                return self._normalize_response(row['response_payload'])
         return None
     def prepare_receipt(self,t,p,key,digest,actor,snapshots=None,organization_access=None,code_mode=None):
         with self.engine.begin() as c:
             order=self._order(c,t,p.purchase_order_id,True)
-            replay=self._document_claim(c,t,"receipt.create",key,digest,organization_access,order)
+            replay=self._document_claim(c,t,"receipt.create",key,digest,organization_access,order,actor=actor)
             if replay:return replay,None
             if not order:return None,None
             if order.get('organization_context'):require_supplier(c,t,order['supplier_id'],OperationalContext.model_validate(order['organization_context']))
@@ -333,12 +363,16 @@ class PurchasingRepository:
 
     def prepare_reconciliation(self,t,id,key,digest,actor):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"receipt.reconcile",key,digest)
-            if replay:return replay,None
+            replay=self._claim(c,t,"receipt.reconcile",key,digest,actor,resume=True)
+            if replay and replay.get('status') not in {'processing','needs_reconciliation'}:return replay,None
             receipt=self._receipt(c,t,id,True)
             if not receipt:return None,None
+            if replay and receipt['status']=='completed':
+                self._finish(c,t,'receipt.reconcile',key,receipt)
+                return receipt,None
             if receipt["status"] not in {"pending_confirmation","processing","needs_reconciliation"}:raise ValueError("receipt_not_reconcilable")
             c.execute(text("update purchasing.purchase_receipts set reconciliation_attempts=reconciliation_attempts+1,last_reconciliation_at=now(),reconciled_by_actor_id=:actor where tenant_id=:t and id=:id"),{"actor":actor,"t":t,"id":id})
+            self._audit(c,t,actor,'receipt.reconcile.prepare','purchase_receipt',id,{'idempotency_key':key})
             rows=c.execute(text("""select rl.id receipt_line_id,rl.order_line_id,rl.quantity,rl.warehouse_ref_id warehouse_id,rl.inventory_idempotency_key,rl.inventory_context_snapshot,ol.inventory_item_ref_id inventory_item_id,ol.line_type,ol.unit_code,ol.unit_price,r.received_at
                 from purchasing.purchase_receipt_lines rl join purchasing.purchase_receipts r on r.tenant_id=rl.tenant_id and r.id=rl.receipt_id
                 join purchasing.purchase_order_lines ol on ol.tenant_id=rl.tenant_id and ol.id=rl.order_line_id

@@ -3,6 +3,13 @@ info:
   title: ERClave HR Service API
   version: 0.2.0
   summary: Tenant-scoped labor area and position capacity catalogs.
+  description: >-
+    Durable area, position and worker commands bind the authenticated actor,
+    tenant, operation, Idempotency-Key and payload. Reusing a receipt with a
+    different actor returns HTTP 409 idempotency_key_reused. The original actor
+    may replay pre-upgrade receipts only when same-transaction HR audit evidence
+    identifies that actor unambiguously; public request and response schemas
+    remain unchanged.
 servers:
 - url: https://api.eslaclave.com
 security:

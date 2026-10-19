@@ -4,6 +4,16 @@ info:
   title: ERClave Sales Service API
   version: 0.6.0
   summary: Corte Local autoritativo de Clientes, Cotizaciones, Pedidos, Ordenes de servicio, surtido y Entregas.
+  description: >-
+    Durable command receipts bind the authenticated actor as well as tenant,
+    operation, Idempotency-Key and payload. Another actor cannot inherit a receipt
+    and receives HTTP 409 idempotency_key_reused. New fulfillment, cancellation,
+    delivery-confirmation and manufacturing-reconciliation intents bind the actor
+    before downstream effects and audit preparation; the original actor can retry
+    after interruption. Legacy completed receipts require unambiguous same-
+    transaction audit authorship. Legacy pending intents without provable authorship
+    remain unchanged and return the existing HTTP 409 reconciliation conflict;
+    their actor must be reviewed explicitly before recovery.
 servers:
 - url: http://127.0.0.1:8008
 security:

@@ -61,6 +61,40 @@ jobs:
         with:
           ref: ${{ inputs.release_sha }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build immutable sanitized QA frontend
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          QA_ADMIN_API_URL: ${{ vars.QA_ADMIN_API_URL }}
+          QA_PRODUCTION_API_URL: ${{ vars.QA_PRODUCTION_API_URL }}
+          QA_INVENTORY_API_URL: ${{ vars.QA_INVENTORY_API_URL }}
+          QA_HR_API_URL: ${{ vars.QA_HR_API_URL }}
+          QA_SALES_API_URL: ${{ vars.QA_SALES_API_URL }}
+          QA_PURCHASING_API_URL: ${{ vars.QA_PURCHASING_API_URL }}
+          QA_MAINTENANCE_API_URL: ${{ vars.QA_MAINTENANCE_API_URL }}
+          QA_COSTING_API_URL: ${{ vars.QA_COSTING_API_URL }}
+          QA_FIREBASE_API_KEY: ${{ vars.QA_FIREBASE_API_KEY }}
+          QA_FIREBASE_AUTH_DOMAIN: ${{ vars.QA_FIREBASE_AUTH_DOMAIN }}
+          QA_FIREBASE_PROJECT_ID: erclave
+          QA_FIREBASE_STORAGE_BUCKET: ${{ vars.QA_FIREBASE_STORAGE_BUCKET }}
+          QA_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.QA_FIREBASE_MESSAGING_SENDER_ID }}
+          QA_FIREBASE_APP_ID: ${{ vars.QA_FIREBASE_APP_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:frontend:qa
+          (cd dist/qa-frontend && find . -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > SHA256SUMS)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qa-frontend-${{ inputs.release_sha }}
+          path: dist/qa-frontend
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Validate QA target
         shell: bash
         run: |
@@ -95,7 +129,8 @@ jobs:
             "hr:hr_service_adapter" \
             "sales:sales_service_adapter" \
             "purchasing:purchasing_service_adapter" \
-            "maintenance:maintenance_service_adapter"; do
+            "maintenance:maintenance_service_adapter" \
+            "costing:costing_service_adapter"; do
             service="${entry%%:*}"
             adapter="${entry##*:}"
             image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$service-service:$RELEASE_SHA"

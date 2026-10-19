@@ -17,12 +17,12 @@ for (const file of requiredFiles) {
 
 if (!errors.length) {
   const config = readText("frontend/api/config.js");
-  const executableConfig = `${config.replace(/export function /g, "function ")}\n({ getDemoTenantId, getConfiguredTenantId, setActiveTenantId, getDemoActorId });`;
+  const executableConfig = `${config.replace(/export function /g, "function ")}\n({ getDemoTenantId, getConfiguredTenantId, setActiveTenantId, getDemoActorId, getCostingApiBaseUrl });`;
   const remoteRuntime = vm.runInNewContext(executableConfig, {
     URL,
     window: {
       location: { hostname: "erclave.web.app" },
-      ERCLAVE_CONFIG: { apiMode: "api" }
+      ERCLAVE_CONFIG: { apiMode: "api", costingApiBaseUrl: "https://costing-qa.example.invalid", localCostingApiBaseUrl: "http://127.0.0.1:8014" }
     },
     localStorage: {
       getItem: () => { throw new Error("QA runtime must not read tenant or actor from localStorage."); },
@@ -33,6 +33,9 @@ if (!errors.length) {
   if (remoteRuntime.getDemoTenantId() !== "") errors.push("QA runtime must not fall back to the demo tenant before session resolution.");
   if (remoteRuntime.getConfiguredTenantId() !== "") errors.push("QA artifact must not embed a default tenant.");
   if (remoteRuntime.getDemoActorId() !== "") errors.push("QA runtime must rely on Firebase identity, not a demo actor.");
+  if (remoteRuntime.getCostingApiBaseUrl() !== "https://costing-qa.example.invalid") {
+    errors.push("QA runtime must resolve Costing from its deployed URL and ignore Local overrides.");
+  }
   remoteRuntime.setActiveTenantId("ten_session_member");
   if (remoteRuntime.getDemoTenantId() !== "ten_session_member") errors.push("QA runtime must retain the tenant selected from session memberships in memory.");
 

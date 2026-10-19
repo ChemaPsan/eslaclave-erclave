@@ -410,11 +410,11 @@ def configure_sales_order_fulfillment(order_id: str, payload: SalesOrderFulfillm
     cost_currency,exchange_rate=stock_context(order,payload,x_tenant_id,authorization,access.actor_id,authority)
     cost_options={'cost_currency':cost_currency,'exchange_rate':exchange_rate} if cost_currency else {}
     if hasattr(repository,'fulfillment_replay'):
-        try: replay=repository.fulfillment_replay(x_tenant_id,order_id,command_key,request_hash)
+        try: replay=repository.fulfillment_replay(x_tenant_id,order_id,command_key,request_hash,actor_id=access.actor_id)
         except ValueError as exc: raise conflict(exc) from exc
         if replay:return SalesOrderResponse(data=replay)
     elif order.fulfillment_state == "completed":
-        try: prepared=repository.prepare_order_fulfillment(x_tenant_id,order_id,payload,command_key,request_hash,**cost_options)
+        try: prepared=repository.prepare_order_fulfillment(x_tenant_id,order_id,payload,command_key,request_hash,actor_id=access.actor_id,**cost_options)
         except ValueError as exc:raise conflict(exc) from exc
         return SalesOrderResponse(data=prepared[0])
     by_id = {line.id: line for line in order.lines}; stock_sources = {}; claimed = False
@@ -436,7 +436,7 @@ def configure_sales_order_fulfillment(order_id: str, payload: SalesOrderFulfillm
                 if inventory_item.get("base_unit", "").upper() != line.unit.upper():
                     raise ErclaveError("product_inventory_unit_mismatch", "Mapped Inventory item unit does not match the sold product.", status_code=422)
                 stock_sources[line.id] = (product, inventory_item)
-        prepared = repository.prepare_order_fulfillment(x_tenant_id, order_id, payload, command_key, request_hash, **cost_options)
+        prepared = repository.prepare_order_fulfillment(x_tenant_id, order_id, payload, command_key, request_hash, actor_id=access.actor_id, **cost_options)
         if not prepared: raise ErclaveError("sales_order_not_found", "Sales order not found.", status_code=404)
         claimed = True
         order, command_key = prepared; by_id = {line.id: line for line in order.lines}; resolved = []
@@ -472,7 +472,7 @@ def configure_sales_order_fulfillment(order_id: str, payload: SalesOrderFulfillm
 def cancel_sales_order(order_id: str, payload: ActionReasonRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client), access: AuthorizedContext = Depends(require_sales_access("sales.order.cancel"))):
     guard_quote(repository.get_order(x_tenant_id,order_id),x_tenant_id,authorization,'sales.order.cancel',access.actor_id)
     command_key = require_key(idempotency_key); request_hash = fingerprint(payload, {"order_id": order_id})
-    try: prepared = repository.prepare_cancel_order(x_tenant_id, order_id, command_key, request_hash)
+    try: prepared = repository.prepare_cancel_order(x_tenant_id, order_id, command_key, request_hash, actor_id=access.actor_id)
     except ValueError as exc: raise conflict(exc) from exc
     if not prepared: raise ErclaveError("sales_order_not_found", "Sales order not found.", status_code=404)
     order, command_key = prepared
@@ -526,7 +526,7 @@ def confirm_delivery(delivery_id: str, payload: ActionReasonRequest, x_tenant_id
 def dispatch_delivery(delivery_id,payload,x_tenant_id,authorization,idempotency_key,repository,authority,access):
     guard_quote(repository.get_delivery(x_tenant_id,delivery_id),x_tenant_id,authorization,'inventory.movement.create',access.actor_id)
     command_key = require_key(idempotency_key); request_hash = fingerprint(payload, {"delivery_id": delivery_id})
-    try: planned = repository.prepare_delivery_confirmation(x_tenant_id, delivery_id, command_key, request_hash)
+    try: planned = repository.prepare_delivery_confirmation(x_tenant_id, delivery_id, command_key, request_hash, actor_id=access.actor_id)
     except ValueError as exc: raise conflict(exc) from exc
     if not planned: raise ErclaveError("delivery_not_found", "Delivery not found.", status_code=404)
     delivery, plan, command_key = planned; consumptions = []

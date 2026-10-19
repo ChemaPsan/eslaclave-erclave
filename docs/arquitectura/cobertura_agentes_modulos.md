@@ -1,5 +1,9 @@
 # Cobertura de agentes, skills y fronteras
 
+## Paridad de despliegue preparada · CHG-335
+
+Costing básico se incorpora como octavo runtime del pipeline QA, con identidad y contrato propios, disponible desde Administración mediante permisos puntuales y scope. El catálogo no activa analítica Costing ni Accounting. Las dependencias reales Production/Inventory → Sales y consumidores → Costing se declaran y validan; preparación Local, no certificación QA. Evidencia/estado en [acta](../operaciones/paridad_local_qa_20261018.md).
+
 ## CHG-310 · Custodio contable
 
 El agente técnico de Contabilidad existente custodia [el control por submódulo](../contexto/CONTROL_CONTABLE.md), con validación de negocio contable y evidencia de cada dueño. La skill erclave-accounting incorpora seguimiento y prevención de trabajo duplicado; context-reconcile y module-boundaries conservan su función transversal. No se crea un módulo ni se reemplazan agentes operativos.

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
+import importlib
+import importlib.util
 import os
 from pathlib import Path
 import sys
@@ -14,9 +17,18 @@ REPO_ROOT = BACKEND_DIR.parent
 ADMIN_SERVICE_DIR = BACKEND_DIR / "services" / "admin-service"
 
 
-sys.path.insert(0, str(ADMIN_SERVICE_DIR))
-
-from app.seeds.permissions import extract_permission_seeds  # noqa: E402
+# A release command can be imported alongside multiple service packages named
+# `app` (for example by certification). Load its own seed package explicitly.
+SEEDS_PACKAGE = "_erclave_admin_release_seeds"
+if SEEDS_PACKAGE not in sys.modules:
+    seeds_dir = ADMIN_SERVICE_DIR / "app" / "seeds"
+    spec = importlib.util.spec_from_file_location(
+        SEEDS_PACKAGE, seeds_dir / "__init__.py", submodule_search_locations=[str(seeds_dir)]
+    )
+    package = importlib.util.module_from_spec(spec)
+    sys.modules[SEEDS_PACKAGE] = package
+    spec.loader.exec_module(package)
+extract_permission_seeds = importlib.import_module(SEEDS_PACKAGE + ".permissions").extract_permission_seeds
 
 
 DEPRECATED_PERMISSION_CODES = (
@@ -36,8 +48,11 @@ def stable_permission_id(code: str) -> str:
     return f"per_{uuid5(NAMESPACE_URL, f'erclave.permission:{code}').hex[:26]}"
 
 
-def upsert_permissions(database_url: str, permissions: tuple[object, ...]) -> int:
-    engine = create_engine(database_url)
+def upsert_permissions(
+    database_url: str, permissions: tuple[object, ...], *,
+    owner_tenant_id: str | None = None, connection=None,
+) -> int:
+    engine = create_engine(database_url) if connection is None else None
     statement = text(
         """
         insert into admin.permissions (
@@ -113,7 +128,7 @@ def upsert_permissions(database_url: str, permissions: tuple[object, ...]) -> in
         for permission in permissions
     ]
 
-    with engine.begin() as connection:
+    with (engine.begin() if engine is not None else nullcontext(connection)) as connection:
         connection.execute(statement, rows)
         connection.execute(
             text(
@@ -143,9 +158,11 @@ def upsert_permissions(database_url: str, permissions: tuple[object, ...]) -> in
                 where roles.code = 'owner'
                     and roles.system_role = true
                     and roles.status = 'active'
+                    and (cast(:owner_tenant_id as text) is null or roles.tenant_id = :owner_tenant_id)
                 on conflict (tenant_id, role_id, permission_id) do nothing
                 """
-            )
+            ),
+            {"owner_tenant_id": owner_tenant_id},
         )
 
     return len(rows)

@@ -10,11 +10,26 @@ from .reservation_context import validate_local_context,validate_cost_currency
 
 
 class InventoryMaterialReturns:
-    def replay_material_return_request(self,t,key,digest):
+    def begin_material_return_command(self,t,id,action,key,digest,actor):
+        operation='material_return.'+action
+        with self.engine.begin() as c:
+            replay=self._claim(c,t,operation,key,digest,actor,resume_pending=True)
+            if replay:return MaterialReturnRead.model_validate(replay)
+            self._audit(c,t,actor,operation+'.prepare','material_return',id,{'idempotency_key':key})
+            return None
+
+    def finish_material_return_command(self,t,action,key,value):
+        # A dependency failure is an unfinished intent, not a final receipt: the
+        # same authenticated actor must still be able to reconcile on retry.
+        if value.status not in ('completed','cancelled'):return value
+        with self.engine.begin() as c:self._done(c,t,'material_return.'+action,key,value)
+        return value
+
+    def replay_material_return_request(self,t,key,digest,actor=None):
         with self.engine.connect() as c:
-            row=c.execute(text("select request_hash,response_payload from inventory.idempotency_records where tenant_id=:t and operation='material_return.request' and idempotency_key=:key"),{'t':t,'key':key}).mappings().first()
+            row=c.execute(text("select request_hash,response_payload,created_at from inventory.idempotency_records where tenant_id=:t and operation='material_return.request' and idempotency_key=:key"),{'t':t,'key':key}).mappings().first()
             if not row:return None
-            if row['request_hash']!=digest:raise ValueError('idempotency_key_reused')
+            self._validate_receipt(c,t,'material_return.request',key,row,digest,actor)
             return self._material_return(c,t,row['response_payload']['id']) if row['response_payload'] else None
 
     @contextmanager
@@ -63,7 +78,7 @@ class InventoryMaterialReturns:
 
     def request_material_return(self,t,p,source,source_code,key,digest,actor):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"material_return.request",key,digest)
+            replay=self._claim(c,t,"material_return.request",key,digest,actor)
             if replay:return MaterialReturnRead.model_validate(replay)
             locked=c.execute(text("select id,quantity,direction,source_type,source_id from inventory.movements where tenant_id=:t and id=:id for update"),{"t":t,"id":p.original_movement_id}).mappings().first()
             original=self._movement(c,t,p.original_movement_id)

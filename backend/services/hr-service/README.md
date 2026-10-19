@@ -4,6 +4,8 @@ Servicio propietario de áreas laborales, puestos/capacidad nominal y expediente
 
 Requiere entitlement `hr`, permisos `hr.area.*` y `hr.position.*`, `Idempotency-Key` en comandos y PostgreSQL mediante `ERCLAVE_HR_DATABASE_URL`.
 
+Los seis comandos de alta/edicion de areas, puestos y trabajadores vinculan actor autenticado, tenant, operacion, clave y payload. Otro actor con la misma clave recibe `409 idempotency_key_reused`; el actor original conserva su replay. Los recibos previos solo se recuperan si `hr.audit_events.created_at` coincide con la transaccion del recibo y su accion `hr.<operacion>` identifica un actor unico coincidente. Las asignaciones por Division ya vinculaban actor en su propia huella. Sin migracion ni cambios de payload publico.
+
 ## Preparación contable y alcance vigente
 
 CC-10 agrega confirmación explícita de tarifa Decimal en moneda base de Sociedad para la asignación del puesto, con fecha y Sociedad confirmadas. Los registros históricos sin moneda permanecen sin confirmar. La consulta por División devuelve capacidad declarada y IDs únicos de trabajadores elegibles; no descuenta compromisos ni permite sumar al trabajador compartido como recursos independientes. Véase [CONTROL_CONTABLE](../../../docs/contexto/CONTROL_CONTABLE.md) y [estado por ambiente](../../../docs/contexto/ESTADO_ACTUAL.md). La preparación no activa Accounting.

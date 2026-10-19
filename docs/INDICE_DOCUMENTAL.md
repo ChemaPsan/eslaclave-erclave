@@ -180,6 +180,7 @@ Vigente significa fuente mantenida; no certifica despliegue ni pruebas. Diseño 
 | [docs/contexto/REANUDACION_CHG269.md](contexto/REANUDACION_CHG269.md) | Arquitectura y dueño del módulo | [Fuente](contexto/ESTADO_ACTUAL.md) |
 | [docs/operaciones/cc20_01_local_20261018.md](operaciones/cc20_01_local_20261018.md) | QA, Seguridad y dueños Admin/Maintenance | [Fuente](contexto/ESTADO_ACTUAL.md) |
 | [docs/operaciones/correcciones_cc20_01_20261018.md](operaciones/correcciones_cc20_01_20261018.md) | Admin, Seguridad, QA y custodio documental | [Fuente](contexto/ESTADO_ACTUAL.md) |
+| [docs/operaciones/paridad_local_qa_20261018.md](operaciones/paridad_local_qa_20261018.md) | Arquitectura, Seguridad, QA y dueños de servicios | [Fuente](contexto/ESTADO_ACTUAL.md) |
 | [docs/operaciones/preparacion_release_qa_20260806.md](operaciones/preparacion_release_qa_20260806.md) | Arquitectura y dueño del módulo | [Fuente](contexto/ESTADO_ACTUAL.md) |
 | [docs/operaciones/preparacion_release_qa_20260821.md](operaciones/preparacion_release_qa_20260821.md) | Arquitectura y dueño del módulo | [Fuente](contexto/ESTADO_ACTUAL.md) |
 | [docs/operaciones/preparacion_release_qa_20260831.md](operaciones/preparacion_release_qa_20260831.md) | Arquitectura y dueño del módulo | [Fuente](contexto/ESTADO_ACTUAL.md) |

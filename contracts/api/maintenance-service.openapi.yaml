@@ -4,6 +4,16 @@ info:
   title: ERClave Maintenance Service API
   version: 1.1.0
   summary: 'CC-18 Local: Maintenance order folios allocated by Admin with managed/manual mode; CC-16 scoped orders and labor snapshots remain. Accounting remains off.'
+  description: >-
+    Command idempotency keys are bound to the authorized actor, tenant, operation
+    and payload. Order transitions, material issue, reject, cancel and reconcile,
+    order reconcile and material-return reconcile
+    persist an intent before external effects. Partial recovery stays pending for
+    the same actor. Completed legacy receipts replay only with unambiguous audit
+    attribution to that actor; pending or ambiguous legacy receipts return 409
+    (idempotency_key_reused) unchanged and require review. Current scope is always
+    checked. Legacy document state without a receipt accepts a new authorized
+    command without inventing historical ownership.
 servers:
 - url: http://127.0.0.1:8012
 security:

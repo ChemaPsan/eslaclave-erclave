@@ -63,6 +63,13 @@ def client(): app.dependency_overrides[reservation_context.get_reservation_conte
 def teardown_function(): app.dependency_overrides.clear()
 def headers(command=False,tenant=TENANT): return {"X-Tenant-Id":tenant,"X-Actor-Id":"usr_demo",**({"Idempotency-Key":"test-1"} if command else {})}
 
+def test_update_item_actor_receipt_conflict_returns_409(monkeypatch):
+    def reject(*args):raise ValueError("idempotency_key_reused")
+    monkeypatch.setattr(FakeRepo,"update_item",reject)
+    response=client().patch('/v1/inventory/items/itm_1',headers=headers(True),json={'name':'Updated'})
+    assert response.status_code==409
+    assert response.json()['error']['code']=='idempotency_key_reused'
+
 def test_reservation_consumption_keeps_positive_quantity_snapshot_when_fully_consumed():
     assert repos.reservation_consumption_state(3.5,3.5)==(3.5,"consumed",0.0)
     assert repos.reservation_consumption_state(3.5,1.25)==(2.25,"active",2.25)

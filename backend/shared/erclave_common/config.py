@@ -1,4 +1,5 @@
 from functools import lru_cache
+import os
 from typing import Literal
 from urllib.parse import urlparse
 
@@ -86,9 +87,13 @@ class Settings(BaseSettings):
 
         local_hosts = {"localhost", "127.0.0.1", "::1"}
 
+        if os.getenv("FIREBASE_AUTH_EMULATOR_HOST", "").strip():
+            raise ValueError("FIREBASE_AUTH_EMULATOR_HOST must be unset in QA and production.")
+
         def require_public_https(value: str, variable: str) -> None:
             parsed = urlparse(value)
-            if parsed.scheme != "https" or not parsed.hostname or parsed.hostname.lower() in local_hosts:
+            if (parsed.scheme != "https" or not parsed.hostname or parsed.hostname.lower() in local_hosts
+                    or parsed.username or parsed.password or parsed.query or parsed.fragment):
                 raise ValueError(f"{variable} must be a public HTTPS URL in QA and production.")
 
         require_public_https(self.api_public_base_url, "ERCLAVE_API_PUBLIC_BASE_URL")
@@ -99,10 +104,12 @@ class Settings(BaseSettings):
             if self.service_name == "production-service":
                 require_public_https(self.hr_service_url, "ERCLAVE_HR_SERVICE_URL")
                 require_public_https(self.inventory_service_url, "ERCLAVE_INVENTORY_SERVICE_URL")
+                require_public_https(self.sales_service_url, "ERCLAVE_SALES_SERVICE_URL")
             if self.service_name == "inventory-service":
                 require_public_https(self.purchasing_service_url, "ERCLAVE_PURCHASING_SERVICE_URL")
                 require_public_https(self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL")
                 require_public_https(self.maintenance_service_url, "ERCLAVE_MAINTENANCE_SERVICE_URL")
+                require_public_https(self.sales_service_url, "ERCLAVE_SALES_SERVICE_URL")
             if self.service_name == "sales-service":
                 require_public_https(self.hr_service_url, "ERCLAVE_HR_SERVICE_URL")
                 require_public_https(self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL")
@@ -113,6 +120,11 @@ class Settings(BaseSettings):
                 require_public_https(self.hr_service_url, "ERCLAVE_HR_SERVICE_URL")
                 require_public_https(self.inventory_service_url, "ERCLAVE_INVENTORY_SERVICE_URL")
                 require_public_https(self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL")
+
+        if self.cost_center_catalog_enabled and self.service_name in {
+            "admin-service", "production-service", "inventory-service", "hr-service"
+        }:
+            require_public_https(self.costing_service_url, "ERCLAVE_COSTING_SERVICE_URL")
 
         if self.auth_mode != "firebase" or not self.firebase_project_id:
             raise ValueError("QA and production require Firebase auth and ERCLAVE_FIREBASE_PROJECT_ID.")

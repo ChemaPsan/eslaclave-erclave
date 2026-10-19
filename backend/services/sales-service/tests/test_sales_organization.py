@@ -775,7 +775,7 @@ def test_scoped_stock_delivery_preserves_original_and_converted_cost(scoped_orde
         assert http.get('/v1/sales/deliveries/'+delivery_id,headers=headers).status_code==403
         scope=replace(scope,all_divisions=False,divisions=(DIVISIONS[0],))
         # Exercise repository finalization inside fixture transaction; the public advisory lock commits by design.
-        current,plan,dispatch_key=repo.prepare_delivery_confirmation(TENANT,delivery_id,'dispatch-'+order.id,'dispatch')
+        current,plan,dispatch_key=repo.prepare_delivery_confirmation(TENANT,delivery_id,'dispatch-'+order.id,'dispatch',actor_id='actor')
         with pytest.raises(ValueError,match='delivery_not_cancellable'):
             repo.cancel_delivery(TENANT,delivery_id,'Synthetic cancellation','cancel-'+order.id,'cancel','actor')
         result=repo.confirm_delivery(TENANT,delivery_id,plan,dispatch_key,'dispatch','actor')
@@ -1014,7 +1014,7 @@ def test_manufacturing_receipt_reconciliation_recovery_and_original_cost(scoped_
         response=http.post(url+'/production-reconciliations',headers=reconciliation_headers,json=reconcile)
         assert response.status_code==503,response.text
         assert repo.production_reconciliation(TENANT,order.id,line.id)['status']=='needs_reconciliation'
-        with pytest.raises(ValueError,match='production_reconciliation_in_progress'):repo.prepare_cancel_order(TENANT,order.id,'cancel-manufacturing','hash')
+        with pytest.raises(ValueError,match='production_reconciliation_in_progress'):repo.prepare_cancel_order(TENANT,order.id,'cancel-manufacturing','hash',actor_id='actor')
         response=http.post(url+'/production-reconciliations',headers=reconciliation_headers,json={**reconcile,'warehouse_id':'other'})
         assert response.status_code==409
         response=http.post(url+'/production-reconciliations',headers=reconciliation_headers,json=reconcile)
@@ -1026,7 +1026,7 @@ def test_manufacturing_receipt_reconciliation_recovery_and_original_cost(scoped_
         assert len(authority.reserve_calls)==2
         delivery=quote_schemas.DeliveryCreateRequest(code='D-'+uuid4().hex[:12],order_id=order.id,scheduled_date='2026-10-10',lines=[{'order_line_id':line.id,'quantity':line.ordered_quantity}])
         created=repo.create_delivery(TENANT,delivery,'delivery-'+order.id,'hash','actor')
-        current,plan,dispatch_key=repo.prepare_delivery_confirmation(TENANT,created.id,'dispatch-'+order.id,'dispatch')
+        current,plan,dispatch_key=repo.prepare_delivery_confirmation(TENANT,created.id,'dispatch-'+order.id,'dispatch',actor_id='actor')
         result=repo.confirm_delivery(TENANT,created.id,plan,dispatch_key,'dispatch','actor')
         assert result.lines[0].original_actual_cost==line.ordered_quantity*Decimal('4.123456')
         assert result.lines[0].actual_cost==(line.ordered_quantity*Decimal('4.123456')*20).quantize(Decimal('0.01'))
@@ -1043,14 +1043,14 @@ def test_manufacturing_per_line_commands_preserve_prior_replay_and_cancel_recove
     conn.execute(text("""insert into sales.order_lines(id,tenant_id,order_id,quote_line_id,line_number,product_service_ref_id,product_service_code,product_service_name,product_service_type,unit,ordered_quantity,unit_price,discount_percentage,total,fulfillment_mode,fulfillment_status)
       select :id,tenant_id,order_id,:id,line_number+1,product_service_ref_id,product_service_code,product_service_name,'product',unit,ordered_quantity,unit_price,discount_percentage,total,'pending','pending' from sales.order_lines where tenant_id=:t and id=:source"""),{'t':TENANT,'id':second,'source':line.id})
     command=quote_schemas.SalesOrderFulfillmentRequest(lines=[{'order_line_id':line.id,'mode':'production'}],cost_exchange_rate='1')
-    repo.prepare_order_fulfillment(TENANT,order.id,command,'first-command','hash1','MXN',Decimal('1'))
+    repo.prepare_order_fulfillment(TENANT,order.id,command,'first-command','hash1','MXN',Decimal('1'),actor_id='actor')
     repo.configure_order_fulfillment(TENANT,order.id,[{'order_line_id':line.id,'mode':'production','production_request_id':'request-first'}],'first-command','hash1','actor')
     command2=quote_schemas.SalesOrderFulfillmentRequest(lines=[{'order_line_id':second,'mode':'stock','allocations':[{'inventory_item_id':'item','warehouse_id':'wh','quantity':str(line.ordered_quantity)}]}],cost_exchange_rate='1')
-    repo.prepare_order_fulfillment(TENANT,order.id,command2,'second-command','hash2','MXN',Decimal('1'))
+    repo.prepare_order_fulfillment(TENANT,order.id,command2,'second-command','hash2','MXN',Decimal('1'),actor_id='actor')
     repo.configure_order_fulfillment(TENANT,order.id,[{'order_line_id':second,'mode':'stock','inventory_item_id':'item','inventory_item_code':'ITEM','inventory_item_name':'Synthetic','reservations':[{'id':'reservation-second','warehouse_id':'wh','quantity':str(line.ordered_quantity),'unit_cost_snapshot':'0'}]}],'second-command','hash2','actor')
-    assert repo.fulfillment_replay(TENANT,order.id,'first-command','hash1').lines[0].production_request_id=='request-first'
+    assert repo.fulfillment_replay(TENANT,order.id,'first-command','hash1',actor_id='actor').lines[0].production_request_id=='request-first'
     assert repo.get_order(TENANT,order.id).lines[1].fulfillment_status=='reserved'
-    with pytest.raises(ValueError,match='idempotency_key_reused'):repo.fulfillment_replay(TENANT,order.id,'first-command','different')
+    with pytest.raises(ValueError,match='idempotency_key_reused'):repo.fulfillment_replay(TENANT,order.id,'first-command','different',actor_id='actor')
     scope=access();monkeypatch.setattr(quote_context,'quote_access',lambda *args:scope)
     class CancelAuthority:
         blocked=True;released=[];cancelled=[]

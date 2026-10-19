@@ -1,4 +1,5 @@
 openapi: 3.1.0
+x-service-evidence-replay: 'Local: immutable phase commands require the original actor and identical payload. A different actor receives 403 idempotency_actor_mismatch; changed content receives 409 service_evidence_already_recorded. Authorized reads keep their existing scope and permissions.'
 info:
   title: ERClave Production Service API
   version: 0.3.0

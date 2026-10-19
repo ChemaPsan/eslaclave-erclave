@@ -1,5 +1,9 @@
 # ERClave - Lista de agentes por modulo
 
+## Paridad Local/QA preparada · CHG-335
+
+[Acta](docs/operaciones/paridad_local_qa_20261018.md). Agentes ejecutados manuales_paridad (pipeline, Purchasing y evidencia Production), trazabilidad (config, identidades, Maintenance, UI y revisión independiente), cc20_integracion (Costing/RH/Inventory/Sales y folios), raíz (configuración preservadora, readiness, guard, aceptación comercial y gobierno). INC-CC20-13-ACTOR-01 corregida y reprobada Local; otros dueños conservan actor, scope actual e intents antes de efectos. Ocho runtimes preparados, catálogo básico sin analítica/Accounting. Usuario autorizó preparar plan sintético QA para revisión, no aplicarlo. Sin promoción remota; no afirmar aceptación completa de variantes históricas sin CC-19 ni UI no ejecutada.
+
 ## Correcciones Local verificadas · CHG-333
 
 [Acta CHG-333](docs/operaciones/correcciones_cc20_01_20261018.md). Admin conserva usuario global/auditoría al retirar una membresía; Firebase se limpia después del commit y solo sin membresías, con estado pendiente/reintento explícitos. Invitación/onboarding comparten bloqueo de usuario con cleanup. Agentes ejecutados: manuales_paridad (bytes/texto Word y UI), trazabilidad (normalización y revisión independiente que detectó carrera); raíz implementación, PostgreSQL/API/Emulator y documentación. CC20-02 aún por ejecutar.

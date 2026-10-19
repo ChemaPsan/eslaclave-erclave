@@ -63,7 +63,8 @@ class FakeRepository:
         self.order = {**self.order, "status": "issued"}
         return self.order
 
-    def receipt_replay(self, tenant, key, request_hash):
+    def receipt_replay(self, tenant, key, request_hash, actor=None):
+        assert actor is not None
         return None
 
     def document_replay(self, tenant, operation, key, request_hash, scope):

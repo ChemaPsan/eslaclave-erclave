@@ -1,4 +1,5 @@
 import importlib,sys
+import pytest
 from datetime import date
 from pathlib import Path
 from fastapi.testclient import TestClient
@@ -26,6 +27,24 @@ class FakeCodes:
     def allocate(self,t,kind,authorization,key,manual_code=None):return manual_code or "PUE-000001"
 def client():app.dependency_overrides[repos.get_hr_repository]=lambda:FakeRepo();app.dependency_overrides[auth.get_settings]=lambda:Settings(auth_mode="demo");app.dependency_overrides[get_business_code_client]=lambda:FakeCodes();return TestClient(app)
 def teardown_function():app.dependency_overrides.clear()
+
+@pytest.mark.parametrize('method,path,command,payload',[
+    ('post','/v1/hr/areas','create_area',{'code':'OWN','name':'Synthetic'}),
+    ('patch','/v1/hr/areas/hra_1','update_area',{'status':'inactive'}),
+    ('post','/v1/hr/positions','create_role',{'labor_area_id':'hra_1','position':'Synthetic','recipe_name':'Synthetic'}),
+    ('patch','/v1/hr/positions/hrp_1','update_role',{'status':'inactive'}),
+    ('post','/v1/hr/workers','create_worker',None),
+    ('patch','/v1/hr/workers/hrw_1','update_worker',{'status':'inactive'}),
+])
+def test_actor_receipt_conflicts_use_existing_409_code(method,path,command,payload):
+    class ConflictRepo(FakeRepo):pass
+    def conflict(*args,**kwargs):raise ValueError('idempotency_key_reused')
+    setattr(ConflictRepo,command,conflict)
+    http=client();app.dependency_overrides[repos.get_hr_repository]=lambda:ConflictRepo()
+    if payload is None:payload=FakeRepo().list_workers(TENANT)[0].model_dump(mode='json')
+    response=getattr(http,method)(path,headers=headers(True),json=payload)
+    assert response.status_code==409
+    assert response.json()['error']['code']=='idempotency_key_reused'
 def headers(command=False,tenant=TENANT):return {"X-Tenant-Id":tenant,"X-Actor-Id":"usr_demo",**({"Idempotency-Key":"hr-test-1"} if command else {})}
 def test_tenant_isolation():assert client().get("/v1/hr/areas",headers=headers(tenant="ten_other")).json()["data"]==[]
 def test_create_area_requires_idempotency():assert client().post("/v1/hr/areas",headers=headers(),json={"code":"OPS","name":"Operaciones"}).status_code==400

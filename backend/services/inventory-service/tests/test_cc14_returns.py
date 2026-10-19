@@ -128,7 +128,8 @@ def test_api_return_request_revoked_scope_blocks_idempotent_replay():
 
 
 @pytest.mark.parametrize('status',['pending','received_pending_reconciliation','completed'])
-def test_api_return_scope_is_checked_before_receive_or_reconciliation(status):
+@pytest.mark.parametrize('action',['receive','cancel'])
+def test_api_return_scope_is_checked_before_receive_or_reconciliation(status,action):
     from erclave_common.organization_client import OrganizationAccess
     class Client:
         def access(self,*args):return OrganizationAccess(TENANT,'actor',('inventory.movement.create',),(),False,False)
@@ -136,9 +137,12 @@ def test_api_return_scope_is_checked_before_receive_or_reconciliation(status):
         @contextmanager
         def return_command_lock(self,*args):yield
         def get_material_return(self,*args):return material_return(status=status)
+        def begin_material_return_command(self,*args):raise AssertionError('Revoked scope reached durable intent/replay')
         def receive_material_return(self,*args):raise AssertionError('Revoked scope reached receipt')
     with pytest.raises(ErclaveError) as exc:
-        inventory_api.receive_material_return('return',x_tenant_id=TENANT,authorization=None,idempotency_key='same-key',repository=GuardedRepository(),authority=None,access=inventory_api.AuthorizedContext(TENANT,'actor','inventory.movement.create'),context_client=Client())
+        options=dict(x_tenant_id=TENANT,idempotency_key='same-key',repository=GuardedRepository(),access=inventory_api.AuthorizedContext(TENANT,'actor','inventory.movement.create'),context_client=Client())
+        if action=='receive':inventory_api.receive_material_return('return',authorization=None,authority=None,**options)
+        else:inventory_api.cancel_material_return('return',schemas.ReverseRequest(reason='Synthetic cancellation'),**options)
     assert exc.value.status_code==403
 
 
@@ -166,7 +170,7 @@ def test_db_return_preserves_issued_context_cost_and_recovery(local_cc14_invento
     assert repo.receive_material_return(TENANT,requested.id,'actor').movement_id==received.movement_id
     completed=repo.finish_material_return(TENANT,requested.id,'actor')
     assert completed.status=='completed'
-    assert repo.replay_material_return_request(TENANT,'request-'+suffix,'request').status=='completed'
+    assert repo.replay_material_return_request(TENANT,'request-'+suffix,'request','actor').status=='completed'
     row=c.execute(text("select quantity,unit_cost,organization_context from inventory.movements where tenant_id=:t and source_type='material_return' and source_id=:id"),{'t':TENANT,'id':requested.id}).mappings().one()
     assert row['quantity']==Decimal('1.123456') and row['unit_cost']==Decimal('12.123456')
     assert row['organization_context']==context.model_dump()

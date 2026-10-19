@@ -1,5 +1,9 @@
 # Inicio de sesion ERClave
 
+## Punto vigente · CHG-335 · plan QA listo para revisión
+
+Continuar desde [acta](../operaciones/paridad_local_qa_20261018.md), [estado](ESTADO_ACTUAL.md) y [pendientes](PENDIENTES.md). Ocho runtimes preparados, frontend inmutable, configuración preservadora, readiness de esquema y guard organizacional READ ONLY. Replay entre actores y recuperaciones parciales corregidos/reprobados Local; consultar evidencia por variante, sin inventar aceptación histórica CC-19 o UI no ejecutada. El usuario eligió preparar estructura sintética QA **para revisión antes de aplicar**; [plan](../../infra/qa/synthetic-organization-plan.json) y monedas MXN/USD aún propuestas. No escribir datos QA ni IAM, PR/merge o gates sin la autorización correspondiente de erclave-qa-release. QA observado sigue e57237f. Fixtures se limpian exclusivamente por IDs propios, sin rebobinar folios ni borrar historia.
+
 ## Candidato para Git autorizado · CHG-334
 
 Publicar el candidato Local en origin/agent/chg-278-qa-release-record con las correcciones CHG-332/333 y protección de bytes de fuentes manuales mediante .gitattributes. Antes de commit comprobar sourceSha256 contra blobs del índice Git, no solo contra el workspace. No hay autorización de merge, PR ni promoción derivada de esta publicación. Reanudar después por CC20-02; consultar estado efectivo del remoto.

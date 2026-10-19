@@ -15,7 +15,7 @@ Antecedente histórico del 2026-08-23 (no inventario vigente): las siete cuentas
 Cada environment debe requerir aprobacion directa del propietario:
 
 - `qa-build`: publica imagenes candidatas en Artifact Registry.
-- `qa-database`: ejecuta la migracion aprobada y, con una confirmacion independiente, reconcilia permisos y entitlements estructurales del tenant demo.
+- `qa-database`: ejecuta la migracion aprobada y, con una confirmacion independiente, reconcilia catálogo global y grants de owners de sistema existentes de un tenant explícito, sin seeds ni reset de datos/entitlements.
 - `qa-services`: crea revisiones candidatas. En servicios existentes conserva el trafico vigente; el bootstrap de un servicio inexistente recibe trafico inicial porque Cloud Run no admite `--no-traffic` durante la creacion.
 - `qa-traffic`: mueve el trafico despues del smoke.
 - `qa-frontend`: publica el artefacto exacto en Firebase Hosting.
@@ -39,6 +39,10 @@ Estado comprobado el 2026-08-08: los cinco environments existen y requieren apro
 | `QA_SALES_RUNTIME_SERVICE_ACCOUNT` | Correo de `erclave-sales-qa` |
 | `QA_PURCHASING_RUNTIME_SERVICE_ACCOUNT` | Correo de `erclave-purchasing-qa` |
 | `QA_MAINTENANCE_RUNTIME_SERVICE_ACCOUNT` | Correo de `erclave-maintenance-qa` |
+| `QA_COSTING_RUNTIME_SERVICE_ACCOUNT` | Cuenta dedicada `erclave-costing-qa`; aprovisionamiento y grants mínimos por autorización propia |
+| `QA_COSTING_API_URL` | Origen HTTPS de `costing-service-qa`, catálogo básico sin activar analítica |
+| `QA_CONFIGURATION_TENANT_ID` | Tenant existente aprobado para reconciliar grants de owners; sin default implícito |
+| `QA_CONFIRMED_SOCIETY_CURRENCIES` | JSON de IDs reales de todas las Sociedades activas y moneda explícitamente revisada; requerido por el guard operativo antes de tráfico |
 | `QA_CLOUD_SQL_CONNECTION_NAME` | `erclave:us-central1:erclave-qa-postgres` |
 | `QA_ADMIN_API_URL` | URL HTTPS estable de Admin QA |
 | `QA_PRODUCTION_API_URL` | URL HTTPS estable de Produccion QA |
@@ -58,19 +62,31 @@ El secreto `erclave-database-url-qa` permanece exclusivamente en Secret Manager 
 
 El procedimiento transversal y la matriz de autorizaciones viven en `docs/operaciones/flujo_local_a_qa.md` y la skill `$erclave-qa-release`.
 
-1. `qa-candidate.yml` exige SHA completo, validacion local equivalente y confirmacion `BUILD_ERCLAVE_QA`; construye siete imagenes y registra digests.
+1. `qa-candidate.yml` exige SHA completo, validacion local equivalente y confirmacion `BUILD_ERCLAVE_QA`; construye ocho imágenes (incluye Costing básico), registra digests y construye una vez el frontend sanitizado con SHA256SUMS.
 2. `qa-release.yml` exige el SHA, el run candidato, `PROMOTE_ERCLAVE_QA` y confirmaciones booleanas separadas para migracion y configuracion del tenant.
-3. `qa-database` aplica Alembic solamente tras aprobacion.
-4. El job estructural idempotente sincroniza permisos y deja activos solamente `admin`, `production`, `inventory`, `hr`, `sales`, `purchasing` y `maintenance`; no carga almacenes, articulos, movimientos, areas, puestos, recetas, ordenes ni documentos comerciales.
+3. `qa-database` aplica Alembic solamente si su input está habilitado y fue aprobado; configuración es un paso condicional independiente. Un job sin ambos pasos no escribe DB.
+4. El job de configuración exige `QA_CONFIGURATION_TENANT_ID` existente/activo y rol owner de sistema existente. En una transacción sincroniza catálogo global, depreca códigos y concede permisos tenant a esos owners sólo para módulos efectivos y Admin (incluye cuatro permisos de centros). Conserva usuarios, membresías, roles personalizados, entitlements, perfil y organización; no ejecuta seed demo ni carga datos funcionales. Los siete módulos operativos y el catálogo básico son capacidades distintas de analítica Costing/Accounting.
 5. `qa-services` crea revisiones etiquetadas `candidate`; usa `--no-traffic` en servicios existentes y una excepcion explicita e idempotente para el primer despliegue de un servicio inexistente. Esa primera revision recibe trafico por una restriccion de Cloud Run, antes de que exista un frontend QA promovido que la consuma.
-6. El smoke se obtiene del SHA inmutable que ejecuta el workflow y valida ambiente, readiness, SHA candidato y URLs publicas. Las imagenes siguen siendo exactamente los digests asociados a `release_sha`; corregir automatizacion de release no obliga a reconstruirlas.
-7. `qa-traffic` requiere otra aprobacion. Antes de escribir, resuelve desde JSON exactamente una revision `candidate` para cada uno de los siete servicios; solo con el conjunto completo mueve el trafico y verifica que cada revision certificada reciba 100%.
-8. `qa-frontend` construye un artefacto sin localhost/emulador, lo conserva y despliega exactamente ese directorio.
+6. Deploy, smoke y tráfico usan el mismo `release_sha` inmutable del candidato. `/ready` remoto consulta DB y compara head Alembic con la imagen; una URL configurada no prueba readiness. Se validan ambiente, SHA y URLs públicas; todas las dependencias reales deben usar HTTPS QA, incluidas Costing y Sales desde Production/Inventory.
+7. `qa-traffic` requiere otra aprobacion. Descarga `certified-qa-revisions-<SHA>` producido por smoke en qa-services y el manifiesto de imágenes aprobado. Antes de escribir compara las ocho revisiones exactas, imagen/digest resuelto, SHA, URL y tráfico estable con lo certificado; un tag movido o cambio estable entre gates bloquea sin mutar. Revalida identidad/tráfico durante aplicación y al terminar; verifica cada revisión certificada al100% y revierte los servicios ya intentados si falla.
+8. `qa-frontend` descarga el artefacto del candidato, verifica SHA256SUMS y despliega exactamente ese directorio sin reconstruir. Preflight ya verificó run exitoso/procedencia/SHA y coincidencia de las ocho URLs con variables actuales. Verificar contenido servido y registrar rollback Hosting.
 9. `qa-admin-backoffice-config.yml` corrige la allowlist de Admin sin reconstruir imagenes: `qa-services` crea una revision sin trafico sobre la imagen certificada y `qa-traffic` la promueve solamente si imagen, version, configuracion y revision de rollback siguen coincidiendo.
 
 Evidencia histórica CHG-191, sustituida por releases posteriores: la variable esta configurada y el run `31661213987` promovio `admin-service-qa-bo-1-1` al 100%; rollback `admin-service-qa-00017-dih`. La prueba funcional autenticada administrador permitido/owner ordinario `403` debe repetirse con sesion renovada y sin almacenar credenciales.
 
 GitHub Pages queda como maqueta manual y ya no se publica automaticamente al cambiar `main`.
+
+## Guard operativo y configuración sintética en revisión · CHG-335
+
+Tras desplegar candidatos y pasar smoke, `erclave-operational-preflight-qa` ejecuta `check_qa_operational_readiness.py` en transacción READ ONLY. Exige tenant explícito, autoridad/proyección organizacional coherente, una cadena Emisor/Sociedad/División activa, monedas confirmadas por ID, scopes efectivos resolubles y un Owner operativo con permisos básicos. Su fallo bloquea `qa-traffic`; no configura ni activa datos. El Admin candidato a 0% permite aplicar después una configuración expresamente aprobada sin sustituir todavía el tráfico estable. Costing nuevo conserva su excepción de primer arranque, que requiere autorización propia.
+
+Las migraciones 0037/38 son DDL y no activan la organización. El [plan sintético](synthetic-organization-plan.json) está autorizado únicamente para preparación y revisión: un emisor sin datos fiscales, dos Sociedades propuestas MXN/USD, tres Divisiones y tres centros, con datos QA previos preservados. Hay que obtener baseline/IDs/hashes y revisar cualquier perfil legado no vacío antes de aprobar ejecución; no usar una moneda implícita del importador ni copiar la base Local.
+
+El frontend se verifica después de publicar con `tools/verify-qa-hosting.js`: compara los archivos realmente servidos por erclave.web.app con las huellas del artefacto inmutable. Un fallo de esa verificación deja release fallido y exige evaluar/restaurar la versión Hosting previa registrada.
+
+### URL Costing antes del primer build
+
+El frontend del candidato requiere `QA_COSTING_API_URL` antes de construir imágenes; no inventar el sufijo opaco de las siete URLs existentes ni desplegar un seed para descubrirlo. Resolver por lectura el número del proyecto `erclave` y registrar el origen determinista `https://costing-service-qa-PROJECT_NUMBER.us-central1.run.app`, según la [documentación oficial de URLs HTTPS de Cloud Run](https://docs.cloud.google.com/run/docs/triggering/https-request). Revisar ese valor junto con la identidad/variable antes de qa-build. Tras el bootstrap aprobado, comprobar ese origen público con health/ready/version y comportamiento autenticado antes de autorizar tráfico/frontend. Si no corresponde al servicio/proyecto/región aprobados, detener el release y volver a construir el candidato con la configuración corregida; no reconstruir sólo el frontend ni cambiar URLs después de certificarlo.
 
 ## Rollback
 

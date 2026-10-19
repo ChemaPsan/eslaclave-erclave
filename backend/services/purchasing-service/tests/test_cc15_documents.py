@@ -51,13 +51,34 @@ def pg():
             line=schemas.PurchaseLineInput(line_type='service',description='Synthetic service',quantity=1,unit_code='E48',unit_price=Decimal('4.12'))
             payload=schemas.PurchaseOrderWrite(code='PO-'+suffix,supplier_id=suppliers[0]['id'],division_ref_id=division['id'],direct_purchase_reason='Synthetic direct purchase',lines=[line])
             calls=[]
-            authority=SimpleNamespace(organization_access=lambda *args:scope,require_catalog=lambda *args:calls.append(args),require_unit=lambda *args:None)
+            authority=SimpleNamespace(organization_access=lambda *args:scope,require_catalog=lambda *args:calls.append(args),require_unit=lambda *args:None,allocate_code=lambda tenant,document,code,*args:{'code':code,'mode':'manual'})
             yield SimpleNamespace(repo=repo,c=c,suffix=suffix,actor=actor,scope=scope,context=context,suppliers=suppliers,line=line,payload=payload,authority=authority,calls=calls)
         finally:tx.rollback()
     engine.dispose()
 
 def create_order(f,payload=None,key='create'):
     return f.repo.create_order(TENANT,payload or f.payload,f.suffix+'-'+key,key,f.actor,context=f.context,organization_access=f.scope)
+
+def test_failed_reconciliation_resumes_same_actor_key_only_pending_lines(pg):
+    from datetime import datetime,timezone
+    f=pg;order=create_order(f)
+    f.repo.issue_order(TENANT,order['id'],f.suffix+'-issue','issue',f.actor,organization_access=f.scope)
+    payload=schemas.ReceiptWrite(code='REC-'+f.suffix,purchase_order_id=order['id'],received_at=datetime.now(timezone.utc),lines=[schemas.ReceiptLineInput(order_line_id=order['lines'][0]['id'],quantity=1)])
+    receipt,_=f.repo.prepare_receipt(TENANT,payload,f.suffix+'-receipt','receipt',f.actor,organization_access=f.scope)
+    key=f.suffix+'-reconcile';first,plan=f.repo.prepare_reconciliation(TENANT,receipt['id'],key,'reconcile',f.actor)
+    failed=f.repo.complete_receipt(TENANT,first,plan,[None],key,f.actor,'transport_failure','receipt.reconcile')
+    assert failed['status']=='needs_reconciliation'
+    attempts=failed['reconciliation_attempts']
+    with pytest.raises(ValueError,match='idempotency_key_reused'):
+        f.repo.prepare_reconciliation(TENANT,receipt['id'],key,'reconcile','other-actor')
+    assert f.repo.get_receipt(TENANT,receipt['id'])['reconciliation_attempts']==attempts
+    current,pending=f.repo.prepare_reconciliation(TENANT,receipt['id'],key,'reconcile',f.actor)
+    assert len(pending)==1 and pending[0]['receipt_line_id']==plan[0]['receipt_line_id']
+    completed=f.repo.complete_receipt(TENANT,current,pending,[{'id':None}],key,f.actor,operation='receipt.reconcile')
+    assert completed['status']=='completed'
+    replay,no_plan=f.repo.prepare_reconciliation(TENANT,receipt['id'],key,'reconcile',f.actor)
+    import json
+    assert replay==json.loads(json.dumps(completed,default=lambda item:item.isoformat() if isinstance(item,datetime) else str(item))) and no_plan is None
 
 def test_snapshot_freezes_same_supplier_refreshes_explicit_change_and_issue(pg):
     f=pg;order=create_order(f)

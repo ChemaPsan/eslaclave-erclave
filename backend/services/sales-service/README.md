@@ -2,6 +2,12 @@
 
 Servicio real de Ventas. Es dueno de clientes, contactos, cotizaciones, pedidos, ordenes de servicio, entregas, partidas, snapshots comerciales, idempotencia y auditoria dentro del schema `sales`.
 
+## Autor de comandos y recuperacion Local
+
+Los recibos durables vinculan el actor autenticado, tenant, operacion, clave y payload. Otro actor recibe `409 idempotency_key_reused`; el actor original conserva su replay. Las asignaciones organizacionales y condiciones ya incluian actor en su huella. Los nuevos intents de surtido, cancelacion de pedido, confirmacion de entrega y conciliacion de fabricacion vinculan actor antes de efectos externos y registran auditoria de preparacion.
+
+Los recibos anteriores pueden recuperarse solo si `sales.audit_events.occurred_at` identifica un actor unico de la misma operacion/transaccion que `sales.idempotency_records.created_at`. Un intent pendiente anterior sin autor demostrable conserva sus datos y responde el conflicto `409` de conciliacion existente: se requiere revisar autoria explicitamente antes de recuperarlo. No se atribuye al creador del documento ni se continua automaticamente con otro actor. Este control no cambia payloads publicos ni requiere migracion; inventariar estos pendientes es una precondicion de la promocion QA.
+
 Valida responsables mediante RH, productos/servicios mediante Produccion, y unidades/monedas/condiciones de pago mediante Administracion. Orquesta reservas/consumos por API de Inventory y solicitudes idempotentes por API de Production, sin escribir schemas ajenos. Devoluciones y facturacion permanecen planeadas.
 
 Local: `http://127.0.0.1:8008`. QA: desplegado dentro del release vigente de siete servicios. Produccion: no aprovisionado.

@@ -17,7 +17,16 @@ QA_SETTINGS = {
     "production_service_url": "https://production-service-qa.example.run.app",
     "maintenance_service_url": "https://maintenance-service-qa.example.run.app",
     "purchasing_service_url": "https://purchasing-service-qa.example.run.app",
+    "sales_service_url": "https://sales-service-qa.example.run.app",
+    "costing_service_url": "https://costing-service-qa.example.run.app",
 }
+
+
+@pytest.fixture(autouse=True)
+def clear_inherited_firebase_emulator(monkeypatch):
+    # A test process started by the Local launcher must still exercise the
+    # intended QA configuration, rather than accidentally inheriting its emulator.
+    monkeypatch.delenv("FIREBASE_AUTH_EMULATOR_HOST", raising=False)
 
 
 def test_local_environment_allows_local_app_url():
@@ -124,6 +133,8 @@ def test_inventory_uses_its_service_database_url_for_readiness():
         ("inventory-service", "maintenance_service_url", "ERCLAVE_MAINTENANCE_SERVICE_URL"),
         ("inventory-service", "purchasing_service_url", "ERCLAVE_PURCHASING_SERVICE_URL"),
         ("sales-service", "inventory_service_url", "ERCLAVE_INVENTORY_SERVICE_URL"),
+        ("production-service", "sales_service_url", "ERCLAVE_SALES_SERVICE_URL"),
+        ("inventory-service", "sales_service_url", "ERCLAVE_SALES_SERVICE_URL"),
     ],
 )
 def test_authority_consumers_reject_local_dependency_urls(service_name, field, message):
@@ -136,3 +147,54 @@ def test_authority_consumers_reject_local_dependency_urls(service_name, field, m
     }
     with pytest.raises(ValidationError, match=message):
         Settings(**values)
+
+
+@pytest.mark.parametrize("environment", ["qa", "prod"])
+@pytest.mark.parametrize("service_name", ["admin-service", "production-service", "inventory-service", "hr-service"])
+def test_active_basic_catalog_requires_its_public_costing_url(environment, service_name):
+    values = {**QA_SETTINGS, "environment": environment, "service_name": service_name,
+              "admin_service_url": QA_SETTINGS["api_public_base_url"],
+              "cost_center_catalog_enabled": True, "costing_service_url": "http://127.0.0.1:8014"}
+    with pytest.raises(ValidationError, match="ERCLAVE_COSTING_SERVICE_URL"):
+        Settings(**values)
+    settings = Settings(**{**values, "costing_service_url": QA_SETTINGS["costing_service_url"]})
+    assert settings.cost_center_catalog_enabled is True
+
+
+@pytest.mark.parametrize("service_name", ["admin-service", "production-service", "inventory-service", "hr-service"])
+def test_disabled_basic_catalog_keeps_costing_an_optional_dependency(service_name):
+    settings = Settings(**{**QA_SETTINGS, "service_name": service_name,
+                           "admin_service_url": QA_SETTINGS["api_public_base_url"],
+                           "cost_center_catalog_enabled": False, "costing_service_url": "http://localhost:8014"})
+    assert settings.cost_center_catalog_enabled is False
+
+
+@pytest.mark.parametrize("environment", ["qa", "prod"])
+def test_firebase_emulator_is_rejected_outside_local(environment, monkeypatch):
+    monkeypatch.setenv("FIREBASE_AUTH_EMULATOR_HOST", "127.0.0.1:9099")
+    with pytest.raises(ValidationError, match="FIREBASE_AUTH_EMULATOR_HOST"):
+        Settings(**{**QA_SETTINGS, "environment": environment})
+
+
+def test_local_firebase_emulator_is_allowed(monkeypatch):
+    monkeypatch.setenv("FIREBASE_AUTH_EMULATOR_HOST", "127.0.0.1:9099")
+    assert Settings(environment="local", firebase_project_id="demo-erclave").environment == "local"
+
+
+@pytest.mark.parametrize("url", ["https://user:secret@api.example.invalid", "https://api.example.invalid?token=secret", "https://api.example.invalid#local"])
+def test_runtime_authority_urls_reject_embedded_credentials_query_and_fragment(url):
+    with pytest.raises(ValidationError, match="ERCLAVE_SALES_SERVICE_URL"):
+        Settings(**{**QA_SETTINGS, "service_name": "production-service",
+                    "admin_service_url": QA_SETTINGS["api_public_base_url"], "sales_service_url": url})
+
+
+def test_costing_catalog_requires_admin_authority_and_its_service_database():
+    values = {**QA_SETTINGS, "service_name": "costing-service", "database_url": None,
+              "cost_center_catalog_enabled": True,
+              "costing_database_url": QA_SETTINGS["database_url"],
+              "admin_service_url": QA_SETTINGS["api_public_base_url"]}
+    assert Settings(**values).effective_database_url == values["costing_database_url"]
+    with pytest.raises(ValidationError, match="ERCLAVE_ADMIN_SERVICE_URL"):
+        Settings(**{**values, "admin_service_url": "http://localhost:8000"})
+    with pytest.raises(ValidationError, match="service database URL"):
+        Settings(**{**values, "costing_database_url": None})

@@ -45,7 +45,7 @@ class InventoryHandoffs:
     def transition_transfer(self,t,id,action,p,key,digest,actor,folio=None):
         operation=f"transfer.{action}"
         with self.engine.begin() as c:
-            replay=self._claim(c,t,operation,key,digest)
+            replay=self._claim(c,t,operation,key,digest,actor)
             if replay:return TransferRead.model_validate(replay)
             transfer=self._transfer(c,t,id,True)
             if not transfer:self._release(c,t,operation,key);return None

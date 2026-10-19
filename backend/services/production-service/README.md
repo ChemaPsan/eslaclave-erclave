@@ -2,6 +2,8 @@
 
 Duenio de productos/servicios productivos, recetas, ordenes, etapas y maquinaria productiva. RH es duenio de areas y puestos; Inventory es duenio de movimientos, reservas y consumos fisicos.
 
+En Local, repetir una evidencia inmutable de inicio o cierre exige el actor que la registró y el mismo contenido. Otro actor recibe `403 idempotency_actor_mismatch`; el mismo actor con contenido distinto recibe `409 service_evidence_already_recorded`. La lectura autorizada de la orden y sus evidencias conserva su permiso y alcance propios.
+
 Para la recepcion de producto terminado publica `GET /v1/production/finished-goods-candidates[/{id}]`. El contrato entrega solo folio, producto vinculado, cantidad, unidad, estado terminado y costo unitario; las lecturas generales conservan permisos propios de Produccion.
 
 No debe escribir inventario, compras, costos o contabilidad directamente; debe publicar eventos o llamar contratos.

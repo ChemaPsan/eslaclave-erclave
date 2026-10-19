@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from .finished_goods_context import finished_goods_context
 from decimal import Decimal
 from .reservation_context import validate_local_context, validate_cost_currency
-import base64, binascii, json
+import base64, binascii, json, hashlib
 from uuid import uuid4
 from sqlalchemy import text
 from sqlalchemy import create_engine
@@ -27,13 +27,25 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
     def __init__(self,engine): self.engine=engine
     def _movement_code(self, folio, tenant, operation, stable_key, manual_code=None):
         return allocate_movement_code(folio,tenant,operation,stable_key,manual_code)
-    def _claim(self,c,t,o,k,h):
+    @staticmethod
+    def _actor_hash(h,actor):
+        return hashlib.sha256(json.dumps({'request_hash':h,'actor_id':actor},sort_keys=True,separators=(',',':')).encode()).hexdigest() if actor is not None else h
+    def _validate_receipt(self,c,t,o,k,row,h,actor=None):
+        if row['request_hash']==self._actor_hash(h,actor):return
+        # Old receipts did not bind the authenticated actor. Recover it only from
+        # the audit event committed in the same transaction; ambiguous evidence
+        # never grants a replay to another actor.
+        if actor is not None and row['request_hash']==h:
+            actors=c.execute(text('select distinct actor_id from inventory.audit_events where tenant_id=:t and action=:o and created_at=:created'),{'t':t,'o':o,'created':row['created_at']}).scalars().all()
+            if actors==[actor]:return
+        raise ValueError('idempotency_key_reused')
+    def _claim(self,c,t,o,k,h,actor=None,resume_pending=False):
         claimed=c.execute(text("""insert into inventory.idempotency_records(id,tenant_id,operation,idempotency_key,request_hash)
-            values(:id,:t,:o,:k,:h) on conflict(tenant_id,operation,idempotency_key) do nothing returning id"""),{"id":f"ide_{uuid4().hex[:26]}","t":t,"o":o,"k":k,"h":h}).first()
+            values(:id,:t,:o,:k,:h) on conflict(tenant_id,operation,idempotency_key) do nothing returning id"""),{"id":f"ide_{uuid4().hex[:26]}","t":t,"o":o,"k":k,"h":self._actor_hash(h,actor)}).first()
         if claimed:return None
-        row=c.execute(text("select request_hash,response_payload from inventory.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k for update"),{"t":t,"o":o,"k":k}).mappings().one()
-        if row["request_hash"] != h: raise ValueError("idempotency_key_reused")
-        if row["response_payload"] is None:raise ValueError("idempotency_request_in_progress")
+        row=c.execute(text("select request_hash,response_payload,created_at from inventory.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k for update"),{"t":t,"o":o,"k":k}).mappings().one()
+        self._validate_receipt(c,t,o,k,row,h,actor)
+        if row["response_payload"] is None and not resume_pending:raise ValueError("idempotency_request_in_progress")
         return row["response_payload"]
     def _done(self,c,t,o,k,value): c.execute(text("update inventory.idempotency_records set response_payload=cast(:p as jsonb) where tenant_id=:t and operation=:o and idempotency_key=:k"),{"p":json.dumps(value.model_dump(mode="json")),"t":t,"o":o,"k":k})
     def _release(self,c,t,o,k): c.execute(text("delete from inventory.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k and response_payload is null"),{"t":t,"o":o,"k":k})
@@ -49,14 +61,14 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
         with self.engine.connect() as c:return self._warehouse(c,t,i)
     def create_warehouse(self,t,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"warehouse.create",k,h)
+            replay=self._claim(c,t,"warehouse.create",k,h,a)
             if replay:return WarehouseRead.model_validate(replay)
             i=f"whs_{uuid4().hex[:26]}"; row=c.execute(text("insert into inventory.warehouses(id,tenant_id,code,name,type,business_center,location,owner,capacity,inventory_policy,zone,aisle,rack,level,position,description) values(:i,:t,lower(:code),:name,:type,:business_center,:location,:owner,:capacity,:inventory_policy,:zone,:aisle,:rack,:level,:position,:description) on conflict(tenant_id,code) do nothing returning id"),{"i":i,"t":t,**p.model_dump()}).first()
             if not row:self._release(c,t,"warehouse.create",k);return None
             value=self._warehouse(c,t,i); self._audit(c,t,a,"warehouse.create","warehouse",i,p.model_dump()); self._done(c,t,"warehouse.create",k,value); return value
     def update_warehouse(self,t,i,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"warehouse.update",k,h)
+            replay=self._claim(c,t,"warehouse.update",k,h,a)
             if replay:return WarehouseRead.model_validate(replay)
             if not self._warehouse(c,t,i):self._release(c,t,"warehouse.update",k);return None
             data=p.model_dump(exclude_none=True)
@@ -76,7 +88,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
         with self.engine.connect() as c: return self._item(c,t,i)
     def create_item(self,t,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"item.create",k,h)
+            replay=self._claim(c,t,"item.create",k,h,a)
             if replay:return ItemRead.model_validate(replay)
             suggested=self._warehouse(c,t,p.suggested_warehouse_id) if p.suggested_warehouse_id else None
             if p.suggested_warehouse_id and (not suggested or suggested.status!="active"):self._release(c,t,"item.create",k);return None
@@ -85,7 +97,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
             value=self._item(c,t,i); self._audit(c,t,a,"item.create","item",i,p.model_dump()); self._done(c,t,"item.create",k,value); return value
     def update_item(self,t,i,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"item.update",k,h)
+            replay=self._claim(c,t,"item.update",k,h,a)
             if replay:return ItemRead.model_validate(replay)
             before=self._item(c,t,i)
             if not before:self._release(c,t,"item.update",k);return None
@@ -142,7 +154,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
                         or Decimal(str(current.quantity))!=p.quantity or current.unit!=p.unit
                         or current.original_unit_cost!=p.unit_cost or current.organization_context!=organization_context):raise ValueError('operational_context_mismatch')
                     return current
-            replay=self._claim(c,t,"movement.create",k,h)
+            replay=self._claim(c,t,"movement.create",k,h,a)
             if replay:
                 previous=MovementRead.model_validate(replay)
                 if previous.organization_context!=organization_context:raise ValueError('operational_context_mismatch')
@@ -199,7 +211,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
         context,original_cost=finished_goods_context(order,product,p.production_order_id)
         with self.engine.begin() as c:
             validate_local_context(c,t,SimpleNamespace(warehouse_id=p.warehouse_id,inventory_item_id=product["inventory_item_id"]),context)
-            replay=self._claim(c,t,operation,k,h)
+            replay=self._claim(c,t,operation,k,h,a)
             if replay:return FinishedGoodsReceiptRead.model_validate(replay)
             c.execute(text("select pg_advisory_xact_lock(hashtextextended(:lock_key,0))"),{"lock_key":f"finished-goods-receipt:{t}:{order['id']}"})
             item=self._item(c,t,product["inventory_item_id"]);warehouse=self._warehouse(c,t,p.warehouse_id)
@@ -281,7 +293,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
             if p.source.type=='production_order':
                 c.execute(text('select pg_advisory_xact_lock(hashtextextended(:k,0))'),{'k':f'production-reservations:{t}:{p.source.id}'})
                 if c.execute(text('select 1 from inventory.reservation_source_rollbacks where tenant_id=:t and source_id=:id'),{'t':t,'id':p.source.id}).first():raise ValueError('production_creation_attempt_failed')
-            replay=self._claim(c,t,"reservation.create",k,h)
+            replay=self._claim(c,t,"reservation.create",k,h,a)
             if replay:
                 replay_value=ReservationRead.model_validate(replay);current=self._reservation(c,t,replay_value.id)
                 if current and current.organization_context!=organization_context:raise ValueError("operational_context_mismatch")
@@ -321,7 +333,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
             if not before:return None
             if allowed_sources is not None and before.source_type not in allowed_sources:raise ValueError("permission_denied")
             if before.source_type=="maintenance_order" and before.status=="consumed":raise ValueError("reservation_not_active")
-            replay=self._claim(c,t,"reservation.release",k,h)
+            replay=self._claim(c,t,"reservation.release",k,h,a)
             if replay:return ReservationRead.model_validate(replay)
             if before.status=="active":c.execute(text("update inventory.reservations set status='released',updated_at=now() where tenant_id=:t and id=:i"),{"t":t,"i":i})
             value=self._reservation(c,t,i);self._audit(c,t,a,"reservation.release","reservation",i,{"reason":reason,"before":before.status,"after":value.status});self._done(c,t,"reservation.release",k,value);return value
@@ -342,7 +354,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
             reservation=self._reservation(c,t,i)
             if not reservation:return None
             if allowed_sources is not None and reservation.source_type not in allowed_sources:raise ValueError("permission_denied")
-            replay=self._claim(c,t,"reservation.consume",k,h)
+            replay=self._claim(c,t,"reservation.consume",k,h,a)
             if replay:return MovementRead.model_validate(replay)
             if reservation.status=="consumed":
                 movement=c.execute(text("select id from inventory.movements where tenant_id=:t and source_type='reservation' and source_id=:i order by created_at limit 1"),{"t":t,"i":i}).scalar_one_or_none()
@@ -430,7 +442,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
         return [BalanceRead.model_validate(x) for x in rows],Page(limit=limit,next_cursor=next_cursor,has_more=has_more)
     def reverse_movement(self,t,i,reason,k,h,a,folio=None):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"movement.reverse",k,h)
+            replay=self._claim(c,t,"movement.reverse",k,h,a)
             if replay:return MovementRead.model_validate(replay)
             c.execute(text("select id from inventory.movements where tenant_id=:t and id=:i for update"),{"t":t,"i":i}).first()
             original=self._movement(c,t,i)

@@ -3,6 +3,20 @@ info:
   title: ERClave Inventory Service API
   version: 0.3.0
   summary: Warehouse, item, movement, balance, kardex and reservation APIs.
+  description: >-
+    Durable command receipts for warehouses, items, movements, reversals,
+    reservations, finished-goods receipts, transfer actions and material-return
+    requests bind tenant, operation, Idempotency-Key, payload and authenticated
+    actor. Reusing a receipt key with another actor returns HTTP 409
+    idempotency_key_reused. Current organization scope is revalidated before
+    operational replay. Pre-upgrade receipts permit the original actor only
+    when their transaction audit identifies that actor unambiguously.
+    Material-return receive and cancel commands also persist an actor-bound intent
+    before downstream effects, after scope validation. Unfinished reconciliation
+    remains retryable by the same actor and stores no final receipt until terminal.
+    A previously terminal return with no historical key receipt may be read by a
+    new authorized command without repeating physical or downstream effects; this
+    does not establish authorship of the historical operation.
 servers:
 - url: https://api.eslaclave.com
 security:

@@ -1,16 +1,25 @@
-import json
+import json,hashlib
 from uuid import uuid4
 from sqlalchemy import create_engine,text
 from erclave_common.config import get_settings
 from .schemas import AreaRead,ProductionCapacityRead,RoleRead,SalesEligibleWorkerRead,WorkerRead
 class HrRepository:
     def __init__(self,engine):self.engine=engine
-    def _claim(self,c,t,o,k,h):
-        params={"id":f"ide_{uuid4().hex[:26]}","t":t,"o":o,"k":k,"h":h}
+    @staticmethod
+    def _actor_hash(h,actor):
+        return hashlib.sha256(json.dumps({'request_hash':h,'actor_id':actor},sort_keys=True,separators=(',',':')).encode()).hexdigest() if actor is not None else h
+    def _validate_receipt(self,c,t,o,row,h,actor=None):
+        if row['request_hash']==self._actor_hash(h,actor):return
+        if actor is not None and row['request_hash']==h:
+            actors=c.execute(text('select distinct actor_id from hr.audit_events where tenant_id=:t and action=:action and created_at=:created'),{'t':t,'action':'hr.'+o,'created':row['created_at']}).scalars().all()
+            if actors==[actor]:return
+        raise ValueError('idempotency_key_reused')
+    def _claim(self,c,t,o,k,h,actor=None):
+        params={"id":f"ide_{uuid4().hex[:26]}","t":t,"o":o,"k":k,"h":self._actor_hash(h,actor)}
         inserted=c.execute(text("insert into hr.idempotency_records(id,tenant_id,operation,idempotency_key,request_hash) values(:id,:t,:o,:k,:h) on conflict(tenant_id,operation,idempotency_key) do nothing returning id"),params).first()
         if inserted:return None
-        row=c.execute(text("select request_hash,response_payload from hr.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k for update"),params).mappings().one()
-        if row["request_hash"]!=h:raise ValueError("idempotency_key_reused")
+        row=c.execute(text("select request_hash,response_payload,created_at from hr.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k for update"),params).mappings().one()
+        self._validate_receipt(c,t,o,row,h,actor)
         if row["response_payload"] is None:raise ValueError("idempotency_request_in_progress")
         return row["response_payload"]
     def _done(self,c,t,o,k,v):c.execute(text("update hr.idempotency_records set response_payload=cast(:p as jsonb) where tenant_id=:t and operation=:o and idempotency_key=:k"),{"p":json.dumps(v.model_dump(mode="json")),"t":t,"o":o,"k":k})
@@ -23,14 +32,14 @@ class HrRepository:
         return [AreaRead.model_validate(dict(x)) for x in rows]
     def create_area(self,t,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"area.create",k,h)
+            replay=self._claim(c,t,"area.create",k,h,a)
             if replay:return AreaRead.model_validate(replay)
             i=f"hra_{uuid4().hex[:26]}";row=c.execute(text("insert into hr.labor_areas(id,tenant_id,code,name,description) values(:i,:t,upper(:code),:name,:description) on conflict(tenant_id,code) do nothing returning id"),{"i":i,"t":t,**p.model_dump()}).first()
             if not row:self._release(c,t,"area.create",k);return None
             value=self._area(c,t,i);self._audit(c,t,a,"hr.area.create","area",i,p.model_dump());self._done(c,t,"area.create",k,value);return value
     def update_area(self,t,i,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"area.update",k,h)
+            replay=self._claim(c,t,"area.update",k,h,a)
             if replay:return AreaRead.model_validate(replay)
             before=self._area(c,t,i)
             if not before:self._release(c,t,"area.update",k);return None
@@ -48,7 +57,7 @@ class HrRepository:
         return [RoleRead.model_validate(dict(x)) for x in rows]
     def create_role(self,t,p,k,h,a,code=None):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"position.create",k,h)
+            replay=self._claim(c,t,"position.create",k,h,a)
             if replay:return RoleRead.model_validate(replay)
             area=self._area(c,t,p.labor_area_id)
             if not area or area.status!="active":self._release(c,t,"position.create",k);raise ValueError("labor_area_invalid")
@@ -57,7 +66,7 @@ class HrRepository:
             value=self._role(c,t,i);self._audit(c,t,a,"hr.position.create","position",i,p.model_dump());self._done(c,t,"position.create",k,value);return value
     def update_role(self,t,i,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"position.update",k,h)
+            replay=self._claim(c,t,"position.update",k,h,a)
             if replay:return RoleRead.model_validate(replay)
             before=self._role(c,t,i)
             if not before:self._release(c,t,"position.update",k);return None
@@ -100,7 +109,7 @@ class HrRepository:
         return [ProductionCapacityRead.model_validate(dict(row)) for row in rows]
     def create_worker(self,t,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"worker.create",k,h)
+            replay=self._claim(c,t,"worker.create",k,h,a)
             if replay:return WorkerRead.model_validate(replay)
             position=self._role(c,t,p.labor_position_id)
             if not position or position.status!="active":self._release(c,t,"worker.create",k);raise ValueError("labor_position_invalid")
@@ -111,7 +120,7 @@ class HrRepository:
             value=self._worker(c,t,i);self._audit(c,t,a,"hr.worker.create","worker",i,{"employee_number":value.employee_number,"position_id":value.labor_position_id});self._done(c,t,"worker.create",k,value);return value
     def update_worker(self,t,i,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"worker.update",k,h)
+            replay=self._claim(c,t,"worker.update",k,h,a)
             if replay:return WorkerRead.model_validate(replay)
             before=self._worker(c,t,i)
             if not before:self._release(c,t,"worker.update",k);return None

@@ -68,7 +68,7 @@ def suppliers(x_tenant_id:str=Header(alias="X-Tenant-Id"),r:PurchasingRepository
 @router.post("/suppliers",response_model=DataResponse,status_code=201)
 def create_supplier(p:SupplierCreate,x_tenant_id:str=Header(alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),authorization:str|None=Header(None,alias="Authorization"),r=Depends(get_purchasing_repository),a=Depends(get_purchasing_authority_client),access:AuthorizedContext=Depends(require_purchasing_access("purchasing.supplier.create"))):
     k=key(idempotency_key);request_digest=digest(p)
-    try:replay=r.supplier_replay(x_tenant_id,k,request_digest)
+    try:replay=r.supplier_replay(x_tenant_id,k,request_digest,access.actor_id)
     except ValueError as exc:raise fail(exc) from exc
     if replay:return DataResponse(data=replay)
     a.require_catalog(x_tenant_id,"currencies",p.currency,authorization); a.require_catalog(x_tenant_id,"payment_terms",p.payment_terms,authorization)
@@ -229,7 +229,7 @@ def receipts(x_tenant_id:str=Header(alias="X-Tenant-Id"),r=Depends(get_purchasin
 @router.post("/receipts",response_model=DataResponse,status_code=201)
 def create_receipt(p:ReceiptCreate,x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),r=Depends(get_purchasing_repository),a:PurchasingAuthorityClient=Depends(get_purchasing_authority_client),access:AuthorizedContext=Depends(require_purchasing_access("purchasing.receipt.create"))):
     k=key(idempotency_key)
-    try:replay=r.receipt_replay(x_tenant_id,k,digest(p))
+    try:replay=r.receipt_replay(x_tenant_id,k,digest(p),access.actor_id)
     except ValueError as exc:raise fail(exc) from exc
     if replay:
         authorize_receipt(r,a,x_tenant_id,replay,"purchasing.receipt.create",authorization,access.actor_id)

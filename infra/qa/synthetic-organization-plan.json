@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "status": "draft-for-owner-review-not-authorized-to-apply",
+  "requestedAt": "2026-10-18",
+  "environment": "qa",
+  "tenantId": "ten_739ee59d765d5e14818674800d",
+  "tenantName": "ERClave Demo QA",
+  "purpose": "Certify the same enabled organizational and operational capabilities as Local using dedicated synthetic QA configuration, preserving existing QA data.",
+  "authorization": {
+    "granted": "Prepare a synthetic QA structure plan for review",
+    "notYetGranted": ["apply this configuration", "change IAM or variables", "create or merge PR", "build or deploy candidate", "migrate QA", "move traffic", "publish Hosting", "create operational UAT documents or another tenant"]
+  },
+  "baselineRequiredBeforeApproval": {
+    "candidateReleaseSha": null,
+    "organizationProfileSha256": null,
+    "authorityAndProjectionSha256": null,
+    "existingEntityIdsAndCurrencies": null,
+    "reviewedLegacyMappingsSha256": null,
+    "authorizedTesterMembershipIds": null,
+    "note": "Resolve through authorized read-only APIs/job; retain hashes/counts/IDs, no credentials or personal data. Stop if the baseline changes. A nonempty legacy profile requires a separately reviewed transition; never erase it or activate it with an assumed MXN currency."
+  },
+  "proposedEntities": {
+    "fiscalIssuers": [
+      {"key": "qa-cert-issuer", "legal_name": "QA CERTIFICACION SINTETICA - SIN VALIDEZ FISCAL", "tax_id": null}
+    ],
+    "societies": [
+      {"key": "qa-cert-mxn", "name": "QA Certificacion MXN", "issuerKey": "qa-cert-issuer", "base_currency": "MXN"},
+      {"key": "qa-cert-usd", "name": "QA Certificacion USD", "issuerKey": "qa-cert-issuer", "base_currency": "USD"}
+    ],
+    "divisions": [
+      {"key": "qa-cert-mxn-a", "name": "QA Certificacion MXN A", "societyKey": "qa-cert-mxn"},
+      {"key": "qa-cert-mxn-b", "name": "QA Certificacion MXN B", "societyKey": "qa-cert-mxn"},
+      {"key": "qa-cert-usd-a", "name": "QA Certificacion USD A", "societyKey": "qa-cert-usd"}
+    ],
+    "costCenters": [
+      {"key": "qa-cert-center-mxn-a", "name": "QA Certificacion Centro MXN A", "divisionKey": "qa-cert-mxn-a"},
+      {"key": "qa-cert-center-mxn-b", "name": "QA Certificacion Centro MXN B", "divisionKey": "qa-cert-mxn-b"},
+      {"key": "qa-cert-center-usd-a", "name": "QA Certificacion Centro USD A", "divisionKey": "qa-cert-usd-a"}
+    ]
+  },
+  "applicationContractAfterApproval": {
+    "ownerApis": ["POST /v1/organization/fiscal-issuers", "POST /v1/organization/societies", "POST /v1/organization/divisions", "POST /v1/cost-centers"],
+    "target": "Tagged immutable Admin/Costing candidate revisions while the seven existing services retain stable traffic",
+    "idsAndCodes": "Resolve fresh IDs and authoritative codes from owner API responses; logical keys above are not database IDs. Never copy IDs or code sequence counters from Local.",
+    "idempotency": "Persist an execution manifest per approved plan hash, tenant, logical key, command key and authenticated actor; retries of the same command use the same key and must not create a second entity.",
+    "scopes": "Preserve existing membership/role semantics. Record existing wildcard scopes at baseline: these already include future divisions under current application rules, so their holders may see newly created divisions without a metadata edit. Review that visibility before applying. Do not create new wildcard grants. Any change for a named tester requires an explicit membership ID and exact division grant in the final approved manifest.",
+    "currencies": "Confirm the proposed MXN/USD and every other active existing Society explicitly. Resolve actual IDs before setting QA_CONFIRMED_SOCIETY_CURRENCIES; no implicit importer defaults.",
+    "preTrafficGate": "check_qa_operational_readiness.py must pass with exact tenant, reviewed currencies, active organization, resolvable scopes and existing authorized operational owner. Failure prevents promotion of stable traffic."
+  },
+  "operationalAcceptanceBoundary": {
+    "structureDoesNotCertifyAllModules": true,
+    "existingMasters": "Inventory warehouses/items, Production machines/products/recipes, HR positions/workers and commercial assignments must be inspected before acceptance. Missing division/currency provenance requires an explicitly reviewed mapping or separately approved synthetic fixture; never assign existing records by guessing.",
+    "followupManifest": "Before any QA operational UAT, declare exact owner APIs, dedicated logical fixture keys, quantities, costs/rates, actors/scopes and cleanup. Operational documents, stock movements and master data are not authorized by approval of this organization-only plan.",
+    "acceptance": "Compare enabled capabilities and run authenticated positive/negative/retry/persistence cases against QA. Retain separate blocked variants for historical CC-19 provenance and unauthorized second-tenant isolation; do not mark QA parity from schema, smoke or this structure alone."
+  },
+  "preservation": [
+    "No Local database export, copy or seed execution in QA",
+    "No alteration or assignment of existing masters, documents, stock, costs, rates or monetary history",
+    "No reset of tenant profile, users, memberships, custom roles, module entitlements or code sequences",
+    "No activation of analytical Costing or Accounting",
+    "Do not equate synthetic acceptance with certification of historical records lacking CC-19 provenance"
+  ],
+  "cleanupAndRollback": "Keep the exact created IDs and audit. Before use, deactivate only the new centers/divisions/societies/issuer in dependency order if rollback is approved. After operational use preserve immutable documents and history; do not delete rows, rewind codes or downgrade schema. Restore only explicitly changed tester scopes from their recorded prior revisions."
+}

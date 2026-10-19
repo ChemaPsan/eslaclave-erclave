@@ -75,7 +75,8 @@ def digest(payload, path=None):
 def warehouses(x_tenant_id: str|None=Header(None,alias="X-Tenant-Id"), q: str|None=None, repository: InventoryRepository=Depends(get_inventory_repository), _=Depends(require_inventory_access(("inventory.warehouse.read","inventory.movement.read","inventory.movement.create","maintenance.material_request.read","maintenance.material_request.create")))): return WarehouseListResponse(data=repository.list_warehouses(tenant(x_tenant_id),q))
 @router.post("/warehouses",response_model=WarehouseResponse,status_code=201)
 def create_warehouse(payload: WarehouseCreate,x_tenant_id: str|None=Header(None,alias="X-Tenant-Id"),idempotency_key: str|None=Header(None,alias="Idempotency-Key"),repository: InventoryRepository=Depends(get_inventory_repository),access: AuthorizedContext=Depends(require_inventory_access("inventory.warehouse.create"))):
-    result=repository.create_warehouse(tenant(x_tenant_id),payload,key(idempotency_key),digest(payload),access.actor_id)
+    try:result=repository.create_warehouse(tenant(x_tenant_id),payload,key(idempotency_key),digest(payload),access.actor_id)
+    except ValueError as exc:raise ErclaveError(str(exc),"The command key was reused with different data or actor.",status_code=409) from exc
     if not result: raise ErclaveError("warehouse_conflict","Warehouse code already exists.",status_code=409)
     return WarehouseResponse(data=result)
 @router.get("/warehouses/{warehouse_id}",response_model=WarehouseResponse)
@@ -85,7 +86,8 @@ def get_warehouse(warehouse_id:str,x_tenant_id:str|None=Header(None,alias="X-Ten
     return WarehouseResponse(data=result)
 @router.patch("/warehouses/{warehouse_id}",response_model=WarehouseResponse)
 def update_warehouse(warehouse_id:str,payload:WarehouseUpdate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access("inventory.warehouse.update"))):
-    result=repository.update_warehouse(tenant(x_tenant_id),warehouse_id,payload,key(idempotency_key),digest(payload,{"id":warehouse_id}),access.actor_id)
+    try:result=repository.update_warehouse(tenant(x_tenant_id),warehouse_id,payload,key(idempotency_key),digest(payload,{"id":warehouse_id}),access.actor_id)
+    except ValueError as exc:raise ErclaveError(str(exc),"The command key was reused with different data or actor.",status_code=409) from exc
     if not result: raise ErclaveError("warehouse_not_found","Warehouse not found.",status_code=404)
     return WarehouseResponse(data=result)
 
@@ -94,7 +96,8 @@ def items(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),q:str|None=None,
 @router.post("/items",response_model=ItemResponse,status_code=201)
 def create_item(payload:ItemCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),unit_catalog:UnitCatalogClient=Depends(get_unit_catalog_client),access:AuthorizedContext=Depends(require_inventory_access("inventory.item.create"))):
     resolved_tenant=tenant(x_tenant_id); unit_catalog.require_active(resolved_tenant,payload.base_unit,authorization)
-    result=repository.create_item(resolved_tenant,payload,key(idempotency_key),digest(payload),access.actor_id)
+    try:result=repository.create_item(resolved_tenant,payload,key(idempotency_key),digest(payload),access.actor_id)
+    except ValueError as exc:raise ErclaveError(str(exc),"The command key was reused with different data or actor.",status_code=409) from exc
     if not result: raise ErclaveError("item_conflict","Item code or warehouse is invalid.",status_code=409)
     return ItemResponse(data=result)
 @router.get("/items/{item_id}",response_model=ItemResponse)
@@ -125,6 +128,7 @@ def update_item(item_id:str,payload:ItemUpdate,x_tenant_id:str|None=Header(None,
         if str(exc)=="suggested_warehouse_invalid": raise ErclaveError("suggested_warehouse_invalid","Suggested warehouse does not belong to the active tenant.",status_code=409) from exc
         if str(exc)=="item_base_unit_locked_by_movements": raise ErclaveError("item_base_unit_locked_by_movements","Base unit cannot change after inventory movements or reservations exist.",status_code=409) from exc
         if str(exc)=="invalid_stock_limits": raise ErclaveError("invalid_stock_limits","Maximum stock must be greater than or equal to minimum stock.",status_code=422) from exc
+        if str(exc)=="idempotency_key_reused": raise ErclaveError(str(exc),"The command key was reused with different data or actor.",status_code=409) from exc
         raise
     if not result: raise ErclaveError("item_not_found","Item not found.",status_code=404)
     return ItemResponse(data=result)
@@ -160,7 +164,7 @@ def request_material_return(payload:MaterialReturnRequest,x_tenant_id:str|None=H
     if not (access.permissions or frozenset({access.permission})).intersection({permission,"inventory.movement.create"}):raise ErclaveError("permission_denied","This order's return permission is required.",status_code=403)
     authorize_handoff(repository,context_client,t,source.get('organization_context'),source.get('warehouse_id'),(permission,'inventory.movement.create'),authorization,access.actor_id)
     source['quantity']=payload.quantity
-    try:replay=repository.replay_material_return_request(t,k,digest(payload))
+    try:replay=repository.replay_material_return_request(t,k,digest(payload),access.actor_id)
     except ValueError as exc:raise ErclaveError(str(exc),"The request key was reused with different data.",status_code=409) from exc
     if replay:return MaterialReturnResponse(data=replay)
     validated=authority.validate(t,source,authorization)
@@ -171,12 +175,15 @@ def request_material_return(payload:MaterialReturnRequest,x_tenant_id:str|None=H
 
 @router.post("/material-returns/{return_id}/receive",response_model=MaterialReturnResponse)
 def receive_material_return(return_id:str,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),authority:MaterialReturnClient=Depends(get_material_return_client),access:AuthorizedContext=Depends(require_inventory_access("inventory.movement.create")),context_client:ReservationContextClient=Depends(get_reservation_context_client),codes:BusinessCodeClient=Depends(get_business_code_client)):
-    t=tenant(x_tenant_id);key(idempotency_key)
+    t=tenant(x_tenant_id);command_key=key(idempotency_key)
     with repository.return_command_lock(t,return_id):
         value=repository.get_material_return(t,return_id)
         if value is None:raise ErclaveError("material_return_not_found","Material return not found.",status_code=404)
         authorize_handoff(repository,context_client,t,value.organization_context,value.warehouse_id,'inventory.movement.create',authorization,access.actor_id,active=value.status=='pending')
-        if value.status=='completed':return MaterialReturnResponse(data=value)
+        try:replay=repository.begin_material_return_command(t,return_id,'receive',command_key,digest(None,{'id':return_id,'action':'receive'}),access.actor_id)
+        except ValueError as exc:raise ErclaveError(str(exc),'The return command belongs to a different request or actor.',status_code=409) from exc
+        if replay:return MaterialReturnResponse(data=replay)
+        if value.status=='completed':return MaterialReturnResponse(data=repository.finish_material_return_command(t,'receive',command_key,value))
         if value.status=='cancelled':raise ErclaveError('material_return_not_receivable','A cancelled return cannot be received.',status_code=409)
         if value.status=='pending':
             validated=authority.validate(t,value.model_dump(mode='json'),authorization)
@@ -186,18 +193,23 @@ def receive_material_return(return_id:str,x_tenant_id:str|None=Header(None,alias
         error_code=None
         try:authority.reconcile(t,value.model_dump(mode='json'),authorization)
         except ErclaveError as exc:error_code=exc.code
-        return MaterialReturnResponse(data=repository.finish_material_return(t,return_id,access.actor_id,error_code))
+        value=repository.finish_material_return(t,return_id,access.actor_id,error_code)
+        return MaterialReturnResponse(data=repository.finish_material_return_command(t,'receive',command_key,value))
 
 @router.post("/material-returns/{return_id}/cancel",response_model=MaterialReturnResponse)
 def cancel_material_return(return_id:str,payload:ReverseRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access("inventory.movement.create")),authorization:str|None=Header(None,alias="Authorization"),context_client:ReservationContextClient=Depends(get_reservation_context_client)):
-    t=tenant(x_tenant_id);key(idempotency_key)
+    t=tenant(x_tenant_id);command_key=key(idempotency_key)
     with repository.return_command_lock(t,return_id):
         current=repository.get_material_return(t,return_id)
-        if current:authorize_handoff(repository,context_client,t,current.organization_context,current.warehouse_id,'inventory.movement.create',authorization,access.actor_id)
+        if current is None:raise ErclaveError('material_return_not_found','Material return not found.',status_code=404)
+        authorize_handoff(repository,context_client,t,current.organization_context,current.warehouse_id,'inventory.movement.create',authorization,access.actor_id)
+        try:replay=repository.begin_material_return_command(t,return_id,'cancel',command_key,digest(payload,{'id':return_id,'action':'cancel'}),access.actor_id)
+        except ValueError as exc:raise ErclaveError(str(exc),'The return command belongs to a different request or actor.',status_code=409) from exc
+        if replay:return MaterialReturnResponse(data=replay)
         try:value=repository.cancel_material_return(t,return_id,payload.reason,access.actor_id)
         except ValueError as exc:raise ErclaveError(str(exc),"Only a pending physical return can be cancelled.",status_code=409) from exc
         if value is None:raise ErclaveError('material_return_not_found','Material return not found.',status_code=404)
-        return MaterialReturnResponse(data=value)
+        return MaterialReturnResponse(data=repository.finish_material_return_command(t,'cancel',command_key,value))
 
 @router.post("/transfers/{transfer_id}/{action}",response_model=TransferResponse)
 def transfer_action(transfer_id:str,action:Literal["receive","request-return","receive-return"],payload:TransferActionRequest,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:InventoryRepository=Depends(get_inventory_repository),access:AuthorizedContext=Depends(require_inventory_access("inventory.movement.create")),authorization:str|None=Header(None,alias="Authorization"),context_client:ReservationContextClient=Depends(get_reservation_context_client),codes:BusinessCodeClient=Depends(get_business_code_client)):

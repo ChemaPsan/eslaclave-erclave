@@ -1,5 +1,11 @@
 # Estado actual de ERClave
 
+## Correcciones de paridad preparadas · CHG-335 · 2026-10-18
+
+El corte Local incluye ocho runtimes en el pipeline (Costing básico), dependencias HTTPS completas, frontend construido una vez y verificado por bytes, readiness DB/head y guard operativo READ ONLY. La configuración conserva usuarios, membresías, perfil, roles personalizados y entitlements. Se corrigieron replay entre actores, intents parciales, retry de código manual y responsive; aceptación HTTP/Chrome real por variantes en [acta](../operaciones/paridad_local_qa_20261018.md). INC-CC20-13-ACTOR-01 está corregida y reprobada en Local. No confundir las variantes comprobadas con aceptación de históricos CC-19 sin procedencia ni UAT QA.
+
+El usuario autorizó **preparar estructura sintética QA y revisar el plan antes de aplicarlo**: [propuesta](../../infra/qa/synthetic-organization-plan.json), un emisor, dos Sociedades MXN/USD propuestas, tres Divisiones y tres centros. Aún faltan baseline privado QA, confirmación de monedas y actores, identidad/variables y aprobaciones separadas de release. QA público observado mantiene siete APIs e57237fe90319f88e1db8ed8d2e686604d2d9c54; no se escribió ni desplegó QA. Accounting y analítica Costing apagados. Los apartados siguientes son cortes previos.
+
 ## Preparación de publicación Git · CHG-334 · 2026-10-18
 
 El usuario autorizó subir el repositorio. El candidato conserva CHG-333 validado y añade .gitattributes para preservar los bytes de las fuentes de manuales vinculadas a huellas Word. Se detectó que seis fuentes coincidían con el registro en el workspace, pero sus blobs HEAD estaban normalizados a LF y no coincidían. El commit debe conservar sus bytes aprobados (sin cambio de texto ni Word); comprobar las huellas del índice Git antes de publicarlo. Destino: rama agent/chg-278-qa-release-record en origin. Workflows de despliegue manuales; publicar la rama no promueve QA. CC20-02–16 y CC-19 real mantienen sus pendientes.

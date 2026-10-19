@@ -4203,6 +4203,34 @@ h3 {
   font-size: 0.82rem;
 }
 
+/* Root report overviews retain complete document identities on narrow panels.
+   Operational record rows in submodules keep their own layouts. */
+.module-overview-records {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.module-overview-records > .record-row {
+  min-width: 0;
+}
+
+.module-overview-records .record-main {
+  flex: 1;
+}
+
+.module-overview-records .record-main strong,
+.module-overview-records .record-main span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@container module-panel (max-width: 560px) {
+  .module-overview-records > .record-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+}
+
 .amount {
   font-weight: 900;
 }
@@ -4770,7 +4798,16 @@ h3 {
   }
 
   .sidebar-footer {
-    display: none;
+    display: flex;
+    position: static;
+    margin-top: 0;
+    padding-top: 0;
+    background: none;
+  }
+
+  .sidebar-footer .icon-button {
+    width: 44px;
+    height: 44px;
   }
 
   .workspace {

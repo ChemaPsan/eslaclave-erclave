@@ -8,11 +8,11 @@ from .schemas import SalesOrderRead
 
 
 class ProductionReconciliationRepository:
-    def fulfillment_replay(self, tenant, order_id, key, digest):
+    def fulfillment_replay(self, tenant, order_id, key, digest, actor_id=None):
         with self.engine.connect() as connection:
-            row=connection.execute(text("select request_hash,response_payload from sales.idempotency_records where tenant_id=:t and operation=:op and idempotency_key=:k"),{'t':tenant,'op':f'order.fulfillment:{order_id}','k':key}).mappings().first()
+            row=connection.execute(text("select request_hash,response_payload,created_at from sales.idempotency_records where tenant_id=:t and operation=:op and idempotency_key=:k"),{'t':tenant,'op':f'order.fulfillment:{order_id}','k':key}).mappings().first()
             if row:
-                if row['request_hash']!=digest:raise ValueError('idempotency_key_reused')
+                self._validate_receipt(connection,tenant,f'order.fulfillment:{order_id}',row,digest,actor_id)
                 if row['response_payload']:
                     return SalesOrderRead.model_validate(row['response_payload'])
         return None
@@ -27,7 +27,18 @@ class ProductionReconciliationRepository:
             row=conn.execute(text('select * from sales.production_reconciliations where tenant_id=:t and order_id=:o and order_line_id=:l'),{'t':tenant,'o':order_id,'l':line_id}).mappings().first()
             return dict(row) if row else None
 
-    def prepare_production_reconciliation(self,tenant,order_id,line_id,warehouse,product,source,key,digest):
+    def validate_production_reconciliation_actor(self,tenant,record,digest,actor_id,connection=None):
+        if record['request_hash']==self._actor_hash(digest,actor_id):return
+        if actor_id is not None and record['request_hash']==digest and record['status']=='completed':
+            def original_actor(conn):
+                return conn.execute(text("select distinct actor_id from sales.audit_events where tenant_id=:t and action='order.production_reconciliation' and entity_id=:o and payload->>'line_id'=:l and occurred_at=:updated"),{'t':tenant,'o':record['order_id'],'l':record['order_line_id'],'updated':record['updated_at']}).scalars().all()
+            if connection is not None:actors=original_actor(connection)
+            else:
+                with self.engine.connect() as conn:actors=original_actor(conn)
+            if actors==[actor_id]:return
+        deny('idempotency_key_reused',409)
+
+    def prepare_production_reconciliation(self,tenant,order_id,line_id,warehouse,product,source,key,digest,actor_id=None):
         with self.engine.begin() as conn:
             conn.execute(text('select id from sales.orders where tenant_id=:t and id=:o for update'),{'t':tenant,'o':order_id}).first()
             order=self._order(conn,tenant,order_id)
@@ -37,13 +48,14 @@ class ProductionReconciliationRepository:
             if not line or line.fulfillment_mode!='production' or not line.production_request_id:deny('production_request_source_conflict',409)
             existing=conn.execute(text('select * from sales.production_reconciliations where tenant_id=:t and order_line_id=:l for update'),{'t':tenant,'l':line_id}).mappings().first()
             if existing:
-                if existing['request_hash']!=digest:deny('production_reconciliation_in_progress',409)
+                self.validate_production_reconciliation_actor(tenant,existing,digest,actor_id,conn)
                 return dict(existing)
             if line.fulfillment_status!='production_requested' or line.delivered_quantity:deny('sales_order_line_already_configured',409)
             amount=line.ordered_quantity-line.delivered_quantity
-            values={'t':tenant,'o':order_id,'l':line_id,'request':line.production_request_id,'production':source['production_order_id'],'wh':warehouse,'item':product['id'],'qty':amount,'unit':line.unit,'key':key,'hash':digest,'snapshot':json.dumps(source,default=str)}
+            values={'t':tenant,'o':order_id,'l':line_id,'request':line.production_request_id,'production':source['production_order_id'],'wh':warehouse,'item':product['id'],'qty':amount,'unit':line.unit,'key':key,'hash':self._actor_hash(digest,actor_id),'snapshot':json.dumps(source,default=str)}
             conn.execute(text("insert into sales.production_reconciliations(tenant_id,order_id,order_line_id,request_id,production_order_id,warehouse_id,inventory_item_id,quantity,unit,command_key,request_hash,status,source_snapshot) values(:t,:o,:l,:request,:production,:wh,:item,:qty,:unit,:key,:hash,'processing',cast(:snapshot as jsonb))"),values)
-            return {'order_id':order_id,'order_line_id':line_id,'request_id':line.production_request_id,'production_order_id':source['production_order_id'],'warehouse_id':warehouse,'inventory_item_id':product['id'],'quantity':amount,'unit':line.unit,'command_key':key,'request_hash':digest,'status':'processing','source_snapshot':source}
+            if actor_id is not None:self._audit(conn,tenant,actor_id,'order.production_reconciliation.prepare','sales_order',order_id,{'line_id':line_id,'idempotency_key':key})
+            return {'order_id':order_id,'order_line_id':line_id,'request_id':line.production_request_id,'production_order_id':source['production_order_id'],'warehouse_id':warehouse,'inventory_item_id':product['id'],'quantity':amount,'unit':line.unit,'command_key':key,'request_hash':values['hash'],'status':'processing','source_snapshot':source}
 
     def fail_production_reconciliation(self,tenant,line_id,error_code):
         with self.engine.begin() as conn:
@@ -55,7 +67,7 @@ class ProductionReconciliationRepository:
             order=self._order(conn,tenant,order_id)
             if order.cancellation_state!='idle' or order.status=='cancelled':deny('sales_order_not_fulfillable',409)
             state=conn.execute(text('select * from sales.production_reconciliations where tenant_id=:t and order_id=:o and order_line_id=:l for update'),{'t':tenant,'o':order_id,'l':line_id}).mappings().one()
-            if state['request_hash']!=digest:deny('production_reconciliation_in_progress',409)
+            self.validate_production_reconciliation_actor(tenant,state,digest,actor,conn)
             if state['status']=='completed':return order
             if (reservation.get('source_type')!='sales_order' or reservation.get('inventory_item_id')!=state['inventory_item_id'] or reservation.get('warehouse_id')!=state['warehouse_id'] or Decimal(str(reservation.get('quantity',0)))!=state['quantity'] or reservation.get('unit')!=state['unit'] or reservation.get('status')!='active' or reservation.get('source_id')!=order_id or reservation.get('source_line_id')!=line_id):deny('operational_context_mismatch',409)
             cost=reservation.get('original_unit_cost') if order.division_ref_id else reservation.get('unit_cost_snapshot')
