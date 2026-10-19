@@ -1,0 +1,5 @@
+.service-cost-context { display:grid; gap:8px; min-width:0; }
+.service-cost-context input { min-width:0; max-width:100%; }
+.service-cost-context .service-cost-confirm { display:flex; align-items:start; gap:8px; }
+.service-cost-context .service-cost-confirm input { width:20px; min-width:20px; height:20px; }
+.service-cost-context span,.service-cost-context p { overflow-wrap:anywhere; }

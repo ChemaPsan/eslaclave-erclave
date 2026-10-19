@@ -34,8 +34,9 @@ class ServiceEvidenceRepository:
                 order=c.execute(text("select status from production.production_orders where tenant_id=:t and id=:o for update"),{"t":t,"o":o}).mappings().first()
                 if not order:raise ErclaveError("production_order_not_found","Order not found.",status_code=404)
                 if not self._is_service_order(c,t,o):raise ErclaveError("service_evidence_service_only","Evidence is only for service recipes.",status_code=409)
-                previous=c.execute(text("select request_hash from production.service_evidence where tenant_id=:t and order_id=:o and phase=:p"),{"t":t,"o":o,"p":phase}).mappings().first()
+                previous=c.execute(text("select request_hash,actor_id from production.service_evidence where tenant_id=:t and order_id=:o and phase=:p"),{"t":t,"o":o,"p":phase}).mappings().first()
                 if previous:
+                    if previous['actor_id']!=actor:raise ErclaveError('idempotency_actor_mismatch','The immutable evidence command belongs to another actor.',status_code=403)
                     if previous["request_hash"] != fingerprint:raise ErclaveError("service_evidence_already_recorded","Evidence is immutable.",status_code=409)
                     return self._service_evidence(c,t,o)
                 if order["status"] in {"completed","cancelled"}:raise ErclaveError("service_evidence_order_locked","Order is closed.",status_code=409)

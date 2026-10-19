@@ -1,3 +1,4 @@
+from erclave_common.transport import open_dependency
 from dataclasses import dataclass
 import json
 from urllib import error,request
@@ -20,8 +21,12 @@ class AdminSessionClient:
     def __init__(self,settings):self.base_url=settings.admin_service_url.rstrip("/");self.timeout=settings.authorization_timeout_seconds
     def get_context(self,tenant,authorization):
         try:
-            with request.urlopen(request.Request(f"{self.base_url}/v1/session/context",headers={"Authorization":authorization,"X-Tenant-Id":tenant}),timeout=self.timeout) as response:return json.loads(response.read())["data"]
-        except (error.URLError,error.HTTPError,KeyError,ValueError) as exc:raise ErclaveError("maintenance_authorization_denied","Maintenance authorization failed.",status_code=403) from exc
+            with open_dependency(request.Request(f"{self.base_url}/v1/session/context",headers={"Authorization":authorization,"X-Tenant-Id":tenant}),timeout=self.timeout, opener=request.urlopen) as response:return json.loads(response.read())["data"]
+        except error.HTTPError as exc:
+            if exc.code >= 500 or exc.code == 429:raise ErclaveError("authorization_service_unavailable","Authorization service is unavailable.",status_code=503) from exc
+            raise ErclaveError("maintenance_authorization_denied","Authorization failed.",status_code=401 if exc.code==401 else 403) from exc
+        except (error.URLError,TimeoutError,KeyError,ValueError) as exc:
+            raise ErclaveError("authorization_service_unavailable","Authorization service is unavailable.",status_code=503) from exc
 def get_admin_session_client(settings:Settings=Depends(get_settings)):return AdminSessionClient(settings)
 def require_maintenance_access(permission):
     def dependency(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),x_actor_id:str|None=Header(None,alias="X-Actor-Id"),settings:Settings=Depends(get_settings),client=Depends(get_admin_session_client)):

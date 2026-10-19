@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Header, Query, status
 
 from erclave_common.config import Settings, get_settings
 from erclave_common.errors import ErclaveError
+from .capabilities import enrich_capabilities
+from .organization_scope import select_active
 
 from .auth import (
     AuthenticatedActor,
@@ -75,6 +77,7 @@ from .schemas import (
     UserInvitationRequest,
     UserListResponse,
     UserResponse,
+    UserDeleteResponse,
     UserUpdateRequest,
     UnitOfMeasureCreateRequest,
     UnitOfMeasureListResponse,
@@ -86,22 +89,29 @@ from .schemas import (
 router = APIRouter(prefix="/v1")
 
 COMMERCIAL_CATALOGS = {"currencies", "payment_terms"}
-CODE_SEQUENCE_CONSUMER_PERMISSIONS = (
-    "production.product_service.create",
-    "production.recipe.create",
-    "production.order.release",
-    "production.machine.create",
-    "inventory.warehouse.create",
-    "inventory.item.create",
-    "inventory.movement.create",
-    "hr.area.create",
-    "hr.position.create",
-    "hr.worker.create",
-    "sales.customer.create",
-    "sales.quote.create",
-    "sales.order.create",
-    "sales.delivery.create",
-)
+CODE_SEQUENCE_TYPE_PERMISSION = {
+    "production.product_service": ("production.product_service.create",),
+    "production.recipe": ("production.recipe.create",),
+    "production.order": ("production.order.release",),
+    "production.machine": ("production.machine.create",),
+    "inventory.warehouse": ("inventory.warehouse.create",),
+    "inventory.item": ("inventory.item.create",),
+    "inventory.movement": ("inventory.movement.create", "inventory.movement.reverse", "inventory.finished_goods_receipt.receive"),
+    "hr.area": ("hr.area.create",),
+    "hr.position": ("hr.position.create",),
+    "hr.worker": ("hr.worker.create",),
+    "sales.customer": ("sales.customer.create",),
+    "sales.quote": ("sales.quote.create",),
+    "sales.order": ("sales.order.create",),
+    "sales.delivery": ("sales.delivery.create",),
+    "sales.service_order": ("sales.order.create",),
+    "purchasing.supplier": ("purchasing.supplier.create",),
+    "purchasing.requisition": ("purchasing.requisition.create",),
+    "purchasing.order": ("purchasing.order.create",),
+    "purchasing.receipt": ("purchasing.receipt.create",),
+    "maintenance.order": ("maintenance.order.create",),
+}
+CODE_SEQUENCE_CONSUMER_PERMISSIONS = tuple(sorted({permission for values in CODE_SEQUENCE_TYPE_PERMISSION.values() for permission in values}))
 
 
 def require_idempotency_key(idempotency_key: str | None) -> str:
@@ -125,12 +135,12 @@ def require_commercial_catalog(catalog_code: str) -> str:
 
 
 @router.get("/catalogs/commercial/{catalog_code}", response_model=CatalogItemListResponse)
-def list_catalog_items(catalog_code: str, include_inactive: bool = Query(default=False), q: str | None = Query(default=None, max_length=120), x_tenant_id: str = Header(alias="X-Tenant-Id"), _authorization: None = Depends(require_permission_for_header_tenant(("admin.catalog.read", "sales.customer.read", "sales.customer.create", "sales.customer.update", "sales.quote.read", "sales.quote.create", "sales.quote.update", "sales.order.read", "sales.order.create"))), repository: AdminRepository = Depends(get_admin_repository)):
+def list_catalog_items(catalog_code: str, include_inactive: bool = Query(default=False), q: str | None = Query(default=None, max_length=120), x_tenant_id: str = Header(alias="X-Tenant-Id"), _authorization: None = Depends(require_permission_for_header_tenant(("admin.catalog.read", "sales.customer.read", "sales.customer.create", "sales.customer.update", "sales.quote.read", "sales.quote.create", "sales.quote.update", "sales.order.read", "sales.order.create", "purchasing.supplier.create", "purchasing.supplier.update"))), repository: AdminRepository = Depends(get_admin_repository)):
     return CatalogItemListResponse(data=repository.list_catalog_items(x_tenant_id, require_commercial_catalog(catalog_code), include_inactive=include_inactive, q=q))
 
 
 @router.get("/catalogs/commercial/{catalog_code}/by-code/{code}", response_model=CatalogItemResponse)
-def get_catalog_item(catalog_code: str, code: str, x_tenant_id: str = Header(alias="X-Tenant-Id"), _authorization: None = Depends(require_permission_for_header_tenant(("admin.catalog.read", "sales.customer.create", "sales.customer.update", "sales.quote.create", "sales.quote.update", "sales.order.create"))), repository: AdminRepository = Depends(get_admin_repository)):
+def get_catalog_item(catalog_code: str, code: str, x_tenant_id: str = Header(alias="X-Tenant-Id"), _authorization: None = Depends(require_permission_for_header_tenant(("admin.catalog.read", "sales.customer.create", "sales.customer.update", "sales.quote.create", "sales.quote.update", "sales.order.create", "purchasing.supplier.create", "purchasing.supplier.update", "purchasing.order.create", "purchasing.order.update"))), repository: AdminRepository = Depends(get_admin_repository)):
     item = repository.get_catalog_item(x_tenant_id, require_commercial_catalog(catalog_code), code, active_only=True)
     if not item:
         raise ErclaveError("catalog_item_not_found", "The catalog value is not active for this tenant.", status_code=404)
@@ -162,10 +172,16 @@ def update_catalog_item(catalog_code: str, item_id: str, payload: CatalogItemUpd
 @router.get("/catalogs/code-sequences", response_model=CodeSequenceListResponse)
 def list_code_sequences(
     x_tenant_id: str = Header(alias="X-Tenant-Id"),
-    _authorization: None = Depends(require_permission_for_header_tenant("admin.setting.read")),
+    actor: AuthenticatedActor | None = Depends(require_permission_for_header_tenant(("admin.setting.read", *CODE_SEQUENCE_CONSUMER_PERMISSIONS))),
     repository: AdminRepository = Depends(get_admin_repository),
 ):
-    return CodeSequenceListResponse(data=repository.list_code_sequences(x_tenant_id))
+    rows = repository.list_code_sequences(x_tenant_id)
+    if actor is not None:
+        context = repository.get_session_context_by_email(x_tenant_id, actor.email)
+        permissions = set(context.permissions if context else ())
+        if "admin.setting.read" not in permissions:
+            rows = [row for row in rows if any(permission in permissions for permission in CODE_SEQUENCE_TYPE_PERMISSION.get(row.document_type, ()))]
+    return CodeSequenceListResponse(data=rows)
 
 
 @router.patch("/catalogs/code-sequences/{sequence_id}", response_model=CodeSequenceResponse)
@@ -201,6 +217,16 @@ def allocate_business_code(
     actor: AuthenticatedActor | None = Depends(require_permission_for_header_tenant(CODE_SEQUENCE_CONSUMER_PERMISSIONS)),
     repository: AdminRepository = Depends(get_admin_repository),
 ):
+    normalized_type = document_type.strip().lower()
+    if normalized_type == "costing.cost_center":
+        raise ErclaveError("cost_center_dedicated_code_required", "Use the cost-center code authority endpoint.", status_code=422)
+    required_permissions = CODE_SEQUENCE_TYPE_PERMISSION.get(normalized_type)
+    if not required_permissions:
+        raise ErclaveError("code_sequence_not_found", "Code sequence does not exist in this tenant.", status_code=404)
+    if actor is not None:
+        context = repository.get_session_context_by_email(x_tenant_id, actor.email)
+        if context is None or not any(permission in context.permissions for permission in required_permissions):
+            raise ErclaveError("permission_denied", "Authenticated actor cannot allocate this document type.", status_code=403)
     try:
         value = repository.allocate_business_code(x_tenant_id, document_type, payload, require_idempotency_key(idempotency_key), resolve_correlation_id(x_correlation_id), actor.email if actor else None)
     except IdempotencyConflictError as exc:
@@ -306,6 +332,7 @@ def update_unit_of_measure(
 
 @router.get("/session/context", response_model=SessionContextResponse)
 def get_session_context(
+    division_id: str | None = Query(default=None, min_length=1, max_length=40),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
     x_actor_id: str | None = Header(default=None, alias="X-Actor-Id"),
     settings: Settings = Depends(get_settings),
@@ -323,7 +350,7 @@ def get_session_context(
                 status_code=404,
                 details={"tenant_id": x_tenant_id, "email": authenticated_actor.email},
             )
-        return SessionContextResponse(data=context)
+        return SessionContextResponse(data=enrich_capabilities(select_active(context, division_id), catalog_enabled=settings.cost_center_catalog_enabled))
 
     if not x_actor_id:
         raise ErclaveError("actor_required", "X-Actor-Id header is required.", status_code=400)
@@ -335,7 +362,7 @@ def get_session_context(
             status_code=404,
             details={"tenant_id": x_tenant_id, "actor_id": x_actor_id},
         )
-    return SessionContextResponse(data=context)
+    return SessionContextResponse(data=enrich_capabilities(select_active(context, division_id), catalog_enabled=settings.cost_center_catalog_enabled))
 
 
 @router.get("/session/tenants", response_model=SessionTenantListResponse)
@@ -422,7 +449,6 @@ def onboard_tenant(
                 status_code=409,
                 details={"module_code": item["module_code"], "dependencies": missing},
             )
-    ensure_firebase_user(payload.owner.email, payload.owner.display_name, settings)
     result = repository.onboard_tenant(
         slug=payload.slug,
         commercial_name=payload.commercial_name,
@@ -436,6 +462,7 @@ def onboard_tenant(
         modules=normalized_modules,
         idempotency_key=resolved_idempotency_key,
         correlation_id=resolve_correlation_id(x_correlation_id),
+        ensure_identity=lambda: ensure_firebase_user(payload.owner.email, payload.owner.display_name, settings),
     )
     try:
         result["invitation"] = create_firebase_password_invitation(payload.owner.email, settings)
@@ -728,7 +755,7 @@ def upsert_setting(
     return SettingResponse(data=setting)
 
 
-@router.post("/organization/legal-entities", response_model=OrganizationItemResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/organization/legal-entities", response_model=OrganizationItemResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
 def create_legal_entity(
     payload: LegalEntityCreateRequest,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
@@ -752,7 +779,7 @@ def create_legal_entity(
     return OrganizationItemResponse(data=item)
 
 
-@router.patch("/organization/legal-entities/{legal_entity_id}", response_model=OrganizationItemResponse)
+@router.patch("/organization/legal-entities/{legal_entity_id}", response_model=OrganizationItemResponse, deprecated=True)
 def update_legal_entity(
     legal_entity_id: str,
     payload: LegalEntityUpdateRequest,
@@ -776,7 +803,7 @@ def update_legal_entity(
     return OrganizationItemResponse(data=item)
 
 
-@router.post("/organization/legal-entities/{legal_entity_id}/activate", response_model=OrganizationItemResponse)
+@router.post("/organization/legal-entities/{legal_entity_id}/activate", response_model=OrganizationItemResponse, deprecated=True)
 def activate_legal_entity(
     legal_entity_id: str,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
@@ -799,7 +826,7 @@ def activate_legal_entity(
     return OrganizationItemResponse(data=item)
 
 
-@router.post("/organization/legal-entities/{legal_entity_id}/deactivate", response_model=OrganizationItemResponse)
+@router.post("/organization/legal-entities/{legal_entity_id}/deactivate", response_model=OrganizationItemResponse, deprecated=True)
 def deactivate_legal_entity(
     legal_entity_id: str,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
@@ -822,7 +849,7 @@ def deactivate_legal_entity(
     return OrganizationItemResponse(data=item)
 
 
-@router.post("/organization/branches", response_model=OrganizationItemResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/organization/branches", response_model=OrganizationItemResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
 def create_branch(
     payload: BranchCreateRequest,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
@@ -846,7 +873,7 @@ def create_branch(
     return OrganizationItemResponse(data=item)
 
 
-@router.patch("/organization/branches/{branch_id}", response_model=OrganizationItemResponse)
+@router.patch("/organization/branches/{branch_id}", response_model=OrganizationItemResponse, deprecated=True)
 def update_branch(
     branch_id: str,
     payload: BranchUpdateRequest,
@@ -870,7 +897,7 @@ def update_branch(
     return OrganizationItemResponse(data=item)
 
 
-@router.post("/organization/branches/{branch_id}/activate", response_model=OrganizationItemResponse)
+@router.post("/organization/branches/{branch_id}/activate", response_model=OrganizationItemResponse, deprecated=True)
 def activate_branch(
     branch_id: str,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
@@ -893,7 +920,7 @@ def activate_branch(
     return OrganizationItemResponse(data=item)
 
 
-@router.post("/organization/branches/{branch_id}/deactivate", response_model=OrganizationItemResponse)
+@router.post("/organization/branches/{branch_id}/deactivate", response_model=OrganizationItemResponse, deprecated=True)
 def deactivate_branch(
     branch_id: str,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
@@ -984,7 +1011,6 @@ def invite_user(
     if repository.get_tenant(x_tenant_id) is None:
         raise ErclaveError("tenant_not_found", "Tenant not found.", status_code=404, details={"tenant_id": x_tenant_id})
     resolved_idempotency_key = require_idempotency_key(idempotency_key)
-    ensure_firebase_user(payload.email, payload.display_name, settings)
     return UserResponse(
         data=repository.invite_user(
             tenant_id=x_tenant_id,
@@ -993,6 +1019,7 @@ def invite_user(
             role_ids=payload.role_ids,
             idempotency_key=resolved_idempotency_key,
             correlation_id=resolve_correlation_id(x_correlation_id),
+            ensure_identity=lambda: ensure_firebase_user(payload.email, payload.display_name, settings),
         )
     )
 
@@ -1044,7 +1071,7 @@ def disable_user(
     return UserResponse(data=user)
 
 
-@router.delete("/users/{user_id}", response_model=UserResponse)
+@router.delete("/users/{user_id}", response_model=UserDeleteResponse)
 def delete_user(
     user_id: str,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
@@ -1053,22 +1080,26 @@ def delete_user(
     _authorization: None = Depends(require_permission_for_header_tenant("admin.user.delete")),
     settings: Settings = Depends(get_settings),
     repository: AdminRepository = Depends(get_admin_repository),
-) -> UserResponse:
+) -> UserDeleteResponse:
     if not x_tenant_id:
         raise ErclaveError("tenant_required", "X-Tenant-Id header is required.", status_code=400)
-    user = repository.get_user_for_tenant(x_tenant_id, user_id)
-    if user is None:
-        raise ErclaveError("user_not_found", "User not found for tenant.", status_code=404, details={"user_id": user_id})
-    delete_firebase_user_by_email(user.email, settings)
-    deleted_user = repository.delete_user(
-        tenant_id=x_tenant_id,
-        user_id=user_id,
-        idempotency_key=require_idempotency_key(idempotency_key),
-        correlation_id=resolve_correlation_id(x_correlation_id),
-    )
+    command_key = require_idempotency_key(idempotency_key)
+    try:
+        deleted_user = repository.delete_user(
+            tenant_id=x_tenant_id,
+            user_id=user_id,
+            idempotency_key=command_key,
+            correlation_id=resolve_correlation_id(x_correlation_id),
+            actor_email=_authorization.email if _authorization else None,
+        )
+    except IdempotencyConflictError as exc:
+        raise ErclaveError("idempotency_key_reused", "Command key conflicts with an earlier request.", status_code=409) from exc
     if deleted_user is None:
         raise ErclaveError("user_not_found", "User not found for tenant.", status_code=404, details={"user_id": user_id})
-    return UserResponse(data=deleted_user)
+    cleanup = repository.cleanup_user_identity(
+        x_tenant_id, user_id, command_key, lambda email: delete_firebase_user_by_email(email, settings)
+    )
+    return UserDeleteResponse(data={**deleted_user.model_dump(), "firebase_identity_cleanup": cleanup})
 
 
 @router.get("/roles", response_model=RoleListResponse)

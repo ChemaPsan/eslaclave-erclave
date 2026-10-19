@@ -11,7 +11,8 @@
       "accountId": "erclave-admin-qa",
       "purpose": "Runtime identity for admin-service-qa",
       "projectRoles": ["roles/cloudsql.client", "roles/firebaseauth.admin"],
-      "secretAccess": ["erclave-database-url-qa"]
+      "secretAccess": ["erclave-database-url-qa"],
+      "runInvokerOn": ["costing-service-qa"]
     },
     {
       "accountId": "erclave-production-qa",
@@ -21,7 +22,9 @@
       "runInvokerOn": [
         "admin-service-qa",
         "hr-service-qa",
-        "inventory-service-qa"
+        "inventory-service-qa",
+        "sales-service-qa",
+        "costing-service-qa"
       ]
     },
     {
@@ -31,12 +34,23 @@
       "secretAccess": ["erclave-database-url-qa"],
       "runInvokerOn": [
         "admin-service-qa",
-        "production-service-qa"
+        "production-service-qa",
+        "maintenance-service-qa",
+        "purchasing-service-qa",
+        "sales-service-qa",
+        "costing-service-qa"
       ]
     },
     {
       "accountId": "erclave-hr-qa",
       "purpose": "Runtime identity for hr-service-qa",
+      "projectRoles": ["roles/cloudsql.client"],
+      "secretAccess": ["erclave-database-url-qa"],
+      "runInvokerOn": ["admin-service-qa", "costing-service-qa"]
+    },
+    {
+      "accountId": "erclave-costing-qa",
+      "purpose": "Runtime identity for costing-service-qa basic cost-center catalog; analytical Costing and Accounting remain disabled",
       "projectRoles": ["roles/cloudsql.client"],
       "secretAccess": ["erclave-database-url-qa"],
       "runInvokerOn": ["admin-service-qa"]

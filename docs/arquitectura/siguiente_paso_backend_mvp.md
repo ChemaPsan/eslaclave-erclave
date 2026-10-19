@@ -1,5 +1,7 @@
 # ERClave - Siguiente paso tecnico para backend MVP
 
+> Evidencia histórica: no ejecutar como próximo paso ni como autorización de datos. Consultar [estado vigente](../contexto/ESTADO_ACTUAL.md) y [verificación Local gobernada](../operaciones/verificacion_local_integral.md).
+
 > Este documento conserva la secuencia de decisiones que inicio el backend MVP. No representa el siguiente paso operativo actual; para estado y prioridades vigentes consultar `docs/contexto/ESTADO_ACTUAL.md` y `docs/contexto/PENDIENTES.md`.
 
 ## 1. Decision del arquitecto SaaS

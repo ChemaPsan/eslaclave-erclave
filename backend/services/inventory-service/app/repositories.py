@@ -1,8 +1,14 @@
-import base64, binascii, json
+from .scoped_availability import check_scoped_availability
+from types import SimpleNamespace
+from .finished_goods_context import finished_goods_context
+from decimal import Decimal
+from .reservation_context import validate_local_context, validate_cost_currency
+import base64, binascii, json, hashlib
 from uuid import uuid4
 from sqlalchemy import text
 from sqlalchemy import create_engine
 from erclave_common.config import get_settings
+from erclave_common.business_codes import derived_manual_code,allocate_movement_code
 from .handoffs import InventoryHandoffs
 from .material_returns import InventoryMaterialReturns
 from .schemas import (
@@ -19,13 +25,27 @@ def reservation_consumption_state(reserved_quantity, consume_quantity):
 
 class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
     def __init__(self,engine): self.engine=engine
-    def _claim(self,c,t,o,k,h):
+    def _movement_code(self, folio, tenant, operation, stable_key, manual_code=None):
+        return allocate_movement_code(folio,tenant,operation,stable_key,manual_code)
+    @staticmethod
+    def _actor_hash(h,actor):
+        return hashlib.sha256(json.dumps({'request_hash':h,'actor_id':actor},sort_keys=True,separators=(',',':')).encode()).hexdigest() if actor is not None else h
+    def _validate_receipt(self,c,t,o,k,row,h,actor=None):
+        if row['request_hash']==self._actor_hash(h,actor):return
+        # Old receipts did not bind the authenticated actor. Recover it only from
+        # the audit event committed in the same transaction; ambiguous evidence
+        # never grants a replay to another actor.
+        if actor is not None and row['request_hash']==h:
+            actors=c.execute(text('select distinct actor_id from inventory.audit_events where tenant_id=:t and action=:o and created_at=:created'),{'t':t,'o':o,'created':row['created_at']}).scalars().all()
+            if actors==[actor]:return
+        raise ValueError('idempotency_key_reused')
+    def _claim(self,c,t,o,k,h,actor=None,resume_pending=False):
         claimed=c.execute(text("""insert into inventory.idempotency_records(id,tenant_id,operation,idempotency_key,request_hash)
-            values(:id,:t,:o,:k,:h) on conflict(tenant_id,operation,idempotency_key) do nothing returning id"""),{"id":f"ide_{uuid4().hex[:26]}","t":t,"o":o,"k":k,"h":h}).first()
+            values(:id,:t,:o,:k,:h) on conflict(tenant_id,operation,idempotency_key) do nothing returning id"""),{"id":f"ide_{uuid4().hex[:26]}","t":t,"o":o,"k":k,"h":self._actor_hash(h,actor)}).first()
         if claimed:return None
-        row=c.execute(text("select request_hash,response_payload from inventory.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k for update"),{"t":t,"o":o,"k":k}).mappings().one()
-        if row["request_hash"] != h: raise ValueError("idempotency_key_reused")
-        if row["response_payload"] is None:raise ValueError("idempotency_request_in_progress")
+        row=c.execute(text("select request_hash,response_payload,created_at from inventory.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k for update"),{"t":t,"o":o,"k":k}).mappings().one()
+        self._validate_receipt(c,t,o,k,row,h,actor)
+        if row["response_payload"] is None and not resume_pending:raise ValueError("idempotency_request_in_progress")
         return row["response_payload"]
     def _done(self,c,t,o,k,value): c.execute(text("update inventory.idempotency_records set response_payload=cast(:p as jsonb) where tenant_id=:t and operation=:o and idempotency_key=:k"),{"p":json.dumps(value.model_dump(mode="json")),"t":t,"o":o,"k":k})
     def _release(self,c,t,o,k): c.execute(text("delete from inventory.idempotency_records where tenant_id=:t and operation=:o and idempotency_key=:k and response_payload is null"),{"t":t,"o":o,"k":k})
@@ -33,22 +53,22 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
     def list_warehouses(self,t,q=None):
         params={"t":t}; where="tenant_id=:t"
         if q: where+=" and (code ilike :q or name ilike :q)"; params["q"]=f"%{q}%"
-        with self.engine.connect() as c: rows=c.execute(text(f"select id,code,name,type,status,business_center,location,owner,capacity,inventory_policy,zone,aisle,rack,level,position,description from inventory.warehouses where {where} order by code"),params).mappings()
+        with self.engine.connect() as c: rows=c.execute(text(f"select division_ref_id,id,code,name,type,status,business_center,location,owner,capacity,inventory_policy,zone,aisle,rack,level,position,description from inventory.warehouses where {where} order by code"),params).mappings()
         return [WarehouseRead.model_validate(dict(x)) for x in rows]
     def _warehouse(self,c,t,i):
-        row=c.execute(text("select id,code,name,type,status,business_center,location,owner,capacity,inventory_policy,zone,aisle,rack,level,position,description from inventory.warehouses where tenant_id=:t and id=:i"),{"t":t,"i":i}).mappings().first(); return WarehouseRead.model_validate(dict(row)) if row else None
+        row=c.execute(text("select division_ref_id,id,code,name,type,status,business_center,location,owner,capacity,inventory_policy,zone,aisle,rack,level,position,description from inventory.warehouses where tenant_id=:t and id=:i"),{"t":t,"i":i}).mappings().first(); return WarehouseRead.model_validate(dict(row)) if row else None
     def get_warehouse(self,t,i):
         with self.engine.connect() as c:return self._warehouse(c,t,i)
     def create_warehouse(self,t,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"warehouse.create",k,h)
+            replay=self._claim(c,t,"warehouse.create",k,h,a)
             if replay:return WarehouseRead.model_validate(replay)
             i=f"whs_{uuid4().hex[:26]}"; row=c.execute(text("insert into inventory.warehouses(id,tenant_id,code,name,type,business_center,location,owner,capacity,inventory_policy,zone,aisle,rack,level,position,description) values(:i,:t,lower(:code),:name,:type,:business_center,:location,:owner,:capacity,:inventory_policy,:zone,:aisle,:rack,:level,:position,:description) on conflict(tenant_id,code) do nothing returning id"),{"i":i,"t":t,**p.model_dump()}).first()
             if not row:self._release(c,t,"warehouse.create",k);return None
             value=self._warehouse(c,t,i); self._audit(c,t,a,"warehouse.create","warehouse",i,p.model_dump()); self._done(c,t,"warehouse.create",k,value); return value
     def update_warehouse(self,t,i,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"warehouse.update",k,h)
+            replay=self._claim(c,t,"warehouse.update",k,h,a)
             if replay:return WarehouseRead.model_validate(replay)
             if not self._warehouse(c,t,i):self._release(c,t,"warehouse.update",k);return None
             data=p.model_dump(exclude_none=True)
@@ -68,7 +88,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
         with self.engine.connect() as c: return self._item(c,t,i)
     def create_item(self,t,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"item.create",k,h)
+            replay=self._claim(c,t,"item.create",k,h,a)
             if replay:return ItemRead.model_validate(replay)
             suggested=self._warehouse(c,t,p.suggested_warehouse_id) if p.suggested_warehouse_id else None
             if p.suggested_warehouse_id and (not suggested or suggested.status!="active"):self._release(c,t,"item.create",k);return None
@@ -77,7 +97,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
             value=self._item(c,t,i); self._audit(c,t,a,"item.create","item",i,p.model_dump()); self._done(c,t,"item.create",k,value); return value
     def update_item(self,t,i,p,k,h,a):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"item.update",k,h)
+            replay=self._claim(c,t,"item.update",k,h,a)
             if replay:return ItemRead.model_validate(replay)
             before=self._item(c,t,i)
             if not before:self._release(c,t,"item.update",k);return None
@@ -104,14 +124,41 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
         row=c.execute(text("""select coalesce(sum(case when direction='in' then quantity else -quantity end),0) quantity,
             coalesce(sum(case when direction='in' then quantity*coalesce(unit_cost,0) else -quantity*coalesce(unit_cost,0) end),0) value
             from inventory.movements where tenant_id=:t and inventory_item_id=:item and warehouse_id=:wh and unit=:unit and status in ('recorded','reversed')"""),{"t":t,"item":item,"wh":warehouse,"unit":unit}).mappings().one()
-        quantity=float(row["quantity"]);value=float(row["value"])
-        return max(0,value/quantity) if quantity>0 else float(default_cost or 0)
+        quantity=Decimal(str(row["quantity"]));value=Decimal(str(row["value"]))
+        return max(Decimal("0"),value/quantity) if quantity>0 else Decimal(str(default_cost or 0))
     def _movement(self,c,t,i):
-        row=c.execute(text("select id,movement_code,movement_type,inventory_item_id,warehouse_id,direction,quantity,unit,unit_cost,reason,source_type,source_id,transfer_group_id,reversal_of_id,status,occurred_at from inventory.movements where tenant_id=:t and id=:i"),{"t":t,"i":i}).mappings().first(); return MovementRead.model_validate(dict(row)) if row else None
-    def create_movement(self,t,p,k,h,a):
+        row=c.execute(text("select source_line_id,monetary_snapshot,case when organization_context is not null then unit_cost end original_unit_cost,organization_context,id,movement_code,movement_type,inventory_item_id,warehouse_id,direction,quantity,unit,unit_cost,reason,source_type,source_id,transfer_group_id,reversal_of_id,status,occurred_at from inventory.movements where tenant_id=:t and id=:i"),{"t":t,"i":i}).mappings().first(); return MovementRead.model_validate(dict(row)) if row else None
+    def warehouse_dimension(self,t,i):
+        with self.engine.connect() as c:return c.execute(text('select division_ref_id from inventory.warehouses where tenant_id=:t and id=:id'),{'t':t,'id':i}).scalar_one_or_none()
+    def get_movement(self,t,i):
+        with self.engine.connect() as c:return self._movement(c,t,i)
+    def create_movement(self,t,p,k,h,a,organization_context=None,destination_context=None,purchase_proof=None,folio=None):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"movement.create",k,h)
-            if replay:return MovementRead.model_validate(replay)
+            validate_local_context(c,t,p,organization_context)
+            if organization_context and p.source.type!='manual' and not (p.source.type=='purchase_receipt' and purchase_proof):raise ValueError('order_context_downstream_pending')
+            if p.source.type=='purchase_receipt' and not purchase_proof:raise ValueError('operational_context_required')
+            if p.movement_type=='transfer':
+                if bool(organization_context)!=bool(destination_context):raise ValueError('operational_context_mismatch')
+                if organization_context:
+                    if organization_context.society_ref_id!=destination_context.society_ref_id:raise ValueError('operational_context_mismatch')
+                    if not organization_context.cost_currency or organization_context.cost_currency!=destination_context.cost_currency:raise ValueError('operational_cost_currency_unavailable')
+                validate_local_context(c,t,p.model_copy(update={'warehouse_id':p.destination_warehouse_id}),destination_context)
+            if organization_context and p.movement_type in ('entry','positive_adjustment') and p.unit_cost is None:raise ValueError('operational_unit_cost_required')
+            if organization_context and p.movement_type in ('exit','negative_adjustment','transfer') and p.unit_cost is not None:raise ValueError('stock_cost_is_authoritative')
+            if purchase_proof:
+                c.execute(text('select pg_advisory_xact_lock(hashtextextended(:key,0))'),{'key':f'purchase-receipt:{t}:{p.source.id}:{p.source.line_id}'})
+                existing=c.execute(text("select id from inventory.movements where tenant_id=:t and source_type='purchase_receipt' and source_id=:source and source_line_id=:line"),{'t':t,'source':p.source.id,'line':p.source.line_id}).scalar_one_or_none()
+                if existing:
+                    current=self._movement(c,t,existing)
+                    if (current.inventory_item_id!=p.inventory_item_id or current.warehouse_id!=p.warehouse_id
+                        or Decimal(str(current.quantity))!=p.quantity or current.unit!=p.unit
+                        or current.original_unit_cost!=p.unit_cost or current.organization_context!=organization_context):raise ValueError('operational_context_mismatch')
+                    return current
+            replay=self._claim(c,t,"movement.create",k,h,a)
+            if replay:
+                previous=MovementRead.model_validate(replay)
+                if previous.organization_context!=organization_context:raise ValueError('operational_context_mismatch')
+                return previous
             item=self._item(c,t,p.inventory_item_id)
             warehouse=self._warehouse(c,t,p.warehouse_id)
             if not item or not warehouse:self._release(c,t,"movement.create",k);return None
@@ -123,52 +170,71 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
             outgoing=p.movement_type in ("exit","negative_adjustment","transfer")
             lock_warehouses=sorted({p.warehouse_id,*([p.destination_warehouse_id] if p.destination_warehouse_id else [])})
             for warehouse_id in lock_warehouses:self._resource_lock(c,t,p.inventory_item_id,warehouse_id)
+            validate_cost_currency(c,t,p.inventory_item_id,p.warehouse_id,organization_context)
             available=self._balance(c,t,p.inventory_item_id,p.warehouse_id,p.unit)-self._reserved(c,t,p.inventory_item_id,p.warehouse_id,p.unit)
             if outgoing and available < p.quantity: self._release(c,t,"movement.create",k);raise ValueError("insufficient_available_stock")
-            unit_cost=float(p.unit_cost) if p.unit_cost is not None else (self._average_cost(c,t,p.inventory_item_id,p.warehouse_id,p.unit,item.default_unit_cost) if outgoing else float(item.default_unit_cost))
-            group=f"trf_{uuid4().hex[:26]}" if p.movement_type=="transfer" else None; i=f"mov_{uuid4().hex[:26]}"; code=f"MOV-{uuid4().hex[:10].upper()}"
-            self._insert_movement(c,t,i,code,p,"out" if outgoing else "in",p.warehouse_id,a,group,unit_cost=unit_cost)
+            unit_cost=p.unit_cost if p.unit_cost is not None else (self._average_cost(c,t,p.inventory_item_id,p.warehouse_id,p.unit,item.default_unit_cost) if outgoing else float(item.default_unit_cost))
+            group=f"trf_{uuid4().hex[:26]}" if p.movement_type=="transfer" else None; i=f"mov_{uuid4().hex[:26]}"
+            proposed=p.manual_code if p.source.type=='manual' else derived_manual_code("PUR",t,p.source.type,p.source.id,p.source.line_id or '',k)
+            code=self._movement_code(folio,t,"movement.create",k,proposed)
+            self._insert_movement(c,t,i,code,p,"out" if outgoing else "in",p.warehouse_id,a,group,unit_cost=unit_cost,organization_context=organization_context)
+            if purchase_proof:
+                c.execute(text('update inventory.movements set monetary_snapshot=cast(:snapshot as jsonb) where tenant_id=:t and id=:id'),{'t':t,'id':i,'snapshot':json.dumps(purchase_proof)})
             if group:
-                c.execute(text("insert into inventory.transfers(id,tenant_id,outgoing_movement_id,destination_warehouse_id) values(:id,:t,:movement,:destination)"),{"id":group,"t":t,"movement":i,"destination":p.destination_warehouse_id})
+                c.execute(text("insert into inventory.transfers(id,tenant_id,outgoing_movement_id,destination_warehouse_id,destination_context) values(:id,:t,:movement,:destination,cast(:context as jsonb))"),{"id":group,"t":t,"movement":i,"destination":p.destination_warehouse_id,'context':destination_context.model_dump_json() if destination_context else None})
             value=self._movement(c,t,i); self._audit(c,t,a,"movement.create","movement",i,p.model_dump(mode="json")); self._done(c,t,"movement.create",k,value); return value
-    def _insert_movement(self,c,t,i,code,p,direction,warehouse,a,group=None,reversal=None,unit_cost=None):
-        c.execute(text("insert into inventory.movements(id,tenant_id,movement_code,movement_type,inventory_item_id,warehouse_id,direction,quantity,unit,unit_cost,reason,source_type,source_id,transfer_group_id,reversal_of_id,actor_id,occurred_at) values(:i,:t,:code,:mt,:item,:wh,:direction,:qty,:unit,:cost,:reason,:st,:sid,:group,:reversal,:actor,:at)"),{"i":i,"t":t,"code":code,"mt":p.movement_type,"item":p.inventory_item_id,"wh":warehouse,"direction":direction,"qty":p.quantity,"unit":p.unit,"cost":unit_cost if unit_cost is not None else p.unit_cost,"reason":p.reason,"st":p.source.type,"sid":p.source.id,"group":group,"reversal":reversal,"actor":a,"at":p.occurred_at})
-    def list_movements(self,t,item=None,warehouse=None):
+    def _insert_movement(self,c,t,i,code,p,direction,warehouse,a,group=None,reversal=None,unit_cost=None,organization_context=None):
+        validate_local_context(c,t,p.model_copy(update={"warehouse_id":warehouse}),organization_context)
+        c.execute(text("insert into inventory.movements(id,tenant_id,movement_code,movement_type,inventory_item_id,warehouse_id,direction,quantity,unit,unit_cost,reason,source_type,source_id,transfer_group_id,reversal_of_id,actor_id,occurred_at,organization_context) values(:i,:t,:code,:mt,:item,:wh,:direction,:qty,:unit,:cost,:reason,:st,:sid,:group,:reversal,:actor,:at,cast(:context as jsonb))"),{"i":i,"t":t,"code":code,"mt":p.movement_type,"item":p.inventory_item_id,"wh":warehouse,"direction":direction,"qty":p.quantity,"unit":p.unit,"cost":unit_cost if unit_cost is not None else p.unit_cost,"reason":p.reason,"st":p.source.type,"sid":p.source.id,"group":group,"reversal":reversal,"actor":a,"at":p.occurred_at,"context":organization_context.model_dump_json() if organization_context else None})
+        if p.source.line_id:
+            c.execute(text('update inventory.movements set source_line_id=:line where tenant_id=:t and id=:id'),{'line':p.source.line_id,'t':t,'id':i})
+    def has_scoped_warehouses(self,t):
+        with self.engine.connect() as c:return bool(c.execute(text("select 1 from inventory.warehouses where tenant_id=:t and division_ref_id is not null limit 1"),{"t":t}).first())
+    def list_movements(self,t,item=None,warehouse=None,allowed_divisions=None):
         filters=["tenant_id=:t"]; params={"t":t}
         if item:filters.append("inventory_item_id=:item");params["item"]=item
         if warehouse:filters.append("warehouse_id=:wh");params["wh"]=warehouse
-        with self.engine.connect() as c: rows=c.execute(text("select id,movement_code,movement_type,inventory_item_id,warehouse_id,direction,quantity,unit,unit_cost,reason,source_type,source_id,transfer_group_id,reversal_of_id,status,occurred_at from inventory.movements where "+" and ".join(filters)+" order by occurred_at desc"),params).mappings()
+        if allowed_divisions is not None:
+            filters.append("warehouse_id in (select id from inventory.warehouses where tenant_id=:t and (division_ref_id is null or division_ref_id=any(:divisions)))");params["divisions"]=allowed_divisions
+        with self.engine.connect() as c: rows=c.execute(text("select source_line_id,monetary_snapshot,case when organization_context is not null then unit_cost end original_unit_cost,organization_context,id,movement_code,movement_type,inventory_item_id,warehouse_id,direction,quantity,unit,unit_cost,reason,source_type,source_id,transfer_group_id,reversal_of_id,status,occurred_at from inventory.movements where "+" and ".join(filters)+" order by occurred_at desc"),params).mappings()
         return [MovementRead.model_validate(dict(x)) for x in rows]
-    def list_finished_goods_receipts(self,t):
+    def list_finished_goods_receipts(self,t,allowed_divisions=None):
+        filters="";params={"t":t}
+        if allowed_divisions is not None:
+            filters=" and warehouse_id in (select id from inventory.warehouses where tenant_id=:t and (division_ref_id is null or division_ref_id=any(:divisions)))"
+            params["divisions"]=allowed_divisions
         with self.engine.connect() as c:
-            rows=c.execute(text("""select source_id production_order_id,coalesce(sum(quantity),0) received_quantity,max(occurred_at) last_received_at
-                from inventory.movements where tenant_id=:t and source_type='production_order_receipt' and direction='in' and status='recorded'
-                group by source_id order by max(occurred_at) desc"""),{"t":t}).mappings()
+            rows=c.execute(text("select source_id production_order_id,coalesce(sum(quantity),0) received_quantity,max(occurred_at) last_received_at from inventory.movements where tenant_id=:t and source_type='production_order_receipt' and direction='in' and status='recorded'"+filters+" group by source_id order by max(occurred_at) desc"),params).mappings()
         return [FinishedGoodsReceiptSummaryRead.model_validate(dict(row)) for row in rows]
-    def create_finished_goods_receipt(self,t,p,order,product,k,h,a):
+    def create_finished_goods_receipt(self,t,p,order,product,k,h,a,folio=None):
         operation="finished_goods_receipt.create"
+        context,original_cost=finished_goods_context(order,product,p.production_order_id)
         with self.engine.begin() as c:
-            replay=self._claim(c,t,operation,k,h)
+            validate_local_context(c,t,SimpleNamespace(warehouse_id=p.warehouse_id,inventory_item_id=product["inventory_item_id"]),context)
+            replay=self._claim(c,t,operation,k,h,a)
             if replay:return FinishedGoodsReceiptRead.model_validate(replay)
             c.execute(text("select pg_advisory_xact_lock(hashtextextended(:lock_key,0))"),{"lock_key":f"finished-goods-receipt:{t}:{order['id']}"})
             item=self._item(c,t,product["inventory_item_id"]);warehouse=self._warehouse(c,t,p.warehouse_id)
             if not item or not warehouse:self._release(c,t,operation,k);return None
             if item.status!="active" or item.type!="finishedGood" or warehouse.status!="active":self._release(c,t,operation,k);raise ValueError("finished_goods_receipt_reference_invalid")
             if item.base_unit!=order["unit"] or item.base_unit!=product["base_unit"]:self._release(c,t,operation,k);raise ValueError("finished_goods_receipt_unit_mismatch")
-            received=float(c.execute(text("""select coalesce(sum(quantity),0) from inventory.movements
-                where tenant_id=:t and source_type='production_order_receipt' and source_id=:order_id and direction='in' and status='recorded'"""),{"t":t,"order_id":order["id"]}).scalar_one())
-            ordered=float(order["quantity"]);quantity=float(p.quantity)
-            if received+quantity>ordered+0.000001:self._release(c,t,operation,k);raise ValueError("finished_goods_receipt_quantity_exceeded")
-            unit_cost=float(order.get("unit_cost")) if order.get("unit_cost") is not None else float(item.default_unit_cost)
+            received=c.execute(text("""select coalesce(sum(quantity),0) from inventory.movements
+                where tenant_id=:t and source_type='production_order_receipt' and source_id=:order_id and direction='in' and status='recorded'"""),{"t":t,"order_id":order["id"]}).scalar_one()
+            received=Decimal(str(received)) if context else float(received)
+            ordered=Decimal(str(order.get("original_quantity",order["quantity"]))) if context else float(order["quantity"]);quantity=Decimal(str(p.quantity)) if context else float(p.quantity)
+            if received+quantity>ordered+(Decimal('0') if context else 0.000001):self._release(c,t,operation,k);raise ValueError("finished_goods_receipt_quantity_exceeded")
+            unit_cost=original_cost if context else float(order.get("unit_cost")) if order.get("unit_cost") is not None else float(item.default_unit_cost)
             movement_payload=MovementCreate(movement_type="entry",inventory_item_id=item.id,warehouse_id=p.warehouse_id,quantity=quantity,unit=item.base_unit,unit_cost=unit_cost,reason=p.notes or f"Recepción de orden {order['code']}",source=SourceRef(type="production_order_receipt",id=order["id"]),occurred_at=p.received_at)
-            movement_id=f"mov_{uuid4().hex[:26]}"; movement_code=f"MOV-{uuid4().hex[:10].upper()}"
+            if context:movement_payload=movement_payload.model_copy(update={"quantity":quantity})
+            movement_id=f"mov_{uuid4().hex[:26]}"; movement_code=self._movement_code(folio,t,"finished_goods_receipt.create",k,derived_manual_code("FGR",t,order["id"],k))
             self._resource_lock(c,t,item.id,p.warehouse_id)
-            self._insert_movement(c,t,movement_id,movement_code,movement_payload,"in",p.warehouse_id,a,unit_cost=unit_cost)
+            validate_cost_currency(c,t,item.id,p.warehouse_id,context)
+            self._insert_movement(c,t,movement_id,movement_code,movement_payload,"in",p.warehouse_id,a,unit_cost=unit_cost,organization_context=context)
             movement=self._movement(c,t,movement_id);cumulative=received+quantity
             value=FinishedGoodsReceiptRead(production_order_id=order["id"],production_order_code=order["code"],product_service_id=product["id"],product_service_code=product["code"],product_service_name=product["name"],inventory_item_id=item.id,inventory_item_code=item.code,inventory_item_name=item.name,warehouse_id=p.warehouse_id,unit=item.base_unit,ordered_quantity=ordered,received_quantity=quantity,cumulative_received_quantity=cumulative,remaining_quantity=max(0,ordered-cumulative),movement=movement)
-            self._audit(c,t,a,"finished_goods_receipt.create","production_order",order["id"],{"movement_id":movement.id,"quantity":quantity,"warehouse_id":p.warehouse_id})
+            self._audit(c,t,a,"finished_goods_receipt.create","production_order",order["id"],{"movement_id":movement.id,"quantity":str(quantity) if context else quantity,"warehouse_id":p.warehouse_id})
             self._done(c,t,operation,k,value);return value
-    def _availability_rows(self,c,t,item,unit):
+    def _availability_rows(self,c,t,item,unit,division_id=None):
         return c.execute(text("""with movement_totals as (
             select warehouse_id,
                 coalesce(sum(case when direction='in' then quantity else -quantity end),0) on_hand,
@@ -191,8 +257,10 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
         from locations l join inventory.warehouses w on w.tenant_id=:t and w.id=l.warehouse_id
         join inventory.items i on i.tenant_id=:t and i.id=:item
         left join movement_totals m on m.warehouse_id=l.warehouse_id left join reservation_totals r on r.warehouse_id=l.warehouse_id
-        where w.status='active' order by available desc,l.warehouse_id"""),{"t":t,"item":item,"unit":unit}).mappings().all()
-    def check_availability(self,t,p):
+        where w.status='active' and (cast(:division as text) is null or w.division_ref_id=:division) order by available desc,l.warehouse_id"""),{"t":t,"item":item,"unit":unit,"division":division_id}).mappings().all()
+    def check_availability(self,t,p,organization_context=None):
+        if organization_context:
+            return check_scoped_availability(self,t,p,organization_context)
         result=[]
         with self.engine.connect() as c:
             for requested in p.items:
@@ -213,25 +281,31 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
                 result.append(AvailabilityItemRead(inventory_item_id=item.id,item_code=item.code,item_name=item.name,unit=item.base_unit,required_quantity=requested.quantity,on_hand_quantity=on_hand,reserved_quantity=reserved,available_quantity=available,unit_cost=unit_cost,total_cost=cost,ok=ok,blocker_code=None if ok else "insufficient_material",allocations=allocations))
         return AvailabilityCheckRead(source=p.source,available=all(item.ok for item in result),items=result)
     def _reservation(self,c,t,i):
-        row=c.execute(text("""select id,inventory_item_id,warehouse_id,quantity,unit,unit_cost_snapshot,source_type,source_id,source_line_id,
+        row=c.execute(text("""select case when organization_context is not null then unit_cost_snapshot end original_unit_cost,organization_context,id,inventory_item_id,warehouse_id,quantity,unit,unit_cost_snapshot,source_type,source_id,source_line_id,
             case when status='active' and expires_at is not null and expires_at<=now() then 'expired' else status end status,expires_at,created_at
             from inventory.reservations where tenant_id=:t and id=:i"""),{"t":t,"i":i}).mappings().first()
         return ReservationRead.model_validate(dict(row)) if row else None
-    def create_reservation(self,t,p,k,h,a):
+    def get_reservation(self,t,i):
+        with self.engine.connect() as c:return self._reservation(c,t,i)
+    def create_reservation(self,t,p,k,h,a,organization_context=None):
         with self.engine.begin() as c:
+            validate_local_context(c,t,p,organization_context)
             if p.source.type=='production_order':
                 c.execute(text('select pg_advisory_xact_lock(hashtextextended(:k,0))'),{'k':f'production-reservations:{t}:{p.source.id}'})
                 if c.execute(text('select 1 from inventory.reservation_source_rollbacks where tenant_id=:t and source_id=:id'),{'t':t,'id':p.source.id}).first():raise ValueError('production_creation_attempt_failed')
-            replay=self._claim(c,t,"reservation.create",k,h)
+            replay=self._claim(c,t,"reservation.create",k,h,a)
             if replay:
                 replay_value=ReservationRead.model_validate(replay);current=self._reservation(c,t,replay_value.id)
+                if current and current.organization_context!=organization_context:raise ValueError("operational_context_mismatch")
                 if current and current.status=="active":return current
                 if not current or current.status=="consumed":raise ValueError("reservation_source_conflict")
+                if p.source.type=='maintenance_order':raise ValueError('reservation_source_conflict')
             item=self._item(c,t,p.inventory_item_id);warehouse=self._warehouse(c,t,p.warehouse_id)
             production_source=p.source.type=="production_order"
             if not item or not warehouse or item.status!="active" or warehouse.status!="active" or (production_source and not item.use_in_recipe):self._release(c,t,"reservation.create",k);raise ValueError("reservation_reference_invalid")
             if item.base_unit!=p.unit:self._release(c,t,"reservation.create",k);raise ValueError("reservation_unit_mismatch")
             self._resource_lock(c,t,item.id,warehouse.id)
+            validate_cost_currency(c,t,item.id,warehouse.id,organization_context)
             available=self._balance(c,t,item.id,warehouse.id,p.unit)-self._reserved(c,t,item.id,warehouse.id,p.unit)
             if available<float(p.quantity):self._release(c,t,"reservation.create",k);raise ValueError("insufficient_available_stock")
             unit_cost=self._average_cost(c,t,item.id,warehouse.id,p.unit,item.default_unit_cost);i=f"rsv_{uuid4().hex[:26]}"
@@ -239,12 +313,14 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
                 c.execute(text("""update inventory.reservations set status='active',quantity=:quantity,unit_cost_snapshot=:cost,
                     expires_at=coalesce(:expires_at,now()+interval '24 hours'),updated_at=now() where tenant_id=:t and id=:i"""),{"quantity":p.quantity,"cost":unit_cost,"expires_at":p.expires_at,"t":t,"i":replay_value.id})
                 value=self._reservation(c,t,replay_value.id);self._audit(c,t,a,"reservation.reactivate","reservation",value.id,p.model_dump(mode="json"));self._done(c,t,"reservation.create",k,value);return value
-            row=c.execute(text("""insert into inventory.reservations(id,tenant_id,inventory_item_id,warehouse_id,quantity,unit,unit_cost_snapshot,source_type,source_id,source_line_id,status,expires_at,created_by)
-                values(:i,:t,:item,:wh,:quantity,:unit,:cost,:source_type,:source_id,:line_id,'active',case when cast(:source_type as varchar) in ('maintenance_order','production_order') then cast(:expires_at as timestamptz) else coalesce(cast(:expires_at as timestamptz),now()+interval '24 hours') end,:actor)
-                on conflict(tenant_id,source_type,source_id,source_line_id,inventory_item_id,warehouse_id,unit) do nothing returning id"""),{"i":i,"t":t,"item":item.id,"wh":warehouse.id,"quantity":p.quantity,"unit":p.unit,"cost":unit_cost,"source_type":p.source.type,"source_id":p.source.id,"line_id":p.source.line_id or item.id,"expires_at":p.expires_at,"actor":a}).first()
+            row=c.execute(text("""insert into inventory.reservations(id,tenant_id,inventory_item_id,warehouse_id,quantity,unit,unit_cost_snapshot,source_type,source_id,source_line_id,status,expires_at,created_by,organization_context)
+                values(:i,:t,:item,:wh,:quantity,:unit,:cost,:source_type,:source_id,:line_id,'active',case when cast(:source_type as varchar) in ('maintenance_order','production_order') then cast(:expires_at as timestamptz) else coalesce(cast(:expires_at as timestamptz),now()+interval '24 hours') end,:actor,cast(:context as jsonb))
+                on conflict(tenant_id,source_type,source_id,source_line_id,inventory_item_id,warehouse_id,unit) do nothing returning id"""),{"i":i,"t":t,"item":item.id,"wh":warehouse.id,"quantity":p.quantity,"unit":p.unit,"cost":unit_cost,"source_type":p.source.type,"source_id":p.source.id,"line_id":p.source.line_id or item.id,"expires_at":p.expires_at,"actor":a,"context":organization_context.model_dump_json() if organization_context else None}).first()
             if not row:
-                existing=c.execute(text("""select id,quantity,status from inventory.reservations where tenant_id=:t and source_type=:source_type and source_id=:source_id
+                existing=c.execute(text("""select id,quantity,status,organization_context from inventory.reservations where tenant_id=:t and source_type=:source_type and source_id=:source_id
                     and source_line_id=:line_id and inventory_item_id=:item and warehouse_id=:wh and unit=:unit for update"""),{"t":t,"source_type":p.source.type,"source_id":p.source.id,"line_id":p.source.line_id or item.id,"item":item.id,"wh":warehouse.id,"unit":p.unit}).mappings().one()
+                if existing["organization_context"]!=(organization_context.model_dump() if organization_context else None):raise ValueError("operational_context_mismatch")
+                if p.source.type=='maintenance_order' and self._reservation(c,t,existing['id']).status!='active':raise ValueError('reservation_source_conflict')
                 if float(existing["quantity"])!=float(p.quantity) or existing["status"]=="consumed":self._release(c,t,"reservation.create",k);raise ValueError("reservation_source_conflict")
                 if existing["status"]!="active":c.execute(text("update inventory.reservations set status='active',unit_cost_snapshot=:cost,expires_at=coalesce(:expires_at,now()+interval '24 hours'),updated_at=now() where tenant_id=:t and id=:i"),{"cost":unit_cost,"expires_at":p.expires_at,"t":t,"i":existing["id"]})
                 value=self._reservation(c,t,existing["id"])
@@ -257,7 +333,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
             if not before:return None
             if allowed_sources is not None and before.source_type not in allowed_sources:raise ValueError("permission_denied")
             if before.source_type=="maintenance_order" and before.status=="consumed":raise ValueError("reservation_not_active")
-            replay=self._claim(c,t,"reservation.release",k,h)
+            replay=self._claim(c,t,"reservation.release",k,h,a)
             if replay:return ReservationRead.model_validate(replay)
             if before.status=="active":c.execute(text("update inventory.reservations set status='released',updated_at=now() where tenant_id=:t and id=:i"),{"t":t,"i":i})
             value=self._reservation(c,t,i);self._audit(c,t,a,"reservation.release","reservation",i,{"reason":reason,"before":before.status,"after":value.status});self._done(c,t,"reservation.release",k,value);return value
@@ -272,27 +348,29 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
             c.execute(text("update inventory.reservations set status='released',updated_at=now() where tenant_id=:t and source_type='production_order' and source_id=:id and status='active' and created_by=:actor"),{'t':t,'id':source_id,'actor':actor})
             self._audit(c,t,actor,'reservation.creation_rollback','production_order',source_id,{'reservation_ids':[row['id'] for row in rows]})
             return {'source_id':source_id,'status':'released'}
-    def consume_reservation(self,t,i,reason,k,h,a,quantity=None,allowed_sources=None):
+    def consume_reservation(self,t,i,reason,k,h,a,quantity=None,allowed_sources=None,folio=None):
         with self.engine.begin() as c:
             c.execute(text("select id from inventory.reservations where tenant_id=:t and id=:i for update"),{"t":t,"i":i}).first()
             reservation=self._reservation(c,t,i)
             if not reservation:return None
             if allowed_sources is not None and reservation.source_type not in allowed_sources:raise ValueError("permission_denied")
-            replay=self._claim(c,t,"reservation.consume",k,h)
+            replay=self._claim(c,t,"reservation.consume",k,h,a)
             if replay:return MovementRead.model_validate(replay)
             if reservation.status=="consumed":
                 movement=c.execute(text("select id from inventory.movements where tenant_id=:t and source_type='reservation' and source_id=:i order by created_at limit 1"),{"t":t,"i":i}).scalar_one_or_none()
                 if movement:
                     value=self._movement(c,t,movement);self._done(c,t,"reservation.consume",k,value);return value
             if reservation.status!="active":self._release(c,t,"reservation.consume",k);raise ValueError("reservation_not_active")
+            if reservation.organization_context:validate_local_context(c,t,reservation,reservation.organization_context)
             consume_quantity=float(quantity) if quantity is not None else float(reservation.quantity)
             if reservation.source_type in {"maintenance_order","production_order"} and consume_quantity!=float(reservation.quantity):raise ValueError("reservation_quantity_exceeded")
             if consume_quantity>float(reservation.quantity):self._release(c,t,"reservation.consume",k);raise ValueError("reservation_quantity_exceeded")
             self._resource_lock(c,t,reservation.inventory_item_id,reservation.warehouse_id)
             if self._balance(c,t,reservation.inventory_item_id,reservation.warehouse_id,reservation.unit)<consume_quantity:self._release(c,t,"reservation.consume",k);raise ValueError("reserved_stock_missing")
-            movement_id=f"mov_{uuid4().hex[:26]}";code=f"MOV-{uuid4().hex[:10].upper()}"
+            movement_id=f"mov_{uuid4().hex[:26]}";code=self._movement_code(folio,t,"reservation.consume",k,derived_manual_code("RSC",t,i,k))
             c.execute(text("""insert into inventory.movements(id,tenant_id,movement_code,movement_type,inventory_item_id,warehouse_id,direction,quantity,unit,unit_cost,reason,source_type,source_id,actor_id,occurred_at)
-                values(:id,:t,:code,'exit',:item,:wh,'out',:quantity,:unit,:cost,:reason,'reservation',:source,:actor,now())"""),{"id":movement_id,"t":t,"code":code,"item":reservation.inventory_item_id,"wh":reservation.warehouse_id,"quantity":consume_quantity,"unit":reservation.unit,"cost":reservation.unit_cost_snapshot,"reason":reason,"source":reservation.id,"actor":a})
+                values(:id,:t,:code,'exit',:item,:wh,'out',:quantity,:unit,:cost,:reason,'reservation',:source,:actor,now())"""),{"id":movement_id,"t":t,"code":code,"item":reservation.inventory_item_id,"wh":reservation.warehouse_id,"quantity":consume_quantity,"unit":reservation.unit,"cost":reservation.original_unit_cost if reservation.original_unit_cost is not None else reservation.unit_cost_snapshot,"reason":reason,"source":reservation.id,"actor":a})
+            c.execute(text("update inventory.movements set organization_context=cast(:context as jsonb) where tenant_id=:t and id=:id"),{"context":reservation.organization_context.model_dump_json() if reservation.organization_context else None,"t":t,"id":movement_id})
             stored_quantity,next_status,remaining=reservation_consumption_state(reservation.quantity,consume_quantity)
             c.execute(text("update inventory.reservations set quantity=:quantity,status=:status,updated_at=now() where tenant_id=:t and id=:i"),{"quantity":stored_quantity,"status":next_status,"t":t,"i":i});value=self._movement(c,t,movement_id)
             self._audit(c,t,a,"reservation.consume","reservation",i,{"movement_id":movement_id,"reason":reason,"quantity":consume_quantity,"remaining_quantity":remaining});self._done(c,t,"reservation.consume",k,value);return value
@@ -301,6 +379,8 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
         order_columns={"item_code":"lower(item_code)","item_name":"lower(item_name)","on_hand_asc":"on_hand_quantity","on_hand_desc":"on_hand_quantity"}
         direction="desc" if order=="on_hand_desc" else "asc"; primary=order_columns[order]
         params={"t":t,"limit":limit+1}; filters=[]; base_filters=["c.tenant_id=:t"]
+        if options.get("allowed_divisions") is not None:
+            base_filters.append("(w.division_ref_id is null or w.division_ref_id=any(:divisions))");params["divisions"]=options["allowed_divisions"]
         for option,column in (("inventory_item_id","c.inventory_item_id"),("warehouse_id","c.warehouse_id"),("category","i.category"),("item_type","i.type"),("item_status","i.status"),("inventory_policy","i.inventory_policy"),("unit","c.unit")):
             value=options.get(option)
             if value is not None: base_filters.append(f"{column}=:{option}"); params[option]=value
@@ -360,9 +440,9 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
             payload={"order":order,"value":value,"item_id":last["inventory_item_id"],"warehouse_id":last["warehouse_id"],"unit":last["unit"]}
             next_cursor=base64.urlsafe_b64encode(json.dumps(payload,separators=(",",":"),sort_keys=True).encode()).decode().rstrip("=")
         return [BalanceRead.model_validate(x) for x in rows],Page(limit=limit,next_cursor=next_cursor,has_more=has_more)
-    def reverse_movement(self,t,i,reason,k,h,a):
+    def reverse_movement(self,t,i,reason,k,h,a,folio=None):
         with self.engine.begin() as c:
-            replay=self._claim(c,t,"movement.reverse",k,h)
+            replay=self._claim(c,t,"movement.reverse",k,h,a)
             if replay:return MovementRead.model_validate(replay)
             c.execute(text("select id from inventory.movements where tenant_id=:t and id=:i for update"),{"t":t,"i":i}).first()
             original=self._movement(c,t,i)
@@ -371,7 +451,7 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
             if original.reversal_of_id or original.movement_type=="reversal":raise ValueError("reversal_cannot_be_reversed")
             if original.transfer_group_id and c.execute(text("select 1 from inventory.transfers where tenant_id=:t and id=:id"),{"t":t,"id":original.transfer_group_id}).first():
                 raise ValueError("transfer_requires_receipt_or_return")
-            if original.source_type in {"production_order","maintenance_order","purchase_order","sales_order","reservation","material_return"}:
+            if original.source_type in {"production_order","maintenance_order","purchase_order","purchase_receipt","sales_order","reservation","material_return"}:
                 raise ValueError("linked_movement_requires_return")
             originals=[original]
             if original.transfer_group_id:
@@ -383,9 +463,10 @@ class InventoryRepository(InventoryHandoffs,InventoryMaterialReturns):
                 if entry.direction=="in" and self._balance(c,t,entry.inventory_item_id,entry.warehouse_id,entry.unit)-self._reserved(c,t,entry.inventory_item_id,entry.warehouse_id,entry.unit)<entry.quantity:raise ValueError("insufficient_available_stock_for_reversal")
             first_reversal=None
             for entry in originals:
-                rid=f"mov_{uuid4().hex[:26]}"; code=f"REV-{uuid4().hex[:10].upper()}"
-                c.execute(text("insert into inventory.movements(id,tenant_id,movement_code,movement_type,inventory_item_id,warehouse_id,direction,quantity,unit,unit_cost,reason,source_type,source_id,transfer_group_id,reversal_of_id,actor_id,occurred_at) values(:id,:t,:code,'reversal',:item,:wh,:direction,:qty,:unit,:cost,:reason,'movement',:source,:group,:source,:actor,now())"),{"id":rid,"t":t,"code":code,"item":entry.inventory_item_id,"wh":entry.warehouse_id,"direction":"out" if entry.direction=="in" else "in","qty":entry.quantity,"unit":entry.unit,"cost":entry.unit_cost,"reason":reason,"source":entry.id,"group":entry.transfer_group_id,"actor":a})
+                rid=f"mov_{uuid4().hex[:26]}"; code=self._movement_code(folio,t,"movement.reverse",f"{k}:{entry.id}",derived_manual_code("REV",t,entry.id))
+                c.execute(text("insert into inventory.movements(id,tenant_id,movement_code,movement_type,inventory_item_id,warehouse_id,direction,quantity,unit,unit_cost,reason,source_type,source_id,transfer_group_id,reversal_of_id,actor_id,occurred_at) values(:id,:t,:code,'reversal',:item,:wh,:direction,:qty,:unit,:cost,:reason,'movement',:source,:group,:source,:actor,now())"),{"id":rid,"t":t,"code":code,"item":entry.inventory_item_id,"wh":entry.warehouse_id,"direction":"out" if entry.direction=="in" else "in","qty":entry.quantity,"unit":entry.unit,"cost":entry.original_unit_cost if entry.original_unit_cost is not None else entry.unit_cost,"reason":reason,"source":entry.id,"group":entry.transfer_group_id,"actor":a})
                 c.execute(text("update inventory.movements set status='reversed' where tenant_id=:t and id=:i"),{"t":t,"i":entry.id})
+                if entry.organization_context:c.execute(text("update inventory.movements set organization_context=cast(:context as jsonb) where tenant_id=:t and id=:id"),{"context":entry.organization_context.model_dump_json(),"t":t,"id":rid})
                 first_reversal=first_reversal or rid
             value=self._movement(c,t,first_reversal); self._audit(c,t,a,"movement.reverse","movement",i,{"reversal_id":first_reversal,"reason":reason,"reversed_count":len(originals)}); self._done(c,t,"movement.reverse",k,value); return value
 

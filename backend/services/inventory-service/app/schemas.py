@@ -1,3 +1,5 @@
+from decimal import Decimal
+from erclave_common.operational_context import OperationalContext
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
@@ -11,6 +13,7 @@ class UnitCodeMixin:
 Status = Literal["active", "inactive", "blocked"]
 
 class WarehouseRead(BaseModel):
+    division_ref_id: str | None = None
     id: str; code: str; name: str; type: str; status: Status; business_center: str; location: str; owner: str; capacity: str | None = None; inventory_policy: str = "standard"; zone: str | None = None; aisle: str | None = None; rack: str | None = None; level: str | None = None; position: str | None = None; description: str | None = None
 class WarehouseCreate(BaseModel):
     code: str = Field(min_length=1, max_length=80); name: str = Field(min_length=1, max_length=200); type: str = Field(min_length=1, max_length=40); business_center: str; location: str; owner: str; capacity: str | None = None; inventory_policy: str = "standard"; zone: str | None = None; aisle: str | None = None; rack: str | None = None; level: str | None = None; position: str | None = None; description: str | None = None
@@ -30,7 +33,7 @@ class ItemCreate(UnitCodeMixin, BaseModel):
             raise ValueError("maximum_stock_must_be_greater_than_or_equal_to_minimum_stock")
         return self
 class ItemUpdate(UnitCodeMixin, BaseModel):
-    name: str | None = None; type: str | None = None; category: str | None = None; base_unit: str | None = None; suggested_warehouse_id: str | None = None; minimum_stock: float | None = Field(default=None, ge=0); maximum_stock: float | None = Field(default=None, ge=0); default_unit_cost: float | None = Field(default=None, ge=0); use_in_recipe: bool | None = None; status: Status | None = None; description: str | None = None
+    name: str | None = None; type: str | None = None; category: str | None = None; base_unit: str | None = None; suggested_warehouse_id: str | None = None; minimum_stock: float | None = Field(default=None, ge=0); maximum_stock: float | None = Field(default=None, ge=0); default_unit_cost: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=6); use_in_recipe: bool | None = None; status: Status | None = None; description: str | None = None
 class ItemResponse(BaseModel): data: ItemRead
 class ItemListResponse(BaseModel): data: list[ItemRead]
 
@@ -53,9 +56,10 @@ class UnitConversionResponse(BaseModel): data: UnitConversionRead
 
 class SourceRef(BaseModel): type: str = Field(min_length=1); id: str = Field(min_length=1); line_id: str | None = None
 class MovementCreate(UnitCodeMixin, BaseModel):
+    manual_code: str | None = Field(default=None, min_length=1, max_length=60, pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
     movement_type: Literal["entry","exit","positive_adjustment","negative_adjustment","transfer"]
     inventory_item_id: str; warehouse_id: str; destination_warehouse_id: str | None = None
-    quantity: float = Field(gt=0); unit: str; unit_cost: float | None = Field(default=None, ge=0)
+    quantity: Decimal = Field(gt=0, max_digits=18, decimal_places=6); unit: str; unit_cost: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=6)
     reason: str = Field(min_length=3); source: SourceRef; occurred_at: datetime
     @model_validator(mode="after")
     def validate_transfer(self):
@@ -63,6 +67,10 @@ class MovementCreate(UnitCodeMixin, BaseModel):
             raise ValueError("Transfer requires a different destination warehouse")
         return self
 class MovementRead(BaseModel):
+    source_line_id: str | None = None
+    monetary_snapshot: dict | None = None
+    original_unit_cost: Decimal | None = None
+    organization_context: OperationalContext | None = None
     id: str; movement_code: str; movement_type: str; inventory_item_id: str; warehouse_id: str; direction: Literal["in","out"]; quantity: float; unit: str; unit_cost: float | None = None; reason: str; source_type: str; source_id: str; transfer_group_id: str | None = None; reversal_of_id: str | None = None; status: Literal["recorded","reversed"]; occurred_at: datetime
 class MovementResponse(BaseModel): data: MovementRead
 class MovementListResponse(BaseModel): data: list[MovementRead]
@@ -75,10 +83,12 @@ class ProductionReservationRollbackRequest(BaseModel):
 class TransferActionRequest(BaseModel):
     model_config = {"extra":"forbid"}
     warehouse_id: str = Field(min_length=1,max_length=40)
-    quantity: Decimal | None = Field(default=None,gt=0)
+    quantity: Decimal | None = Field(default=None,gt=0,max_digits=18,decimal_places=6)
     reason: str = Field(min_length=3,max_length=500)
 
 class TransferRead(BaseModel):
+    organization_context: OperationalContext | None = None
+    destination_context: OperationalContext | None = None
     id: str
     status: Literal["in_transit","partially_received","received","return_requested","returned"]
     outgoing_movement_id: str
@@ -103,10 +113,11 @@ class TransferListResponse(BaseModel): data: list[TransferRead]
 class MaterialReturnRequest(BaseModel):
     model_config={"extra":"forbid"}
     original_movement_id:str=Field(min_length=1,max_length=40)
-    quantity:Decimal=Field(gt=0)
+    quantity:Decimal=Field(gt=0,max_digits=18,decimal_places=6)
     reason:str=Field(min_length=3,max_length=500)
 
 class MaterialReturnRead(BaseModel):
+    organization_context: OperationalContext | None = None
     id:str
     original_movement_id:str
     movement_id:str|None=None
@@ -134,6 +145,7 @@ class MaterialReturnResponse(BaseModel): data:MaterialReturnRead
 class MaterialReturnListResponse(BaseModel): data:list[MaterialReturnRead]
 
 class FinishedGoodsReceiptCreate(BaseModel):
+    model_config={"extra":"forbid"}
     production_order_id: str = Field(min_length=1, max_length=80)
     warehouse_id: str = Field(min_length=1, max_length=80)
     quantity: float = Field(gt=0)
@@ -181,6 +193,7 @@ class AvailabilityItemRequest(UnitCodeMixin, BaseModel):
     unit: str = Field(min_length=1, max_length=40)
 
 class AvailabilityCheckRequest(BaseModel):
+    division_ref_id: str | None = Field(default=None, min_length=1, max_length=40)
     source: SourceRef
     items: list[AvailabilityItemRequest] = Field(min_length=1)
 
@@ -191,12 +204,17 @@ class AvailabilityCheckRequest(BaseModel):
         return self
 
 class AvailabilityAllocation(BaseModel):
+    original_unit_cost: Decimal | None = None
+    cost_currency: str | None = None
     warehouse_id: str
     warehouse_name: str
     quantity: float
     unit_cost: float
 
 class AvailabilityItemRead(BaseModel):
+    original_unit_cost: Decimal | None = None
+    original_total_cost: Decimal | None = None
+    cost_currency: str | None = None
     inventory_item_id: str
     item_code: str
     item_name: str
@@ -228,6 +246,8 @@ class ReservationCreateRequest(UnitCodeMixin, BaseModel):
     expires_at: datetime | None = None
 
 class ReservationRead(BaseModel):
+    original_unit_cost: Decimal | None = None
+    organization_context: OperationalContext | None = None
     id: str
     inventory_item_id: str
     warehouse_id: str

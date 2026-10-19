@@ -2,6 +2,7 @@ import hashlib,json
 from typing import Literal
 from fastapi import APIRouter,Depends,Header
 from erclave_common.errors import ErclaveError
+from erclave_common.business_codes import BusinessCodeClient,get_business_code_client
 from erclave_common.csv_reports import csv_report_response
 from .authorization import AuthorizedContext,require_hr_access
 from .repositories import HrRepository,get_hr_repository
@@ -25,6 +26,7 @@ def conflict(exc,default_code,default_message):
     code=str(exc)
     known={
         "idempotency_key_reused":("idempotency_key_reused","La clave de idempotencia ya fue usada con datos distintos."),
+        "idempotency_request_in_progress":("idempotency_request_in_progress","El comando de puesto continúa en proceso."),
         "labor_area_invalid":("labor_area_invalid","Selecciona un area activa de Recursos Humanos."),
         "labor_position_invalid":("labor_position_invalid","Selecciona un puesto activo de Recursos Humanos."),
     }
@@ -47,8 +49,10 @@ def update_area(area_id:str,payload:AreaUpdate,x_tenant_id:str|None=Header(None,
 @router.get("/positions",response_model=RoleListResponse)
 def positions(x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),area_id:str|None=None,production_only:bool=False,maintenance_only:bool=False,repository:HrRepository=Depends(get_hr_repository),_=Depends(require_hr_access("hr.position.read"))):return RoleListResponse(data=repository.list_roles(tenant(x_tenant_id),area_id,production_only,maintenance_only))
 @router.post("/positions",response_model=RoleResponse,status_code=201)
-def create_position(payload:RoleCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),repository:HrRepository=Depends(get_hr_repository),access:AuthorizedContext=Depends(require_hr_access("hr.position.create"))):
-    try:value=repository.create_role(tenant(x_tenant_id),payload,key(idempotency_key),digest(payload),access.actor_id)
+def create_position(payload:RoleCreate,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),idempotency_key:str|None=Header(None,alias="Idempotency-Key"),authorization:str|None=Header(None,alias="Authorization"),repository:HrRepository=Depends(get_hr_repository),codes:BusinessCodeClient=Depends(get_business_code_client),access:AuthorizedContext=Depends(require_hr_access("hr.position.create"))):
+    t=tenant(x_tenant_id);k=key(idempotency_key)
+    code=codes.allocate(t,"hr.position",authorization,f"hr.position.create:{k}",payload.code)
+    try:value=repository.create_role(t,payload,k,digest(payload),access.actor_id,code=code)
     except ValueError as exc:raise conflict(exc,"position_command_conflict","No se pudo completar el comando de puesto por un conflicto de estado.") from exc
     if not value:raise ErclaveError("position_conflict","Position already exists in this area.",status_code=409)
     return RoleResponse(data=value)

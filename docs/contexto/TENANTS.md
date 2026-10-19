@@ -19,3 +19,7 @@
 - No ejecutar migraciones, seeds, benchmarks o despliegues sobre Cloud SQL QA o Produccion sin autorizacion explicita y plan de rollback.
 
 Este archivo documenta limites, no concede permisos adicionales.
+
+## Fronteras y navegación
+
+Fuente normativa vigente; revisada documentalmente el 2026-10-07 sin ampliar autorizaciones. Relacionada con [inicio de sesión](INICIO_SESION.md), [estado por ambiente](ESTADO_ACTUAL.md) y [fronteras de ambientes](../arquitectura/fronteras_ambientes_local_qa_produccion.md).

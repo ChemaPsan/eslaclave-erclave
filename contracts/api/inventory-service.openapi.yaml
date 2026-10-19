@@ -1,8 +1,22 @@
 openapi: 3.1.0
 info:
   title: ERClave Inventory Service API
-  version: 0.2.0
+  version: 0.3.0
   summary: Warehouse, item, movement, balance, kardex and reservation APIs.
+  description: >-
+    Durable command receipts for warehouses, items, movements, reversals,
+    reservations, finished-goods receipts, transfer actions and material-return
+    requests bind tenant, operation, Idempotency-Key, payload and authenticated
+    actor. Reusing a receipt key with another actor returns HTTP 409
+    idempotency_key_reused. Current organization scope is revalidated before
+    operational replay. Pre-upgrade receipts permit the original actor only
+    when their transaction audit identifies that actor unambiguously.
+    Material-return receive and cancel commands also persist an actor-bound intent
+    before downstream effects, after scope validation. Unfinished reconciliation
+    remains retryable by the same actor and stores no final receipt until terminal.
+    A previously terminal return with no historical key receipt may be read by a
+    new authorized command without repeating physical or downstream effects; this
+    does not establish authorship of the historical operation.
 servers:
 - url: https://api.eslaclave.com
 security:
@@ -14,85 +28,846 @@ tags:
 - name: Balances
 - name: Reservations
 paths:
+  /v1/inventory/warehouses/{warehouse_id}/operation-context:
+    get:
+      tags:
+      - Organization assignments
+      summary: Warehouse Operation Context
+      operationId: warehouse_operation_context_v1_inventory_warehouses__warehouse_id__operation_context_get
+      parameters:
+      - name: warehouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Warehouse Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseOperationContextResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.movement.create
+  /v1/inventory/division-stock:
+    get:
+      tags:
+      - Organization assignments
+      summary: Division Stock
+      operationId: division_stock_v1_inventory_division_stock_get
+      parameters:
+      - name: division_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Division Id
+      - name: inventory_item_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Inventory Item Id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionStockResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.balance.read
+      - sales.order.fulfill
+  /v1/inventory/organization/divisions:
+    get:
+      tags:
+      - Organization assignments
+      summary: Divisions
+      operationId: divisions_v1_inventory_organization_divisions_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionChoicesResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.item.read
+      - inventory.warehouse.read
+  /v1/inventory/warehouses/{warehouse_id}/division:
+    get:
+      tags:
+      - Organization assignments
+      summary: Warehouse Division
+      operationId: warehouse_division_v1_inventory_warehouses__warehouse_id__division_get
+      parameters:
+      - name: warehouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Warehouse Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseDivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.warehouse.read
+    patch:
+      tags:
+      - Organization assignments
+      summary: Assign Warehouse
+      operationId: assign_warehouse_v1_inventory_warehouses__warehouse_id__division_patch
+      parameters:
+      - name: warehouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Warehouse Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarehouseDivisionCommand'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseDivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.warehouse.update
+  /v1/inventory/items/{item_id}/division-assignments:
+    get:
+      tags:
+      - Organization assignments
+      summary: Item Divisions
+      operationId: item_divisions_v1_inventory_items__item_id__division_assignments_get
+      parameters:
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Item Id
+      - name: division_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 40
+          - type: 'null'
+          title: Division Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemDivisionListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.item.read
+  /v1/inventory/items/{item_id}/division-assignments/{division_id}:
+    put:
+      tags:
+      - Organization assignments
+      summary: Assign Item
+      operationId: assign_item_v1_inventory_items__item_id__division_assignments__division_id__put
+      parameters:
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Item Id
+      - name: division_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Division Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemDivisionCommand'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemDivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.item.update
+  /v1/inventory/division-items:
+    get:
+      tags:
+      - Organization assignments
+      summary: Division Items
+      operationId: division_items_v1_inventory_division_items_get
+      parameters:
+      - name: division_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Division Id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibleItemsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.item.read
   /v1/inventory/reports/{report_code}/export:
     get:
       tags:
-      - Reports
-      operationId: exportInventoryStandardReport
-      summary: Export a fixed Inventory report as UTF-8 CSV.
-      x-required-module: inventory
-      x-permissions: [inventory.warehouse.read, inventory.item.read, inventory.balance.read, inventory.kardex.read]
+      - inventory
+      summary: Export Report
+      operationId: export_report_v1_inventory_reports__report_code__export_get
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
       - name: report_code
         in: path
         required: true
         schema:
           type: string
+          title: Report Code
       - name: lang
         in: query
+        required: false
         schema:
-          type: string
           enum:
           - es
           - en
+          type: string
           default: es
+          title: Lang
       - name: date_from
         in: query
+        required: false
         schema:
-          type: string
-          format: date
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Date From
       - name: date_to
         in: query
+        required: false
         schema:
-          type: string
-          format: date
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Date To
       - name: status
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
       - name: type
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Type
       - name: category
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
       - name: q
         in: query
+        required: false
         schema:
-          type: string
-          maxLength: 120
+          anyOf:
+          - type: string
+            maxLength: 120
+          - type: 'null'
+          title: Q
       - name: warehouse_id
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
       - name: item_id
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Item Id
       - name: movement_type
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Movement Type
       - name: condition
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Condition
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: CSV export.
-        '204':
-          description: No rows matched the filters.
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.balance.read
+      - inventory.item.read
+      - inventory.kardex.read
+      - inventory.warehouse.read
   /v1/inventory/warehouses:
     get:
       tags:
-      - Warehouses
-      operationId: listWarehouses
+      - inventory
       summary: Warehouses
-      x-required-module: inventory
-      x-permissions: [inventory.movement.create, inventory.movement.read, inventory.warehouse.read, maintenance.material_request.create, maintenance.material_request.read]
+      operationId: warehouses_v1_inventory_warehouses_get
       parameters:
       - name: q
         in: query
@@ -104,7 +879,7 @@ paths:
           title: Q
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -139,24 +914,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.movement.create
+      - inventory.movement.read
+      - inventory.warehouse.read
+      - maintenance.material_request.create
+      - maintenance.material_request.read
       x-implementation-status: implemented
     post:
       tags:
-      - Warehouses
-      operationId: createWarehouse
+      - inventory
       summary: Create Warehouse
-      x-required-module: inventory
-      x-permissions: [inventory.warehouse.create]
+      operationId: create_warehouse_v1_inventory_warehouses_post
       parameters:
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -164,7 +938,7 @@ paths:
           title: X-Tenant-Id
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -205,56 +979,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.warehouse.create
       x-implementation-status: implemented
-  /v1/inventory/warehouses/{id}:
-    get:
-      tags:
-      - Warehouses
-      operationId: getWarehouse
-      summary: Get one tenant warehouse for Inventory or Purchasing validation.
-      x-required-module: inventory
-      x-permissions: [inventory.warehouse.read, maintenance.material_request.create, purchasing.receipt.create]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Warehouse.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WarehouseResponse'
-    patch:
-      tags:
-      - Warehouses
-      operationId: updateWarehouse
-      summary: Update warehouse.
-      x-required-module: inventory
-      x-permissions: [inventory.warehouse.update]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WarehouseUpdateRequest'
-      responses:
-        '200':
-          description: Warehouse updated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WarehouseResponse'
   /v1/inventory/warehouses/{id}/locations:
     post:
       tags:
@@ -262,7 +990,8 @@ paths:
       operationId: createWarehouseLocation
       summary: Create warehouse location.
       x-required-module: inventory
-      x-permissions: [inventory.location.create]
+      x-permissions:
+      - inventory.location.create
       x-implementation-status: planned
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
@@ -289,7 +1018,18 @@ paths:
       operationId: listInventoryItems
       summary: Search inventory items.
       x-required-module: inventory
-      x-permissions: [inventory.item.read, maintenance.material_request.create, maintenance.material_request.read, production.product_service.create, production.product_service.update, purchasing.order.create, purchasing.order.issue, purchasing.order.update, purchasing.requisition.create, purchasing.requisition.update, sales.order.fulfill]
+      x-permissions:
+      - inventory.item.read
+      - maintenance.material_request.create
+      - maintenance.material_request.read
+      - production.product_service.create
+      - production.product_service.update
+      - purchasing.order.create
+      - purchasing.order.issue
+      - purchasing.order.update
+      - purchasing.requisition.create
+      - purchasing.requisition.update
+      - sales.order.fulfill
       x-permission-mode: any
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
@@ -320,7 +1060,8 @@ paths:
       operationId: createInventoryItem
       summary: Create inventory item.
       x-required-module: inventory
-      x-permissions: [inventory.item.create]
+      x-permissions:
+      - inventory.item.create
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
       - $ref: '#/components/parameters/CorrelationId'
@@ -345,7 +1086,17 @@ paths:
       operationId: getInventoryItem
       summary: Get inventory item.
       x-required-module: inventory
-      x-permissions: [inventory.item.read, maintenance.material_request.create, production.product_service.create, production.product_service.update, purchasing.order.create, purchasing.order.issue, purchasing.order.update, purchasing.requisition.create, purchasing.requisition.update, sales.order.fulfill]
+      x-permissions:
+      - inventory.item.read
+      - maintenance.material_request.create
+      - production.product_service.create
+      - production.product_service.update
+      - purchasing.order.create
+      - purchasing.order.issue
+      - purchasing.order.update
+      - purchasing.requisition.create
+      - purchasing.requisition.update
+      - sales.order.fulfill
       x-permission-mode: any
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
@@ -365,7 +1116,8 @@ paths:
       operationId: updateInventoryItem
       summary: Update inventory item.
       x-required-module: inventory
-      x-permissions: [inventory.item.update]
+      x-permissions:
+      - inventory.item.update
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
       - $ref: '#/components/parameters/CorrelationId'
@@ -391,7 +1143,8 @@ paths:
       operationId: convertInventoryItemUnit
       summary: Convert a quantity and optional unit cost to the item's authoritative base unit.
       x-required-module: inventory
-      x-permissions: [inventory.item.read]
+      x-permissions:
+      - inventory.item.read
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
       - $ref: '#/components/parameters/CorrelationId'
@@ -418,116 +1171,254 @@ paths:
   /v1/inventory/balances:
     get:
       tags:
-      - Balances
-      operationId: listInventoryBalances
-      summary: List calculated inventory balances.
-      x-required-module: inventory
-      x-permissions: [inventory.balance.read]
+      - inventory
+      summary: Balances
+      operationId: balances_v1_inventory_balances_get
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - $ref: '#/components/parameters/Search'
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Q
       - name: inventory_item_id
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Inventory Item Id
       - name: warehouse_id
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
       - name: category
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
       - name: item_type
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Item Type
       - name: item_status
         in: query
+        required: false
         schema:
-          type: string
-          enum:
-          - active
-          - inactive
-          - blocked
+          anyOf:
+          - enum:
+            - active
+            - inactive
+            - blocked
+            type: string
+          - type: 'null'
+          title: Item Status
       - name: inventory_policy
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Inventory Policy
       - name: unit
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Unit
       - name: stock_status
         in: query
+        required: false
         schema:
-          type: string
-          enum:
-          - negative
-          - out_of_stock
-          - below_minimum
-          - normal
-          - above_maximum
+          anyOf:
+          - enum:
+            - negative
+            - out_of_stock
+            - below_minimum
+            - normal
+            - above_maximum
+            type: string
+          - type: 'null'
+          title: Stock Status
       - name: sort
         in: query
+        required: false
         schema:
-          type: string
           enum:
           - item_code
           - item_name
           - on_hand_asc
           - on_hand_desc
+          type: string
           default: item_code
+          title: Sort
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Balances.
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BalanceListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.balance.read
   /v1/inventory/kardex:
     get:
       tags:
-      - Balances
-      operationId: listKardex
-      summary: List kardex entries calculated from movements.
-      x-required-module: inventory
-      x-permissions: [inventory.kardex.read]
+      - inventory
+      summary: Kardex
+      operationId: kardex_v1_inventory_kardex_get
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
       - name: inventory_item_id
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Inventory Item Id
       - name: warehouse_id
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Warehouse Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: Kardex.
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MovementListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.kardex.read
   /v1/inventory/movements:
     get:
       tags:
-      - Movements
-      operationId: listInventoryMovements
+      - inventory
       summary: Movements
-      x-required-module: inventory
-      x-permissions: [inventory.movement.read]
+      operationId: movements_v1_inventory_movements_get
       parameters:
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -562,24 +1453,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
+      x-required-module: inventory
+      x-permissions:
+      - inventory.movement.read
     post:
       tags:
-      - Movements
-      operationId: createInventoryMovement
+      - inventory
       summary: Create Movement
-      x-required-module: inventory
-      x-permissions: [inventory.movement.create]
+      operationId: create_movement_v1_inventory_movements_post
       parameters:
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -595,7 +1480,7 @@ paths:
           title: Authorization
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -628,27 +1513,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
-      description: A transfer records only its outgoing movement; the destination must confirm receipt through the transfer workflow. Reversal
-        compensators and reversed originals both remain in the authoritative ledger.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.movement.create
   /v1/inventory/purchase-receipts:
     post:
       tags:
-      - Movements
-      operationId: createInventoryPurchaseReceiptMovement
+      - inventory
       summary: Create Purchase Receipt Movement
-      x-required-module: inventory
-      x-permissions: [inventory.movement.create]
+      operationId: create_purchase_receipt_movement_v1_inventory_purchase_receipts_post
       parameters:
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -664,7 +1541,7 @@ paths:
           title: Authorization
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -697,23 +1574,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.movement.create
       x-implementation-status: implemented
-      description: Warehouse-only physical purchase receipt; Purchasing preparation does not create stock. Stable receipt-line idempotency keys
-        prevent duplicate entries.
+      description: 'CC-14: accepts only purchase_receipt origin (receipt ID + receipt line ID). Resolves authenticated Purchasing proof, validates
+        immutable quantity/cost/currency and current scope; one physical effect per tenant/origin line.'
   /v1/inventory/availability-checks:
     post:
       tags:
       - Balances
       operationId: createAvailabilityCheck
-      summary: Check item availability for production or sales.
+      summary: Check material availability for production.
+      description: Optional division_ref_id restricts eligible items and warehouses to the authorized Division. Scoped responses preserve exact
+        original costs in Society currency and reject incompatible monetary history; no legacy master-price fallback.
       x-required-module: inventory
-      x-permissions: [production.order.release, production.order.validate]
+      x-permissions:
+      - production.order.release
+      - production.order.validate
       x-permission-mode: any
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
@@ -739,7 +1617,8 @@ paths:
       operationId: createConsumptionRequest
       summary: Register production consumption requested by production-service.
       x-required-module: inventory
-      x-permissions: [internal.production.inventory.consume]
+      x-permissions:
+      - internal.production.inventory.consume
       x-implementation-status: planned
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
@@ -760,12 +1639,15 @@ paths:
                 $ref: '#/components/schemas/MovementResponse'
   /v1/inventory/finished-goods-receipts:
     get:
+      description: Authorized warehouse Division filtering is applied before receipt totals are grouped. Unassigned legacy warehouses retain their
+        documented tenant compatibility.
       tags:
       - Movements
       operationId: listFinishedGoodsReceipts
       summary: List received quantities grouped by production order.
       x-required-module: inventory
-      x-permissions: [inventory.finished_goods_receipt.read]
+      x-permissions:
+      - inventory.finished_goods_receipt.read
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
       - $ref: '#/components/parameters/CorrelationId'
@@ -777,12 +1659,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/FinishedGoodsReceiptListResponse'
     post:
+      description: Resolves the authenticated Production projection; dimensioned orders require an exact original cost in Society currency, scoped
+        authority, same-Division item and warehouse, and compatible monetary history. Context and cost are stored on the movement; caller cannot
+        override them.
       tags:
       - Movements
       operationId: createFinishedGoodsReceipt
       summary: Confirm physical receipt of a completed production order.
       x-required-module: inventory
-      x-permissions: [inventory.finished_goods_receipt.receive]
+      x-permissions:
+      - inventory.finished_goods_receipt.receive
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
       - $ref: '#/components/parameters/CorrelationId'
@@ -805,17 +1691,42 @@ paths:
   /v1/inventory/reservation-requests:
     post:
       tags:
-      - Reservations
-      operationId: createReservationRequest
-      description: Maintenance requests without an explicit expiry remain reserved until issue or release; other sources retain their 24-hour
-        default. Historical reservations are not rewritten.
-      summary: Create inventory reservation.
-      x-required-module: inventory
-      x-permissions: [maintenance.material_request.create, production.order.release, sales.order.fulfill]
+      - inventory
+      summary: Create Reservation
+      operationId: create_reservation_v1_inventory_reservation_requests_post
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/CorrelationId'
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       requestBody:
         required: true
         content:
@@ -824,11 +1735,22 @@ paths:
               $ref: '#/components/schemas/ReservationCreateRequest'
       responses:
         '201':
-          description: Reservation created.
+          description: Successful Response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReservationResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: inventory
+      x-permissions:
+      - maintenance.material_request.create
+      - production.order.release
+      - sales.order.fulfill
   /v1/inventory/transfers:
     get:
       tags:
@@ -855,7 +1777,7 @@ paths:
           title: Offset
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -890,15 +1812,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
       x-implementation-status: implemented
       x-required-module: inventory
-      x-permissions: [inventory.movement.read]
+      x-permissions:
+      - inventory.movement.read
   /v1/inventory/material-returns:
     get:
       tags:
@@ -925,7 +1842,7 @@ paths:
           title: Offset
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -960,15 +1877,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
       x-implementation-status: implemented
       x-required-module: inventory
-      x-permissions: [inventory.movement.read]
+      x-permissions:
+      - inventory.movement.read
     post:
       tags:
       - inventory
@@ -977,7 +1889,7 @@ paths:
       parameters:
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -993,7 +1905,7 @@ paths:
           title: Authorization
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1026,15 +1938,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
       x-implementation-status: implemented
       x-required-module: inventory
-      x-permissions: [inventory.movement.create, maintenance.material_request.create, production.order.update]
+      x-permissions:
+      - inventory.movement.create
+      - maintenance.material_request.create
+      - production.order.update
   /v1/inventory/material-returns/{return_id}:
     get:
       tags:
@@ -1050,7 +1959,7 @@ paths:
           title: Return Id
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1085,15 +1994,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
       x-implementation-status: implemented
       x-required-module: inventory
-      x-permissions: [inventory.movement.create, inventory.movement.read]
+      x-permissions:
+      - inventory.movement.create
+      - inventory.movement.read
   /v1/inventory/material-returns/{return_id}/receive:
     post:
       tags:
@@ -1109,7 +2014,7 @@ paths:
           title: Return Id
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1125,7 +2030,7 @@ paths:
           title: Authorization
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1152,15 +2057,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
       x-implementation-status: implemented
       x-required-module: inventory
-      x-permissions: [inventory.movement.create]
+      x-permissions:
+      - inventory.movement.create
   /v1/inventory/material-returns/{return_id}/cancel:
     post:
       tags:
@@ -1176,7 +2076,7 @@ paths:
           title: Return Id
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1184,7 +2084,7 @@ paths:
           title: X-Tenant-Id
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1225,15 +2125,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
       x-implementation-status: implemented
       x-required-module: inventory
-      x-permissions: [inventory.movement.create]
+      x-permissions:
+      - inventory.movement.create
   /v1/inventory/transfers/{transfer_id}/{action}:
     post:
       tags:
@@ -1259,7 +2154,7 @@ paths:
           title: Action
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1267,7 +2162,7 @@ paths:
           title: X-Tenant-Id
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1308,23 +2203,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
       x-implementation-status: implemented
       x-required-module: inventory
-      x-permissions: [inventory.movement.create]
+      x-permissions:
+      - inventory.movement.create
   /v1/inventory/movements/{movement_id}/reverse:
     post:
       tags:
-      - Movements
-      operationId: reverseInventoryMovement
+      - inventory
       summary: Reverse Movement
-      x-required-module: inventory
-      x-permissions: [inventory.movement.reverse]
+      operationId: reverse_movement_v1_inventory_movements__movement_id__reverse_post
       parameters:
       - name: movement_id
         in: path
@@ -1383,24 +2271,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
         '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
         '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+          description: Stable error envelope; no partial document effect.
         '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
+          description: Stable error envelope; no partial document effect.
+      x-required-module: inventory
+      x-permissions:
+      - inventory.movement.reverse
   /v1/inventory/reservations/{reservation_id}/release:
     post:
       tags:
-      - Reservations
-      operationId: releaseReservation
+      - inventory
       summary: Release Reservation
-      x-required-module: inventory
-      x-permissions: [inventory.movement.create, maintenance.material_request.cancel, maintenance.order.cancel, production.order.cancel, sales.order.cancel]
-      x-permission-mode: by-reservation-source
-      description: Maintenance order cancellation may release its unissued parts reservations. Production creation recovery uses the separate
-        proven-failure rollback endpoint.
+      operationId: release_reservation_v1_inventory_reservations__reservation_id__release_post
       parameters:
       - name: reservation_id
         in: path
@@ -1410,7 +2299,7 @@ paths:
           title: Reservation Id
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1418,7 +2307,7 @@ paths:
           title: X-Tenant-Id
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1459,24 +2348,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
+      x-required-module: inventory
+      x-permissions:
+      - inventory.movement.create
+      - maintenance.material_request.cancel
+      - maintenance.order.cancel
+      - production.order.cancel
+      - sales.order.cancel
   /v1/inventory/reservations/{reservation_id}/consume:
     post:
       tags:
-      - Reservations
-      operationId: consumeReservation
+      - inventory
       summary: Consume Reservation
-      x-required-module: inventory
-      x-permissions: [inventory.movement.create]
-      x-permission-mode: by-reservation-source
-      description: Warehouse authority is required for production, maintenance and sales stock issues. Source ownership and full-quantity requirements
-        for production/maintenance remain enforced.
+      operationId: consume_reservation_v1_inventory_reservations__reservation_id__consume_post
       parameters:
       - name: reservation_id
         in: path
@@ -1486,7 +2370,7 @@ paths:
           title: Reservation Id
       - name: X-Tenant-Id
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1494,7 +2378,7 @@ paths:
           title: X-Tenant-Id
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -1535,13 +2419,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      x-implementation-status: implemented
+      x-required-module: inventory
+      x-permissions:
+      - inventory.movement.create
   /v1/inventory/production-reservation-rollbacks:
     post:
       tags:
@@ -1607,7 +2487,183 @@ paths:
           description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
       x-implementation-status: implemented
       x-required-module: inventory
-      x-permissions: [production.order.release]
+      x-permissions:
+      - production.order.release
+  /v1/inventory/finished-goods-receipts/{production_order_id}/stock-context:
+    get:
+      tags:
+      - Organization assignments
+      summary: Received Stock Context
+      operationId: received_stock_context_v1_inventory_finished_goods_receipts__production_order_id__stock_context_get
+      parameters:
+      - name: production_order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Production Order Id
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceivedStockResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: inventory
+      x-permissions:
+      - sales.order.fulfill
+  /v1/inventory/warehouses/{warehouse_id}:
+    get:
+      tags:
+      - inventory
+      summary: Get Warehouse
+      operationId: get_warehouse_v1_inventory_warehouses__warehouse_id__get
+      parameters:
+      - name: warehouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Warehouse Id
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: inventory
+      x-permissions:
+      - inventory.warehouse.read
+      - maintenance.material_request.create
+      - purchasing.receipt.create
+    patch:
+      tags:
+      - inventory
+      summary: Update Warehouse
+      operationId: update_warehouse_v1_inventory_warehouses__warehouse_id__patch
+      parameters:
+      - name: warehouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Warehouse Id
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarehouseUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: inventory
+      x-permissions:
+      - inventory.warehouse.update
 components:
   securitySchemes:
     bearerAuth:
@@ -1662,17 +2718,455 @@ components:
       schema:
         type: string
   schemas:
-    Page:
+    WarehouseOperationContextResponse:
+      properties:
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
       type: object
+      required:
+      - data
+      title: WarehouseOperationContextResponse
+    DivisionStockResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/DivisionStockChoices'
+      type: object
+      required:
+      - data
+      title: DivisionStockResponse
+    DivisionStockChoices:
+      properties:
+        inventory_item_id:
+          type: string
+          title: Inventory Item Id
+        item_code:
+          type: string
+          title: Item Code
+        item_name:
+          type: string
+          title: Item Name
+        unit:
+          type: string
+          title: Unit
+        cost_currency:
+          type: string
+          title: Cost Currency
+        warehouses:
+          items:
+            $ref: '#/components/schemas/DivisionStockChoice'
+          type: array
+          title: Warehouses
+        has_more:
+          type: boolean
+          title: Has More
+      type: object
+      required:
+      - inventory_item_id
+      - item_code
+      - item_name
+      - unit
+      - cost_currency
+      - warehouses
+      - has_more
+      title: DivisionStockChoices
+    DivisionStockChoice:
+      properties:
+        warehouse_id:
+          type: string
+          title: Warehouse Id
+        warehouse_code:
+          type: string
+          title: Warehouse Code
+        warehouse_name:
+          type: string
+          title: Warehouse Name
+        available_quantity:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Available Quantity
+      type: object
+      required:
+      - warehouse_id
+      - warehouse_code
+      - warehouse_name
+      - available_quantity
+      title: DivisionStockChoice
+    OperationalContext:
+      properties:
+        cost_currency:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z]{3}$
+          - type: 'null'
+          title: Cost Currency
+        division_ref_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Division Ref Id
+        society_ref_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Society Ref Id
+        division_code:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Division Code
+        division_name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Division Name
+      additionalProperties: false
+      type: object
+      required:
+      - division_ref_id
+      - society_ref_id
+      - division_code
+      - division_name
+      title: OperationalContext
+    BalanceRead:
+      properties:
+        inventory_item_id:
+          type: string
+          title: Inventory Item Id
+        item_code:
+          type: string
+          title: Item Code
+        item_name:
+          type: string
+          title: Item Name
+        item_type:
+          type: string
+          title: Item Type
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        item_status:
+          type: string
+          enum:
+          - active
+          - inactive
+          - blocked
+          title: Item Status
+        inventory_policy:
+          type: string
+          title: Inventory Policy
+        warehouse_id:
+          type: string
+          title: Warehouse Id
+        warehouse_code:
+          type: string
+          title: Warehouse Code
+        warehouse_name:
+          type: string
+          title: Warehouse Name
+        on_hand_quantity:
+          type: number
+          title: On Hand Quantity
+        reserved_quantity:
+          type: number
+          title: Reserved Quantity
+          default: 0
+        available_quantity:
+          type: number
+          title: Available Quantity
+        unit:
+          type: string
+          title: Unit
+        average_unit_cost:
+          type: number
+          title: Average Unit Cost
+          default: 0
+        inventory_value:
+          type: number
+          title: Inventory Value
+          default: 0
+        minimum_stock:
+          type: number
+          title: Minimum Stock
+          default: 0
+        maximum_stock:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Maximum Stock
+        stock_status:
+          type: string
+          enum:
+          - negative
+          - out_of_stock
+          - below_minimum
+          - normal
+          - above_maximum
+          title: Stock Status
+        last_movement_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Movement At
+      type: object
+      required:
+      - inventory_item_id
+      - item_code
+      - item_name
+      - item_type
+      - item_status
+      - inventory_policy
+      - warehouse_id
+      - warehouse_code
+      - warehouse_name
+      - on_hand_quantity
+      - available_quantity
+      - unit
+      - stock_status
+      title: BalanceRead
+    AssignmentPage:
+      properties:
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - total
+      - limit
+      - offset
+      title: AssignmentPage
+    DivisionChoice:
+      properties:
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        society_id:
+          type: string
+          title: Society Id
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - society_id
+      title: DivisionChoice
+    DivisionChoicesResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DivisionChoice'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: DivisionChoicesResponse
+    EligibleItem:
+      properties:
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        base_unit:
+          type: string
+          title: Base Unit
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        cost_center_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Center Ref Id
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - base_unit
+      - division_ref_id
+      title: EligibleItem
+    EligibleItemsResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/EligibleItem'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: EligibleItemsResponse
+    ItemDivisionCommand:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+          default: active
+        cost_center_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Cost Center Ref Id
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      title: ItemDivisionCommand
+    ItemDivisionListResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ItemDivisionRead'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: ItemDivisionListResponse
+    ItemDivisionRead:
+      properties:
+        item_id:
+          type: string
+          title: Item Id
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        cost_center_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Center Ref Id
+        cost_center_snapshot:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Cost Center Snapshot
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+        revision:
+          type: integer
+          title: Revision
+      type: object
+      required:
+      - item_id
+      - division_ref_id
+      - status
+      - revision
+      title: ItemDivisionRead
+    ItemDivisionResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ItemDivisionRead'
+      type: object
+      required:
+      - data
+      title: ItemDivisionResponse
+    WarehouseDivisionCommand:
+      properties:
+        division_ref_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Division Ref Id
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+      additionalProperties: false
+      type: object
+      required:
+      - division_ref_id
+      - expected_revision
+      title: WarehouseDivisionCommand
+    WarehouseDivisionRead:
+      properties:
+        warehouse_id:
+          type: string
+          title: Warehouse Id
+        division_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Division Ref Id
+        revision:
+          type: integer
+          title: Revision
+      type: object
+      required:
+      - warehouse_id
+      - revision
+      title: WarehouseDivisionRead
+    WarehouseDivisionResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/WarehouseDivisionRead'
+      type: object
+      required:
+      - data
+      title: WarehouseDivisionResponse
+    Page:
       properties:
         limit:
           type: integer
+          title: Limit
         next_cursor:
-          type:
-          - string
-          - 'null'
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
         has_more:
           type: boolean
+          title: Has More
+      type: object
+      required:
+      - limit
+      - has_more
+      title: Page
     ErrorResponse:
       type: object
       properties:
@@ -1946,19 +3440,24 @@ components:
           - string
           - 'null'
     ItemResponse:
-      type: object
       properties:
         data:
-          $ref: '#/components/schemas/Item'
+          $ref: '#/components/schemas/ItemRead'
+      type: object
+      required:
+      - data
+      title: ItemResponse
     ItemListResponse:
-      type: object
       properties:
         data:
-          type: array
           items:
-            $ref: '#/components/schemas/Item'
-        page:
-          $ref: '#/components/schemas/Page'
+            $ref: '#/components/schemas/ItemRead'
+          type: array
+          title: Data
+      type: object
+      required:
+      - data
+      title: ItemListResponse
     ItemCreateRequest:
       type: object
       required:
@@ -2048,63 +3547,35 @@ components:
           - string
           - 'null'
     UnitConversionRequest:
+      properties:
+        source_unit:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Source Unit
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+        source_unit_cost:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Source Unit Cost
       type: object
       required:
       - source_unit
       - quantity
-      properties:
-        source_unit:
-          type: string
-          minLength: 1
-          maxLength: 40
-        quantity:
-          type: number
-          exclusiveMinimum: 0
-        source_unit_cost:
-          type:
-          - number
-          - 'null'
-          minimum: 0
+      title: UnitConversionRequest
     UnitConversionResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/UnitConversionRead'
       type: object
       required:
       - data
-      properties:
-        data:
-          type: object
-          required:
-          - inventory_item_id
-          - source_unit
-          - base_unit
-          - conversion_factor
-          - source_quantity
-          - base_quantity
-          properties:
-            inventory_item_id:
-              type: string
-            source_unit:
-              type: string
-            base_unit:
-              type: string
-            conversion_factor:
-              type: number
-              exclusiveMinimum: 0
-            source_quantity:
-              type: number
-              exclusiveMinimum: 0
-            base_quantity:
-              type: number
-              exclusiveMinimum: 0
-            source_unit_cost:
-              type:
-              - number
-              - 'null'
-              minimum: 0
-            unit_cost_per_base_unit:
-              type:
-              - number
-              - 'null'
-              minimum: 0
+      title: UnitConversionResponse
     Movement:
       type: object
       properties:
@@ -2169,6 +3640,10 @@ components:
       - source
       - occurred_at
       properties:
+        manual_code:
+          type: [string, 'null']
+          maxLength: 60
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._/-]*$'
         movement_type:
           type: string
         inventory_item_id:
@@ -2194,6 +3669,7 @@ components:
       allOf:
       - $ref: '#/components/schemas/MovementCreateRequest'
     FinishedGoodsReceiptCreateRequest:
+      additionalProperties: false
       type: object
       required:
       - production_order_id
@@ -2270,34 +3746,24 @@ components:
         movement:
           $ref: '#/components/schemas/Movement'
     FinishedGoodsReceiptResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/FinishedGoodsReceiptRead'
       type: object
       required:
       - data
-      properties:
-        data:
-          $ref: '#/components/schemas/FinishedGoodsReceipt'
+      title: FinishedGoodsReceiptResponse
     FinishedGoodsReceiptListResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FinishedGoodsReceiptSummaryRead'
+          type: array
+          title: Data
       type: object
       required:
       - data
-      properties:
-        data:
-          type: array
-          items:
-            type: object
-            required:
-            - production_order_id
-            - received_quantity
-            properties:
-              production_order_id:
-                type: string
-              received_quantity:
-                type: number
-              last_received_at:
-                type:
-                - string
-                - 'null'
-                format: date-time
+      title: FinishedGoodsReceiptListResponse
     SourceRef:
       properties:
         type:
@@ -2331,109 +3797,180 @@ components:
           - 'null'
           exclusiveMinimum: 0
     BalanceListResponse:
-      type: object
       properties:
         data:
-          type: array
           items:
-            type: object
-            properties:
-              inventory_item_id:
-                type: string
-              item_code:
-                type: string
-              item_name:
-                type: string
-              item_type:
-                type: string
-              category:
-                type:
-                - string
-                - 'null'
-              item_status:
-                type: string
-                enum:
-                - active
-                - inactive
-                - blocked
-              inventory_policy:
-                type: string
-              warehouse_id:
-                type: string
-              warehouse_code:
-                type: string
-              warehouse_name:
-                type: string
-              on_hand_quantity:
-                type: number
-              reserved_quantity:
-                type: number
-              available_quantity:
-                type: number
-              average_unit_cost:
-                type: number
-              inventory_value:
-                type: number
-              unit:
-                type: string
-              minimum_stock:
-                type: number
-              maximum_stock:
-                type:
-                - number
-                - 'null'
-              stock_status:
-                type: string
-                enum:
-                - negative
-                - out_of_stock
-                - below_minimum
-                - normal
-                - above_maximum
-              last_movement_at:
-                type:
-                - string
-                - 'null'
-                format: date-time
+            $ref: '#/components/schemas/BalanceRead'
+          type: array
+          title: Data
         page:
           $ref: '#/components/schemas/Page'
+      type: object
+      required:
+      - data
+      - page
+      title: BalanceListResponse
     AvailabilityCheckRequest:
+      properties:
+        division_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Division Ref Id
+        source:
+          $ref: '#/components/schemas/SourceRef'
+        items:
+          items:
+            $ref: '#/components/schemas/AvailabilityItemRequest'
+          type: array
+          minItems: 1
+          title: Items
       type: object
       required:
       - source
       - items
+      title: AvailabilityCheckRequest
+    AvailabilityAllocation:
       properties:
-        source:
-          $ref: '#/components/schemas/SourceRef'
-        items:
-          type: array
-          items:
-            type: object
-            required:
-            - inventory_item_id
-            - quantity
-            - unit
-            properties:
-              inventory_item_id:
-                type: string
-              quantity:
-                type: number
-              unit:
-                type: string
-    AvailabilityCheckResponse:
+        original_unit_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Unit Cost
+        cost_currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Currency
+        warehouse_id:
+          type: string
+          title: Warehouse Id
+        warehouse_name:
+          type: string
+          title: Warehouse Name
+        quantity:
+          type: number
+          title: Quantity
+        unit_cost:
+          type: number
+          title: Unit Cost
       type: object
+      required:
+      - warehouse_id
+      - warehouse_name
+      - quantity
+      - unit_cost
+      title: AvailabilityAllocation
+    AvailabilityItemRead:
+      properties:
+        original_unit_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Unit Cost
+        original_total_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Total Cost
+        cost_currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Currency
+        inventory_item_id:
+          type: string
+          title: Inventory Item Id
+        item_code:
+          type: string
+          title: Item Code
+        item_name:
+          type: string
+          title: Item Name
+        unit:
+          type: string
+          title: Unit
+        required_quantity:
+          type: number
+          title: Required Quantity
+        on_hand_quantity:
+          type: number
+          title: On Hand Quantity
+        reserved_quantity:
+          type: number
+          title: Reserved Quantity
+        available_quantity:
+          type: number
+          title: Available Quantity
+        unit_cost:
+          type: number
+          title: Unit Cost
+        total_cost:
+          type: number
+          title: Total Cost
+        ok:
+          type: boolean
+          title: Ok
+        blocker_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Blocker Code
+        allocations:
+          items:
+            $ref: '#/components/schemas/AvailabilityAllocation'
+          type: array
+          title: Allocations
+      type: object
+      required:
+      - inventory_item_id
+      - item_code
+      - item_name
+      - unit
+      - required_quantity
+      - on_hand_quantity
+      - reserved_quantity
+      - available_quantity
+      - unit_cost
+      - total_cost
+      - ok
+      title: AvailabilityItemRead
+    AvailabilityCheckResponse:
       properties:
         data:
-          type: object
-          properties:
-            available:
-              type: boolean
-            items:
-              type: array
-              items:
-                type: object
-                additionalProperties: true
+          $ref: '#/components/schemas/AvailabilityCheckRead'
+      type: object
+      required:
+      - data
+      title: AvailabilityCheckResponse
     ReservationCreateRequest:
+      properties:
+        inventory_item_id:
+          type: string
+          title: Inventory Item Id
+        warehouse_id:
+          type: string
+          title: Warehouse Id
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+        unit:
+          type: string
+          title: Unit
+        source:
+          $ref: '#/components/schemas/SourceRef'
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expires At
       type: object
       required:
       - inventory_item_id
@@ -2441,17 +3978,7 @@ components:
       - quantity
       - unit
       - source
-      properties:
-        inventory_item_id:
-          type: string
-        warehouse_id:
-          type: string
-        quantity:
-          type: number
-        unit:
-          type: string
-        source:
-          $ref: '#/components/schemas/SourceRef'
+      title: ReservationCreateRequest
     ReservationResponse:
       properties:
         data:
@@ -2462,6 +3989,11 @@ components:
       title: ReservationResponse
     WarehouseRead:
       properties:
+        division_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Division Ref Id
         id:
           type: string
           title: Id
@@ -2651,6 +4183,27 @@ components:
       title: WarehouseCreate
     MovementRead:
       properties:
+        source_line_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Line Id
+        monetary_snapshot:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Monetary Snapshot
+        original_unit_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Unit Cost
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
         id:
           type: string
           title: Id
@@ -2730,6 +4283,10 @@ components:
       title: MovementRead
     MovementCreate:
       properties:
+        manual_code:
+          type: [string, 'null']
+          maxLength: 60
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._/-]*$'
         movement_type:
           type: string
           enum:
@@ -2751,8 +4308,11 @@ components:
           - type: 'null'
           title: Destination Warehouse Id
         quantity:
-          type: number
-          exclusiveMinimum: 0.0
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
           title: Quantity
         unit:
           type: string
@@ -2761,6 +4321,8 @@ components:
           anyOf:
           - type: number
             minimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
           - type: 'null'
           title: Unit Cost
         reason:
@@ -2797,6 +4359,14 @@ components:
       title: TransferListResponse
     TransferRead:
       properties:
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
+        destination_context:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
         id:
           type: string
           title: Id
@@ -2893,6 +4463,10 @@ components:
       title: MaterialReturnListResponse
     MaterialReturnRead:
       properties:
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
         id:
           type: string
           title: Id
@@ -3013,7 +4587,7 @@ components:
           - type: number
             exclusiveMinimum: 0.0
           - type: string
-            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
           title: Quantity
         reason:
           type: string
@@ -3057,7 +4631,7 @@ components:
           - type: number
             exclusiveMinimum: 0.0
           - type: string
-            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
           - type: 'null'
           title: Quantity
         reason:
@@ -3098,6 +4672,16 @@ components:
       title: ReservationActionRequest
     ReservationRead:
       properties:
+        original_unit_cost:
+          anyOf:
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Original Unit Cost
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
         id:
           type: string
           title: Id
@@ -3170,3 +4754,556 @@ components:
       required:
       - source_id
       title: ProductionReservationRollbackRequest
+    AvailabilityCheckRead:
+      properties:
+        source:
+          $ref: '#/components/schemas/SourceRef'
+        available:
+          type: boolean
+          title: Available
+        items:
+          items:
+            $ref: '#/components/schemas/AvailabilityItemRead'
+          type: array
+          title: Items
+      type: object
+      required:
+      - source
+      - available
+      - items
+      title: AvailabilityCheckRead
+    AvailabilityItemRequest:
+      properties:
+        inventory_item_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Inventory Item Id
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+        unit:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Unit
+      type: object
+      required:
+      - inventory_item_id
+      - quantity
+      - unit
+      title: AvailabilityItemRequest
+    FinishedGoodsReceiptCreate:
+      properties:
+        production_order_id:
+          type: string
+          maxLength: 80
+          minLength: 1
+          title: Production Order Id
+        warehouse_id:
+          type: string
+          maxLength: 80
+          minLength: 1
+          title: Warehouse Id
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+        received_at:
+          type: string
+          format: date-time
+          title: Received At
+        notes:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Notes
+      additionalProperties: false
+      type: object
+      required:
+      - production_order_id
+      - warehouse_id
+      - quantity
+      - received_at
+      title: FinishedGoodsReceiptCreate
+    FinishedGoodsReceiptRead:
+      properties:
+        production_order_id:
+          type: string
+          title: Production Order Id
+        production_order_code:
+          type: string
+          title: Production Order Code
+        product_service_id:
+          type: string
+          title: Product Service Id
+        product_service_code:
+          type: string
+          title: Product Service Code
+        product_service_name:
+          type: string
+          title: Product Service Name
+        inventory_item_id:
+          type: string
+          title: Inventory Item Id
+        inventory_item_code:
+          type: string
+          title: Inventory Item Code
+        inventory_item_name:
+          type: string
+          title: Inventory Item Name
+        warehouse_id:
+          type: string
+          title: Warehouse Id
+        unit:
+          type: string
+          title: Unit
+        ordered_quantity:
+          type: number
+          title: Ordered Quantity
+        received_quantity:
+          type: number
+          title: Received Quantity
+        cumulative_received_quantity:
+          type: number
+          title: Cumulative Received Quantity
+        remaining_quantity:
+          type: number
+          title: Remaining Quantity
+        movement:
+          $ref: '#/components/schemas/MovementRead'
+      type: object
+      required:
+      - production_order_id
+      - production_order_code
+      - product_service_id
+      - product_service_code
+      - product_service_name
+      - inventory_item_id
+      - inventory_item_code
+      - inventory_item_name
+      - warehouse_id
+      - unit
+      - ordered_quantity
+      - received_quantity
+      - cumulative_received_quantity
+      - remaining_quantity
+      - movement
+      title: FinishedGoodsReceiptRead
+    FinishedGoodsReceiptSummaryRead:
+      properties:
+        production_order_id:
+          type: string
+          title: Production Order Id
+        received_quantity:
+          type: number
+          title: Received Quantity
+        last_received_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Received At
+      type: object
+      required:
+      - production_order_id
+      - received_quantity
+      title: FinishedGoodsReceiptSummaryRead
+    ItemCreate:
+      properties:
+        code:
+          type: string
+          maxLength: 80
+          minLength: 1
+          title: Code
+        name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Name
+        type:
+          type: string
+          title: Type
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        base_unit:
+          type: string
+          title: Base Unit
+        inventory_policy:
+          type: string
+          enum:
+          - standard
+          - lot
+          - serial
+          - restricted
+          title: Inventory Policy
+          default: standard
+        suggested_warehouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Suggested Warehouse Id
+        minimum_stock:
+          type: number
+          minimum: 0.0
+          title: Minimum Stock
+          default: 0
+        maximum_stock:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Maximum Stock
+        default_unit_cost:
+          type: number
+          minimum: 0.0
+          title: Default Unit Cost
+          default: 0
+        use_in_recipe:
+          type: boolean
+          title: Use In Recipe
+          default: false
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      type: object
+      required:
+      - code
+      - name
+      - type
+      - base_unit
+      title: ItemCreate
+    ItemRead:
+      properties:
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        type:
+          type: string
+          title: Type
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        base_unit:
+          type: string
+          title: Base Unit
+        inventory_policy:
+          type: string
+          title: Inventory Policy
+        suggested_warehouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Suggested Warehouse Id
+        minimum_stock:
+          type: number
+          title: Minimum Stock
+          default: 0
+        maximum_stock:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Maximum Stock
+        default_unit_cost:
+          type: number
+          title: Default Unit Cost
+          default: 0
+        default_unit_cost_per_base_unit:
+          type: number
+          title: Default Unit Cost Per Base Unit
+          default: 0
+        use_in_recipe:
+          type: boolean
+          title: Use In Recipe
+          default: false
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          - blocked
+          title: Status
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - type
+      - base_unit
+      - inventory_policy
+      - status
+      title: ItemRead
+    ItemUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Type
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        base_unit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Base Unit
+        suggested_warehouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Suggested Warehouse Id
+        minimum_stock:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Minimum Stock
+        maximum_stock:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Maximum Stock
+        default_unit_cost:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
+          - type: 'null'
+          title: Default Unit Cost
+        use_in_recipe:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Use In Recipe
+        status:
+          anyOf:
+          - type: string
+            enum:
+            - active
+            - inactive
+            - blocked
+          - type: 'null'
+          title: Status
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      type: object
+      title: ItemUpdate
+    ReceivedStockChoice:
+      properties:
+        warehouse_id:
+          type: string
+          title: Warehouse Id
+        warehouse_code:
+          type: string
+          title: Warehouse Code
+        warehouse_name:
+          type: string
+          title: Warehouse Name
+        inventory_item_id:
+          type: string
+          title: Inventory Item Id
+        item_code:
+          type: string
+          title: Item Code
+        item_name:
+          type: string
+          title: Item Name
+        received_quantity:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Received Quantity
+        available_quantity:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Available Quantity
+        unit:
+          type: string
+          title: Unit
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/OperationalContext'
+          - type: 'null'
+      type: object
+      required:
+      - warehouse_id
+      - warehouse_code
+      - warehouse_name
+      - inventory_item_id
+      - item_code
+      - item_name
+      - received_quantity
+      - available_quantity
+      - unit
+      - organization_context
+      title: ReceivedStockChoice
+    ReceivedStockResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ReceivedStockChoice'
+          type: array
+          title: Data
+      type: object
+      required:
+      - data
+      title: ReceivedStockResponse
+    UnitConversionRead:
+      properties:
+        inventory_item_id:
+          type: string
+          title: Inventory Item Id
+        source_unit:
+          type: string
+          title: Source Unit
+        base_unit:
+          type: string
+          title: Base Unit
+        conversion_factor:
+          type: number
+          title: Conversion Factor
+        source_quantity:
+          type: number
+          title: Source Quantity
+        base_quantity:
+          type: number
+          title: Base Quantity
+        source_unit_cost:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Source Unit Cost
+        unit_cost_per_base_unit:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Unit Cost Per Base Unit
+      type: object
+      required:
+      - inventory_item_id
+      - source_unit
+      - base_unit
+      - conversion_factor
+      - source_quantity
+      - base_quantity
+      title: UnitConversionRead
+    WarehouseUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Type
+        status:
+          anyOf:
+          - type: string
+            enum:
+            - active
+            - inactive
+            - blocked
+          - type: 'null'
+          title: Status
+        business_center:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Business Center
+        location:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Location
+        owner:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owner
+        capacity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Capacity
+        inventory_policy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Inventory Policy
+        zone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Zone
+        aisle:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Aisle
+        rack:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rack
+        level:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Level
+        position:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Position
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      type: object
+      title: WarehouseUpdate
+x-transport-policy:
+  implementation-status: local-only
+  operation-budget-seconds: 25
+  budget-enforcement: cooperative-http-steps-not-database-cancellation
+  request-budget-header: X-Request-Timeout-Ms
+  request-budget-unit: milliseconds
+  request-budget-rule: optional-positive-finite-value-can-only-reduce-budget
+  correlation-header: X-Correlation-Id
+  error-dependency-field: error.details.dependency_service
+  automatic-retries: false

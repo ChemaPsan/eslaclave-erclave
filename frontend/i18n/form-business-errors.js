@@ -1,10 +1,29 @@
 /** Stable backend codes only. No backend message, identifiers or personal data are interpolated. */
 const messages = {};
+// Maintenance keeps organization and confirmed RH rates in its document snapshots.
+// Purchasing context and commercial terms are service-owned and frozen per document.
 function define(codes, es, en, fields) {
   for (const code of codes.split(' ')) messages[code] = Object.freeze({ es, en, ...(fields ? { fields } : {}) });
 }
 
+define('operational_exchange_rate_required operational_exchange_rate_invalid', 'Confirma un tipo de cambio positivo; si las monedas coinciden debe ser 1.', 'Confirm a positive exchange rate; it must be 1 when currencies match.', ['cost_exchange_rate']);
+define('quote_context_required', 'Asigna primero la División de la cotización para confirmar la tasa de costo.', 'Assign the quote Division before confirming the cost exchange rate.', ['division_ref_id']);
+define('purchasing_receipt_exchange_rate_required purchasing_receipt_exchange_rate_invalid', 'Captura la tasa de moneda de la orden de compra a moneda de la Sociedad; debe ser positiva, con hasta seis decimales, y 1 si coinciden.', 'Enter the rate from purchase order currency to Society currency; it must be positive, have up to six decimal places, and be 1 when they match.', ['cost_exchange_rate']);
+define('operational_unit_cost_required', 'Captura el costo unitario en la moneda indicada de la Sociedad.', 'Enter the unit cost in the indicated Society currency.', ['unit_cost']);
+
 // Capture and identity validation (schemas); ambiguous multi-field conflicts stay in the summary.
+define('maintenance_document_context_required', 'Selecciona la División de la orden.', 'Select the order Division.', ['division_ref_id']);
+define('maintenance_worker_not_eligible', 'Selecciona un técnico elegible para la División de la orden.', 'Select a technician eligible for the order Division.');
+define('operational_context_mismatch', 'La orden y sus referencias deben pertenecer a la misma Sociedad y División.', 'The order and its references must belong to the same Society and Division.');
+define('maintenance_document_history_review_required', 'Revisa el contexto de la orden histórica antes de continuar.', 'Review the historical order context before continuing.');
+define('maintenance_worker_tariff_unavailable maintenance_worker_tariff_changed', 'Revisa la asignación y tarifa confirmada del técnico en la División de la orden.', 'Review the technician assignment and confirmed rate in the order Division.');
+define('maintenance_time_cost_out_of_range maintenance_worker_daily_capacity_exceeded', 'Revisa el intervalo de tiempo y la capacidad diaria del técnico.', 'Review the time interval and the technician daily capacity.', ['ended_at']);
+define('maintenance_time_timezone_required', 'Indica un intervalo con zona horaria.', 'Provide an interval with a time zone.');
+define('purchasing_document_context_required purchasing_document_context_locked', 'Selecciona una División válida; un documento existente conserva su División original.', 'Select a valid Division; an existing document keeps its original Division.', ['division_ref_id']);
+define('purchasing_document_terms_required purchasing_document_terms_changed', 'Revisa el proveedor y sus condiciones confirmadas para esta División.', 'Review the supplier and its confirmed terms for this Division.', ['supplier_id']);
+define('purchasing_document_terms_mismatch', 'Revisa la moneda y condiciones de pago confirmadas del proveedor.', 'Review the supplier confirmed currency and payment terms.');
+define('purchasing_document_history_review_required', 'Revisa el contexto del documento histórico antes de continuar.', 'Review the historical document context before continuing.');
+define('operational_context_resource_unavailable', 'La referencia no está disponible en esta División. Revisa su asignación.', 'The reference is unavailable in this Division. Review its assignment.');
 define('invalid_curp', 'La CURP debe tener 18 caracteres y un formato válido. Revisa el dato capturado.', 'CURP must contain 18 characters in a valid format. Check the entered value.', ['curp']);
 define('invalid_rfc invalid_mexican_rfc', 'El RFC no tiene un formato válido. Revisa letras, fecha y homoclave.', 'The RFC format is invalid. Check its letters, date and final characters.');
 define('invalid_nss', 'El NSS debe contener exactamente 11 dígitos.', 'The social security number must contain exactly 11 digits.', ['nss']);
@@ -18,7 +37,10 @@ define('invalid_mexican_postal_code', 'El código postal de México debe tener c
 define('required_text_blank', 'Un texto obligatorio está vacío o contiene solo espacios. Completa los campos requeridos.', 'A required text is empty or contains only spaces. Complete the required fields.');
 define('reason_too_short cancellation_reason_required service_order_reason_required', 'Escribe un motivo de al menos 3 caracteres.', 'Enter a reason with at least 3 characters.', ['reason']);
 define('invalid_customer_code invalid_delivery_code invalid_quote_code invalid_sales_order_code', 'La clave del documento no cumple el formato permitido. Revisa la clave capturada.', 'The document code does not match the allowed format. Check the entered code.', ['code']);
-define('manual_business_code_required', 'Esta numeración es manual. Captura una clave para continuar.', 'This numbering sequence is manual. Enter a code to continue.', ['code']);
+define('manual_business_code_required', 'Esta numeración es manual. Captura una clave para continuar.', 'This numbering sequence is manual. Enter a code to continue.', ['code', 'manualCode']);
+define('code_authority_unavailable', 'No se pudo consultar la autoridad de folios. Conserva la captura y revisa el resultado antes de reintentar.', 'The code authority is unavailable. Keep your entry and check the result before retrying.');
+define('code_authority_denied', 'No tienes permiso para asignar este tipo de folio.', 'You cannot allocate this document type.');
+define('code_allocation_conflict', 'El folio ya se asignó con una solicitud diferente. Revisa el documento antes de reintentar.', 'The code was already allocated with a different request. Review the document before retrying.');
 define('invalid_document_logo', 'El logotipo no es válido. Selecciona una imagen PNG, JPEG o WebP de hasta 1 MB.', 'The logo is invalid. Select a PNG, JPEG or WebP image up to 1 MB.', ['logo_data_url']);
 define('empty_update', 'No hay cambios válidos para actualizar. Revisa los campos editables.', 'There are no valid changes to update. Check the editable fields.');
 define('invalid_stock_limits maximum_stock_must_be_greater_than_or_equal_to_minimum_stock', 'La existencia máxima debe ser mayor o igual a la mínima.', 'Maximum stock must be greater than or equal to minimum stock.', ['minimum_stock', 'maximum_stock']);
@@ -171,7 +193,7 @@ define('maintenance_reconciliation_incomplete', 'La conciliación de mantenimien
 define('actor_required actor_mismatch idempotency_actor_mismatch session_context_not_found', 'No se pudo validar la sesión para esta operación. Revisa la empresa activa y vuelve a iniciar sesión.', 'The session could not be validated for this operation. Check the active organization and sign in again.');
 define('backoffice_admin_required', 'Esta operación requiere acceso de administración interna. Solicita la revisión de tus permisos.', 'This operation requires internal administration access. Ask for your permissions to be reviewed.');
 define('authority_validation_denied hr_worker_validation_denied maintenance_authorization_denied purchasing_authorization_denied sales_authorization_denied production_reference_denied unit_catalog_validation_denied', 'No se autorizó validar una referencia necesaria para esta operación. Solicita al administrador que revise los permisos y módulos habilitados.', 'Validation of a required reference was not authorized. Ask an administrator to review permissions and enabled modules.');
-define('authority_unavailable authorization_service_unavailable hr_service_unavailable unit_catalog_unavailable resource_authority_unavailable production_service_unavailable maintenance_dependency_unavailable purchasing_dependency_unavailable inventory_response_incomplete', 'No se pudo consultar un servicio necesario. Conserva la captura y revisa el estado de la operación antes de reintentar.', 'A required service could not be queried. Keep the entered information and check the operation status before retrying.');
+define('authority_unavailable authorization_service_unavailable unit_catalog_unavailable resource_authority_unavailable production_service_unavailable maintenance_dependency_unavailable purchasing_dependency_unavailable inventory_response_incomplete', 'No se pudo consultar un servicio necesario. Conserva la captura y revisa el estado de la operación antes de reintentar.', 'A required service could not be queried. Keep the entered information and check the operation status before retrying.');
 define('purchasing_dependency_rejected', 'Un servicio relacionado rechazó la operación de compra. Revisa el documento y las referencias antes de reintentar.', 'A related service rejected the purchasing operation. Review the document and references before retrying.');
 define('firebase_admin_missing firebase_emulator_forbidden', 'La autenticación no está configurada correctamente para este ambiente. Solicita al administrador que revise la configuración.', 'Authentication is not configured correctly for this environment. Ask an administrator to review the configuration.');
 define('firebase_identity_permission_denied', 'El servicio de identidad no autorizó la operación. Solicita al administrador que revise la configuración de acceso.', 'The identity service did not authorize the operation. Ask an administrator to review access configuration.');
@@ -189,6 +211,7 @@ for (const [field, es, en] of [['commercial_name', 'nombre comercial', 'commerci
  * The single English literal is a pre-existing schema message, matched exactly (not displayed).
  */
 const validationFields = {
+  operational_cost_amount_out_of_range: [],
   invalid_email: [], required_text_blank: [], invalid_customer_code: [], invalid_tax_id: [],
   incomplete_billing_profile: ['legal_name', 'tax_id', 'billing_email'], empty_update: [],
   invalid_quote_code: [], valid_until_in_past: [], promised_delivery_date_in_past: [],
@@ -223,6 +246,20 @@ for (let mask = 1; mask < 2 ** fiscalFields.length; mask += 1) {
   validationFields[`incomplete_supplier_fiscal_profile:${fields.join(',')}`] = fields;
 }
 define('transfer_destination_invalid', 'Selecciona un almacén destino diferente al almacén origen.', 'Select a destination warehouse different from the source warehouse.', ['destination_warehouse_id']);
+define("assignment_division_denied","La División no está activa o no pertenece a tu alcance. Actualiza la sesión.","The Division is inactive or outside your scope. Refresh your session.");
+define("assignment_center_invalid","Selecciona un centro activo de la División elegida.","Select an active cost center in the chosen Division.", ['cost_center_ref_id']);
+define("assignment_revision_conflict","La asignación cambió. Conservamos la captura; vuelve a consultar antes de guardar.","The assignment changed. Your input was kept; reload before saving.");
+define("assignment_authority_unavailable","No se pudo validar la organización. Conservamos la captura; reintenta.","Organization validation is unavailable. Your input was kept; retry.");
+define("document_presentation_unavailable","No se pudo confirmar la identidad y plantilla del documento. Conservamos el estado; reintenta.","The document identity and template could not be confirmed. The current state was kept; retry.");
+define("assignment_authority_denied","No tienes acceso a la referencia. Revisa tus permisos y la sesión.","Reference access was denied. Check your permissions and session.");
+define("assignment_reference_invalid","La referencia ya no está disponible. Consulta de nuevo el catálogo.","The reference is no longer available. Reload the catalog.");
+define('assignment_machine_division_locked', 'La División de la máquina ya está asignada. Conserva su ubicación; solicita una revisión para corregirla.', 'The machine Division is already assigned. Keep its location; request a review to correct it.');
+define('assignment_machine_requires_full_scope', 'Asignar una máquina pendiente requiere alcance completo. Solicita la asignación a un administrador autorizado.', 'Assigning a pending machine requires full scope. Ask an authorized administrator.');
+define("assignment_resource_not_found","El recurso no está disponible en este tenant. Vuelve a consultar.","The resource is unavailable in this tenant. Reload the catalog.");
+define("assignment_resource_inactive","Activa el recurso antes de habilitar su asignación.","Activate the resource before enabling its assignment.");
+define("assignment_unassigned_requires_full_scope","Asignar un almacén pendiente requiere alcance completo. Solicita la asignación a un administrador autorizado.","Assigning a pending warehouse requires full scope. Ask an authorized administrator.");
+define("assignment_warehouse_division_locked","La División del almacén ya está fijada. No se puede cambiar desde esta captura.","The warehouse Division is already fixed and cannot be changed here.");
+define("assignment_inactive_reference_locked","La desactivación debe conservar el centro existente. Vuelve a consultar la asignación.","Deactivation must preserve the existing cost center. Reload the assignment.");
 export const VALIDATION_RULES = Object.freeze(Object.fromEntries(Object.entries(validationFields).map(([literal, fields]) => [literal, Object.freeze({ code: literal === 'Transfer requires a different destination warehouse' ? 'transfer_destination_invalid' : literal.startsWith('incomplete_supplier_fiscal_profile:') ? 'incomplete_supplier_fiscal_profile' : literal, fields: Object.freeze(fields) })])));
 
 define('service_evidence_start_required', 'Registra cómo se recibió el servicio antes de esperar recursos o iniciar. Abre la evidencia de inicio.', 'Record the service receipt before waiting for resources or starting. Open start evidence.');
@@ -235,5 +272,63 @@ define('service_evidence_file_too_large', 'Reduce la carga: máximo 3 archivos, 
 define('service_evidence_file_not_found', 'El adjunto no está disponible. Recarga la orden y consulta su evidencia escrita.', 'The attachment is unavailable. Reload the order and review its written evidence.');
 define('service_evidence_expired', 'El adjunto cumplió su año de conservación. La evidencia escrita sigue disponible en la orden.', 'The attachment reached its one-year retention limit. Written evidence is still available on the order.');
 define('service_evidence_storage_unavailable', 'No se pudo acceder al almacenamiento de evidencia. Conservamos tu captura; intenta de nuevo.', 'Evidence storage is unavailable. Your entries were kept; try again.');
+
+
+define('hr_service_unavailable', 'Recursos Humanos no respondió a tiempo o no está disponible. Conserva la captura y consulta el estado de la orden antes de volver a intentar.', 'Human resources did not respond in time or is unavailable. Keep the entered information and check the order status before trying again.');
+
+define('organization_review_required', 'La organización existente requiere revisar y activar su migración antes de editarla.', 'The existing organization requires migration review and activation before editing.');
+define('organization_review_changed organization_shadow_changed organization_projection_changed', 'La organización cambió después de su revisión. Conservamos tu captura; solicita una nueva revisión de la migración.', 'The organization changed after review. Your entries were kept; request a new migration review.');
+define('organization_record_not_found', 'El registro no está disponible en este tenant. Actualiza la consulta.', 'The record is unavailable in this tenant. Refresh the search.');
+define('organization_parent_invalid', 'Selecciona un registro válido de este tenant.', 'Select a valid record from this tenant.');
+define('organization_parent_inactive', 'Selecciona un registro padre activo antes de continuar.', 'Select an active parent record before continuing.');
+define('organization_active_dependents', 'Primero desactiva o reasigna las sociedades o divisiones activas que dependen de este registro.', 'First deactivate or reassign the active societies or divisions that depend on this record.');
+define('organization_tax_id_duplicate', 'Esta identificación fiscal ya corresponde a otro emisor. Usa el emisor existente.', 'This tax identification already belongs to another issuer. Use the existing issuer.', ['tax_id']);
+define('organization_code_duplicate', 'El código ya está en uso. Selecciona uno diferente.', 'This code is already in use. Select a different one.', ['code']);
+define('organization_code_managed', 'El código se asigna automáticamente. Actualiza la consulta antes de volver a guardar.', 'The code is assigned automatically. Refresh the search before saving again.', ['code']);
+define('organization_currency_invalid', 'Selecciona una moneda activa del catálogo de Administración.', 'Select an active currency from the Administration catalog.', ['base_currency']);
+define('organization_society_required', 'Selecciona la sociedad de la división.', 'Select the division’s society.', ['legal_entity_id']);
+define('organization_shared_issuer', 'Este emisor es compartido. Edita sus datos desde Emisores.', 'This issuer is shared. Edit its details in Issuers.');
+define('organization_structure_read_only', 'Edita la estructura desde Emisores, Sociedades o Divisiones.', 'Edit the structure in Issuers, Societies or Divisions.');
+define('organization_required_value', 'Completa los datos obligatorios de la organización.', 'Complete the required organization details.');
+define('organization_value_invalid', 'Revisa el formato y la longitud de este dato.', 'Check this value’s format and length.');
+define('organization_tenant_in_use', 'El tenant conserva estructura organizacional e historial. Desactívalo para conservar estos datos.', 'The tenant contains organization structure and history. Deactivate it to preserve these records.');
+define('organization_code_immutable', 'El código identifica al registro y no se puede cambiar después del alta.', 'The code identifies the record and cannot be changed after creation.', ['code']);
+define('organization_scope_denied', 'La División ya no está disponible en tu alcance. Actualiza la sesión y selecciona una División autorizada.', 'The division is no longer available in your scope. Refresh your session and select an authorized division.');
+define('organization_scope_invalid organization_scope_review_required', 'El alcance organizacional requiere revisión en Administración. No se concedió acceso adicional.', 'The organization scope requires review in Administration. No additional access was granted.');
+define('organization_scope_conflict', 'El alcance cambió mientras lo editabas. Conservamos tu selección; vuelve a abrir el editor para revisar la versión vigente.', 'The scope changed while you were editing it. Your selection was kept; reopen the editor to review the current version.');
+define('organization_scope_reference_invalid', 'Revisa las sociedades y divisiones seleccionadas: deben estar activas y pertenecer a este corporativo y alcance.', 'Review the selected societies and divisions: they must be active and belong to this corporate organization and scope.');
+define('configuration_revision_conflict', 'La configuración cambió. Conservamos tu captura; cierra y vuelve a abrir para revisar la versión vigente.', 'The configuration changed. Your input was kept; close and reopen to review the current revision.');
+define('cost_center_division_denied', 'La División no está disponible en tu alcance. Actualiza la sesión y revisa la División.', 'The Division is unavailable in your scope. Refresh your session and review the Division.');
+define('cost_center_revision_conflict', 'El centro de costos cambió. Conservamos la captura; vuelve a cargar el registro antes de guardar.', 'The cost center changed. Your input was kept; reload the record before saving.');
+define('cost_center_authority_unavailable cost_center_storage_unavailable cost_center_code_unavailable', 'El catálogo de centros o su autoridad no está disponible. Conservamos la captura; reintenta cuando se recupere.', 'The cost-center catalog or its authority is unavailable. Your input was kept; retry when it recovers.');
+define('cost_center_authority_denied', 'No se pudo autorizar la operación del centro de costos. Revisa tu sesión y permisos.', 'The cost-center operation could not be authorized. Review your session and permissions.');
+define('cost_center_code_conflict cost_center_managed_code_required cost_center_dedicated_code_required', 'Revisa el folio administrado de centros de costos en Administración. No cambies la captura para resolver un problema de folios.', 'Review managed cost-center numbering in Administration. Do not change your input to resolve a numbering problem.');
+define('cost_center_not_found', 'El centro de costos ya no está disponible. Actualiza la lista.', 'The cost center is no longer available. Refresh the list.');
+define('hr_assignment_history_locked', 'Desactivar conserva la tarifa y el centro guardados. Vuelve a abrir la asignación y cambia sólo su estado.', 'Deactivation preserves the saved rate and cost center. Reopen the assignment and change only its status.');
+define('hr_assignment_position_unavailable', 'El puesto vigente debe estar activo y habilitado en esta División. Revisa sus asignaciones en Recursos Humanos.', 'The current position must be active and enabled in this Division. Review its assignments in Human Resources.');
+define('hr_assignment_area_unavailable', 'El área del puesto está inactiva. Revisa su estado en Recursos Humanos antes de activar la asignación.', 'The position area is inactive. Review its status in Human Resources before activating the assignment.');
+
+define('hr_tariff_currency_required hr_tariff_currency_mismatch', 'La moneda debe coincidir con la moneda base vigente de la Sociedad. Actualiza la sesión y vuelve a confirmar la tarifa.', 'Currency must match the current Society base currency. Refresh your session and confirm the rate again.', ['hourly_cost_currency_code']);
+
+define('machine_tariff_amount_required', 'Captura el costo por minuto junto con la moneda confirmada.', 'Enter the cost per minute together with the confirmed currency.', ['cost_per_minute']);
+define('machine_tariff_confirmation_required operational_cost_currency_mismatch', 'Confirma la tarifa en la moneda base vigente de la Sociedad. Actualiza la sesión si cambió la moneda.', 'Confirm the rate in the current Society base currency. Refresh your session if the currency changed.', ['cost_currency']);
+
+define('recipe_resource_duplicate', 'La receta repite un recurso. Corrige su versión antes de generar la orden.', 'The recipe repeats a resource. Correct its version before creating the order.', ['recipe_version_id']);
+define('production_legacy_labor_capacity_review_required', 'Hay compromisos laborales históricos sin trabajadores identificados. Producción debe conciliarlos antes de reservar capacidad nueva.', 'Historical labor commitments have no identified workers. Production must reconcile them before reserving new capacity.');
+define('production_execution_worker_not_eligible', 'Un responsable o trabajador dejó de estar habilitado en esta División. Revisa las asignaciones vigentes en Recursos Humanos.', 'An assignee or worker is no longer eligible in this Division. Review current assignments in Human Resources.');
+
+define('operational_cost_amount_out_of_range', 'El importe calculado excede el rango permitido. Revisa la tarifa, cantidad y tipo de cambio.', 'The calculated amount exceeds the allowed range. Review the rate, quantity and exchange rate.');
+
+define('production_request_not_found', 'La solicitud ya no está disponible en tu alcance. Actualiza el seguimiento del pedido.', 'The request is no longer available in your scope. Refresh sales order tracking.');
+define('production_request_source_conflict', 'La solicitud y su pedido de origen no coinciden. Actualiza el seguimiento antes de planificar de nuevo.', 'The request does not match its source sales order. Refresh tracking before planning again.');
+define('production_request_cancelled', 'La solicitud fue cancelada. Consulta el pedido antes de continuar.', 'The request was cancelled. Review the sales order before continuing.');
+define('production_request_already_converted production_request_has_order', 'La solicitud ya tiene una orden. Consulta la orden existente; para cancelar el pedido, atiende primero su cancelación en Producción.', 'The request already has an order. View the existing order; to cancel the sales order, first handle its cancellation in Production.');
+define('production_source_unavailable', 'No se pudo confirmar el pedido de origen. Conservamos tu captura; reintenta cuando Ventas esté disponible.', 'The source sales order could not be confirmed. Your input was kept; retry when Sales is available.');
+define('production_creation_recovery_pending', 'La creación requiere recuperar un paso pendiente. Conservamos tu captura; reintenta la misma operación.', 'Creation requires recovery of a pending step. Your input was kept; retry the same operation.');
+
+define('sales_production_source_unavailable', 'No se pudo confirmar la fabricación del pedido. Conservamos tu captura; actualiza el seguimiento o reintenta cuando se recupere el servicio.', 'Sales order manufacturing could not be confirmed. Your input was kept; refresh tracking or retry when the service recovers.');
+define('sales_production_not_completed', 'La orden de producción aún no está terminada. Consulta su avance antes de conciliar la recepción.', 'The production order is not yet completed. Review its progress before reconciling the receipt.');
+define('sales_production_receipt_required', 'Selecciona un almacén con recepción confirmada y existencias suficientes del producto terminado en esta División.', 'Select a warehouse with confirmed receipt and sufficient finished goods stock in this Division.', ['warehouse_id']);
+define('production_reconciliation_in_progress', 'La conciliación ya está en curso. Conservamos tu selección; actualiza el seguimiento antes de reintentar.', 'Reconciliation is already in progress. Your selection was kept; refresh tracking before retrying.');
 
 export const FORM_BUSINESS_ERRORS = Object.freeze(messages);

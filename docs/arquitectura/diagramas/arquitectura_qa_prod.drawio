@@ -8,7 +8,7 @@
         <mxCell id="title" value="ERClave - Arquitectura de entrega QA y Producción" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#351455;" vertex="1" parent="1">
           <mxGeometry x="40" y="20" width="2120" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="subtitle" value="QA está operativo con siete servicios. Producción sigue como arquitectura objetivo sin infraestructura autorizada." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=14;fontColor=#555555;whiteSpace=wrap;" vertex="1" parent="1">
+        <mxCell id="subtitle" value="QA documentado: siete servicios, SHA e57237f. Producción: objetivo sin infraestructura autorizada." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=14;fontColor=#555555;whiteSpace=wrap;" vertex="1" parent="1">
           <mxGeometry x="40" y="72" width="2120" height="46" as="geometry" />
         </mxCell>
         <mxCell id="delivery" value="CADENA DE ENTREGA" style="swimlane;html=1;rounded=1;horizontal=1;startSize=34;fillColor=#EDE2F5;swimlaneFillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#351455;fontStyle=1;fontSize=15;whiteSpace=wrap;arcSize=8;" vertex="1" parent="1">
@@ -44,7 +44,7 @@
         <mxCell id="qa_run" value="Cloud Run QA&lt;br&gt;Admin · Producción · Inventory · RH&lt;br&gt;Sales · Purchasing · Maintenance" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#D9EAF7;strokeColor=#8A6AA3;fontColor=#17365D;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="735" y="540" width="610" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="qa_data" value="Cloud SQL QA&lt;br&gt;schemas por servicio · Alembic 0029&lt;br&gt;sin datos funcionales copiados" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
+        <mxCell id="qa_data" value="Cloud SQL QA&lt;br&gt;schemas por servicio · Alembic 0036&lt;br&gt;sin datos funcionales copiados" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#DDF2E1;strokeColor=#8A6AA3;fontColor=#20552A;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="735" y="735" width="610" height="125" as="geometry" />
         </mxCell>
         <mxCell id="qa_obs" value="Observabilidad&lt;br&gt;health · ready · version&lt;br&gt;logs y correlation_id" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">

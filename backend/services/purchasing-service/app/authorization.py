@@ -1,3 +1,4 @@
+from erclave_common.transport import open_dependency
 from dataclasses import dataclass
 import json
 from urllib import error, request
@@ -17,8 +18,12 @@ class AdminSessionClient:
     def get_context(self, tenant_id, authorization):
         call=request.Request(f"{self.base_url}/v1/session/context",headers={"Authorization":authorization,"X-Tenant-Id":tenant_id},method="GET")
         try:
-            with request.urlopen(call,timeout=self.timeout) as response:return json.loads(response.read())["data"]
-        except (error.URLError,error.HTTPError,KeyError,ValueError) as exc: raise ErclaveError("purchasing_authorization_denied","Purchasing authorization failed.",status_code=403) from exc
+            with open_dependency(call,timeout=self.timeout, opener=request.urlopen) as response:return json.loads(response.read())["data"]
+        except error.HTTPError as exc:
+            if exc.code >= 500 or exc.code == 429:raise ErclaveError("authorization_service_unavailable","Authorization service is unavailable.",status_code=503) from exc
+            raise ErclaveError("purchasing_authorization_denied","Authorization failed.",status_code=401 if exc.code==401 else 403) from exc
+        except (error.URLError,TimeoutError,KeyError,ValueError) as exc:
+            raise ErclaveError("authorization_service_unavailable","Authorization service is unavailable.",status_code=503) from exc
 
 def get_admin_session_client(settings:Settings=Depends(get_settings)): return AdminSessionClient(settings)
 def require_purchasing_access(permission):

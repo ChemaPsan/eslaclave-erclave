@@ -1,3 +1,7 @@
+from erclave_common.operational_context import society_currency
+from .stock_context import stock_context
+from .service_context import service_context
+from .quote_context import guard_quote, quote_access, resources, quote_cost_currency, collect_quote_costs
 import hashlib
 import json
 from datetime import date
@@ -18,12 +22,29 @@ from .schemas import *
 router = APIRouter(prefix="/v1/sales", tags=["sales"])
 
 @router.get("/reports/{report_code}/export")
-def export_report(report_code:str,lang:Literal["es","en"]="es",date_from:date|None=None,date_to:date|None=None,status:str|None=None,q:str|None=Query(None,max_length=120),customer_id:str|None=None,responsible_worker_id:str|None=None,product_service_id:str|None=None,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),repository:SalesRepository=Depends(get_sales_repository),access:AuthorizedContext=Depends(require_sales_access(tuple(REPORT_PERMISSIONS.values())))):
+def export_report(report_code:str,lang:Literal["es","en"]="es",date_from:date|None=None,date_to:date|None=None,status:str|None=None,q:str|None=Query(None,max_length=120),customer_id:str|None=None,responsible_worker_id:str|None=None,product_service_id:str|None=None,x_tenant_id:str|None=Header(None,alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),repository:SalesRepository=Depends(get_sales_repository),access:AuthorizedContext=Depends(require_sales_access(tuple(REPORT_PERMISSIONS.values())))):
     validate_date_range(date_from,date_to);permission=REPORT_PERMISSIONS.get(report_code)
     if not permission:raise ErclaveError("report_not_found","Sales report does not exist.",status_code=404)
     access.require(permission)
     filters={"date_from":date_from,"date_to":date_to,"status":status,"q":q,"customer_id":customer_id,"responsible_worker_id":responsible_worker_id,"product_service_id":product_service_id}
+    if report_code=='quotes' and hasattr(repository,'has_scoped_quotes') and repository.has_scoped_quotes(x_tenant_id):
+        scope=quote_access(x_tenant_id,authorization,'sales.quote.read',access.actor_id)
+        filters['_scope_all']=scope.all_divisions;filters['_scope_divisions']=[row['id'] for row in scope.divisions]
+    if report_code in {'orders','commercial-margin','service-orders','deliveries'} and hasattr(repository,'has_scoped_orders') and repository.has_scoped_orders(x_tenant_id):
+        scope=quote_access(x_tenant_id,authorization,permission,access.actor_id)
+        filters['_scope_all']=scope.all_divisions;filters['_scope_divisions']=[row['id'] for row in scope.divisions]
     return csv_report_response(build_report(repository,require_tenant(x_tenant_id),report_code,filters),lang)
+
+
+def scoped_rows(rows,tenant,authorization,permission):
+    if not any(getattr(row,'division_ref_id',None) for row in rows):return rows
+    scope=quote_access(tenant,authorization,permission)
+    ids={row['id'] for row in scope.divisions}
+    return [row for row in rows if not row.division_ref_id or scope.all_divisions or row.division_ref_id in ids]
+
+def stop_scoped_execution(value,tenant,authorization,permission,actor=None):
+    if guard_quote(value,tenant,authorization,permission,actor):
+        raise ErclaveError('order_context_downstream_pending','Dimensional fulfillment and service execution are pending.',409)
 
 
 def require_tenant(value):
@@ -39,7 +60,11 @@ def require_key(value):
 
 
 def fingerprint(payload=None, path=None):
-    document = {"body": payload.model_dump(mode="json") if payload else {}, "path": path or {}}
+    body = payload.model_dump(mode="json") if payload else {}
+    if isinstance(payload, (ServiceTimeEntryCreateRequest, ServiceCostEntryCreateRequest)):
+        for field in ("cost_currency", "cost_exchange_rate"):
+            if body.get(field) is None: body.pop(field, None)
+    document = {"body": body, "path": path or {}}
     return hashlib.sha256(json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
@@ -142,14 +167,20 @@ def update_customer(customer_id: str, payload: CustomerUpdateRequest, x_tenant_i
 
 
 @router.get("/quotes", response_model=QuoteListResponse)
-def list_quotes(status: QuoteStatus | None = None, customer_id: str | None = None, x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.quote.read"))):
-    return QuoteListResponse(data=repository.list_quotes(require_tenant(x_tenant_id), status, customer_id))
+def list_quotes(status: QuoteStatus | None = None, customer_id: str | None = None, x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.quote.read"))):
+    rows=repository.list_quotes(require_tenant(x_tenant_id), status, customer_id)
+    if any(getattr(row,'division_ref_id',None) for row in rows):
+        scope=quote_access(x_tenant_id,authorization,'sales.quote.read')
+        ids={row['id'] for row in scope.divisions}
+        rows=[row for row in rows if not row.division_ref_id or scope.all_divisions or row.division_ref_id in ids]
+    return QuoteListResponse(data=rows)
 
 
 @router.get("/quotes/{quote_id}", response_model=QuoteResponse)
-def get_quote(quote_id: str, x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.quote.read"))):
+def get_quote(quote_id: str, x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.quote.read"))):
     value = repository.get_quote(require_tenant(x_tenant_id), quote_id)
     if not value: raise ErclaveError("quote_not_found", "Quote not found.", status_code=404)
+    guard_quote(value,x_tenant_id,authorization,'sales.quote.read')
     return QuoteResponse(data=value)
 
 
@@ -171,13 +202,21 @@ def create_quote(payload: QuoteCreateRequest, x_tenant_id: str | None = Header(d
 def update_quote(quote_id: str, payload: QuoteUpdateRequest, x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client), access: AuthorizedContext = Depends(require_sales_access("sales.quote.update"))):
     tenant_id = require_tenant(x_tenant_id); before = repository.get_quote(tenant_id, quote_id)
     if not before: raise ErclaveError("quote_not_found", "Quote not found.", status_code=404)
+    scope=guard_quote(before,tenant_id,authorization,'sales.quote.update',access.actor_id)
+    if 'cost_exchange_rate' in payload.model_fields_set and not scope:
+        raise ErclaveError('quote_context_required','Set the quote Division before capturing its cost exchange rate.',status_code=422)
+    if scope:
+        resources(before,scope,authority,lines=payload.lines,worker=payload.responsible_worker_id)
     customer = repository.get_customer(tenant_id, payload.customer_id) if payload.customer_id else None
     if customer and customer.status != "active": raise ErclaveError("active_customer_required", "Quote requires an active customer.", status_code=422)
     worker = authority.get_worker(tenant_id, payload.responsible_worker_id, authorization) if payload.responsible_worker_id else None
     if payload.currency: authority.require_catalog_item(tenant_id, "currencies", payload.currency, authorization)
     if payload.payment_terms: authority.require_catalog_item(tenant_id, "payment_terms", payload.payment_terms, authorization)
     lines = resolve_lines(tenant_id, payload.lines, authority, authorization) if payload.lines is not None else None
-    try: value = repository.update_quote(tenant_id, quote_id, payload, customer, worker, lines, require_key(idempotency_key), fingerprint(payload, {"quote_id": quote_id}), access.actor_id)
+    options={"organization_revision":before.organization_revision,"cost_currency":quote_cost_currency(scope,before.society_ref_id)} if scope else {}
+    if scope and before.status=='draft':
+        options['estimated_costs']=collect_quote_costs(authority,tenant_id,lines if lines is not None else before.lines,before.division_ref_id,before.society_ref_id,authorization)
+    try: value = repository.update_quote(tenant_id, quote_id, payload, customer, worker, lines, require_key(idempotency_key), fingerprint(payload, {"quote_id": quote_id}), access.actor_id, **options)
     except ValueError as exc: raise conflict(exc) from exc
     return QuoteResponse(data=value)
 
@@ -185,6 +224,9 @@ def update_quote(quote_id: str, payload: QuoteUpdateRequest, x_tenant_id: str | 
 def transition(quote_id, target, tenant_id, authorization, key, repository, authority, access):
     current = repository.get_quote(tenant_id, quote_id)
     if not current: raise ErclaveError("quote_not_found", "Quote not found.", status_code=404)
+    permission={'quoted':'sales.quote.submit','approved':'sales.quote.approve','expired':'sales.quote.expire','cancelled':'sales.quote.cancel'}[target]
+    scope=guard_quote(current,tenant_id,authorization,permission,access.actor_id)
+    if scope and target in {'quoted','approved'}:resources(current,scope,authority)
     if target in {"quoted", "approved"}:
         customer = repository.get_customer(tenant_id, current.customer_id)
         if not customer or customer.status != "active": raise ErclaveError("active_customer_required", "Quote requires an active customer.", status_code=422)
@@ -195,7 +237,18 @@ def transition(quote_id, target, tenant_id, authorization, key, repository, auth
             product = authority.get_product(tenant_id, line.product_service_id, authorization)
             unit = authority.require_unit(tenant_id, line.unit, authorization)
             if product.base_unit.upper() != unit: raise ErclaveError("quote_unit_mismatch", "Quote line no longer matches the authoritative product unit.", status_code=422)
-    try: value = repository.transition_quote(tenant_id, quote_id, target, require_key(key), fingerprint(path={"quote_id": quote_id, "target": target}), access.actor_id)
+    presentation = None
+    estimated_costs = None
+    if target == "approved" and current.status == "quoted" and current.division_ref_id:
+        from erclave_common.document_presentation import resolve_document_presentation
+        presentation = resolve_document_presentation(tenant_id, current.division_ref_id, current.society_ref_id, authorization, access.actor_id)
+    if current.division_ref_id and ((target=='approved' and current.status=='quoted') or (target=='quoted' and current.status=='draft')):
+        estimated_costs=collect_quote_costs(authority,tenant_id,current.lines,current.division_ref_id,current.society_ref_id,authorization)
+    options = {"organization_revision": current.organization_revision} if scope else {}
+    if presentation is not None: options["presentation_snapshot"] = presentation
+    if estimated_costs is not None: options["estimated_costs"] = estimated_costs
+    if estimated_costs is not None: options["cost_currency"] = quote_cost_currency(scope,current.society_ref_id)
+    try: value = repository.transition_quote(tenant_id, quote_id, target, require_key(key), fingerprint(path={"quote_id": quote_id, "target": target}), access.actor_id, **options)
     except ValueError as exc: raise conflict(exc) from exc
     return QuoteResponse(data=value)
 
@@ -217,14 +270,15 @@ def cancel_quote(quote_id: str, x_tenant_id: str = Header(alias="X-Tenant-Id"), 
 
 
 @router.get("/orders", response_model=SalesOrderListResponse)
-def list_sales_orders(status: OrderStatus | None = None, customer_id: str | None = None, x_tenant_id: str = Header(alias="X-Tenant-Id"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.order.read"))):
-    return SalesOrderListResponse(data=repository.list_orders(x_tenant_id, status, customer_id))
+def list_sales_orders(status: OrderStatus | None = None, customer_id: str | None = None, x_tenant_id: str = Header(alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.order.read"))):
+    return SalesOrderListResponse(data=scoped_rows(repository.list_orders(x_tenant_id, status, customer_id),x_tenant_id,authorization,"sales.order.read"))
 
 
 @router.get("/orders/{order_id}", response_model=SalesOrderResponse)
-def get_sales_order(order_id: str, x_tenant_id: str = Header(alias="X-Tenant-Id"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.order.read"))):
+def get_sales_order(order_id: str, x_tenant_id: str = Header(alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.order.read"))):
     value = repository.get_order(x_tenant_id, order_id)
     if not value: raise ErclaveError("sales_order_not_found", "Sales order not found.", status_code=404)
+    guard_quote(value,x_tenant_id,authorization,'sales.order.read')
     return SalesOrderResponse(data=value)
 
 
@@ -233,6 +287,9 @@ def create_sales_order(payload: SalesOrderCreateRequest, x_tenant_id: str = Head
     command_key = require_key(idempotency_key)
     quote = repository.get_quote(x_tenant_id, payload.quote_id)
     if not quote or quote.status != "approved": raise ErclaveError("approved_quote_required", "Sales order requires an approved quote.", status_code=422)
+    if getattr(quote,'division_ref_id',None):
+        scope=guard_quote(quote,x_tenant_id,authorization,'sales.order.create',access.actor_id)
+        resources(quote,scope,authority)
     customer = repository.get_customer(x_tenant_id, quote.customer_id)
     if not customer or customer.status != "active": raise ErclaveError("active_customer_required", "Sales order requires an active customer.", status_code=422)
     authority.get_worker(x_tenant_id, quote.responsible_worker_id, authorization)
@@ -255,23 +312,25 @@ def create_sales_order(payload: SalesOrderCreateRequest, x_tenant_id: str = Head
 
 @router.get("/service-orders", response_model=ServiceOrderListResponse)
 def list_service_orders(status: ServiceOrderStatus | None = None, order_id: str | None = None, customer_id: str | None = None,
-    x_tenant_id: str = Header(alias="X-Tenant-Id"), repository: SalesRepository = Depends(get_sales_repository),
+    x_tenant_id: str = Header(alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository),
     _=Depends(require_sales_access("sales.service_order.read"))):
-    return ServiceOrderListResponse(data=repository.list_service_orders(x_tenant_id, status, order_id, customer_id))
+    return ServiceOrderListResponse(data=scoped_rows(repository.list_service_orders(x_tenant_id, status, order_id, customer_id),x_tenant_id,authorization,"sales.service_order.read"))
 
 
 @router.get("/service-orders/{service_order_id}", response_model=ServiceOrderResponse)
 def get_service_order(service_order_id: str, x_tenant_id: str = Header(alias="X-Tenant-Id"),
-    repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.service_order.read"))):
+    authorization: str | None = Header(default=None, alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.service_order.read"))):
     value = repository.get_service_order(x_tenant_id, service_order_id)
     if not value: raise ErclaveError("service_order_not_found", "Service order not found.", status_code=404)
+    guard_quote(value,x_tenant_id,authorization,'sales.service_order.read')
     return ServiceOrderResponse(data=value)
 
 
 @router.post("/service-orders/{service_order_id}/plan", response_model=ServiceOrderResponse)
 def plan_service_order(service_order_id: str, payload: ServiceOrderPlanRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), authorization: str | None = Header(default=None, alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client),
     access: AuthorizedContext = Depends(require_sales_access("sales.service_order.plan"))):
+    service_context(repository.get_service_order(x_tenant_id,service_order_id),x_tenant_id,authorization,'sales.service_order.plan',authority,access.actor_id)
     try: value = repository.plan_service_order(x_tenant_id, service_order_id, payload, require_key(idempotency_key), fingerprint(payload, {"service_order_id": service_order_id}), access.actor_id)
     except ValueError as exc: raise conflict(exc) from exc
     if not value: raise ErclaveError("service_order_not_found", "Service order not found.", status_code=404)
@@ -283,8 +342,11 @@ def add_service_time_entry(service_order_id: str, payload: ServiceTimeEntryCreat
     authorization: str | None = Header(default=None, alias="Authorization"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client),
     access: AuthorizedContext = Depends(require_sales_access("sales.service_order.time.create"))):
+    scope = service_context(repository.get_service_order(x_tenant_id,service_order_id),x_tenant_id,authorization,'sales.service_order.time.create',authority,access.actor_id,worker=payload.worker_id)
+    current = repository.get_service_order(x_tenant_id,service_order_id)
+    money_options = {'base_currency':society_currency(scope,current.society_ref_id)} if scope and current else {}
     worker = authority.get_worker(x_tenant_id, payload.worker_id, authorization)
-    try: value = repository.add_service_time_entry(x_tenant_id, service_order_id, payload, worker, require_key(idempotency_key), fingerprint(payload, {"service_order_id": service_order_id}), access.actor_id)
+    try: value = repository.add_service_time_entry(x_tenant_id, service_order_id, payload, worker, require_key(idempotency_key), fingerprint(payload, {"service_order_id": service_order_id}), access.actor_id, **money_options)
     except ValueError as exc: raise conflict(exc) from exc
     if not value: raise ErclaveError("service_order_not_found", "Service order not found.", status_code=404)
     return ServiceOrderResponse(data=value)
@@ -292,9 +354,12 @@ def add_service_time_entry(service_order_id: str, payload: ServiceTimeEntryCreat
 
 @router.post("/service-orders/{service_order_id}/cost-entries", response_model=ServiceOrderResponse, status_code=201)
 def add_service_cost_entry(service_order_id: str, payload: ServiceCostEntryCreateRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), authorization: str | None = Header(default=None, alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client),
     access: AuthorizedContext = Depends(require_sales_access("sales.service_order.cost.create"))):
-    try: value = repository.add_service_cost_entry(x_tenant_id, service_order_id, payload, require_key(idempotency_key), fingerprint(payload, {"service_order_id": service_order_id}), access.actor_id)
+    scope = service_context(repository.get_service_order(x_tenant_id,service_order_id),x_tenant_id,authorization,'sales.service_order.cost.create',authority,access.actor_id)
+    current = repository.get_service_order(x_tenant_id,service_order_id)
+    money_options = {'base_currency':society_currency(scope,current.society_ref_id)} if scope and current else {}
+    try: value = repository.add_service_cost_entry(x_tenant_id, service_order_id, payload, require_key(idempotency_key), fingerprint(payload, {"service_order_id": service_order_id}), access.actor_id, **money_options)
     except ValueError as exc: raise conflict(exc) from exc
     if not value: raise ErclaveError("service_order_not_found", "Service order not found.", status_code=404)
     return ServiceOrderResponse(data=value)
@@ -302,8 +367,9 @@ def add_service_cost_entry(service_order_id: str, payload: ServiceCostEntryCreat
 
 @router.post("/service-orders/{service_order_id}/evidence", response_model=ServiceOrderResponse, status_code=201)
 def add_service_evidence(service_order_id: str, payload: ServiceEvidenceCreateRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), authorization: str | None = Header(default=None, alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client),
     access: AuthorizedContext = Depends(require_sales_access("sales.service_order.evidence.create"))):
+    service_context(repository.get_service_order(x_tenant_id,service_order_id),x_tenant_id,authorization,'sales.service_order.evidence.create',authority,access.actor_id)
     try: value = repository.add_service_evidence(x_tenant_id, service_order_id, payload, require_key(idempotency_key), fingerprint(payload, {"service_order_id": service_order_id}), access.actor_id)
     except ValueError as exc: raise conflict(exc) from exc
     if not value: raise ErclaveError("service_order_not_found", "Service order not found.", status_code=404)
@@ -316,6 +382,7 @@ def transition_service_order(service_order_id: str, action: Literal["assign", "s
     authorization: str | None = Header(default=None, alias="Authorization"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client),
     access: AuthorizedContext = Depends(require_service_order_transition_access)):
+    service_context(repository.get_service_order(x_tenant_id,service_order_id),x_tenant_id,authorization,access.permission,authority,access.actor_id,worker=payload.responsible_worker_id if isinstance(payload,ServiceOrderAssignRequest) else None,stopping=action in {"cancel","wait"})
     command_key = require_key(idempotency_key)
     request_hash = fingerprint(payload, {"service_order_id": service_order_id, "action": action})
     try:
@@ -340,9 +407,15 @@ def transition_service_order(service_order_id: str, action: Literal["assign", "s
 def configure_sales_order_fulfillment(order_id: str, payload: SalesOrderFulfillmentRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client), access: AuthorizedContext = Depends(require_sales_access("sales.order.fulfill"))):
     command_key = require_key(idempotency_key); request_hash = fingerprint(payload, {"order_id": order_id}); order = repository.get_order(x_tenant_id, order_id)
     if not order: raise ErclaveError("sales_order_not_found", "Sales order not found.", status_code=404)
-    if order.fulfillment_state == "completed":
-        try: prepared = repository.prepare_order_fulfillment(x_tenant_id, order_id, payload, command_key, request_hash)
+    cost_currency,exchange_rate=stock_context(order,payload,x_tenant_id,authorization,access.actor_id,authority)
+    cost_options={'cost_currency':cost_currency,'exchange_rate':exchange_rate} if cost_currency else {}
+    if hasattr(repository,'fulfillment_replay'):
+        try: replay=repository.fulfillment_replay(x_tenant_id,order_id,command_key,request_hash,actor_id=access.actor_id)
         except ValueError as exc: raise conflict(exc) from exc
+        if replay:return SalesOrderResponse(data=replay)
+    elif order.fulfillment_state == "completed":
+        try: prepared=repository.prepare_order_fulfillment(x_tenant_id,order_id,payload,command_key,request_hash,actor_id=access.actor_id,**cost_options)
+        except ValueError as exc:raise conflict(exc) from exc
         return SalesOrderResponse(data=prepared[0])
     by_id = {line.id: line for line in order.lines}; stock_sources = {}; claimed = False
     try:
@@ -363,7 +436,7 @@ def configure_sales_order_fulfillment(order_id: str, payload: SalesOrderFulfillm
                 if inventory_item.get("base_unit", "").upper() != line.unit.upper():
                     raise ErclaveError("product_inventory_unit_mismatch", "Mapped Inventory item unit does not match the sold product.", status_code=422)
                 stock_sources[line.id] = (product, inventory_item)
-        prepared = repository.prepare_order_fulfillment(x_tenant_id, order_id, payload, command_key, request_hash)
+        prepared = repository.prepare_order_fulfillment(x_tenant_id, order_id, payload, command_key, request_hash, actor_id=access.actor_id, **cost_options)
         if not prepared: raise ErclaveError("sales_order_not_found", "Sales order not found.", status_code=404)
         claimed = True
         order, command_key = prepared; by_id = {line.id: line for line in order.lines}; resolved = []
@@ -373,6 +446,12 @@ def configure_sales_order_fulfillment(order_id: str, payload: SalesOrderFulfillm
                 product, inventory_item = stock_sources[line.id]; reservations = []
                 for index, allocation in enumerate(request_line.allocations):
                     reservation = authority.reserve_stock(x_tenant_id, order_id, line.id, allocation.inventory_item_id, allocation.warehouse_id, allocation.quantity, line.unit, authorization, f"{command_key}-reserve-{line.id}-{index}")
+                    if order.division_ref_id:
+                        context=reservation.get('organization_context') or {}
+                        if reservation.get('original_unit_cost') is None:raise ErclaveError('assignment_authority_unavailable','Missing original cost.',503)
+                        reservation={**reservation,'unit_cost_snapshot':reservation['original_unit_cost']}
+                        if context.get('division_ref_id')!=order.division_ref_id or context.get('society_ref_id')!=order.society_ref_id or context.get('cost_currency')!=order.cost_currency:
+                            raise ErclaveError('operational_context_mismatch','Inventory reservation context differs from its source.',409)
                     reservations.append(reservation)
                 resolved.append({"order_line_id": line.id, "mode": "stock", "inventory_item_id": product.inventory_item_id,
                     "inventory_item_code": inventory_item.get("code"), "inventory_item_name": inventory_item.get("name"), "reservations": reservations})
@@ -391,12 +470,17 @@ def configure_sales_order_fulfillment(order_id: str, payload: SalesOrderFulfillm
 
 @router.post("/orders/{order_id}/cancel", response_model=SalesOrderResponse)
 def cancel_sales_order(order_id: str, payload: ActionReasonRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client), access: AuthorizedContext = Depends(require_sales_access("sales.order.cancel"))):
+    guard_quote(repository.get_order(x_tenant_id,order_id),x_tenant_id,authorization,'sales.order.cancel',access.actor_id)
     command_key = require_key(idempotency_key); request_hash = fingerprint(payload, {"order_id": order_id})
-    try: prepared = repository.prepare_cancel_order(x_tenant_id, order_id, command_key, request_hash)
+    try: prepared = repository.prepare_cancel_order(x_tenant_id, order_id, command_key, request_hash, actor_id=access.actor_id)
     except ValueError as exc: raise conflict(exc) from exc
     if not prepared: raise ErclaveError("sales_order_not_found", "Sales order not found.", status_code=404)
     order, command_key = prepared
     try:
+        if order.status!='cancelled':
+            for line in order.lines:
+                if line.production_request_id:
+                    authority.cancel_production_request(x_tenant_id,line.production_request_id,payload.reason,authorization,f"{command_key}-production-{line.id}")
         for line in order.lines:
             for reservation in line.reservations:
                 if reservation.status == "active": authority.release_reservation(x_tenant_id, reservation.reservation_ref_id, payload.reason, authorization, f"{command_key}-release-{reservation.reservation_ref_id}")
@@ -409,19 +493,21 @@ def cancel_sales_order(order_id: str, payload: ActionReasonRequest, x_tenant_id:
 
 
 @router.get("/deliveries", response_model=DeliveryListResponse)
-def list_deliveries(status: DeliveryStatus | None = None, order_id: str | None = None, x_tenant_id: str = Header(alias="X-Tenant-Id"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.delivery.read"))):
-    return DeliveryListResponse(data=repository.list_deliveries(x_tenant_id, status, order_id))
+def list_deliveries(status: DeliveryStatus | None = None, order_id: str | None = None, x_tenant_id: str = Header(alias="X-Tenant-Id"), authorization: str | None=Header(None,alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.delivery.read"))):
+    return DeliveryListResponse(data=scoped_rows(repository.list_deliveries(x_tenant_id, status, order_id),x_tenant_id,authorization,'sales.delivery.read'))
 
 
 @router.get("/deliveries/{delivery_id}", response_model=DeliveryResponse)
-def get_delivery(delivery_id: str, x_tenant_id: str = Header(alias="X-Tenant-Id"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.delivery.read"))):
+def get_delivery(delivery_id: str, x_tenant_id: str = Header(alias="X-Tenant-Id"), authorization: str | None=Header(None,alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), _=Depends(require_sales_access("sales.delivery.read"))):
     value = repository.get_delivery(x_tenant_id, delivery_id)
     if not value: raise ErclaveError("delivery_not_found", "Delivery not found.", status_code=404)
+    guard_quote(value,x_tenant_id,authorization,'sales.delivery.read')
     return DeliveryResponse(data=value)
 
 
 @router.post("/deliveries", response_model=DeliveryResponse, status_code=201)
-def create_delivery(payload: DeliveryCreateRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository), access: AuthorizedContext = Depends(require_sales_access("sales.delivery.create"))):
+def create_delivery(payload: DeliveryCreateRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), authorization: str | None = Header(default=None, alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), access: AuthorizedContext = Depends(require_sales_access("sales.delivery.create"))):
+    guard_quote(repository.get_order(x_tenant_id,payload.order_id),x_tenant_id,authorization,'sales.delivery.create',access.actor_id)
     try: value = repository.create_delivery(x_tenant_id, payload, require_key(idempotency_key), fingerprint(payload), access.actor_id)
     except ValueError as exc: raise conflict(exc) from exc
     if not value: raise ErclaveError("delivery_code_conflict", "Delivery code already exists.", status_code=409)
@@ -432,13 +518,15 @@ def create_delivery(payload: DeliveryCreateRequest, x_tenant_id: str = Header(al
 def confirm_delivery(delivery_id: str, payload: ActionReasonRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), authorization: str | None = Header(default=None, alias="Authorization"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository), authority: SalesAuthorityClient = Depends(get_sales_authority_client), access: AuthorizedContext = Depends(require_sales_access(("sales.delivery.confirm","inventory.movement.create")))):
     if "inventory.movement.create" not in (access.permissions or frozenset({access.permission})):
         raise ErclaveError("sales_warehouse_dispatch_required","Warehouse must issue this delivery in Movements.",status_code=403)
+    guard_quote(repository.get_delivery(x_tenant_id,delivery_id),x_tenant_id,authorization,'inventory.movement.create',access.actor_id)
     with repository.delivery_command_lock(x_tenant_id,delivery_id):
         return dispatch_delivery(delivery_id,payload,x_tenant_id,authorization,idempotency_key,repository,authority,access)
 
 
 def dispatch_delivery(delivery_id,payload,x_tenant_id,authorization,idempotency_key,repository,authority,access):
+    guard_quote(repository.get_delivery(x_tenant_id,delivery_id),x_tenant_id,authorization,'inventory.movement.create',access.actor_id)
     command_key = require_key(idempotency_key); request_hash = fingerprint(payload, {"delivery_id": delivery_id})
-    try: planned = repository.prepare_delivery_confirmation(x_tenant_id, delivery_id, command_key, request_hash)
+    try: planned = repository.prepare_delivery_confirmation(x_tenant_id, delivery_id, command_key, request_hash, actor_id=access.actor_id)
     except ValueError as exc: raise conflict(exc) from exc
     if not planned: raise ErclaveError("delivery_not_found", "Delivery not found.", status_code=404)
     delivery, plan, command_key = planned; consumptions = []
@@ -446,6 +534,12 @@ def dispatch_delivery(delivery_id,payload,x_tenant_id,authorization,idempotency_
     try:
         for index, item in enumerate(plan):
             movement = authority.consume_reservation(x_tenant_id, item["reservation_ref_id"], item["quantity"], payload.reason, authorization, f"{command_key}-consume-{index}-{item['reservation_ref_id']}")
+            if delivery.division_ref_id:
+                context=movement.get('organization_context') or {}
+                if movement.get('original_unit_cost') is None:raise ErclaveError('assignment_authority_unavailable','Missing original cost.',503)
+                movement={**movement,'unit_cost':movement['original_unit_cost']}
+                if context.get('division_ref_id')!=delivery.division_ref_id or context.get('society_ref_id')!=delivery.society_ref_id or context.get('cost_currency')!=delivery.cost_currency:
+                    raise ErclaveError('operational_context_mismatch','Inventory movement context differs from its source.',409)
             consumptions.append({**item, "unit_cost": movement.get("unit_cost") if movement.get("unit_cost") is not None else item["unit_cost"]})
         value = repository.confirm_delivery(x_tenant_id, delivery_id, consumptions, command_key, request_hash, access.actor_id)
     except ValueError as exc: raise conflict(exc) from exc
@@ -456,7 +550,8 @@ def dispatch_delivery(delivery_id,payload,x_tenant_id,authorization,idempotency_
 
 
 @router.post("/deliveries/{delivery_id}/cancel", response_model=DeliveryResponse)
-def cancel_delivery(delivery_id: str, payload: ActionReasonRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), repository: SalesRepository = Depends(get_sales_repository), access: AuthorizedContext = Depends(require_sales_access("sales.delivery.cancel"))):
+def cancel_delivery(delivery_id: str, payload: ActionReasonRequest, x_tenant_id: str = Header(alias="X-Tenant-Id"), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"), authorization: str | None=Header(None,alias="Authorization"), repository: SalesRepository = Depends(get_sales_repository), access: AuthorizedContext = Depends(require_sales_access("sales.delivery.cancel"))):
+    guard_quote(repository.get_delivery(x_tenant_id,delivery_id),x_tenant_id,authorization,'sales.delivery.cancel',access.actor_id)
     try: value = repository.cancel_delivery(x_tenant_id, delivery_id, payload.reason, require_key(idempotency_key), fingerprint(payload, {"delivery_id": delivery_id}), access.actor_id)
     except ValueError as exc: raise conflict(exc) from exc
     if not value: raise ErclaveError("delivery_not_found", "Delivery not found.", status_code=404)
@@ -464,5 +559,6 @@ def cancel_delivery(delivery_id: str, payload: ActionReasonRequest, x_tenant_id:
 
 
 @router.get("/warehouse-deliveries")
-def warehouse_deliveries(limit:int=Query(25,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str=Header(alias="X-Tenant-Id"),repository:SalesRepository=Depends(get_sales_repository),_=Depends(require_sales_access("inventory.movement.read"))):
-    return {"data":repository.list_warehouse_deliveries(x_tenant_id,limit,offset)}
+def warehouse_deliveries(limit:int=Query(25,ge=1,le=100),offset:int=Query(0,ge=0),x_tenant_id:str=Header(alias="X-Tenant-Id"),authorization:str|None=Header(None,alias="Authorization"),repository:SalesRepository=Depends(get_sales_repository),_=Depends(require_sales_access("inventory.movement.read"))):
+    scope=quote_access(x_tenant_id,authorization,"inventory.movement.read") if hasattr(repository,"has_scoped_orders") and repository.has_scoped_orders(x_tenant_id) else None
+    return {"data":repository.list_warehouse_deliveries(x_tenant_id,limit,offset,**({"scope":scope} if scope else {}))}

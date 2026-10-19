@@ -20,7 +20,7 @@ export function createInitialState({ authConfigured = false } = {}) {
     hrApi: { status: "idle", error: "", workers: [] },
     salesApi: { status: "idle", error: "", referenceWarnings: [], workers: [], references: { currencies: [], payment_terms: [] } },
     salesServiceOrderDetail: { status: "idle", id: "", data: null, error: "" },
-    purchasingApi: { status: "idle", error: "", suppliers: [], requisitions: [], orders: [], receipts: [], items: [], warehouses: [] },
+    purchasingApi: { status: "idle", error: "", referenceWarnings: [], references: { currencies: [], payment_terms: [] }, suppliers: [], requisitions: [], orders: [], receipts: [], items: [], warehouses: [] },
     purchasingSupplierEditId: "",
     purchasingRequisitionEditId: "",
     purchasingOrderEditId: "",

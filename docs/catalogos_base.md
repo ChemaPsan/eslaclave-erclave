@@ -2,11 +2,11 @@
 
 ## 1. Proposito
 
-Este documento concentra los catalogos base que ERClave debera administrar desde el modulo de Administracion y Configuracion.
+Este documento distingue catálogos implementados y candidatos de diseño. Una pantalla en Administración no cambia la propiedad: RH posee áreas/puestos, Costing centros y cada módulo sus estados. [Ownership](arquitectura/ownership_datos_mvp.md), [control contable](contexto/CONTROL_CONTABLE.md) y [módulos](../modulos/README.md) delimitan runtime.
 
 En Local ya estan implementados `units_of_measure`, `currencies` y `payment_terms`. MXN/USD/EUR y contado/credito a 7/15/30/45/60 dias son defaults iniciales, pero cada tenant puede agregar valores o inactivarlos. Ventas valida codigos activos y no acepta texto libre. Los estados de Cotizacion, Pedido, Entrega y Orden de Produccion son maquinas de estado protegidas, no catalogos editables.
 
-`document.template` es configuracion tenant-safe y no un catalogo: centraliza logo, colores, pie y numeracion para los PDF de Ventas, Produccion y generadores futuros.
+`document.template` es configuración tenant-safe, no catálogo. Existe editor por Sociedad/División con herencia y override; impresiones aún requieren consumir plantilla e identidad del documento (CC-17). [Contrato CONT-04](arquitectura/cont_04_configuracion_por_alcance.md).
 
 El objetivo es no perder contexto de los valores que hoy pueden existir como opciones fijas del MVP, pero que mas adelante deberan poder configurarse por tenant, centro de negocio, modulo, rol o pais.
 
@@ -55,15 +55,15 @@ Estos catalogos son candidatos a implementarse primero porque impactan varios mo
 
 | Catalogo | Modulo dueno | Uso principal | Prioridad |
 |---|---|---|---|
-| Centros de negocio | Administracion | Segmentar operacion, permisos, reportes y configuracion. | Alta |
-| Areas o departamentos | Administracion | Asignar usuarios, flujos, costos y responsables. | Alta |
+| Sociedades, Divisiones y Emisores | Administración | Estructura normalizada implementada Local; sustituye sucursales/centros de negocio legacy mediante compatibilidad explícita. | Implementado Local |
+| Áreas laborales y puestos | RH | Autoridad laboral consumida por Producción/Mantenimiento; no duplicar en Admin. | Implementado |
 | Roles | Administracion | Controlar acceso funcional por perfil. | Alta |
 | Permisos | Administracion | Controlar acciones por modulo, submodulo y alcance. | Alta |
 | Unidades de medida | Administracion | Compras, almacenes, produccion, ventas y costos. | Alta |
 | Monedas | Administracion | Compras, ventas, gastos, costos y contabilidad. | Alta |
 | Impuestos | Administracion | Compras, ventas, gastos y contabilidad. | Alta |
 | Prioridades | Administracion | Ordenes, tareas, requisiciones y tickets operativos. | Media |
-| Estados operativos compartidos | Administracion | Borrador, en revision, aprobado, cancelado, cerrado. | Media |
+| Estados operativos | Servicio dueño de cada documento | Máquinas de estado protegidas; no catálogo editable transversal. | Contrato de dominio |
 | Motivos de cancelacion | Administracion | Trazabilidad de cancelaciones en varios modulos. | Media |
 | Idiomas | Administracion | Soporte Espanol/Ingles y futuros idiomas. | Media |
 
@@ -77,7 +77,9 @@ Permisos: `admin.unit.read`, `admin.unit.create` y `admin.unit.update`. La lectu
 
 ---
 
-## 5. Catalogos por modulo
+## 5. Inventario de conceptos por módulo
+
+Las tablas siguientes son candidatos/alcance conceptual, no inventario de catálogos administrables entregados. Estados/transiciones permanecen protegidos por el servicio dueño y no se convertirán automáticamente en opciones editables. Gastos, analítica Costos, Accounting y Reportes transversal siguen planned; distinguir catálogo de centros básico ya implementado.
 
 ### Produccion
 
@@ -143,7 +145,7 @@ Permisos: `admin.unit.read`, `admin.unit.create` y `admin.unit.update`. La lectu
 
 | Catalogo | Uso |
 |---|---|
-| Centros de costo | Agrupar costos por area, centro o proceso. |
+| Centros de costos | Catálogo básico Costing implementado Local por División, visible en Admin sin activar analítica/Accounting; [CONT-05](arquitectura/cont_05_catalogo_centros.md). |
 | Drivers de prorrateo | Horas, unidades, metros, porcentaje, consumo real. |
 | Metodos de costeo | Estandar, promedio, real, estimado. |
 | Tipos de variacion | Precio, cantidad, eficiencia, merma, tiempo. |
@@ -172,9 +174,9 @@ Permisos: `admin.unit.read`, `admin.unit.create` y `admin.unit.update`. La lectu
 
 ---
 
-## 6. Opciones fijas actuales que deberan migrarse a catalogos
+## 6. Opciones a evaluar antes de ampliar catálogos
 
-Estas opciones pueden existir hoy en el frontend como parte del MVP, pero quedan marcadas para llevarse despues a Administracion y Configuracion.
+El inventario original siguiente no es una orden de migración. Unidades, monedas y organización ya tienen sus dueños/contratos; estados y tipos de efecto que controlan reglas backend no se vuelven editables por aparecer aquí. Justificar cada catálogo restante, su dueño y consumidor antes de implementar.
 
 | Area | Opciones identificadas |
 |---|---|
@@ -185,9 +187,9 @@ Estas opciones pueden existir hoy en el frontend como parte del MVP, pero quedan
 
 ---
 
-## 7. Permisos sugeridos
+## 7. Permisos de diseño, no grants disponibles
 
-Los catalogos base deberan tener permisos separados de la operacion diaria.
+Los catálogos usan permisos puntuales del dueño según OpenAPI y seeds actuales. Los nombres siguientes fueron sugerencias iniciales; no concederlos ni implementarlos por esta lista. No usar permisos genéricos Admin para eludir RH, Inventory o Accounting.
 
 ```text
 admin.catalogs.read
@@ -228,7 +230,7 @@ Una opcion fija debera moverse a catalogo administrable cuando cumpla uno o mas 
 
 1. Repetir para cada catalogo pendiente el patron de tarjeta-resumen y vista dedicada ya implementado en Unidades de medida.
 2. Mantener `admin-service` como propietario de catalogos transversales y definir ownership explicito para catalogos propios de modulo.
-3. Migrar opciones fijas restantes del frontend a lectura desde catalogos.
+3. Evaluar opciones restantes; migrar sólo catálogos justificados y conservar estados de dominio protegidos.
 4. Agregar soporte ES/EN a cada nuevo valor visible.
 5. Exigir idempotencia, correlacion y bitacora de cambios en cada catalogo mutable.
 6. Agregar importacion/exportacion controlada para cargas iniciales.

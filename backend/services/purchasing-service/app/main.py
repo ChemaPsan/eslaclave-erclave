@@ -5,8 +5,9 @@ from erclave_common.errors import ErclaveError,erclave_error_handler
 from erclave_common.health import router as health_router
 from erclave_common.middleware import CorrelationIdMiddleware,TenantContextMiddleware
 from .api import router
+from .organization_api import router as organization_router
 def create_app():
     settings=get_settings(); app=FastAPI(title="ERClave Purchasing Service",version=settings.version)
-    app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origin_list,allow_methods=["GET","POST","PATCH","OPTIONS"],allow_headers=["Content-Type","X-Tenant-Id","X-Actor-Id","X-Correlation-Id","Idempotency-Key","Authorization"])
-    app.add_middleware(CorrelationIdMiddleware); app.add_middleware(TenantContextMiddleware); app.add_exception_handler(ErclaveError,erclave_error_handler); app.include_router(health_router); app.include_router(router); return app
+    app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origin_list,allow_methods=["GET","POST","PUT","PATCH","OPTIONS"],allow_headers=["Content-Type","X-Tenant-Id","X-Actor-Id","X-Correlation-Id","Idempotency-Key","Authorization"])
+    app.add_middleware(CorrelationIdMiddleware); app.add_middleware(TenantContextMiddleware); app.add_exception_handler(ErclaveError,erclave_error_handler); app.include_router(health_router); app.include_router(router); app.include_router(organization_router); return app
 app=create_app()

@@ -1,0 +1,137 @@
+name: Inspect QA release baseline read only
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full commit SHA of the successful immutable candidate
+        required: true
+        type: string
+      candidate_run_id:
+        description: Successful qa-candidate workflow run ID for that SHA
+        required: true
+        type: string
+      tenant_id:
+        description: Explicit existing QA tenant to inspect
+        required: true
+        type: string
+      confirmation:
+        description: Type INSPECT_ERCLAVE_QA (no migration or data writes)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: erclave-qa-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_SHA: ${{ inputs.release_sha }}
+  CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+  TARGET_TENANT: ${{ inputs.tenant_id }}
+  CONFIRMATION: ${{ inputs.confirmation }}
+  PROJECT_ID: ${{ vars.QA_GCP_PROJECT_ID }}
+  REGION: ${{ vars.QA_GCP_REGION }}
+  REPOSITORY: ${{ vars.QA_ARTIFACT_REPOSITORY }}
+
+jobs:
+  inspect:
+    environment: qa-database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate explicit read-only scope
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = INSPECT_ERCLAVE_QA
+          test "$PROJECT_ID" = erclave
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$WORKFLOW_SHA" = "$RELEASE_SHA"
+          [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$TARGET_TENANT" =~ ^ten_[A-Za-z0-9]{1,36}$ ]]
+          [[ "$REGION" =~ ^[a-z0-9-]+$ ]]
+          [[ "$REPOSITORY" =~ ^[a-z0-9_-]+$ ]]
+          test -n "${{ vars.QA_MIGRATOR_SERVICE_ACCOUNT }}"
+          test "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" = erclave:us-central1:erclave-qa-postgres
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - name: Verify source and successful candidate provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          gh api "repos/$EXPECTED_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID" > candidate-run.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          run = json.loads(Path('candidate-run.json').read_text())
+          assert run['path'] == '.github/workflows/qa-candidate.yml', 'Unexpected candidate workflow'
+          assert run['event'] == 'workflow_dispatch' and run['status'] == 'completed' and run['conclusion'] == 'success', 'Candidate must have succeeded'
+          assert run['head_sha'] == os.environ['RELEASE_SHA'], 'Candidate workflow SHA mismatch'
+          assert run['repository']['full_name'] == os.environ['EXPECTED_REPOSITORY'], 'Candidate repository mismatch'
+          assert run['head_repository']['full_name'] == os.environ['EXPECTED_REPOSITORY'], 'Fork candidate rejected'
+          PY
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-images-${{ inputs.release_sha }}
+          path: candidate
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.candidate_run_id }}
+
+      - name: Validate exact approved registry digest without sourcing artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, pathlib, re
+          services = ('admin', 'production', 'inventory', 'hr', 'sales', 'purchasing', 'maintenance', 'costing')
+          prefix = f"{os.environ['REGION']}-docker.pkg.dev/{os.environ['PROJECT_ID']}/{os.environ['REPOSITORY']}/"
+          expected = {s.upper() + '_IMAGE': prefix + s + '-service' for s in services}
+          lines = pathlib.Path('candidate/qa-images.env').read_text().splitlines()
+          assert len(lines) == len(expected), 'Exactly eight immutable bindings required'
+          images = {}
+          for line in lines:
+              key, separator, image = line.partition('=')
+              assert separator and key in expected and key not in images, 'Unexpected image binding'
+              assert re.fullmatch(re.escape(expected[key]) + r'@sha256:[0-9a-f]{64}', image), 'Registry, service or digest mismatch'
+              images[key] = image
+          with open(os.environ['GITHUB_ENV'], 'a') as handle:
+              handle.write('ADMIN_IMAGE=' + images['ADMIN_IMAGE'] + '\n')
+          PY
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.QA_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.QA_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Run only the SELECT baseline inspector in QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run jobs deploy erclave-inspect-baseline-qa \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --image "$ADMIN_IMAGE" \
+            --service-account "${{ vars.QA_MIGRATOR_SERVICE_ACCOUNT }}" \
+            --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" \
+            --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest \
+            --set-env-vars "^|^ERCLAVE_ENVIRONMENT=qa|ERCLAVE_QA_INSPECTION_CONFIRMATION=INSPECT_ERCLAVE_QA|ERCLAVE_QA_CONFIGURATION_TENANT_ID=$TARGET_TENANT|ERCLAVE_QA_EXPECTED_CLOUD_SQL_CONNECTION_NAME=${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}|PGOPTIONS=-c default_transaction_read_only=on -c lock_timeout=5s -c statement_timeout=120s" \
+            --command python --args=scripts/inspect_qa_release_baseline.py \
+            --max-retries 0 --task-timeout 5m --quiet
+          gcloud run jobs execute erclave-inspect-baseline-qa \
+            --project "$PROJECT_ID" --region "$REGION" --wait
+          echo 'Sanitized baseline JSON is in this QA job execution stdout (Cloud Logging). No migration, activation or currency confirmation was performed.'

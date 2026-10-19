@@ -1,3 +1,4 @@
+from erclave_common.transport import open_dependency
 from dataclasses import dataclass
 import json
 from urllib import error, request
@@ -20,19 +21,20 @@ class AdminSessionClient:
     def get_context(self, tenant_id, authorization):
         req=request.Request(f"{self.base_url}/v1/session/context",headers={"Authorization":authorization,"X-Tenant-Id":tenant_id},method="GET")
         try:
-            with request.urlopen(req,timeout=self.timeout) as response: return json.loads(response.read())["data"]
+            with open_dependency(req,timeout=self.timeout, opener=request.urlopen) as response: return json.loads(response.read())["data"]
         except error.HTTPError as exc:
+            if exc.code >= 500 or exc.code == 429:raise ErclaveError("authorization_service_unavailable","Authorization service is unavailable.",status_code=503) from exc
             raise ErclaveError("authorization_denied","Inventory authorization failed.",status_code=401 if exc.code==401 else 403) from exc
         except (error.URLError,TimeoutError,KeyError,ValueError) as exc:
             raise ErclaveError("authorization_service_unavailable","Authorization service is unavailable.",status_code=503) from exc
 def get_admin_session_client(settings: Settings=Depends(get_settings)): return AdminSessionClient(settings)
 class UnitCatalogClient:
-    def __init__(self,settings): self.base_url=settings.admin_service_url.rstrip("/"); self.timeout=settings.authorization_timeout_seconds
+    def __init__(self,settings): self.base_url=settings.admin_service_url.rstrip("/"); self.timeout=getattr(settings,"dependency_timeout_seconds",settings.authorization_timeout_seconds)
     def resolve_active(self,tenant_id,code,authorization=None):
         normalized=code.strip().upper()
         req=request.Request(f"{self.base_url}/v1/catalogs/units-of-measure/by-code/{normalized}",headers={"Authorization":authorization or "","X-Tenant-Id":tenant_id},method="GET")
         try:
-            with request.urlopen(req,timeout=self.timeout) as response:return json.loads(response.read().decode("utf-8"))["data"]
+            with open_dependency(req,timeout=self.timeout, opener=request.urlopen) as response:return json.loads(response.read().decode("utf-8"))["data"]
         except error.HTTPError as exc:
             if exc.code==404: raise ErclaveError("unit_of_measure_invalid","Unit of measure is not active in the tenant catalog.",status_code=422,details={"code":normalized}) from exc
             raise ErclaveError("unit_catalog_validation_denied","Unit catalog rejected validation.",status_code=403 if exc.code in (401,403) else 503) from exc
@@ -41,11 +43,11 @@ class UnitCatalogClient:
         return self.resolve_active(tenant_id,code,authorization)["code"].upper()
 def get_unit_catalog_client(settings: Settings=Depends(get_settings)): return UnitCatalogClient(settings)
 class ProductionOrderClient:
-    def __init__(self,settings): self.base_url=settings.production_service_url.rstrip("/"); self.timeout=settings.authorization_timeout_seconds
+    def __init__(self,settings): self.base_url=settings.production_service_url.rstrip("/"); self.timeout=getattr(settings,"dependency_timeout_seconds",settings.authorization_timeout_seconds)
     def _get(self,path,tenant_id,authorization):
         req=request.Request(f"{self.base_url}{path}",headers={"Authorization":authorization or "","X-Tenant-Id":tenant_id},method="GET")
         try:
-            with request.urlopen(req,timeout=self.timeout) as response:return json.loads(response.read().decode("utf-8"))["data"]
+            with open_dependency(req,timeout=self.timeout, opener=request.urlopen) as response:return json.loads(response.read().decode("utf-8"))["data"]
         except error.HTTPError as exc:
             if exc.code==404: raise ErclaveError("production_reference_not_found","The production order or product was not found.",status_code=404) from exc
             raise ErclaveError("production_reference_denied","Production rejected finished-goods receipt validation.",status_code=403 if exc.code in (401,403) else 503) from exc

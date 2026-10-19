@@ -1,0 +1,42 @@
+export const resourceRateCopy = {
+  "es": {
+    "currency": "Moneda base de la Sociedad",
+    "pending": "Moneda histórica pendiente de confirmar",
+    "confirm": "Confirmo este importe en la moneda indicada para operaciones futuras.",
+    "missing": "Actualiza la sesión y confirma la moneda base de la Sociedad en Administración.",
+    "rate": "Costo por minuto",
+    "editHint": "Confirma o cambia esta tarifa desde Asignación por División.",
+    "save": "Confirmar tarifa",
+    "saved": "Tarifa confirmada.",
+    "history": "La confirmación no convierte ni modifica costos históricos.",
+    "date": "Fecha de capacidad",
+    "machineCapacityHint": "Consulta hasta 25 máquinas de la División; descuenta los compromisos de la fecha elegida.",
+    "available": "minutos disponibles",
+    "machineEmpty": "No hay máquinas elegibles con tarifa confirmada.",
+    "capacity": "Consultar capacidad de esta División",
+    "capacityHint": "Capacidad declarada de trabajadores elegibles. No descuenta compromisos y no se suma entre Divisiones: los trabajadores compartidos conservan los mismos minutos.",
+    "empty": "No hay puestos con tarifa confirmada y trabajadores elegibles.",
+    "minutes": "minutos declarados",
+    "workers": "trabajadores elegibles"
+  },
+  "en": {
+    "currency": "Society base currency",
+    "pending": "Historical currency pending confirmation",
+    "confirm": "I confirm this amount in the indicated currency for future operations.",
+    "missing": "Refresh your session and confirm the Society base currency in Administration.",
+    "rate": "Cost per minute",
+    "editHint": "Confirm or change this rate in Division assignment.",
+    "save": "Confirm rate",
+    "saved": "Rate confirmed.",
+    "history": "Confirmation does not convert or change historical costs.",
+    "date": "Capacity date",
+    "machineCapacityHint": "View up to 25 machines in the Division; commitments for the chosen date are deducted.",
+    "available": "available minutes",
+    "machineEmpty": "No eligible machines with confirmed rates.",
+    "capacity": "Check capacity in this Division",
+    "capacityHint": "Declared capacity of eligible workers. Commitments are not deducted; do not add across Divisions: shared workers retain the same minutes.",
+    "empty": "No positions with confirmed rates and eligible workers.",
+    "minutes": "declared minutes",
+    "workers": "eligible workers"
+  }
+};

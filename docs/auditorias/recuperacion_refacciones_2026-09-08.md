@@ -1,5 +1,7 @@
 # Recuperación de refacciones interrumpidas — CHG-268
 
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](../contexto/ESTADO_ACTUAL.md).
+
 ## Problema y resultado
 
 MTO-000001, «No calienta», tenía una solicitud de 1 H87 de Rodamiento 001 fallida por existencia insuficiente el 6 de septiembre. Un reintento quedó en `processing/reserve` sin terminar su registro de idempotencia. El cliente HTTP de Maintenance intentaba serializar directamente un `Decimal` leído de PostgreSQL: fallaba antes de llamar a Inventory. La pantalla tampoco ofrecía recuperar ese estado interrumpido.

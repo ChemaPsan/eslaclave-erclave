@@ -50,4 +50,5 @@ testpaths = [
   ,"services/sales-service/tests"
   ,"services/purchasing-service/tests"
   ,"services/maintenance-service/tests"
+  ,"services/costing-service/tests"
 ]

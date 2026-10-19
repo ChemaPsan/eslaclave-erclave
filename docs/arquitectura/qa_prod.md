@@ -1,6 +1,6 @@
 # ERClave - Arquitectura QA y Produccion
 
-Este documento define la arquitectura inicial para llevar ERClave desde la maqueta funcional hacia ambientes reales de QA y Produccion.
+Este documento conserva arquitectura objetivo y reglas de promoción. El core ya opera en QA según el [release documentado](../operaciones/release_qa_20260914.md); la topología objetivo (incluidos Billing, Provisioning, Gateway y Pub/Sub) no prueba despliegue. Inventario y estado por ambiente: [ESTADO_ACTUAL](../contexto/ESTADO_ACTUAL.md) y [fronteras](fronteras_ambientes_local_qa_produccion.md).
 
 El objetivo no es sobredimensionar la plataforma desde el dia uno, sino establecer una base escalable, segura y operable para los primeros modulos reales: Produccion, Almacenes y Ventas.
 
@@ -57,7 +57,7 @@ flowchart LR
 | Ambiente | Uso | Datos | Acceso | Despliegue |
 |---|---|---|---|---|
 | Local | Desarrollo diario | Mock, fixtures o datos anonimizados | Desarrolladores | Manual local |
-| QA | Validacion funcional y tecnica | Datos de prueba controlados | Equipo interno y usuarios piloto | Pipeline automatico desde rama o tag |
+| QA | Validacion funcional y tecnica | Datos de prueba controlados | Equipo interno y usuarios piloto | Workflow manual por SHA inmutable, con aprobación explícita |
 | Produccion | Operacion real de clientes | Datos reales por tenant | Usuarios finales | Pipeline con aprobacion |
 
 Reglas:
@@ -232,10 +232,10 @@ Reglas:
 
 ### 7.1 Pipeline QA implementado
 
-- `.github/workflows/qa-candidate.yml` es manual, exige SHA completo y construye cuatro imagenes por digest mediante identidad federada.
+- `.github/workflows/qa-candidate.yml` es manual, exige SHA completo y construye siete imagenes por digest mediante identidad federada.
 - `.github/workflows/qa-release.yml` consume esos digests y separa las aprobaciones `qa-database`, `qa-services`, `qa-traffic` y `qa-frontend`.
 - Las revisiones se crean con tag `candidate`; los servicios existentes conservan su trafico con `--no-traffic`. Cloud Run obliga a que el bootstrap de un servicio inexistente reciba trafico inicial, por lo que el pipeline detecta esa condicion de forma idempotente, la limita a `qa-services` y ejecuta el smoke desde el SHA inmutable del workflow contra los digests y `release_sha` candidatos antes de permitir continuar hacia `qa-traffic` o frontend.
-- La promocion de trafico resuelve las cuatro revisiones desde la respuesta JSON de Cloud Run y completa ese preflight antes de cualquier escritura. Despues de actualizar valida que cada candidato certificado reciba exactamente 100%; el frontend conserva una aprobacion posterior independiente.
+- La promocion de trafico resuelve las siete revisiones desde la respuesta JSON de Cloud Run y completa ese preflight antes de cualquier escritura. Despues de actualizar valida que cada candidato certificado reciba exactamente 100%; el frontend conserva una aprobacion posterior independiente.
 - El frontend QA se construye sin URLs locales, Firebase Emulator, tenant ni actor local; el mismo directorio guardado como artefacto se entrega a Firebase Hosting.
 - GitHub Pages permanece como maqueta de ejecucion manual y no publica automaticamente cambios de `main`.
 - Las cuentas runtime y el migrador son dedicados; GitHub usa Workload Identity Federation y no llaves JSON.
@@ -350,7 +350,7 @@ Cada evento debe tener:
 
 ## 13. Pendientes del arquitecto SaaS
 
-- Hacer atomica o compensatoria la promocion multi-servicio y conservar estado de rollback verificable.
+- Conservar y probar la promoción compensatoria multi-servicio ya implementada; evidencia de release en [14 de septiembre](../operaciones/release_qa_20260914.md). No tratarla como una implementación pendiente.
 - Construir el frontend una sola vez en el candidato y validar su hash/provenance antes de Firebase Hosting.
 - Separar migracion y configuracion estructural en jobs condicionales con autorizaciones independientes.
 - Fijar Actions por SHA y fortalecer provenance/attestation de artifacts e imagenes.

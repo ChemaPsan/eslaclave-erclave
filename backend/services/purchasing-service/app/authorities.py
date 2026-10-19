@@ -1,19 +1,24 @@
+from erclave_common.transport import open_dependency
 import json
 from urllib import error, parse, request
 from fastapi import Depends
 from erclave_common.config import Settings, get_settings
 from erclave_common.errors import ErclaveError
+from erclave_common.organization_client import OrganizationClient, resolve_organization_access, deny
+import hashlib
 
 class PurchasingAuthorityClient:
-    def __init__(self,settings): self.inventory=settings.inventory_service_url.rstrip("/"); self.admin=settings.admin_service_url.rstrip("/"); self.timeout=settings.authorization_timeout_seconds
-    def _call(self,url,tenant,authorization,method="GET",payload=None,key=None):
+    def __init__(self,settings): self.inventory=settings.inventory_service_url.rstrip("/"); self.admin=settings.admin_service_url.rstrip("/"); self.timeout=getattr(settings,"dependency_timeout_seconds",settings.authorization_timeout_seconds); self.organization=OrganizationClient(settings)
+    def organization_access(self,tenant,permission,authorization,actor):
+        return resolve_organization_access(self.organization.session(tenant,authorization,actor),tenant,"purchasing",permission,authorization)
+    def _call(self,url,tenant,authorization,method="GET",payload=None,key=None,preserve_codes=()):
         headers={"X-Tenant-Id":tenant,"Accept":"application/json"}
         if authorization: headers["Authorization"]=authorization
         if key: headers["Idempotency-Key"]=key
         body=None
         if payload is not None: body=json.dumps(payload).encode(); headers["Content-Type"]="application/json"
         try:
-            with request.urlopen(request.Request(url,headers=headers,data=body,method=method),timeout=self.timeout) as response:return json.loads(response.read())["data"]
+            with open_dependency(request.Request(url,headers=headers,data=body,method=method),timeout=self.timeout, opener=request.urlopen) as response:return json.loads(response.read())["data"]
         except error.HTTPError as exc:
             if exc.code in {401,403}:
                 try:code=json.loads(exc.read()).get("error",{}).get("code")
@@ -21,6 +26,10 @@ class PurchasingAuthorityClient:
                 code=code if code in {"auth_required","permission_denied","module_not_enabled","tenant_access_denied"} else "permission_denied"
                 raise ErclaveError(code,"The authoritative service rejected access.",status_code=exc.code) from exc
             if 400 <= exc.code < 500:
+                try: dependency_code=json.loads(exc.read()).get("error",{}).get("code")
+                except (ValueError,AttributeError): dependency_code=None
+                if dependency_code in preserve_codes:
+                    raise ErclaveError(dependency_code,"The code authority rejected the request.",status_code=exc.code) from exc
                 raise ErclaveError("purchasing_dependency_rejected","An authoritative service rejected Purchasing data.",status_code=422,details={"status":exc.code}) from exc
             raise ErclaveError("purchasing_dependency_unavailable","An authoritative service is unavailable.",status_code=503,details={"status":exc.code}) from exc
         except (error.URLError,TimeoutError,KeyError,ValueError) as exc: raise ErclaveError("purchasing_dependency_unavailable","An authoritative service is unavailable.",status_code=503) from exc
@@ -28,6 +37,23 @@ class PurchasingAuthorityClient:
         item=self._call(f"{self.admin}/v1/catalogs/commercial/{parse.quote(catalog)}/by-code/{parse.quote(code)}",tenant,authorization)
         if item.get("status")!="active": raise ErclaveError("catalog_item_not_found","Catalog item is not active.",status_code=422)
         return item
+    def list_catalog(self,tenant,catalog,authorization):
+        return self._call(f"{self.admin}/v1/catalogs/commercial/{parse.quote(catalog)}",tenant,authorization)
+    def allocate_code(self,tenant,document_type,manual_code,authorization,command_key):
+        allocation_key="purchasing-"+hashlib.sha256(f"{tenant}:{document_type}:{command_key}".encode()).hexdigest()
+        value=self._call(
+            f"{self.admin}/v1/catalogs/code-sequences/{parse.quote(document_type,safe='')}/next",
+            tenant,authorization,"POST",{"manual_code":manual_code},allocation_key,
+            preserve_codes={"manual_business_code_required","code_sequence_not_found","idempotency_key_reused"},
+        )
+        if value.get("document_type")!=document_type or not isinstance(value.get("code"),str) or not value["code"]:
+            raise ErclaveError("purchasing_dependency_unavailable","The code authority returned an invalid allocation.",status_code=503)
+        if value.get("mode") not in {"managed","manual"}:
+            raise ErclaveError("purchasing_dependency_unavailable","The code authority returned an invalid allocation mode.",status_code=503)
+        maximum=40 if document_type=="purchasing.supplier" else 60
+        if len(value["code"])>maximum:
+            raise ErclaveError("purchasing_code_too_long","The allocated code exceeds the document limit.",status_code=422)
+        return {"code":value["code"],"mode":value["mode"]}
     def require_unit(self,tenant,code,authorization):
         try:
             item=self._call(f"{self.admin}/v1/catalogs/units-of-measure/by-code/{parse.quote(code)}",tenant,authorization)
@@ -46,6 +72,10 @@ class PurchasingAuthorityClient:
             raise
     def item(self,tenant,item_id,authorization): return self._inventory_call(f"{self.inventory}/v1/inventory/items/{item_id}",tenant,authorization)
     def warehouse(self,tenant,warehouse_id,authorization): return self._inventory_call(f"{self.inventory}/v1/inventory/warehouses/{warehouse_id}",tenant,authorization)
+    def item_assignments(self,tenant,item_id,division_id,authorization):
+        return self._inventory_call(f"{self.inventory}/v1/inventory/items/{parse.quote(item_id,safe='')}/division-assignments?{parse.urlencode({'division_id':division_id,'limit':1})}",tenant,authorization)
     def receive(self,tenant,line,receipt_id,order_id,authorization,key):
-        return self._inventory_call(f"{self.inventory}/v1/inventory/purchase-receipts",tenant,authorization,"POST",{"movement_type":"entry","inventory_item_id":line["inventory_item_id"],"warehouse_id":line["warehouse_id"],"quantity":str(line["quantity"]),"unit":line["unit_code"],"unit_cost":str(line["unit_price"]),"reason":f"Purchase receipt {receipt_id}","source":{"type":"purchase_order","id":order_id,"line_id":line["order_line_id"]},"occurred_at":line["received_at"]},key)
+        snapshot=line.get("inventory_context_snapshot")
+        if not snapshot:deny("operational_cost_history_review_required",409)
+        return self._inventory_call(f"{self.inventory}/v1/inventory/purchase-receipts",tenant,authorization,"POST",{"movement_type":"entry","inventory_item_id":line["inventory_item_id"],"warehouse_id":line["warehouse_id"],"quantity":str(line["quantity"]),"unit":line["unit_code"],"unit_cost":snapshot["unit_cost"],"reason":f"Purchase receipt {receipt_id}","source":{"type":"purchase_receipt","id":receipt_id,"line_id":line["receipt_line_id"]},"occurred_at":line["received_at"]},key)
 def get_purchasing_authority_client(settings:Settings=Depends(get_settings)): return PurchasingAuthorityClient(settings)

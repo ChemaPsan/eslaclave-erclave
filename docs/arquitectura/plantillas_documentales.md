@@ -21,6 +21,10 @@ El encabezado, pie, colores y logo aplican a cualquier documento generado por el
 
 En el corte Local la impresion de Cotizaciones y Ordenes de Produccion ya consume la configuracion. Los demas consumidores deben integrarla al implementar su generador PDF.
 
+CC-17 (CHG-322, Local) resuelve la plantilla completa Corporativo → Sociedad → Division junto con la identidad efectiva de Division, Sociedad y Emisor mediante `GET /v1/configuration/document-presentation/division/{division_id}`. Admin exige pertenencia y alcance de la Division, un permiso consumidor de Ventas o Produccion y organizacion activa. El servicio propietario conserva el snapshot en su propio schema: Sales al aprobar la cotizacion y Production en la transaccion que libera la orden. Incluye IDs y nombres/codigos organizacionales, razon social, datos fiscales/domicilio del Emisor y plantilla con su origen. Reintentos recuperan el mismo documento y snapshot; cambios posteriores de Admin no lo reescriben.
+
+La cotizacion en borrador o cotizada consulta la identidad vigente al imprimir. La cotizacion aprobada y la orden liberada imprimen exclusivamente el snapshot guardado. Un documento historico anterior a CC-17 sin snapshot informa indisponibilidad de presentacion y no inventa identidad vigente. Los demas generadores siguen pendientes de una decision por documento y su propia integracion; el contrato de Admin es de lectura y no concede edicion de la plantilla.
+
 Los generadores Local recargan el registro autoritativo cuando el ID solicitado no esta en la cache de presentacion, informan un error visible si deja de existir y escapan todo texto operativo antes de insertarlo en el documento imprimible. Un usuario sin `admin.setting.update` puede consultar la identidad si su permiso consumidor lo permite, pero no recibe controles editables.
 
 ## Regla de evolucion

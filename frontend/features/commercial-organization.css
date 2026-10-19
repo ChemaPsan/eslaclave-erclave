@@ -1,0 +1,16 @@
+.commercial-organization-panel { container-type: inline-size; min-width: 0; max-width: 100%; }
+.commercial-organization-panel * { box-sizing: border-box; }
+.commercial-organization-panel h2, .commercial-organization-panel p, .commercial-organization-panel button { overflow-wrap: anywhere; }
+.commercial-organization-panel form { display: grid; gap: 12px; margin-block: 18px; min-width: 0; }
+.commercial-organization-panel label { display: grid; gap: 6px; min-width: 0; }
+.commercial-organization-panel input, .commercial-organization-panel select { min-width: 0; width: 100%; max-width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--panel, #fff); color: var(--text); }
+.commercial-organization-panel [data-results] { display: grid; gap: 6px; max-height: 240px; overflow: auto; }
+.commercial-organization-panel [data-results] button { text-align: start; white-space: normal; }
+.commercial-organization-panel article { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-block: 8px; }
+.commercial-assignment-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+@container (max-width: 480px) { .commercial-assignment-actions > button { flex: 1 1 auto; } }
+
+[data-scoped-stock] { min-width: 0; }
+[data-scoped-stock] fieldset { min-width: 0; margin: 0; padding: 12px; }
+[data-scoped-stock] legend, [data-scoped-stock] p { max-width: 100%; overflow-wrap: anywhere; }
+[data-scoped-stock] select, [data-scoped-stock] input { min-width: 0; max-width: 100%; width: 100%; box-sizing: border-box; }

@@ -21,7 +21,7 @@ on:
         default: false
         type: boolean
       configure_qa_tenant:
-        description: Reconcile QA permissions and enable only real-service modules
+        description: Reconcile permission catalog and grants of existing owners in the explicitly configured QA tenant
         required: true
         default: false
         type: boolean
@@ -39,8 +39,11 @@ env:
   RELEASE_SHA: ${{ inputs.release_sha }}
   PROJECT_ID: ${{ vars.QA_GCP_PROJECT_ID }}
   REGION: ${{ vars.QA_GCP_REGION }}
+  REPOSITORY: ${{ vars.QA_ARTIFACT_REPOSITORY }}
   EVIDENCE_BUCKET: ${{ vars.QA_EVIDENCE_BUCKET }}
   BACKOFFICE_ADMIN_EMAILS: ${{ vars.QA_BACKOFFICE_ADMIN_EMAILS }}
+  QA_CONFIGURATION_TENANT_ID: ${{ vars.QA_CONFIGURATION_TENANT_ID }}
+  CONFIRMED_SOCIETY_CURRENCIES: ${{ vars.QA_CONFIRMED_SOCIETY_CURRENCIES }}
 
 jobs:
   preflight:
@@ -48,16 +51,35 @@ jobs:
     steps:
       - name: Validate explicit QA promotion authorization
         shell: bash
+        env:
+          QA_ADMIN_API_URL: ${{ vars.QA_ADMIN_API_URL }}
+          QA_PRODUCTION_API_URL: ${{ vars.QA_PRODUCTION_API_URL }}
+          QA_INVENTORY_API_URL: ${{ vars.QA_INVENTORY_API_URL }}
+          QA_HR_API_URL: ${{ vars.QA_HR_API_URL }}
+          QA_SALES_API_URL: ${{ vars.QA_SALES_API_URL }}
+          QA_PURCHASING_API_URL: ${{ vars.QA_PURCHASING_API_URL }}
+          QA_MAINTENANCE_API_URL: ${{ vars.QA_MAINTENANCE_API_URL }}
+          QA_COSTING_API_URL: ${{ vars.QA_COSTING_API_URL }}
         run: |
           test "${{ inputs.confirmation }}" = "PROMOTE_ERCLAVE_QA"
-          test "${{ inputs.execute_database_migration }}" = "true"
-          test "${{ inputs.configure_qa_tenant }}" = "true"
           test "$PROJECT_ID" = "erclave"
           [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "${{ inputs.candidate_run_id }}" =~ ^[0-9]+$ ]]
           [[ "$EVIDENCE_BUCKET" =~ ^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$ ]]
           test -n "$BACKOFFICE_ADMIN_EMAILS"
           [[ "$BACKOFFICE_ADMIN_EMAILS" != *"|"* ]]
+          test -n "${{ vars.QA_COSTING_RUNTIME_SERVICE_ACCOUNT }}"
+          export COSTING_URL="${{ vars.QA_COSTING_API_URL }}"
+          python -c 'import os; from urllib.parse import urlparse; value=urlparse(os.environ["COSTING_URL"]); assert value.scheme == "https" and value.hostname and value.hostname not in ("localhost", "127.0.0.1", "::1") and not value.username and not value.password, "QA_COSTING_API_URL must be public HTTPS"'
+          python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          for service in ('ADMIN', 'PRODUCTION', 'INVENTORY', 'HR', 'SALES', 'PURCHASING', 'MAINTENANCE', 'COSTING'):
+              key = f'QA_{service}_API_URL'
+              value = urlparse(os.environ[key])
+              assert value.scheme == 'https' and value.hostname and value.hostname not in ('localhost', '127.0.0.1', '::1') and not value.username and not value.password and not value.query and not value.fragment and value.path in ('', '/'), f'{key} must be a public HTTPS service origin'
+          PY
+          [[ "$QA_CONFIGURATION_TENANT_ID" =~ ^ten_[a-zA-Z0-9]+$ ]]
 
       - uses: actions/checkout@v4
         with:
@@ -65,6 +87,21 @@ jobs:
 
       - name: Verify exact source
         run: test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+
+      - name: Verify candidate workflow provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${{ github.repository }}/actions/runs/${{ inputs.candidate_run_id }}" > candidate-run.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          run = json.loads(Path('candidate-run.json').read_text())
+          assert run['path'] == '.github/workflows/qa-candidate.yml', 'Candidate must originate in the QA candidate workflow'
+          assert run['event'] == 'workflow_dispatch' and run['status'] == 'completed' and run['conclusion'] == 'success', 'Candidate run must have completed successfully'
+          PY
 
       - uses: actions/download-artifact@v4
         with:
@@ -77,7 +114,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(wc -l < candidate/qa-images.env)" -eq 7
+          test "$(wc -l < candidate/qa-images.env)" -eq 8
           grep -Eq '^ADMIN_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
           grep -Eq '^PRODUCTION_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
           grep -Eq '^INVENTORY_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
@@ -85,6 +122,55 @@ jobs:
           grep -Eq '^SALES_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
           grep -Eq '^PURCHASING_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
           grep -Eq '^MAINTENANCE_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
+          grep -Eq '^COSTING_IMAGE=.+@sha256:[0-9a-f]{64}$' candidate/qa-images.env
+          python - <<'PY'
+          import os, pathlib, re
+          services = ('admin', 'production', 'inventory', 'hr', 'sales', 'purchasing', 'maintenance', 'costing')
+          assert re.fullmatch(r'[a-z0-9-]+', os.environ['REGION']) and re.fullmatch(r'[a-z0-9_-]+', os.environ['REPOSITORY']), 'Invalid QA registry configuration'
+          prefix = f"{os.environ['REGION']}-docker.pkg.dev/{os.environ['PROJECT_ID']}/{os.environ['REPOSITORY']}/"
+          lines = pathlib.Path('candidate/qa-images.env').read_text().splitlines()
+          expected = {service.upper() + '_IMAGE': prefix + service + '-service' for service in services}
+          assert len(lines) == len(expected), 'Expected exactly eight immutable image bindings'
+          seen = set()
+          for line in lines:
+              key, separator, image = line.partition('=')
+              assert separator and key in expected and key not in seen, 'Unexpected or duplicate image binding'
+              assert re.fullmatch(re.escape(expected[key]) + r'@sha256:[0-9a-f]{64}', image), 'Image must bind its service to the approved QA registry digest'
+              seen.add(key)
+          assert seen == set(expected)
+          PY
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-frontend-${{ inputs.release_sha }}
+          path: candidate/frontend
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.candidate_run_id }}
+
+      - name: Reject frontend and backend configuration drift before QA writes
+        env:
+          QA_ADMIN_API_URL: ${{ vars.QA_ADMIN_API_URL }}
+          QA_PRODUCTION_API_URL: ${{ vars.QA_PRODUCTION_API_URL }}
+          QA_INVENTORY_API_URL: ${{ vars.QA_INVENTORY_API_URL }}
+          QA_HR_API_URL: ${{ vars.QA_HR_API_URL }}
+          QA_SALES_API_URL: ${{ vars.QA_SALES_API_URL }}
+          QA_PURCHASING_API_URL: ${{ vars.QA_PURCHASING_API_URL }}
+          QA_MAINTENANCE_API_URL: ${{ vars.QA_MAINTENANCE_API_URL }}
+          QA_COSTING_API_URL: ${{ vars.QA_COSTING_API_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd candidate/frontend && sha256sum --strict --check SHA256SUMS)
+          test "$(find candidate/frontend -type f ! -name SHA256SUMS | wc -l)" -eq "$(wc -l < candidate/frontend/SHA256SUMS)"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          manifest = json.loads(Path('candidate/frontend/release-manifest.json').read_text())
+          services = ('admin', 'production', 'inventory', 'hr', 'sales', 'purchasing', 'maintenance', 'costing')
+          expected = {service: os.environ[f'QA_{service.upper()}_API_URL'].rstrip('/') for service in services}
+          assert manifest['sourceSha'] == os.environ['RELEASE_SHA'] and manifest['environment'] == 'qa' and manifest['firebaseProjectId'] == 'erclave'
+          assert manifest['services'] == expected, 'QA service configuration changed after the candidate frontend was built'
+          PY
 
       - uses: actions/upload-artifact@v4
         with:
@@ -110,6 +196,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Run approved Alembic migration as a Cloud Run job
+        if: ${{ inputs.execute_database_migration }}
         shell: bash
         run: |
           set -euo pipefail
@@ -120,24 +207,26 @@ jobs:
             --service-account "${{ vars.QA_MIGRATOR_SERVICE_ACCOUNT }}" \
             --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" \
             --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest \
-            --set-env-vars ERCLAVE_ENVIRONMENT=qa \
+            --set-env-vars "^|^ERCLAVE_ENVIRONMENT=qa|PGOPTIONS=-c lock_timeout=5000 -c statement_timeout=480000" \
             --command alembic --args=-c,/app/alembic.ini,upgrade,head \
             --max-retries 0 --task-timeout 10m --quiet
           gcloud run jobs execute erclave-migrate-qa \
             --project "$PROJECT_ID" --region "$REGION" --wait
 
-      - name: Reconcile QA permission catalog and real-service entitlements
+      - name: Reconcile QA permission catalog and existing owner grants
+        if: ${{ inputs.configure_qa_tenant }}
         shell: bash
         run: |
           set -euo pipefail
           source candidate/qa-images.env
+          [[ "$QA_CONFIGURATION_TENANT_ID" =~ ^ten_[a-zA-Z0-9]+$ ]]
           gcloud run jobs deploy erclave-configure-tenant-qa \
             --project "$PROJECT_ID" --region "$REGION" \
             --image "$ADMIN_IMAGE" \
             --service-account "${{ vars.QA_MIGRATOR_SERVICE_ACCOUNT }}" \
             --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" \
             --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest \
-            --set-env-vars ERCLAVE_ENVIRONMENT=qa,ERCLAVE_QA_CONFIGURATION_CONFIRMATION=CONFIGURE_ERCLAVE_QA \
+            --set-env-vars "ERCLAVE_ENVIRONMENT=qa,ERCLAVE_QA_CONFIGURATION_CONFIRMATION=CONFIGURE_ERCLAVE_QA,ERCLAVE_QA_CONFIGURATION_TENANT_ID=$QA_CONFIGURATION_TENANT_ID" \
             --command python --args=scripts/configure_qa_tenant.py \
             --max-retries 0 --task-timeout 10m --quiet
           gcloud run jobs execute erclave-configure-tenant-qa \
@@ -150,7 +239,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.release_sha }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -169,15 +258,27 @@ jobs:
         run: |
           set -euo pipefail
           source candidate/qa-images.env
-          common=(--project "$PROJECT_ID" --region "$REGION" --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest --allow-unauthenticated --tag candidate --quiet)
+          common=(--project "$PROJECT_ID" --region "$REGION" --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" --allow-unauthenticated --tag candidate --quiet)
+          test -n "${{ vars.QA_COSTING_RUNTIME_SERVICE_ACCOUNT }}"
+          [[ "${{ vars.QA_COSTING_API_URL }}" == https://* ]]
           cors="https://erclave.web.app,https://erclave.firebaseapp.com"
           admin_env="^|^ERCLAVE_ENVIRONMENT=qa|ERCLAVE_SERVICE_NAME=admin-service|ERCLAVE_VERSION=$RELEASE_SHA|ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_ADMIN_API_URL }}|ERCLAVE_APP_PUBLIC_BASE_URL=https://erclave.web.app|ERCLAVE_CORS_ORIGINS=$cors|ERCLAVE_AUTH_MODE=firebase|ERCLAVE_FIREBASE_PROJECT_ID=erclave|ERCLAVE_FIREBASE_WEB_API_KEY=${{ vars.QA_FIREBASE_API_KEY }}|ERCLAVE_BACKOFFICE_ADMIN_EMAILS=$BACKOFFICE_ADMIN_EMAILS"
-          inventory_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=inventory-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_PRODUCTION_SERVICE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_MAINTENANCE_SERVICE_URL=${{ vars.QA_MAINTENANCE_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
+          inventory_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=inventory-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_PRODUCTION_SERVICE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_MAINTENANCE_SERVICE_URL=${{ vars.QA_MAINTENANCE_API_URL }}@ERCLAVE_PURCHASING_SERVICE_URL=${{ vars.QA_PURCHASING_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
           hr_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=hr-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_HR_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
           production_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=production-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_HR_SERVICE_URL=${{ vars.QA_HR_API_URL }}@ERCLAVE_INVENTORY_SERVICE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_EVIDENCE_BUCKET=$EVIDENCE_BUCKET@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
           sales_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=sales-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_SALES_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_HR_SERVICE_URL=${{ vars.QA_HR_API_URL }}@ERCLAVE_PRODUCTION_SERVICE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_INVENTORY_SERVICE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
           purchasing_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=purchasing-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_PURCHASING_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_INVENTORY_SERVICE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
           maintenance_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=maintenance-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_MAINTENANCE_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_HR_SERVICE_URL=${{ vars.QA_HR_API_URL }}@ERCLAVE_PRODUCTION_SERVICE_URL=${{ vars.QA_PRODUCTION_API_URL }}@ERCLAVE_INVENTORY_SERVICE_URL=${{ vars.QA_INVENTORY_API_URL }}@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
+          admin_env="$admin_env|ERCLAVE_COST_CENTER_CATALOG_ENABLED=true|ERCLAVE_COSTING_SERVICE_URL=${{ vars.QA_COSTING_API_URL }}"
+          inventory_env="$inventory_env@ERCLAVE_COSTING_SERVICE_URL=${{ vars.QA_COSTING_API_URL }}@ERCLAVE_COST_CENTER_CATALOG_ENABLED=true"
+          inventory_env="$inventory_env@ERCLAVE_SALES_SERVICE_URL=${{ vars.QA_SALES_API_URL }}"
+          hr_env="$hr_env@ERCLAVE_COSTING_SERVICE_URL=${{ vars.QA_COSTING_API_URL }}@ERCLAVE_COST_CENTER_CATALOG_ENABLED=true"
+          production_env="$production_env@ERCLAVE_COSTING_SERVICE_URL=${{ vars.QA_COSTING_API_URL }}@ERCLAVE_COST_CENTER_CATALOG_ENABLED=true"
+          production_env="$production_env@ERCLAVE_SALES_SERVICE_URL=${{ vars.QA_SALES_API_URL }}"
+          sales_env="$sales_env@ERCLAVE_COSTING_SERVICE_URL=${{ vars.QA_COSTING_API_URL }}@ERCLAVE_COST_CENTER_CATALOG_ENABLED=true"
+          purchasing_env="$purchasing_env@ERCLAVE_COSTING_SERVICE_URL=${{ vars.QA_COSTING_API_URL }}@ERCLAVE_COST_CENTER_CATALOG_ENABLED=true"
+          maintenance_env="$maintenance_env@ERCLAVE_COSTING_SERVICE_URL=${{ vars.QA_COSTING_API_URL }}@ERCLAVE_COST_CENTER_CATALOG_ENABLED=true"
+          costing_env="^@^ERCLAVE_ENVIRONMENT=qa@ERCLAVE_SERVICE_NAME=costing-service@ERCLAVE_VERSION=$RELEASE_SHA@ERCLAVE_API_PUBLIC_BASE_URL=${{ vars.QA_COSTING_API_URL }}@ERCLAVE_ADMIN_SERVICE_URL=${{ vars.QA_ADMIN_API_URL }}@ERCLAVE_COSTING_SERVICE_URL=${{ vars.QA_COSTING_API_URL }}@ERCLAVE_COST_CENTER_CATALOG_ENABLED=true@ERCLAVE_CORS_ORIGINS=$cors@ERCLAVE_AUTH_MODE=firebase@ERCLAVE_FIREBASE_PROJECT_ID=erclave"
 
           deploy_candidate() {
             local service="$1"
@@ -185,6 +286,10 @@ jobs:
             local service_account="$3"
             local environment="$4"
             local traffic_args=(--no-traffic)
+            local service_secrets=(--set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest)
+            if [[ "$service" == "costing-service-qa" ]]; then
+              service_secrets=(--set-secrets ERCLAVE_COSTING_DATABASE_URL=erclave-database-url-qa:latest)
+            fi
 
             if ! gcloud run services describe "$service" --project "$PROJECT_ID" --region "$REGION" >/dev/null 2>&1; then
               echo "::notice title=Cloud Run QA bootstrap::$service does not exist; its first candidate revision must receive traffic until the qa-traffic gate normalizes the release."
@@ -192,7 +297,7 @@ jobs:
             fi
 
             gcloud run deploy "$service" --image "$image" --service-account "$service_account" "${common[@]}" "${traffic_args[@]}" \
-              --set-env-vars "$environment"
+              "${service_secrets[@]}" --set-env-vars "$environment"
           }
 
           deploy_candidate admin-service-qa "$ADMIN_IMAGE" "${{ vars.QA_ADMIN_RUNTIME_SERVICE_ACCOUNT }}" "$admin_env"
@@ -202,10 +307,43 @@ jobs:
           deploy_candidate sales-service-qa "$SALES_IMAGE" "${{ vars.QA_SALES_RUNTIME_SERVICE_ACCOUNT }}" "$sales_env"
           deploy_candidate purchasing-service-qa "$PURCHASING_IMAGE" "${{ vars.QA_PURCHASING_RUNTIME_SERVICE_ACCOUNT }}" "$purchasing_env"
           deploy_candidate maintenance-service-qa "$MAINTENANCE_IMAGE" "${{ vars.QA_MAINTENANCE_RUNTIME_SERVICE_ACCOUNT }}" "$maintenance_env"
+          deploy_candidate costing-service-qa "$COSTING_IMAGE" "${{ vars.QA_COSTING_RUNTIME_SERVICE_ACCOUNT }}" "$costing_env"
 
       - name: Smoke candidate revision URLs
         shell: bash
-        run: pwsh -File backend/scripts/smoke_qa.ps1 -ProjectId "$PROJECT_ID" -Region "$REGION" -RevisionTag candidate -ExpectedVersion "$RELEASE_SHA"
+        run: pwsh -File backend/scripts/smoke_qa.ps1 -ProjectId "$PROJECT_ID" -Region "$REGION" -RevisionTag candidate -ExpectedVersion "$RELEASE_SHA" -ImageManifestPath candidate/qa-images.env -CandidateManifestPath qa-candidate-revisions.json
+
+      - name: Check tenant operational readiness before moving stable traffic
+        shell: bash
+        run: |
+          set -euo pipefail
+          source candidate/qa-images.env
+          confirmed_currencies="$(python - <<'PY'
+          import json, os, re
+          values = json.loads(os.environ['CONFIRMED_SOCIETY_CURRENCIES'])
+          assert isinstance(values, dict) and values, 'Explicit reviewed society currencies are required'
+          assert all(re.fullmatch(r'soc_[a-zA-Z0-9]+', key) and isinstance(value, str) and re.fullmatch(r'[A-Z]{3}', value) for key, value in values.items()), 'Invalid society currency confirmation'
+          print(json.dumps(values, separators=(',', ':')))
+          PY
+          )"
+          gcloud run jobs deploy erclave-operational-preflight-qa \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --image "$ADMIN_IMAGE" \
+            --service-account "${{ vars.QA_MIGRATOR_SERVICE_ACCOUNT }}" \
+            --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" \
+            --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest \
+            --set-env-vars "^|^ERCLAVE_ENVIRONMENT=qa|ERCLAVE_QA_READINESS_CONFIRMATION=CHECK_ERCLAVE_QA|ERCLAVE_QA_CONFIGURATION_TENANT_ID=$QA_CONFIGURATION_TENANT_ID|ERCLAVE_QA_CONFIRMED_SOCIETY_CURRENCIES=$confirmed_currencies|ERCLAVE_COST_CENTER_CATALOG_ENABLED=true" \
+            --command python --args=scripts/check_qa_operational_readiness.py \
+            --max-retries 0 --task-timeout 10m --quiet
+          gcloud run jobs execute erclave-operational-preflight-qa \
+            --project "$PROJECT_ID" --region "$REGION" --wait
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: certified-qa-revisions-${{ inputs.release_sha }}
+          path: qa-candidate-revisions.json
+          if-no-files-found: error
+          retention-days: 30
 
   promote_traffic:
     needs: deploy_candidate
@@ -214,7 +352,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.release_sha }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: certified-qa-revisions-${{ inputs.release_sha }}
+          path: certified
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: approved-qa-images-${{ inputs.release_sha }}
+          path: candidate
 
       - uses: google-github-actions/auth@v2
         with:
@@ -223,7 +371,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Route QA traffic to certified candidate revisions
         shell: bash
-        run: pwsh -File backend/scripts/promote_qa_traffic.ps1 -ProjectId "$PROJECT_ID" -Region "$REGION" -RevisionTag candidate
+        run: pwsh -File backend/scripts/promote_qa_traffic.ps1 -ProjectId "$PROJECT_ID" -Region "$REGION" -RevisionTag candidate -ExpectedVersion "$RELEASE_SHA" -ImageManifestPath candidate/qa-images.env -CandidateManifestPath certified/qa-candidate-revisions.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -243,30 +391,31 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Build sanitized QA frontend artifact
-        env:
-          QA_ADMIN_API_URL: ${{ vars.QA_ADMIN_API_URL }}
-          QA_PRODUCTION_API_URL: ${{ vars.QA_PRODUCTION_API_URL }}
-          QA_INVENTORY_API_URL: ${{ vars.QA_INVENTORY_API_URL }}
-          QA_HR_API_URL: ${{ vars.QA_HR_API_URL }}
-          QA_SALES_API_URL: ${{ vars.QA_SALES_API_URL }}
-          QA_PURCHASING_API_URL: ${{ vars.QA_PURCHASING_API_URL }}
-          QA_MAINTENANCE_API_URL: ${{ vars.QA_MAINTENANCE_API_URL }}
-          QA_FIREBASE_API_KEY: ${{ vars.QA_FIREBASE_API_KEY }}
-          QA_FIREBASE_AUTH_DOMAIN: ${{ vars.QA_FIREBASE_AUTH_DOMAIN }}
-          QA_FIREBASE_PROJECT_ID: erclave
-          QA_FIREBASE_STORAGE_BUCKET: ${{ vars.QA_FIREBASE_STORAGE_BUCKET }}
-          QA_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.QA_FIREBASE_MESSAGING_SENDER_ID }}
-          QA_FIREBASE_APP_ID: ${{ vars.QA_FIREBASE_APP_ID }}
-        run: npm run build:frontend:qa
-      - uses: actions/upload-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: qa-frontend-${{ inputs.release_sha }}
           path: dist/qa-frontend
-          retention-days: 30
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.candidate_run_id }}
+      - name: Verify immutable candidate frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist/qa-frontend && sha256sum --strict --check SHA256SUMS)
+          test "$(find dist/qa-frontend -type f ! -name SHA256SUMS | wc -l)" -eq "$(wc -l < dist/qa-frontend/SHA256SUMS)"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          manifest = json.loads(Path('dist/qa-frontend/release-manifest.json').read_text())
+          assert manifest['sourceSha'] == os.environ['RELEASE_SHA'], 'Frontend SHA differs from approved candidate'
+          assert manifest['environment'] == 'qa' and manifest['firebaseProjectId'] == 'erclave'
+          assert set(manifest['services']) == {'admin', 'production', 'inventory', 'hr', 'sales', 'purchasing', 'maintenance', 'costing'}
+          PY
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.QA_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.QA_DEPLOY_SERVICE_ACCOUNT }}
       - name: Deploy the exact QA frontend artifact
         run: npx --yes firebase-tools@15.1.0 deploy --only hosting --project erclave --config firebase.qa.json
+      - name: Verify the bytes actually served by QA Hosting
+        run: node tools/verify-qa-hosting.js dist/qa-frontend

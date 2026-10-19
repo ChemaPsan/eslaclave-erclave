@@ -24,3 +24,5 @@ test-results/
 
 # Private local service evidence; never publish user attachments.
 .local/
+.local-config/
+.tmp/

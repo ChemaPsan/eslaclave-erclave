@@ -1,4 +1,5 @@
 from functools import lru_cache
+import os
 from typing import Literal
 from urllib.parse import urlparse
 
@@ -12,6 +13,7 @@ AuthMode = Literal["demo", "firebase"]
 
 
 class Settings(BaseSettings):
+    purchasing_service_url: str = "http://127.0.0.1:8010"
     model_config = SettingsConfigDict(
         env_prefix="ERCLAVE_",
         extra="ignore",
@@ -25,8 +27,14 @@ class Settings(BaseSettings):
     hr_service_url: str = "http://localhost:8006"
     inventory_service_url: str = "http://localhost:8004"
     production_service_url: str = "http://localhost:8002"
+    sales_service_url: str = "http://localhost:8008"
+    costing_service_url: str = "http://localhost:8014"
+    cost_center_catalog_enabled: bool = False
+    costing_database_url: str | None = None
     maintenance_service_url: str = "http://localhost:8012"
-    authorization_timeout_seconds: float = 5.0
+    authorization_timeout_seconds: float = Field(default=10.0, gt=0, le=30)
+    dependency_timeout_seconds: float = Field(default=12.0, gt=0, le=30)
+    operation_timeout_seconds: float = Field(default=25.0, gt=0, le=30)
     app_public_base_url: str = "http://localhost:4173"
     cors_origins: str = "http://127.0.0.1:4173,http://localhost:4173"
     auth_mode: AuthMode = "demo"
@@ -53,6 +61,9 @@ class Settings(BaseSettings):
                 (self.inventory_service_url, "ERCLAVE_INVENTORY_SERVICE_URL"),
                 (self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL"),
                 (self.maintenance_service_url, "ERCLAVE_MAINTENANCE_SERVICE_URL"),
+                (self.costing_service_url, "ERCLAVE_COSTING_SERVICE_URL"),
+                (self.sales_service_url, "ERCLAVE_SALES_SERVICE_URL"),
+                (self.purchasing_service_url, "ERCLAVE_PURCHASING_SERVICE_URL"),
             ]:
                 if urlparse(value).hostname not in local_hosts:
                     raise ValueError(f"{variable} must remain on loopback in Local isolated mode.")
@@ -63,6 +74,7 @@ class Settings(BaseSettings):
                 (self.sales_database_url, "ERCLAVE_SALES_DATABASE_URL"),
                 (self.purchasing_database_url, "ERCLAVE_PURCHASING_DATABASE_URL"),
                 (self.maintenance_database_url, "ERCLAVE_MAINTENANCE_DATABASE_URL"),
+                (self.costing_database_url, "ERCLAVE_COSTING_DATABASE_URL"),
             ]:
                 if not value:
                     continue
@@ -75,9 +87,13 @@ class Settings(BaseSettings):
 
         local_hosts = {"localhost", "127.0.0.1", "::1"}
 
+        if os.getenv("FIREBASE_AUTH_EMULATOR_HOST", "").strip():
+            raise ValueError("FIREBASE_AUTH_EMULATOR_HOST must be unset in QA and production.")
+
         def require_public_https(value: str, variable: str) -> None:
             parsed = urlparse(value)
-            if parsed.scheme != "https" or not parsed.hostname or parsed.hostname.lower() in local_hosts:
+            if (parsed.scheme != "https" or not parsed.hostname or parsed.hostname.lower() in local_hosts
+                    or parsed.username or parsed.password or parsed.query or parsed.fragment):
                 raise ValueError(f"{variable} must be a public HTTPS URL in QA and production.")
 
         require_public_https(self.api_public_base_url, "ERCLAVE_API_PUBLIC_BASE_URL")
@@ -88,9 +104,12 @@ class Settings(BaseSettings):
             if self.service_name == "production-service":
                 require_public_https(self.hr_service_url, "ERCLAVE_HR_SERVICE_URL")
                 require_public_https(self.inventory_service_url, "ERCLAVE_INVENTORY_SERVICE_URL")
+                require_public_https(self.sales_service_url, "ERCLAVE_SALES_SERVICE_URL")
             if self.service_name == "inventory-service":
+                require_public_https(self.purchasing_service_url, "ERCLAVE_PURCHASING_SERVICE_URL")
                 require_public_https(self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL")
                 require_public_https(self.maintenance_service_url, "ERCLAVE_MAINTENANCE_SERVICE_URL")
+                require_public_https(self.sales_service_url, "ERCLAVE_SALES_SERVICE_URL")
             if self.service_name == "sales-service":
                 require_public_https(self.hr_service_url, "ERCLAVE_HR_SERVICE_URL")
                 require_public_https(self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL")
@@ -101,6 +120,11 @@ class Settings(BaseSettings):
                 require_public_https(self.hr_service_url, "ERCLAVE_HR_SERVICE_URL")
                 require_public_https(self.inventory_service_url, "ERCLAVE_INVENTORY_SERVICE_URL")
                 require_public_https(self.production_service_url, "ERCLAVE_PRODUCTION_SERVICE_URL")
+
+        if self.cost_center_catalog_enabled and self.service_name in {
+            "admin-service", "production-service", "inventory-service", "hr-service"
+        }:
+            require_public_https(self.costing_service_url, "ERCLAVE_COSTING_SERVICE_URL")
 
         if self.auth_mode != "firebase" or not self.firebase_project_id:
             raise ValueError("QA and production require Firebase auth and ERCLAVE_FIREBASE_PROJECT_ID.")
@@ -120,6 +144,8 @@ class Settings(BaseSettings):
 
     @property
     def effective_database_url(self) -> str | None:
+        if self.service_name == "costing-service":
+            return self.costing_database_url
         if self.service_name == "inventory-service":
             return self.inventory_database_url or self.database_url
         if self.service_name == "hr-service":

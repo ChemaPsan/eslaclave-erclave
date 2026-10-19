@@ -3,6 +3,11 @@ const path = require("path");
 const { fail, fromRoot, listFiles, ok, readText } = require("./shared");
 
 const errors = [];
+const { spawnSync } = require("child_process");
+const mapTests = spawnSync(process.execPath, [fromRoot("tools/tests/documentation-map.test.js")], { encoding: "utf8", windowsHide: true });
+if (mapTests.status !== 0) errors.push(`Documentation map tests: ${mapTests.stderr || mapTests.error}`);
+const mapResult = spawnSync(process.execPath, [fromRoot("tools/documentation-map.js")], { encoding: "utf8", windowsHide: true });
+if (mapResult.status !== 0) errors.push(`Documentation map: ${mapResult.stderr || mapResult.error || mapResult.stdout}`);
 
 const livingDocuments = [
   "AGENTS.md",

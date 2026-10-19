@@ -1,0 +1,777 @@
+openapi: 3.1.0
+info:
+  title: ERClave Cost Center Catalog
+  version: 0.1.0
+  description: Basic catalog owned by Costing and available through Administration.
+    Analytical Costing and Accounting remain optional and unimplemented. Requires
+    deployed catalog flag, active Admin, exact permission and effective division scope
+    v2.
+paths:
+  /v1/cost-centers:
+    get:
+      tags:
+      - Cost centers
+      summary: List Cost Centers
+      operationId: list_cost_centers_v1_cost_centers_get
+      parameters:
+      - name: division_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 40
+          - type: 'null'
+          title: Division Id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - active
+            - inactive
+            type: string
+          - type: 'null'
+          title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostCenterListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '401':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '403':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '404':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '409':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '503':
+          description: Stable error envelope; no captured values or internal diagnostics.
+      x-required-module: admin
+      x-permissions: [costing.cost_center.read]
+    post:
+      tags:
+      - Cost centers
+      summary: Create Cost Center
+      operationId: create_cost_center_v1_cost_centers_post
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CostCenterCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostCenterResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '401':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '403':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '404':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '409':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '503':
+          description: Stable error envelope; no captured values or internal diagnostics.
+      x-required-module: admin
+      x-permissions: [costing.cost_center.create]
+  /v1/cost-centers/eligible:
+    get:
+      tags:
+      - Cost centers
+      summary: Eligible Cost Centers
+      operationId: eligible_cost_centers_v1_cost_centers_eligible_get
+      parameters:
+      - name: division_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Division Id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 10
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostCenterListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '401':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '403':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '404':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '409':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '503':
+          description: Stable error envelope; no captured values or internal diagnostics.
+      x-required-module: admin
+      x-permissions: [costing.cost_center.read]
+  /v1/cost-centers/{cost_center_id}:
+    get:
+      tags:
+      - Cost centers
+      summary: Get Cost Center
+      operationId: get_cost_center_v1_cost_centers__cost_center_id__get
+      parameters:
+      - name: cost_center_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Cost Center Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostCenterResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '401':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '403':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '404':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '409':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '503':
+          description: Stable error envelope; no captured values or internal diagnostics.
+      x-required-module: admin
+      x-permissions: [costing.cost_center.read]
+    patch:
+      tags:
+      - Cost centers
+      summary: Update Cost Center
+      operationId: update_cost_center_v1_cost_centers__cost_center_id__patch
+      parameters:
+      - name: cost_center_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Cost Center Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CostCenterUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostCenterResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '401':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '403':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '404':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '409':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '503':
+          description: Stable error envelope; no captured values or internal diagnostics.
+      x-required-module: admin
+      x-permissions: [costing.cost_center.update]
+  /v1/cost-centers/{cost_center_id}/activate:
+    post:
+      tags:
+      - Cost centers
+      summary: Activate Cost Center
+      operationId: activate_cost_center_v1_cost_centers__cost_center_id__activate_post
+      parameters:
+      - name: cost_center_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Cost Center Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CostCenterStatus'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostCenterResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '401':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '403':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '404':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '409':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '503':
+          description: Stable error envelope; no captured values or internal diagnostics.
+      x-required-module: admin
+      x-permissions: [costing.cost_center.status]
+  /v1/cost-centers/{cost_center_id}/deactivate:
+    post:
+      tags:
+      - Cost centers
+      summary: Deactivate Cost Center
+      operationId: deactivate_cost_center_v1_cost_centers__cost_center_id__deactivate_post
+      parameters:
+      - name: cost_center_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Cost Center Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CostCenterStatus'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostCenterResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '401':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '403':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '404':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '409':
+          description: Stable error envelope; no captured values or internal diagnostics.
+        '503':
+          description: Stable error envelope; no captured values or internal diagnostics.
+      x-required-module: admin
+      x-permissions: [costing.cost_center.status]
+components:
+  schemas:
+    CostCenterCreate:
+      properties:
+        name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Name
+        division_ref_id:
+          type: string
+          maxLength: 40
+          minLength: 1
+          title: Division Ref Id
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - division_ref_id
+      title: CostCenterCreate
+    CostCenterListResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CostCenterRead'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+      type: object
+      required:
+      - data
+      - meta
+      title: CostCenterListResponse
+    CostCenterRead:
+      properties:
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+        revision:
+          type: integer
+          title: Revision
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - division_ref_id
+      - status
+      - revision
+      title: CostCenterRead
+    CostCenterResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/CostCenterRead'
+      type: object
+      required:
+      - data
+      title: CostCenterResponse
+    CostCenterStatus:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 1.0
+          title: Expected Revision
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      title: CostCenterStatus
+    CostCenterUpdate:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 1.0
+          title: Expected Revision
+        name:
+          type: string
+          maxLength: 240
+          minLength: 1
+          title: Name
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      - name
+      title: CostCenterUpdate
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    PageMeta:
+      properties:
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - total
+      - limit
+      - offset
+      title: PageMeta
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+x-implementation-status: implemented
+security:
+- bearerAuth: []

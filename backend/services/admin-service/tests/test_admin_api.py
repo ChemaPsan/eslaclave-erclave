@@ -162,7 +162,10 @@ class FakeAdminRepository:
         modules: list[dict],
         idempotency_key: str,
         correlation_id: str,
+        ensure_identity=None,
     ):
+        if ensure_identity:
+            ensure_identity()
         assert source == {"type": "manual", "id": "qa-onboarding"}
         assert owner["email"] == "owner.nuevo@cliente.com"
         assert owner["branch_ids"] == ["*"]
@@ -464,7 +467,10 @@ class FakeAdminRepository:
         role_ids: list[str],
         idempotency_key: str,
         correlation_id: str,
+        ensure_identity=None,
     ):
+        if ensure_identity:
+            ensure_identity()
         return UserRead(
             id="usr_invited",
             email=email.lower(),
@@ -503,7 +509,7 @@ class FakeAdminRepository:
             roles=["owner"],
         )
 
-    def delete_user(self, tenant_id: str, user_id: str, idempotency_key: str, correlation_id: str):
+    def delete_user(self, tenant_id: str, user_id: str, idempotency_key: str, correlation_id: str, actor_email=None):
         if tenant_id != TENANT_ID or user_id != USER_ID:
             return None
         return UserRead(
@@ -513,6 +519,10 @@ class FakeAdminRepository:
             status="deleted",
             roles=["owner"],
         )
+
+    def cleanup_user_identity(self, tenant_id, user_id, idempotency_key, delete_identity):
+        delete_identity("admin.qa@erclave.local")
+        return {"status": "completed", "error_codes": []}
 
     def list_roles(self, tenant_id: str, limit: int = 50):
         return [RoleRead(id=ROLE_ID, code="owner", name="Owner", status="active", permissions=["admin.tenant.read"])]
@@ -610,6 +620,33 @@ class FakeAdminRepositoryWithPurchasingUnitConsumer(FakeAdminRepository):
     session_permissions = ["purchasing.requisition.create"]
 
 
+class FakeAdminRepositoryWithPurchasingCatalogConsumer(FakeAdminRepository):
+    session_permissions = ["purchasing.supplier.create"]
+
+    @staticmethod
+    def _currency():
+        return {
+            "id": "cat_mxn",
+            "catalog_code": "currencies",
+            "code": "MXN",
+            "name_es": "Peso mexicano",
+            "name_en": "Mexican peso",
+            "metadata": {},
+            "system_default": True,
+            "status": "active",
+        }
+
+    def list_catalog_items(self, tenant_id, catalog_code, *, include_inactive=False, q=None):
+        return [self._currency()] if tenant_id == TENANT_ID and catalog_code == "currencies" else []
+
+    def get_catalog_item(self, tenant_id, catalog_code, code, *, active_only=False):
+        return self._currency() if tenant_id == TENANT_ID and catalog_code == "currencies" and code == "MXN" else None
+
+
+class FakeAdminRepositoryWithPurchasingOrderCatalogConsumer(FakeAdminRepositoryWithPurchasingCatalogConsumer):
+    session_permissions = ["purchasing.order.update"]
+
+
 class FakeAdminRepositoryWithModuleDependencyError(FakeAdminRepository):
     def set_backoffice_entitlement(self, *args, **kwargs):
         raise ValueError("module_dependencies_required:hr,production")
@@ -672,6 +709,38 @@ def test_unit_catalog_allows_purchasing_command_permission_as_consumer():
 
     assert response.status_code == 200
     assert response.json()["data"]["code"] == "H87"
+
+
+def test_commercial_catalog_list_allows_supplier_permission_as_consumer():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepositoryWithPurchasingCatalogConsumer()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-purchasing", email="admin.qa@erclave.local", name="Purchasing user"
+    )
+
+    response = TestClient(app).get(
+        "/v1/catalogs/commercial/currencies",
+        headers={"X-Tenant-Id": TENANT_ID, "Authorization": "Bearer local-test"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"][0]["code"] == "MXN"
+
+
+def test_commercial_catalog_lookup_allows_order_permission_as_consumer():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepositoryWithPurchasingOrderCatalogConsumer()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="firebase-purchasing", email="admin.qa@erclave.local", name="Purchasing user"
+    )
+
+    response = TestClient(app).get(
+        "/v1/catalogs/commercial/currencies/by-code/MXN",
+        headers={"X-Tenant-Id": TENANT_ID, "Authorization": "Bearer local-test"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["code"] == "MXN"
 
 
 def test_unit_catalog_create_requires_idempotency_key():
@@ -1735,6 +1804,58 @@ def test_delete_user_returns_deleted_user():
 
     assert response.status_code == 200
     assert response.json()["data"]["status"] == "deleted"
+    assert response.json()["data"]["firebase_identity_cleanup"]["status"] == "completed"
+
+
+def test_delete_user_validates_key_before_any_identity_side_effect(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Deletion must not start without a command key")
+    monkeypatch.setattr(FakeAdminRepository, "delete_user", forbidden)
+    monkeypatch.setattr(admin_api, "delete_firebase_user_by_email", forbidden)
+    response = client_with_fake_repo().delete(f"/v1/users/{USER_ID}", headers={"X-Tenant-Id": TENANT_ID})
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "idempotency_key_required"
+
+
+def test_delete_user_does_not_touch_firebase_if_local_removal_fails(monkeypatch):
+    calls = []
+    def fail_removal(*args, **kwargs):
+        raise ErclaveError("local_removal_failed", "Safe synthetic failure", status_code=503)
+    monkeypatch.setattr(FakeAdminRepository, "delete_user", fail_removal)
+    monkeypatch.setattr(admin_api, "delete_firebase_user_by_email", lambda *args: calls.append(args))
+    response = client_with_fake_repo().delete(f"/v1/users/{USER_ID}", headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "delete-fails-local"})
+    assert response.status_code == 503
+    assert calls == []
+
+
+def test_delete_user_returns_pending_cleanup_without_turning_membership_removal_into_error(monkeypatch):
+    monkeypatch.setattr(FakeAdminRepository, "cleanup_user_identity", lambda *args: {"status": "pending", "error_codes": ["firebase_identity_unavailable"]})
+    response = client_with_fake_repo().delete(f"/v1/users/{USER_ID}", headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "delete-firebase-pending"})
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "deleted"
+    assert response.json()["data"]["firebase_identity_cleanup"] == {"status": "pending", "error_codes": ["firebase_identity_unavailable"]}
+
+
+def test_delete_user_returns_not_required_for_shared_identity(monkeypatch):
+    calls = []
+    monkeypatch.setattr(FakeAdminRepository, "cleanup_user_identity", lambda *args: {"status": "not_required", "error_codes": []})
+    monkeypatch.setattr(admin_api, "delete_firebase_user_by_email", lambda *args: calls.append(args))
+    response = client_with_fake_repo().delete(f"/v1/users/{USER_ID}", headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "delete-shared-identity"})
+    assert response.status_code == 200
+    assert response.json()["data"]["firebase_identity_cleanup"]["status"] == "not_required"
+    assert calls == []
+
+
+def test_delete_user_rechecks_permission_before_cleanup(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Unauthorized deletion reached the repository")
+    monkeypatch.setattr(FakeAdminRepository, "delete_user", forbidden)
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepository()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(uid="synthetic", email="admin.qa@erclave.local")
+    response = TestClient(app).delete(f"/v1/users/{USER_ID}", headers={"X-Tenant-Id": TENANT_ID, "Idempotency-Key": "delete-no-permission"})
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "permission_denied"
 
 
 def test_list_roles_returns_roles_for_tenant():
@@ -1847,6 +1968,21 @@ def test_list_code_sequences_returns_tenant_catalog():
     response = client_with_fake_repo().get("/v1/catalogs/code-sequences", headers={"X-Tenant-Id": TENANT_ID})
     assert response.status_code == 200
     assert response.json()["data"][0]["document_type"] == "production.order"
+
+
+def test_code_sequence_consumer_cannot_read_or_allocate_another_document_type():
+    app.dependency_overrides[get_admin_repository] = lambda: FakeAdminRepositoryWithPurchasingCatalogConsumer()
+    app.dependency_overrides[get_settings] = lambda: Settings(auth_mode="firebase")
+    app.dependency_overrides[get_authenticated_actor] = lambda: AuthenticatedActor(
+        uid="purchasing-user", email="admin.qa@erclave.local", name="Purchasing user"
+    )
+    client = TestClient(app)
+    headers = {"X-Tenant-Id": TENANT_ID, "Authorization": "Bearer local-test"}
+    assert client.get("/v1/catalogs/code-sequences", headers=headers).json()["data"] == []
+    response = client.post("/v1/catalogs/code-sequences/production.order/next",
+        headers={**headers, "Idempotency-Key": "cross-type-allocation-001"}, json={})
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "permission_denied"
 
 
 def test_update_code_sequence_switches_to_manual_mode():

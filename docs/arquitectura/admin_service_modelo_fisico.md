@@ -1,13 +1,17 @@
 # Modelo fisico inicial de `admin-service`
 
-Estado: definido para implementacion MVP.
+## Conservación de autores al retirar membresías · CHG-333 · Local
+
+`DELETE /v1/users/{user_id}` conserva la fila `admin.users` requerida por `audit_events.actor_user_id`. Retira solo `membership_roles` y `memberships` del tenant autorizado; sin membresías restantes actualiza el estado global a `disabled`. Se reutiliza `admin.command_idempotency` para replay ligado al actor y para el resultado de limpieza Firebase. El efecto externo ocurre después del commit, bajo lock de usuario que revalida membresías/reinvitación; las invitaciones y onboarding provisionan dentro del mismo lock. No cambian tablas ni Alembic0062. [Detalle y pruebas](../operaciones/correcciones_cc20_01_20261018.md).
+
+Estado: modelo inicial implementado y ampliado. La organización normalizada Local, autoridad y compatibilidad se describen en [CONT-02](cont_02_administracion_organizacional.md); estado por ambiente en [ESTADO_ACTUAL](../contexto/ESTADO_ACTUAL.md). Este inventario inicial no sustituye migraciones posteriores.
 
 Este documento aterriza el primer modelo fisico real de `admin-service` en PostgreSQL/Cloud SQL. El objetivo es crear la fuente de verdad para tenants, usuarios, roles, permisos, modulos contratados, configuracion organizacional, membresias y auditoria.
 
 ## Principios
 
 - `admin-service` es duenio de tenants, usuarios, roles, permisos y modulos activos.
-- `admin-service` es duenio del perfil organizacional inicial del tenant mediante `admin.tenant_settings` key `organization.profile`.
+- `admin-service` posee la organización. Tras el switch por tenant de CONT-02, tablas normalizadas son autoridad y `organization.profile` es proyección compatible; el perfil corporativo sigue en settings.
 - Ningun servicio operativo debe escribir estas tablas directamente.
 - Todo dato operable por tenant debe tener separacion clara por `tenant_id`.
 - El usuario se modela como identidad global y la relacion con cada tenant vive en `memberships`.
@@ -62,7 +66,7 @@ Tablas con `tenant_id` obligatorio:
 
 El modelo prepara `audit_events.idempotency_key` y `audit_events.correlation_id` para rastrear comandos criticos.
 
-La idempotencia final se debera complementar con una tabla dedicada de comandos procesados cuando implementemos endpoints mutables como:
+La tabla dedicada `admin.command_idempotency` ya existe para comandos reales; revisar el repositorio/contrato de cada operación para su cobertura, sin inferirla de la sola tabla. Las operaciones del diseño inicial incluyen:
 
 - `POST /v1/tenants`;
 - `PUT /v1/tenants/{tenant_id}/entitlements/{module_code}`;
@@ -83,7 +87,9 @@ El editor matricial implementa esa tabla para `role.permissions.replace`, con al
 
 `admin.roles.permission_revision` protege contra ultimo-escritor-gana. El reemplazo bloquea la fila, compara `expected_revision`, aplica un diff y aumenta la revision. Las asignaciones existentes conservan su `scope`; el payload legado se mantiene solo por compatibilidad temporal.
 
-## Perfil organizacional
+## Perfil organizacional y compatibilidad
+
+La estructura siguiente describe la proyección legacy. Sociedad/División/Emisor se administran mediante [APIs normalizadas](cont_02_administracion_organizacional.md); los adaptadores antiguos escriben a través del mismo dueño tras el switch, nunca como autoridad independiente.
 
 Cada tenant debe nacer con:
 
@@ -117,9 +123,9 @@ El primer seed versionado define estos codigos de modulo:
 | `admin` | `admin-service` | No |
 | `production` | `production-service` | Si |
 | `inventory` | `inventory-service` | Si |
-| `sales` | `sales-service` | Si; Clientes/Cotizaciones implementados solo en Local, resto `planned` |
-| `purchasing` | `purchasing-service` | Si; implementado solo en Local |
-| `maintenance` | `maintenance-service` | Si; correctivos implementados solo en Local |
+| `sales` | `sales-service` | Si; ciclo operativo base Local/QA, ampliación dimensional sólo Local |
+| `purchasing` | `purchasing-service` | Si; ciclo base Local/QA, dimensiones documentales pendientes Local |
+| `maintenance` | `maintenance-service` | Si; correctivos Local/QA, dimensiones pendientes Local |
 | `hr` | `hr-service` | Si; implementado en Local y QA |
 | `billing` | `billing-service` | No |
 | `provisioning` | `provisioning-service` | No |
@@ -145,10 +151,6 @@ python scripts/seed_admin_mvp.py --dry-run
 python scripts/seed_admin_mvp.py
 ```
 
-## Pendientes inmediatos
+## Continuación y fuentes
 
-1. Definir si agregaremos tabla global `admin.modules` o mantenemos modulos como catalogo en codigo durante el MVP.
-2. Implementar repositorios o unidad de trabajo para `admin-service`.
-3. Implementar endpoints mutables de tenants y asegurar que `POST /v1/tenants` inicialice `organization.profile`.
-4. Agregar tabla de idempotencia para comandos reales.
-5. Agregar pruebas de migracion contra PostgreSQL en QA.
+Repositorios, endpoints mutables e idempotencia ya están implementados; no reabrirlos por el plan inicial. El catálogo versionado sigue siendo la fuente de módulos, sin exigir una nueva tabla global por esta documentación. Las ampliaciones vigentes están en [PENDIENTES](../contexto/PENDIENTES.md) y [CONTROL_CONTABLE](../contexto/CONTROL_CONTABLE.md). Pruebas/migraciones de QA requieren el [flujo de release](../operaciones/flujo_local_a_qa.md); este documento no autoriza ejecutarlas.

@@ -1,36 +1,33 @@
 # Manuales funcionales de la solución ERClave
 
-Esta biblioteca explica ERClave desde la perspectiva de usuarios operativos, supervisores y administradores. No funciona como bitácora de desarrollo ni como evidencia de release.
+CHG-331: los siete Word se regeneraron desde las fuentes vigentes, se cotejó su texto y se revisaron visualmente sus 50 páginas. Son candidatos Local; consultar [REGISTRO](REGISTRO.md) para las huellas y el alcance de revisión. CC-20 integrado y la promoción QA siguen pendientes.
 
-**Edición 2026-09-14:** fuentes actualizadas y Word regenerados. Revisión visual pendiente; consultar REGISTRO.md antes de distribuir los binarios.
+CC-17 CHG-322: fuentes Markdown de Produccion, Ventas y Administracion actualizadas para presentacion efectiva y snapshot documental, solo Local. Esta nota conserva el estado anterior a CHG-331.
 
-## Organización vigente
+Biblioteca para usuarios operativos, supervisores y administradores. Cobertura actualizada: **CHG-317 · 2026-10-12**. Consultar [REGISTRO](REGISTRO.md) antes de distribuir.
 
-- `fuentes/`: fuente Markdown canónica y versionable, una por módulo implementado.
-- `word/`: un DOCX vigente por módulo, generado desde la fuente canónica.
-- `REGISTRO.md`: cobertura, ambiente y limitaciones conocidas.
-- `PLANTILLA.md`: estructura para un futuro manual cuando un módulo pase de planeado a implementado.
+## Vigencia y ambiente
 
-No se conservan copias `*_CHG-*.docx`: acumulaban cortes parciales, podían circular como instrucciones vigentes y duplicaban contenido que ya pertenece a la fuente canónica. El historial técnico permanece fuera de esta biblioteca.
+Las fuentes Markdown describen el recorrido base QA e57237f y ampliaciones explícitas sólo Local. Los siete manuales Word tienen paridad y revisión visual CHG-331; la guía QA Word conserva su registro independiente. Todos son exportaciones candidatas y sus comprobaciones figuran en el registro. [Estado por ambiente](../contexto/ESTADO_ACTUAL.md) y [control por submódulo](../contexto/CONTROL_CONTABLE.md) distinguen lo implementado de lo pendiente. Un despliegue no equivale a aceptación funcional.
 
-## Regla de ambiente
+CHG-317 incorporó recepción física con origen y conversión explícitos, refacciones por División, transferencias dentro de una Sociedad y sobrantes con costo/contexto conservados. La falta de LibreOffice de ese corte quedó superada para los siete manuales en CHG-331. Datos reales CC-19 y aceptación transversal CC-20 continúan pendientes.
 
-Cada manual distingue **Local**, **QA** y capacidades no disponibles. Una funcionalidad preparada en archivos Local no debe anunciarse como existente en QA. La revisión del 14 de septiembre de 2026 incorpora las mejoras Local de formularios, margen esperado y evidencia de servicios, señaladas como pendientes de promoción. La base publicada permanece en el release QA `b63cdad`, que incluye los siete servicios, las órdenes de servicio de Ventas, las compras de servicios sin Inventario y los reportes estándar. Desplegado no significa aceptación funcional concluida: el tester debe ejecutar la guía vigente y registrar sus resultados.
+## Organización
 
-## Mantenimiento
+- Fuentes Markdown canónicas por módulo y exportaciones Word candidatas enlazadas en [REGISTRO](REGISTRO.md).
+- [Plantilla funcional](fuentes/PLANTILLA.md) para nuevos módulos con runtime e interfaz.
+- [Fichas de módulos](../../modulos/README.md) para reglas y diseño objetivo; capacidades planned no son instrucciones operativas.
 
-Generación vigente: ejecutar `python tools/generate-solution-manuals.py` para los siete manuales y `python tools/generate-qa-document.py` para la guía. Ambos usan `tools/build-functional-document.py`, que convierte las tablas Markdown en tablas Word y conserva la numeración de cada procedimiento. Utilice un intérprete con python-docx y revise visualmente el resultado antes de distribuirlo.
+No se mantienen copias por CHG como versiones distribuibles. La historia técnica vive en [TRAZABILIDAD](../../TRAZABILIDAD.md).
 
-Al cambiar pantallas, campos, estados, permisos, mensajes, dependencias o integraciones:
+## Mantenimiento y control
 
-1. actualizar primero la fuente Markdown;
-2. eliminar instrucciones obsoletas en vez de agregar parches históricos;
-3. regenerar el DOCX con el mismo nombre canónico;
-4. revisar portada, encabezados, tablas, listas, saltos de página y apertura en Word;
-5. actualizar `REGISTRO.md`.
+El Custodio de manuales coordina a negocio/técnico de cada dueño según [AGENTES](../../AGENTES.md), [skill de manuales](../../.agents/skills/erclave-solution-manuals/SKILL.md) y [gobierno documental](../arquitectura/gobierno_documentacion_viva.md).
 
-Los módulos planeados no reciben un manual operativo hasta contar con interfaz y runtime verificables. Su definición funcional continúa en `modulos/`.
+Al modificar pantallas, campos, estados, permisos, mensajes o integraciones: contrastar fuente con UI, contrato y pruebas; sustituir instrucciones superadas; regenerar Word; revisar todas sus páginas y actualizar registro. Separar validación estructural, visual y aceptación funcional.
+
+Generación: python tools/generate-solution-manuals.py para siete manuales y python tools/generate-qa-document.py para guía. Ambos usan [generador común](../../tools/build-functional-document.py). Aplicar el flujo vigente de documentos antes de modificar DOCX; los bloqueos de herramientas de sesiones anteriores no prueban disponibilidad actual.
 
 ## Entrega al tester
 
-La guía vigente está en `docs/qa/guia_pruebas_qa_mvp.md` y su Word correspondiente. La carpeta de entrega contiene siete manuales Word, la guía de pruebas y un archivo LEEME con alcance, versión y orden sugerido. Las fuentes canónicas permanecen en esta biblioteca; no distribuya documentos históricos como instrucciones vigentes.
+[Guía de pruebas](../qa/guia_pruebas_qa_mvp.md), [matriz de ejecución](../qa/MATRIZ_EJECUCION_QA.md) y [entrega al tester](../qa/ENTREGA_TESTER.md) describen alcance QA. Distribuir sólo documentos con ambiente y estado de revisión identificados; un Word previo no sustituye instrucciones Local posteriores.

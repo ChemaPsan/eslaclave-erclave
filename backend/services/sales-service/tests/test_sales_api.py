@@ -70,7 +70,7 @@ class FakeRepository:
     def get_delivery(self, tenant_id, delivery_id): return delivery() if delivery_id == "del_1" else None
     def create_delivery(self, tenant_id, payload, key, fingerprint, actor): return delivery()
     def delivery_consumption_plan(self, tenant_id, delivery_id): return (delivery(), []) if delivery_id == "del_1" else None
-    def prepare_delivery_confirmation(self, tenant_id, delivery_id, key, fingerprint): return (delivery(), [], key) if delivery_id == "del_1" else None
+    def prepare_delivery_confirmation(self, tenant_id, delivery_id, key, fingerprint, actor_id=None): return (delivery(), [], key) if delivery_id == "del_1" else None
     def mark_delivery_reconciliation(self, tenant_id, delivery_id): pass
     def confirm_delivery(self, tenant_id, delivery_id, consumptions, key, fingerprint, actor): return delivery("confirmed")
     def cancel_delivery(self, tenant_id, delivery_id, reason, key, fingerprint, actor): return delivery("cancelled")

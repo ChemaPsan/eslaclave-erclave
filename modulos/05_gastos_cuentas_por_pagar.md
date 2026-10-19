@@ -1,5 +1,13 @@
 # ERClave — Módulo de Gastos y Cuentas por Pagar
 
+## Vigencia y relaciones · conciliación CHG-311
+
+Planned: gastos, extracción fiscal, CxP y pagos no tienen runtime operativo. Las secciones siguientes son requisitos propuestos, no instrucciones de uso ni políticas fiscales aprobadas. Reconocimiento contable y automatismos se definirán en su corte.
+
+Estado por ambiente: [ESTADO_ACTUAL](../docs/contexto/ESTADO_ACTUAL.md). Brechas y cierre: [CONTROL_CONTABLE](../docs/contexto/CONTROL_CONTABLE.md). Relación operativa: [03_compras_abastecimiento](03_compras_abastecimiento.md). Contrato/regla: [plan_preparacion_contabilidad](../docs/arquitectura/plan_preparacion_contabilidad.md). Navegación: [índice de módulos](README.md).
+
+Las referencias CHG conservan procedencia; no se suman como pendientes vigentes. La historia de implementación está en [TRAZABILIDAD](../TRAZABILIDAD.md). Costos y tarifas deben usar moneda base de Sociedad (CHG-309); su aplicación se verifica por flujo en el control, sin reinterpretar historia. Centro requerido sólo donde el flujo de imputación esté habilitado.
+
 ## 1. Objetivo
 
 El módulo de Gastos y Cuentas por Pagar permitirá registrar, clasificar y asignar gastos mediante XML, PDF y documentos relacionados, conectándolos con centros de costos, órdenes de producción, almacenes, proveedores y proyectos.

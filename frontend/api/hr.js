@@ -7,7 +7,7 @@ export async function getHrCatalog(filters={}, {areas:readAreas=true,positions:r
 export async function getHrAreas(){return (await request("/v1/hr/areas")).data;}
 export async function createHrArea(payload){return (await request("/v1/hr/areas",{method:"POST",body:JSON.stringify(payload)})).data;}
 export async function updateHrArea(id,payload){return (await request(`/v1/hr/areas/${id}`,{method:"PATCH",body:JSON.stringify(payload)})).data;}
-export async function createHrPosition(payload){return (await request("/v1/hr/positions",{method:"POST",body:JSON.stringify(payload)})).data;}
+export async function createHrPosition(payload,requestKey){return (await request("/v1/hr/positions",{method:"POST",body:JSON.stringify(payload),...(requestKey?{headers:{"Idempotency-Key":requestKey}}:{})})).data;}
 export async function updateHrPosition(id,payload){return (await request(`/v1/hr/positions/${id}`,{method:"PATCH",body:JSON.stringify(payload)})).data;}
 export async function getHrWorkers(filters={}){const query=new URLSearchParams();Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=="")query.set(k,String(v));});return (await request(`/v1/hr/workers?${query}`)).data;}
 export async function getProductionEligibleWorkers(){return (await request("/v1/hr/workers/production-eligible")).data;}

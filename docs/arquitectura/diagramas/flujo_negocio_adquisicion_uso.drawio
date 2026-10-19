@@ -50,10 +50,10 @@
         <mxCell id="prod" value="Producción&lt;br&gt;receta -&gt; orden -&gt; etapas&lt;br&gt;-&gt; recepción terminada" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="90" y="930" width="430" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="purch" value="Compras&lt;br&gt;requisición -&gt; OC -&gt; recepción&lt;br&gt;física o servicio Local" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+        <mxCell id="purch" value="Compras&lt;br&gt;requisición -&gt; OC -&gt; recepción&lt;br&gt;física o servicio aceptado" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="610" y="930" width="430" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="sales" value="Ventas&lt;br&gt;cliente -&gt; cotización -&gt; pedido&lt;br&gt;-&gt; entrega / servicio Local" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
+        <mxCell id="sales" value="Ventas&lt;br&gt;cliente -&gt; cotización -&gt; pedido&lt;br&gt;-&gt; entrega / servicio" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="1130" y="930" width="430" height="140" as="geometry" />
         </mxCell>
         <mxCell id="maint" value="Mantenimiento&lt;br&gt;reporte -&gt; asignación -&gt; ejecución&lt;br&gt;-&gt; refacciones -&gt; cierre" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FFFFFF;strokeColor=#8A6AA3;fontColor=#30343B;fontSize=13;spacing=8;" vertex="1" parent="1">

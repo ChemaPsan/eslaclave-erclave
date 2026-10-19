@@ -4,6 +4,8 @@
 
 Un `select` HTML es adecuado para catalogos pequenos y estables. Entidades que crecen con la operacion deben usar busqueda por texto, filtros de negocio, elegibilidad server-side, paginacion y resultados acotados. La UI conserva el ID seleccionado; nunca resuelve relaciones por el texto mostrado.
 
+El selector global de Sociedad/División es una excepción de presentación: muestra únicamente las Divisiones ya autorizadas en la sesión v2, no consulta un catálogo libre. CHG-329 lo presenta en una lista separada de la barra superior con búsqueda local por Sociedad, División o código. Al elegir conserva el ID de División y el backend revalida alcance y deriva Sociedad/Emisor mediante la sesión. Si el alcance llega a crecer más que la lista de sesión, deberá incorporarse búsqueda paginada del servicio dueño antes de usarlo como selector de maestros.
+
 ## Matriz recomendada
 
 | Seleccion | Busqueda principal | Filtros ideales | Orden inicial | Elegibilidad |

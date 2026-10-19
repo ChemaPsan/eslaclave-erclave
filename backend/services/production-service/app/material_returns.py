@@ -1,5 +1,6 @@
 from decimal import Decimal
 from sqlalchemy import text
+from .order_context import scope_sql
 
 
 class ProductionMaterialReturns:
@@ -32,14 +33,15 @@ class ProductionMaterialReturns:
             self._audit(c,t,actor,'order.material_return','production_order',p['source_id'],None,{'return_id':p['id'],'quantity':str(quantity),'movement_id':p['movement_id']},'return-'+p['id'])
             return {'id':p['id'],'status':'completed'}
 
-    def returnable_materials(self,t,limit=25,offset=0):
+    def returnable_materials(self,t,limit=25,offset=0,scope=None):
+        clause,scope_params=scope_sql(scope,'o.organization_context')
         with self.engine.connect() as c:
-            return [dict(row) for row in c.execute(text("""select v.value->>'id' id,o.code,r.resource_code item_code,r.resource_name_snapshot item_name,r.unit,
+            return [dict(row) for row in c.execute(text(f"""select v.value->>'id' id,o.code,r.resource_code item_code,r.resource_name_snapshot item_name,r.unit,
                 (v.value->>'quantity')::numeric-coalesce((select sum(a.quantity) from production.material_return_adjustments a where a.tenant_id=o.tenant_id and a.original_movement_id=v.value->>'id'),0) quantity
                 from production.material_issues i join production.production_orders o on o.tenant_id=i.tenant_id and o.id=i.production_order_id
                 cross join lateral jsonb_each(i.movements) v
                 join production.production_order_resource_reservations rr on rr.tenant_id=o.tenant_id and rr.reservation_ref_id=v.key
                 join production.production_order_resources r on r.tenant_id=rr.tenant_id and r.id=rr.production_order_resource_id
-                where o.tenant_id=:t and o.status in ('completed','cancelled')
+                where o.tenant_id=:t {clause} and o.status in ('completed','cancelled')
                 and (v.value->>'quantity')::numeric>coalesce((select sum(a.quantity) from production.material_return_adjustments a where a.tenant_id=o.tenant_id and a.original_movement_id=v.value->>'id'),0)
-                order by o.created_at,o.id,r.id,v.key limit :limit offset :offset"""),{'t':t,'limit':limit,'offset':offset}).mappings()]
+                order by o.created_at,o.id,r.id,v.key limit :limit offset :offset"""),{'t':t,'limit':limit,'offset':offset,**scope_params}).mappings()]

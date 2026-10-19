@@ -4,6 +4,12 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const source = path.join(repoRoot, "frontend");
 const output = path.resolve(repoRoot, process.argv[2] || "dist/qa-frontend");
+const relativeOutput = path.relative(repoRoot, output);
+const outputParts = relativeOutput.split(path.sep);
+if (!relativeOutput || relativeOutput.startsWith("..") || path.isAbsolute(relativeOutput)
+    || outputParts.length < 2 || !["dist", ".local"].includes(outputParts[0])) {
+  throw new Error("QA output must be a dedicated directory under dist or .local.");
+}
 
 const required = [
   "QA_ADMIN_API_URL",
@@ -13,6 +19,7 @@ const required = [
   "QA_SALES_API_URL",
   "QA_PURCHASING_API_URL",
   "QA_MAINTENANCE_API_URL",
+  "QA_COSTING_API_URL",
   "QA_FIREBASE_API_KEY",
   "QA_FIREBASE_AUTH_DOMAIN",
   "QA_FIREBASE_PROJECT_ID",
@@ -27,8 +34,8 @@ if (missing.length) throw new Error(`Missing QA frontend variables: ${missing.jo
 function requirePublicHttps(name) {
   const value = process.env[name];
   const parsed = new URL(value);
-  if (parsed.protocol !== "https:" || ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname)) {
-    throw new Error(`${name} must be a public HTTPS URL.`);
+  if (parsed.protocol !== "https:" || ["localhost", "127.0.0.1", "::1", "[::1]"].includes(parsed.hostname) || parsed.username || parsed.password || parsed.search || parsed.hash || !["", "/"].includes(parsed.pathname)) {
+    throw new Error(`${name} must be a public HTTPS service origin.`);
   }
   return value.replace(/\/$/, "");
 }
@@ -44,6 +51,7 @@ const config = {
   salesApiBaseUrl: requirePublicHttps("QA_SALES_API_URL"),
   purchasingApiBaseUrl: requirePublicHttps("QA_PURCHASING_API_URL"),
   maintenanceApiBaseUrl: requirePublicHttps("QA_MAINTENANCE_API_URL"),
+  costingApiBaseUrl: requirePublicHttps("QA_COSTING_API_URL"),
   firebaseConfig: {
     apiKey: process.env.QA_FIREBASE_API_KEY,
     authDomain: process.env.QA_FIREBASE_AUTH_DOMAIN,
@@ -67,7 +75,10 @@ const backofficeConfig = {
 
 fs.rmSync(output, { recursive: true, force: true });
 fs.mkdirSync(path.dirname(output), { recursive: true });
-fs.cpSync(source, output, { recursive: true });
+fs.cpSync(source, output, { recursive: true, filter: (entry) => {
+  const name = path.basename(entry);
+  return !name.endsWith(".log") && name !== ".env" && !name.startsWith(".env.");
+} });
 fs.writeFileSync(path.join(output, "env.js"), `window.ERCLAVE_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
 fs.writeFileSync(path.join(output, "backoffice", "env.js"), `window.ERCLAVE_CONFIG = ${JSON.stringify(backofficeConfig, null, 2)};\n`);
 
@@ -81,7 +92,7 @@ for (const relative of ["env.js", path.join("backoffice", "env.js")]) {
 
 const manifest = {
   environment: "qa",
-  sourceSha: process.env.GITHUB_SHA || "local-validation",
+  sourceSha: process.env.RELEASE_SHA || process.env.GITHUB_SHA || "local-validation",
   generatedAt: new Date().toISOString(),
   services: {
     admin: config.apiBaseUrl,
@@ -90,7 +101,8 @@ const manifest = {
     hr: config.hrApiBaseUrl,
     sales: config.salesApiBaseUrl,
     purchasing: config.purchasingApiBaseUrl,
-    maintenance: config.maintenanceApiBaseUrl
+    maintenance: config.maintenanceApiBaseUrl,
+    costing: config.costingApiBaseUrl
   },
   firebaseProjectId: config.firebaseConfig.projectId
 };

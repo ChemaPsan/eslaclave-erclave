@@ -1,223 +1,106 @@
 # Decisiones vigentes de ERClave
 
-## Evidencia de servicios CHG-274 — solo Local
+## Conservar auditoría al retirar una membresía · CHG-333 · 2026-10-18
 
-CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+Se implementa la regla ya descrita por el manual de Administración: Eliminar retira la membresía y Firebase solo cuando no está compartido. Las FKs de autoría se conservan manteniendo la fila global, deshabilitada cuando ya no tiene membresías. El recibo de comando registra limpieza externa posterior al commit y permite reintentar; no se presenta un fallo de proveedor como reversión de una membresía ya retirada. [Justificación y evidencia Local](../operaciones/correcciones_cc20_01_20261018.md).
 
+## CC-21 - costo estimado de cotizaciones - 2026-10-14
 
-## Margen esperado sin tope CHG-273
+El usuario confirmo que una cotizacion puede aprobarse si falta costo confirmado en moneda base de Sociedad o tasa explicita hacia la moneda documental. En ese caso costo y margen estimados quedan nulos, nunca cero supuesto ni importe de moneda desconocida. Cuando existen, Sales conserva origen, tasa y convertido por partida y congela el resultado al aprobar; historia no se reinterpreta. [Revision y criterio](../arquitectura/cont_08_costo_estimado_cotizaciones.md).
 
-CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración Local `20260913_0035` aplicada; QA conserva `20260908_0034` y release b63cdad. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
+## CC-18 - folios de movimientos internos - 2026-10-14
 
+El usuario confirmo que, cuando `inventory.movement` este en modo manual, los movimientos automaticos sin formulario reciben un codigo estable derivado del documento y la operacion de origen. La autoridad de Admin valida y conserva ese codigo con clave idempotente; Inventario mantiene unicidad por tenant. Un movimiento manual capturado por una persona exige el codigo en el formulario. El modo administrado usa el siguiente numero de Admin. Los folios existentes no se renumeran.
 
-## Autoridad de salida antes del inicio CHG-264
+## CC-17 - momento del snapshot - 2026-10-14
 
-CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+El usuario confirmo congelar plantilla e identidad al aprobar la cotizacion y al liberar la orden de produccion. Antes de aprobar, la cotizacion consulta la presentacion efectiva vigente; despues usa exclusivamente el snapshot del documento. La orden de produccion nace liberada y conserva el snapshot en su creacion. Los documentos anteriores sin snapshot no se reinterpretan con datos actuales. Administracion resuelve la jerarquia Corporativo > Sociedad > Division y la identidad del Emisor; cada dueno persiste su documento.
 
-La orden permanece Liberada/En espera de recursos despues de entregar; iniciar sigue siendo un comando propio de Produccion. Sin materiales no exige entrega. Cancelar antes de entregar libera reservas; despues de entregar conserva los movimientos. Una entrega iniciada e incompleta bloquea cancelacion hasta conciliar. El lock por tenant/orden cubre entrega y cambios de estado durante HTTP; la intencion se persiste antes de consumir. Reintentos usan la identidad estable por orden/reserva y conservan movimientos confirmados. Nuevas reservas productivas sin fecha explicita no vencen a las 24 horas; no se reactivan reservas historicas.
+## Alcance y precedencia · conciliación 2026-10-07
 
-## Refacciones y entrega fisica Local CHG-263
+Este documento conserva reglas vigentes y su justificación; [ESTADO_ACTUAL](ESTADO_ACTUAL.md) conserva implementación/ambiente y [PENDIENTES](PENDIENTES.md) las brechas. Una decisión no prueba runtime. El [snapshot previo a CHG-311](historico/DECISIONES_PRE_CHG311.md) conserva las formulaciones históricas, incluidas las sustituidas; [TRAZABILIDAD](../../TRAZABILIDAD.md) conserva evidencia de cada corte.
 
-- Solicitar aparta material; Almacen confirma la entrega completa desde Movimientos y ese es el momento de registrar la salida. Resolver la reparacion no consume.
-- La confirmacion combina autorizacion y entrega; no se agrega una aprobacion previa independiente ni una entrega parcial editable. El tecnico asignado es el receptor y queda en la auditoria de la confirmacion.
-- Se reutilizan `inventory.movement.read|create` para consulta y registro/rechazo de esta salida interna; los permisos de Mantenimiento no conceden entrega. Inventory valida ademas el origen de la reserva, de modo que esa capacidad no consume/libera reservas de Produccion o Ventas.
-- Las nuevas reservas de Mantenimiento sin vencimiento explicito permanecen hasta entrega/cancelacion. No se reactivan reservas historicas vencidas ni se reinterpretan movimientos previos.
-- El rechazo usa `cancelled` con motivo auditado; no crea un estado persistente adicional. Solicitudes ya emitidas o con entrega en conciliacion no se rechazan.
+## Organización, capacidades y contabilidad
 
-## Coherencia frontend/backend
+| Decisión vigente | Justificación y procedencia |
+|---|---|
+| Emisor 1:N Sociedad; cada Sociedad tiene un Emisor; División pertenece a Sociedad; centro pertenece a División; libros futuros por Sociedad. | Confirmación CHG-289; sustituye propuesta muchos-a-muchos. [CONT-01](../arquitectura/cont_01_estructura_organizacional.md). |
+| Costos/tarifas de materiales, máquinas y mano de obra en moneda base de Sociedad; documento en otra moneda conserva original, tipo explícito y convertido; misma moneda = 1. | CHG-307 y confirmación transversal CHG-309. No volver a preguntar; no interpretar ni convertir historia sin moneda confirmada. Implementación parcial según CONTROL_CONTABLE. |
+| Centro obligatorio sólo por flujo de imputación habilitado. Catálogo básico desde Admin sin activar analítica/Accounting. | CHG-296 sustituye obligatoriedad general de CHG-289 y la duda abierta CHG-294. Costing es dueño técnico; Admin orquesta por contrato. [Capacidades](../arquitectura/matriz_capacidades_organizacionales.md). |
+| Organización y operación independientes de Accounting; analítica y libro se activan por separado. | CHG-294/296: no bloquear operación por módulo apagado; en fases futuras definir inicio, desactivación/reactivación, jobs e historia sin replay automático. [Fronteras](../arquitectura/contabilidad_opcional_y_capacidades.md). |
+| Condiciones comerciales explícitas por División, sin herencia ni copia/restauración automática desde maestro. | CHG-302, opción 2 confirmada. Moneda/pago y crédito cliente o plazo proveedor; modificar ficha general no altera condiciones existentes. No sustituye herencia de plantillas Admin. [Contrato](../arquitectura/cont_07_commercial_condiciones.md). |
+| Maestros compartidos con asignaciones por División; recursos físicos con División propia; usuarios con identidad corporativa y scope. | CHG-287 y cortes CONT-07. Evita duplicar maestros; cada dueño valida elegibilidad. [Plan CONT](../arquitectura/plan_preparacion_contabilidad.md). |
+| Dimensión documental fija y snapshot de condiciones; refresco explícito permitido sólo donde el contrato lo habilita. | CHG-303/304/305. Cotización/pedido/servicio conservan historia; no recalcular documentos por cambio de maestro. Los bloqueos temporales de cortes antiguos se consultan en estado/control actuales. |
 
-- CHG-262 aplica los contratos existentes a campos inmutables, valores iniciales y ramas condicionales. No se agrega un campo al backend solo para sostener una captura heredada de la maqueta.
-- Los permisos de lectura son independientes por recurso y se validan antes de componer consultas; un comando compuesto comprueba todas sus autoridades antes de la primera mutacion.
-- Un saldo parcial del navegador no autoriza ni bloquea salidas API; Inventory es la autoridad de existencia y reservas.
+Admin es dueño de estructura normalizada; JSON es proyección de compatibilidad (CONT-02). Los comandos nuevos y adaptadores comparten reglas, locks, auditoría e idempotencia; permisos exactos según [CONT-02](../arquitectura/cont_02_administracion_organizacional.md). El scope v2 usa wildcard explícito para acceso total heredado, listas vacías deniegan y grants restringidos no crecen al crear Divisiones. La preferencia de División activa nunca autoriza ni concede bypass Owner; `admin.user.update` gobierna cambios de alcance. Reinvitar, onboarding o seed no lo reemplazan.
 
-## Autorizacion operativa por capacidad
+Migrar requiere origen/destino revisados, preview/hash, equivalencias y auditoría; no fusionar RFC, renumerar códigos ni asignar huérfanos silenciosamente. Preservar IDs/datos fiscales incompletos sin declararlos listos para CFDI. Los códigos `*-MIG-*` son exclusivamente migratorios. Expandir → migrar → exigir → retirar compatibilidad; el downgrade 0038 no procede con autoridad/datos fiscales nuevos. La estructura/mapeo real sigue pendiente y no se infiere del tenant.
 
-- Cada aprobacion, aceptacion, liberacion, finalizacion, cancelacion o recepcion implementada usa un permiso puntual derivado del contrato.
-- El backend resuelve el permiso exacto a partir de la accion solicitada; ocultar el control en frontend no sustituye autorizacion.
-- Gerente de Produccion, Almacenista o Tecnico son roles configurables del tenant, no nombres codificados en la politica. Los usuarios heredan capacidades por sus membresias de rol.
-- Los permisos genericos retirados no se convierten automaticamente en todas las capacidades nuevas, porque eso ampliaria autoridad sin aprobacion del administrador.
-- La matriz vigente vive en `docs/arquitectura/matriz_autorizacion_operativa.md`.
-- Una integracion entre modulos recibe una proyeccion minima para su tarea. Desde CHG-237, los permisos de recepcion Inventory no abren ordenes ni productos completos de Produccion; consumen exclusivamente `finished-goods-candidates`.
-- La autorizacion exacta se evalua antes de precondiciones que puedan revelar estado interno. OpenAPI y runtime deben coincidir tanto en rutas como en conjuntos de permisos estaticos.
+La custodia del seguimiento corresponde al agente técnico contable con negocio y dueños de módulos: [CONTROL_CONTABLE](CONTROL_CONTABLE.md). Tener fichas/contratos no demuestra runtime. La continuación Local no concede promoción QA ni activación contable; CHG-291 sustituyó la preparación remota por Local.
 
-## Arquitectura y ownership
+## Ownership, contratos y autorización
 
-- El frontend consume HTTP exclusivamente mediante `frontend/api/`.
-- Cada microservicio escribe solamente su schema y datos propios.
-- No se crean FKs entre schemas de servicios distintos.
-- Los movimientos de inventario son inmutables: se corrigen con reversa o nuevo ajuste auditable.
-- Balances y Kardex son consultas calculadas; no tienen captura directa.
-- Los contratos OpenAPI, schemas, consumidores y pruebas cambian en el mismo corte.
-- Los OpenAPI deben parsear como YAML y coincidir con cada ruta FastAPI implementada. Una operacion futura lleva `x-implementation-status: planned`; un contrato o manifiesto no convierte por si solo un modulo en real.
-- Los manifiestos de microfrontend declaran `implementationStatus` y solo usan permisos puntuales con puntos, nunca alias historicos con `:`.
-- En manifiestos `implemented`, `permissions` enumera exhaustivamente las capacidades implementadas del namespace propietario publicadas por operaciones OpenAPI cuyo `x-required-module` corresponde al modulo. No incorpora permisos cruzados ni operaciones `planned`; los manifiestos planeados conservan la lista vacia. `validate-architecture` bloquea faltantes y sobrantes.
+- Cada servicio escribe sólo su schema; sin FKs entre schemas. El frontend consume HTTP mediante `frontend/api/`. Contratos, schemas, consumidores y pruebas cambian juntos; OpenAPI futuro usa `x-implementation-status: planned`.
+- Firebase identifica; Admin resuelve tenant, membresías, permisos y entitlements. `X-Tenant-Id`, preferencia del navegador, rol Owner o control oculto no conceden autoridad.
+- Permisos de lectura, alta, edición y transición son independientes. La acción exacta se autoriza antes de revelar precondiciones. Roles del tenant son configurables; no ampliar permisos retirados automáticamente.
+- Manifiestos declaran `implementationStatus` y permisos puntuales con puntos. En implementados, enumeran capacidades del namespace dueño publicadas por OpenAPI; no permisos cruzados ni planned. Los planeados mantienen permisos vacíos.
+- Integraciones consumen proyecciones mínimas: recepción Inventory no abre órdenes/productos completos, usa candidatos de terminado. Referencias crecientes requieren búsqueda acotada/identidad estable; nunca descargar todo para filtrar en navegador.
+- Toda consulta restringe `tenant_id`. Operaciones distribuidas usan reclamo durable, claves estables y reconciliación; una llamada HTTP seguida de commit local no es atomicidad. No repetir efectos confirmados.
 
-## Identidad y autorizacion
+Fuentes normativas: [ownership](../arquitectura/ownership_datos_mvp.md), [APIs](../arquitectura/apis_mvp.md), [autorización operativa](../arquitectura/matriz_autorizacion_operativa.md) y [selección escalable](../arquitectura/seleccion_escalable_documentos.md).
 
-- Firebase es proveedor de identidad, no fuente de permisos ni membresias.
-- En QA, la cuenta runtime de Admin conserva `roles/firebaseauth.admin` porque Backoffice crea, actualiza y elimina identidades Firebase durante el ciclo de tenants. El rol no concede permisos ERClave ni sustituye `session/context`; no se entrega a los otros servicios ni a operadores humanos.
-- ERClave autoriza mediante `admin-service /v1/session/context`.
-- `X-Tenant-Id` selecciona contexto, pero nunca concede autoridad.
-- Las APIs aplican permisos y aislamiento aunque el frontend o sus filtros sean manipulados.
+## Catálogos, formularios y datos
 
-## Datos y escalamiento
+Admin es autoridad de unidades de medida, monedas, condiciones de pago y folios. Cada dueño conserva unicidad/validación del documento; ID técnico no sustituye folio visible. Reserva de código atómica e idempotente, modo manual/managed según contrato. No inventar conversiones de empaque ni referencias.
 
-- PostgreSQL es la fuente transaccional del MVP.
-- Toda consulta operativa multi-tenant comienza restringida por `tenant_id`.
-- Las listas grandes usan filtros server-side, limites y paginacion estable; no se descargan colecciones completas para filtrarlas en el navegador.
-- Categoria de articulos sigue siendo texto libre. Un catalogo jerarquico requiere una decision funcional y migracion posteriores.
-- Reservas, bloqueos, transito y cuarentena no deben mostrarse como reales hasta que exista su modelo operativo.
-- Las areas laborales son catalogos independientes con ID estable. Los puestos solo pueden vincularse a un `labor_area_id` existente del mismo tenant; nunca crean areas desde texto libre.
-- Cada trabajador tiene un unico puesto vigente y expediente RH. Los responsables operativos referencian trabajadores activos; Produccion exige ademas que su puesto y area esten activos y que el puesto intervenga en produccion.
-- Administracion es fuente de verdad tenant-safe de unidades de medida. Produccion e Inventarios guardan el codigo estable y validan que siga activo; las altas/ediciones del catalogo son idempotentes, correlacionadas y auditadas.
-- Administracion es tambien la autoridad tenant-safe de folios de negocio. Cada tipo documental define prefijo, separador, siguiente consecutivo, longitud y modo `managed` o `manual`; reservar un folio es atomico e idempotente. Los servicios propietarios conservan su validacion y unicidad, y nunca usan el ID tecnico como folio visible.
-- Crear/editar areas y crear/editar puestos usan permisos distintos para que los roles de usuario deleguen cada responsabilidad por separado.
-- Areas y puestos pertenecen a `hr-service`, usan permisos `hr.area.*` y `hr.position.*` y requieren el entitlement `hr` activo. Produccion y Costos solo consumen el contrato; no escriben el esquema `hr`.
-- Maquinaria pertenece a Produccion, pero su area se selecciona exclusivamente entre areas activas de RH. El formulario de Maquinaria no crea areas ni acepta nombres libres; conserva `area_name` como snapshot compatible con el contrato vigente.
-- Produccion conserva snapshots de los datos laborales utilizados por una receta para que cambios posteriores de costo, capacidad o estatus no alteren historia aprobada.
-- El editor de permisos no usa plantillas ni presets: cada rol conserva personalizacion individual. La UI ofrece busqueda, filtros y selecciones masivas explicitas, pero nunca concede permisos por nombre de rol.
-- Los codigos de permiso permanecen como contrato; la UI muestra etiquetas/descripciones ES/EN versionadas. Solo permisos clasificados `tenant` y marcados asignables pueden concederse a roles humanos.
-- Editar permisos usa draft, diff, guardado unico, revision optimista e idempotencia. Los filtros no limitan el payload ni eliminan asignaciones ocultas; scopes existentes se preservan.
-- Un articulo solo es candidato de receta cuando esta activo y tiene `use_in_recipe=true`; la disponibilidad se calcula desde movimientos de todos los almacenes del tenant.
-- Una orden de Produccion solo se crea desde una version aprobada vigente. Produccion orquesta, pero Inventarios es autoridad de existencia, reservas, movimientos y valuacion; RH es autoridad de trabajadores, puestos y capacidad laboral; Produccion es autoridad de maquinaria y compromisos de capacidad. El navegador no puede declarar disponibilidad ni costo.
-- Liberar una orden reserva materiales por almacen y compromete minutos de mano de obra/maquinaria por fecha. Almacen confirma la entrega desde Movimientos y registra salidas inmutables antes de `in_progress`; iniciar, reanudar o cerrar no consume. Cancelar antes de entregar libera reservas y cancelar despues conserva salidas. El cierre exige materiales entregados y etapas completas; tiempos reales temporales permanecen diferidos. Los comandos externos y locales son idempotentes y los bloqueos se ordenan por recurso para evitar sobreasignacion concurrente.
-- En modo API, una receta solo selecciona articulos activos marcados `use_in_recipe`, puestos RH activos con `intervenes_in_production=true` y, como etapas, areas RH activas que tengan al menos uno de esos puestos productivos. La etapa conserva `labor_area_ref_id` y nombre snapshot, sin FK ni escritura cruzada.
-- Las fases activas de una receta se numeran en orden consecutivo y sus porcentajes deben sumar exactamente 100. La orden copia numero, area y peso; su avance general es la suma ponderada del avance de cada fase, no un promedio simple.
-- El costo manual de un articulo pertenece a Inventory y significa costo por una unidad base del articulo. Las conversiones solo se permiten entre unidades activas, compatibles y con factor estandar inequívoco; Compras sera la autoridad futura para recalcularlo desde recepciones u ordenes de compra.
-- CHG-228 preparo Compras y CHG-229 implemento su primer corte supplier-to-receipt, hoy desplegado en Local y QA. Admin conserva unidades, monedas, condiciones, folios y autorizacion. Compras es dueno de proveedor/requisicion/orden/recepcion comercial e Inventory del articulo/almacen/movimiento/saldo. CHG-255 mantiene Inventory como dependencia condicional solo para partidas inventariables; factura, pago, devolucion y contabilidad quedan fuera hasta definir sus owners y contratos.
-- Desde CHG-230, todo proveedor nuevo exige perfil fiscal minimo y RFC unico por tenant. Los proveedores heredados incompletos permanecen legibles y solo deben completar el conjunto al editar datos fiscales. El maestro sigue siendo editable; cualquier factura fiscal futura conservara snapshots propios.
-- Desde CHG-231, una requisicion de Compras agrupa multiples partidas y consolida cada articulo en una sola linea. La orden conserva precio por partida. Dividir una requisicion entre varios proveedores requiere un corte posterior con saldo adjudicable por linea y no se simula duplicando documentos.
-- Desde CHG-232, una orden originada en requisicion debe coincidir exactamente en tipo, articulo, descripcion, cantidad y unidad; solo agrega precio. Requisiciones y ordenes se cancelan con motivo y actor. Cada recepcion reclama saldo bajo bloqueo, conserva una clave Inventory estable por linea y su conciliacion reintenta exclusivamente lineas no completadas.
-- CHG-234 implementa Mantenimiento correctivo y CHG-235 endurece su conciliacion; el corte acumulado esta desplegado en Local y QA. RH e Inventory son dependencias duras y Production es integracion opcional. `maintenance-service` es dueno de ordenes, asignaciones, tiempos y solicitudes internas; RH de elegibilidad, Production de maquinas/ordenes y del hold `maintenance_order_ref_id`, e Inventory de refacciones, reservas, movimientos y costos. Resolver nunca reanuda Produccion automaticamente.
-- Una orden de Mantenimiento apunta a una maquina de Production o a una descripcion/ubicacion libre de edificio u otro objetivo. Un articulo de Inventory no se convierte en activo. Solo una falla bloqueante puede permanecer activa por maquina.
-- Una falla productiva deja la orden en `waiting_resources` si no inicio o la pasa a `paused` si estaba en proceso. Resolver libera la maquina, pero nunca reanuda Produccion automaticamente: el operador debe revalidar y reanudar.
-- La primera entrega de Mantenimiento sera correctiva. Preventivos recurrentes, Activos, garantias, anexos y escalamiento automatico a Compras permanecen fuera hasta un corte propio.
-- Los estados de orden y etapa son maquinas de estado backend; las etapas terminadas u omitidas son terminales y el cierre de orden requiere una transicion explicita desde validacion.
-- Inventario incluye articulos sin movimientos con saldo cero cuando tienen almacen sugerido, sin fabricar movimientos ni existencias.
-- El corte certificado de Ventas esta desplegado en Local y QA para Clientes, Cotizaciones, Pedidos y Entregas. CHG-255 agrega Ordenes de servicio solo en Local hasta una promocion posterior. Sales conserva ownership de sus documentos y snapshots; RH, Produccion y Administracion siguen siendo autoridades de responsables, productos/servicios y unidades.
-- La activacion de `sales` exige `hr` y `production` efectivos en los dos niveles de gobierno. Las transiciones de entitlements bloquean todas las filas modulares del tenant y no permiten apagar una autoridad mientras Ventas permanezca activa. Onboarding crea entitlements antes de asignar permisos al owner.
-- La UI comercial carga documentos y catalogos de mutacion por separado. La indisponibilidad o falta de permisos sobre responsables, productos o unidades no debe ocultar Clientes/Cotizaciones a un usuario de solo lectura.
-- Un cliente exige contacto principal y responsable RH activo. El perfil fiscal es opcional, pero razon social, RFC/ID fiscal y correo de facturacion se vuelven obligatorios juntos al iniciarlo.
-- Una cotizacion solo usa cliente activo, productos/servicios activos y la unidad base activa. Importes, costo snapshot y margen estimado se calculan en backend.
-- El segundo corte Local convierte una cotizacion aprobada una sola vez en Pedido. Sales orquesta referencias a reservas de Inventory o solicitudes de Production sin escribir sus schemas; confirmar Entregas consume parcial o totalmente reservas y calcula costo/margen real. Devoluciones y facturacion permanecen `planned`.
-- Monedas y condiciones de pago son catalogos tenant-safe de Admin. Estados comerciales son maquinas de estado y no catalogos editables.
-- `document.template` es configuracion unica por tenant para logo/colores de todos los PDF. Local admite el logo como data URL validado; QA/Produccion requeriran object storage.
-- Toda operacion de Ventas que produzca efectos en Inventory o Production usa un reclamo local durable antes de la llamada, claves derivadas estables y estado `needs_reconciliation` reanudable; una llamada HTTP seguida de una transaccion local nunca se considera atomicidad.
-- Una unidad coincidente no demuestra que un articulo de Inventory corresponde al producto vendido. Production es dueno del mapeo por ID, valida el articulo por API de Inventory y Sales vuelve a validarlo al surtir.
-- Un costo solo se etiqueta como real cuando proviene de consumo o captura operativa trazable. Sales conserva `actual_cost_source`; el costo estandar permanece exclusivamente estimado.
-- Una partida `service` confirmada en un Pedido genera exactamente una orden de servicio propiedad de Sales. Su planeacion, asignacion, ejecucion, tiempos, costos, evidencia y aceptacion usan permisos puntuales, idempotencia, auditoria y snapshots; no se representan como Entrega ni generan movimientos de Inventory.
-- Compras puede operar para un tenant de servicios sin habilitar Inventory. Admin sigue siendo dependencia transversal; Inventory se exige y consulta solo cuando una partida es `inventory_item`. Una partida `service` prohibe articulo y almacen, pero conserva recepcion comercial parcial o total en Compras.
+Estados/tipos/prioridades/políticas de contrato permanecen enums cerrados. Catálogo implementado exige código válido del dueño; valores históricos inactivos se muestran sin reemplazo y altas requieren activos. PATCH puede conservar un valor histórico omitiéndolo. Purchasing expone su proyección de monedas/pago Admin con permisos comerciales, sin exigir permiso administrativo al comprador ni consumir Sales.
 
-## Ambientes
+Cada campo debe tener propósito de tarea, origen, obligatoriedad contextual y contrato alta/edición/lectura; considerar derivarlo o posponerlo antes de exigir captura. Categoría jerárquica y semántica de responsable/área se deciden con negocio. Catálogos fiscales requieren autoridad/vigencia y flujo fiscal, no listas parciales. Skills `erclave-form-contract` y `erclave-form-feedback`; [piloto](../auditorias/piloto_contrato_formularios_2026-09-20.md).
 
-- Local usa Firebase Emulator, PostgreSQL local y APIs locales; no consume recursos QA por defecto.
-- Una ejecucion local que consume cualquier recurso QA se clasifica como `local conectado a QA` y requiere autorizacion explicita.
-- `erclave.web.app` permanece como dominio QA; Produccion usara un dominio adquirido y un proyecto GCP separado.
-- El primer release incluye Administracion, Backoffice, Produccion, Almacenes/Inventario, Recursos Humanos y Ventas, todos certificados previamente en QA.
-- El usuario propietario aprueba directamente releases y autodeploys despues de pruebas locales.
-- Produccion tendra RPO de 15 minutos y RTO de 2 horas; su infraestructura no se implementa antes de autorizar la fase productiva.
+## Producción, RH e Inventarios
 
-- Local, QA y Produccion no comparten bases de datos de prueba.
-- No se despliega, migra, ejecuta seed ni escribe en QA/Produccion sin autorizacion explicita.
-- Las pruebas de volumen y datos dummy se ejecutan solamente en recursos locales aislados y se limpian al terminar.
-- `backend/shared/erclave_common/config.py` no carga `.env` automaticamente. Local canonico recibe variables explicitas de `start_local.ps1`; QA/Produccion las reciben del runtime/pipeline. Esto impide que un archivo hibrido cambie silenciosamente la frontera.
-- En dominios no locales, el tenant activo se resuelve desde `/v1/session/tenants` y se conserva solo en memoria para enviar `X-Tenant-Id`; no existe fallback al tenant o actor demo.
-- `docs/contexto/ESTADO_ACTUAL.md` es la unica fuente de estado operativo mutable. Agentes, skills y documentos modulares deben referenciarlo, no duplicar revisiones o despliegues que envejecen.
-- La documentacion viva y los agentes se gobiernan por `docs/arquitectura/gobierno_documentacion_viva.md`. Cada cambio aplica su matriz de actualizacion y `npm.cmd run validate:documentation`; evidencia historica, estado vigente y objetivos `planned` nunca se mezclan.
-- Toda liberacion Local→QA usa `$erclave-qa-release`, registra `Agentes consultados` y conserva aprobaciones independientes para build, base/configuracion, servicios, trafico, frontend, IAM y datos.
+RH es dueño de áreas/puestos/trabajadores. Un trabajador tiene puesto vigente; Production exige trabajador/puesto/área activos y puesto que interviene en producción. Nuevos puestos no adquieren esa bandera por defecto. Producción consume RH, nunca escribe su schema.
 
-## Responsive y accesibilidad visual
+La receta valida identidad/elegibilidad de producto, unidad, materiales, puestos, máquinas/áreas y proyecta cantidades/costo; no valida disponibilidad para fecha. Maquinaria en mantenimiento puede formar parte de receta, pero aporta cero capacidad a la orden; inactiva/inexistente no puede agregarse/aprobarse. Área recomendada no se infiere comparando nombres. La orden es la autoridad para existencias, capacidad y compromisos concurrentes.
 
-- Los componentes contenidos en paneles se adaptan mediante CSS Container Queries; los media queries de viewport se reservan para el shell global.
-- Cada tabla declara una estrategia compacta: tarjetas con etiquetas, scroll horizontal interno o vista reducida justificada.
-- Ningun layout depende de cortar textos traducibles, identificadores, cantidades, errores o acciones esenciales.
-- Formularios, flujos, filtros y alertas deben seguir operables cuando sidebar y paneles laterales reduzcan el ancho real del contenido.
-- Los breakpoints se eligen donde el contenido se rompe, usando como referencia los estados documentados en `docs/arquitectura/estandar_responsive_transversal.md`.
-- QA verifica ancho de contenedor, zoom 200%, teclado, ES/EN y estados carga/vacio/error; probar solo resoluciones de viewport no es suficiente.
-- La guia de flujo compartida mantiene el riel vertical izquierdo y su estado comprimido. Las correcciones de una pantalla no pueden modificar globalmente su formato; cualquier excepcion se delimita con una clase especifica.
-- El shell muestra una sola identidad principal por pantalla. Los indicadores transversales pertenecen al panel de Alertas operativas y las leyendas internas de API, base de datos, mock, QA o persistencia no se presentan como estados de negocio.
-- Modales y tarjetas operativas compuestas son contenedores responsive propios; no pueden depender exclusivamente del ancho del panel padre ni comprimir texto humano para conservar columnas.
+La receta sugiere duración; orden decide inicio/días/fin. Minutos laborales/máquina se distribuyen por días productivos, materiales se reservan una vez y fecha requerida no precede fin. Calendario base lunes-viernes; turnos/festivos/ausencias son futuros. Bloqueo por recurso/fecha protege liberación. Etapas finalizadas/omitidas son terminales; cierre exige transición explícita.
 
-Una decision nueva o reemplazada debe registrarse tambien en `TRAZABILIDAD.md` y actualizar las fuentes funcionales correspondientes.
+Almacén confirma entrega física de materiales desde Movimientos antes de iniciar; liberar reserva y no consume, iniciar/reanudar revalida recursos/salida y no repite consumo. Sin materiales no se exige entrega. Cancelar conserva salidas ya emitidas; entrega parcial incierta bloquea cancelación hasta conciliar. Nuevas reservas productivas/refacciones sin vencimiento no caducan a 24 horas por defecto; no reactivar históricas.
 
-## Feedback operativo y localización de errores
+Inventory es autoridad de movimientos inmutables, reservas, saldos/Kardex y valuación. Corrección mediante reversa o ajuste auditable. Disponible = máximo de físico menos reservado y cero; saldos sin movimientos pueden ser cero con almacén sugerido, nunca inventar existencias. Costos operativos requieren fuente trazable; costo estándar sigue estimado. Unidad base queda fija tras primer movimiento; inactivos no permiten movimientos/reservas y máximo no puede ser menor al mínimo.
 
-- `error.code` es la fuente estable para resolver copy ES/EN; `error.message` es diagnóstico y no se presenta directamente al usuario.
-- Un error de mutación nunca confirma ni conserva visualmente un estado no aceptado. La UI restaura o recarga la proyección autoritativa y explica el siguiente paso.
-- La severidad visible distingue éxito, bloqueo funcional, conciliación y fallo técnico; sólo los casos inesperados o inciertos muestran `correlation_id` como referencia de soporte.
-- El contrato y la taxonomía completos viven en `docs/arquitectura/feedback_operativo_y_errores.md`.
-- Desde CHG-259, toda presentacion de errores del shell usa `frontend/features/error-feedback.js`; `frontend/app.js` no puede leer `error.message` ni `reason.message` para mostrarlo. El validador transversal bloquea regresiones.
+Producción/Mantenimiento solicitan sobrantes de órdenes terminadas/canceladas; Almacén confirma y dueño registra ajuste de costo conservando salida original. Tránsito requiere recepción destino, permite parcial/retorno confirmado origen. No confundir sobrantes con merma ni devolución comercial.
 
-## Verificacion y paginacion Local
+Para servicios ejecutados con receta en Production, evidencia de recepción/inicio y cierre es obligatoria; texto, adjuntos, límites/retención y autorización según [contrato de evidencia](../auditorias/evidencia_servicios_2026-09-13.md). Esta evidencia histórica define el corte; estado de despliegue sólo en ESTADO_ACTUAL. Margen esperado representa utilidad sobre costo, finito y no negativo, sin tope 100 (CHG-273).
 
-- La verificacion PostgreSQL completa es un comando explicito y reproducible: `npm run verify:postgres`. Solo admite `erclave_local` en loopback `5434` y convierte cualquier prueba omitida en fallo.
-- `npm run verify:local` compone la integracion PostgreSQL estricta con Playwright. El E2E usa Chrome instalado, Firebase Emulator y URLs loopback; una dependencia Local ausente o una base remota detiene el recorrido.
-- La primera paginacion transversal es de presentacion: pagina en bloques de 25 los registros que la pantalla ya cargo, sin perder acciones ni filtros. No sustituye la busqueda/paginacion server-side obligatoria para maestros y documentos de alto volumen.
+## Ventas, Compras y Mantenimiento
 
-## Continuidad del flujo de Compras
+Sales conserva clientes/cotizaciones/pedidos/servicios/entregas y snapshots; requiere autoridades RH/Production efectivas. Alta de cliente exige contacto/responsable; perfil fiscal opcional con campos obligatorios conjuntos al iniciarse. Cotización usa referencias activas/unidad base, backend calcula importes. Sólo borrador editable; pedido desde cotización aprobada una vez.
 
-- Aprobar, crear, emitir y recibir permanecen como comandos independientes; la navegacion guiada no los fusiona ni hereda permisos entre ellos.
-- La seleccion de requisicion u orden se transporta solo en estado transitorio del frontend. El backend vuelve a validar tenant, estado, lineas, proveedor, saldos y permiso en cada comando.
-- Crear una orden consume la requisicion completa del primer corte y la cambia a `converted`; dividir partidas entre proveedores sigue fuera del alcance vigente.
+Lecturas comerciales sobreviven a fallo de catálogos de mutación. Producto Inventory debe estar mapeado por Production: igual unidad no prueba identidad. Cada servicio de pedido genera una orden propia Sales, con planeación, responsable, tiempos, costos, evidencia y aceptación; no es Entrega física ni movimiento Inventory. CHG-314 adapta moneda sin alterar ese ciclo. Costo real productivo se concilia explícitamente desde evidencia autoritativa en CC-12 CHG-315; callback automático no es requisito y el costo no se inventa por snapshot.
 
-## Planeacion multi-dia de Produccion
+Compras aprueba requisición, crea/emite orden y recibe mediante comandos independientes. Requisición del corte actual se convierte completa, líneas coinciden exactamente y OC agrega precio; adjudicación parcial entre proveedores es futura. Bienes requieren Inventory; servicios lo prohíben y permiten Compras sin Inventory. Compras prepara recepción, Almacén confirma bienes y solicitante original acepta servicios (comprador si directa). Claims/locks y claves por línea permiten recuperar faltantes sin repetir confirmados.
 
-- La receta propone `suggested_duration_days`; la orden conserva la decision operativa definitiva con inicio, duracion y fin planeados.
-- Mano de obra y maquinaria se miden en minutos diarios, descuentan compromisos activos por recurso/fecha y se asignan secuencialmente sobre dias productivos. Materiales se validan y reservan una sola vez.
-- El calendario base del corte Local es lunes-viernes. Turnos, festivos, ausencias y excepciones por mantenimiento requieren un calendario tenant posterior y no se simulan con datos inventados.
-- La fecha requerida es un limite de negocio y no puede quedar antes del fin planeado. Crear/liberar conserva el bloqueo transaccional por cada combinacion recurso/fecha.
+Maintenance correctivo es dueño de orden/técnicos/tiempos/solicitudes; RH de elegibilidad, Production de máquina/hold e Inventory de material/costo. Objetivo puede ser máquina o descripción/ubicación libre; artículo no se convierte en activo. Una falla bloqueante por máquina; detiene/pausa Production. Resolver libera máquina pero no reanuda orden. Solicitar refacción reserva; Almacén confirma solicitud completa y salida, resolver no consume. Rechazo audita motivo con estado cancelado; no rechazar entrega emitida/en conciliación. Reintento conserva claves y partidas.
 
-## Maquinaria de receta frente a disponibilidad operativa
+Fuentes: [Producción](../../modulos/01_produccion.md), [Inventory](../../modulos/02_almacenes_inventarios.md), [Compras](../../modulos/03_compras_abastecimiento.md), [Ventas](../../modulos/04_ventas_clientes.md), [RH](../../modulos/10_recursos_humanos.md), [Mantenimiento](../../modulos/11_mantenimiento.md).
 
-- La receta puede referir maquinaria activa o en mantenimiento porque define el proceso esperado, no confirma disponibilidad para una fecha concreta.
-- La validacion/liberacion de la orden es la autoridad operativa: una maquina en mantenimiento aporta cero capacidad y bloquea el inicio del ciclo hasta reactivarse.
-- `area_ref_id` mejora asignacion y reportes, pero su ausencia no invalida la definicion de receta. No se infiere ni escribe automaticamente comparando nombres.
-- Maquinaria inactiva o inexistente no puede agregarse ni aprobarse en una receta.
+## Interfaz y evidencia
 
-## Frontera entre validar receta y validar orden
+Container queries responden al ancho real de panel/modales; viewport se reserva al shell. Tablas declaran estrategia compacta, targets accesibles, ES/EN, teclado/zoom y datos legibles. El riel vertical compartido no cambia globalmente por corregir una pantalla. Solicitudes en Movimientos comienzan plegadas y su expansión es temporal; no sumar páginas como totales. [Responsive](../arquitectura/estandar_responsive_transversal.md).
 
-- La validacion de receta confirma identidad y elegibilidad de producto, unidad, materiales, puestos, maquinaria y areas; tambien proyecta cantidades y costo. No evalua existencias ni minutos disponibles.
-- La duracion sugerida de receta es solo un valor inicial para planeacion y no participa en la elegibilidad de sus recursos.
-- La orden de produccion es el unico punto que valida disponibilidad material, capacidad laboral/maquinaria, compromisos concurrentes, inicio y numero de dias productivos.
-- Un faltante operativo nunca invalida historicamente la definicion de una receta; impide liberar la orden concreta hasta resolverlo o cambiar su horizonte.
+`error.code` resuelve copy ES/EN, nunca diagnóstico `error.message`. Rutas estructuradas apuntan al control realmente serializado; campos desconocidos/inmutables usan resumen seguro. Conservar captura y restaurar estado rechazado, sin conservar contraseñas. Severidad distingue éxito, bloqueo, conciliación y técnico; correlación para soporte. [Feedback](../arquitectura/feedback_operativo_y_errores.md).
 
+Una raíz operativa muestra reportes de sólo lectura; Admin es centro de configuración. Reportes cruzados pertenecen a Reporting futuro. Paginación visual de 25 no sustituye cursor contractual/búsqueda server-side. Smoke parcial y número de formularios cableados no son aceptación funcional. Usar `erclave-qa-evidence` y registrar ambiente/SHA/rol/pasos/evidencia.
 
-## 2026-09-08 — Responsabilidades CHG-265
+## Ambientes, verificación y gobierno
 
-El usuario confirmó: solicitante acepta servicios comprados, destino confirma transferencias y Almacén confirma devoluciones. La preparación comercial no implica movimiento físico. No se agregan permisos nuevos ni escrituras entre schemas. CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+Local usa Emulator, PostgreSQL y APIs locales; cualquier recurso QA vuelve la sesión `local conectado a QA` y requiere autorización explícita. `erclave.web.app` es QA; Produccion futura separa dominio/proyecto, RPO 15 minutos/RTO 2 horas. Pruebas/volumen locales se limpian y sólo usan [tenant autorizado](TENANTS.md).
 
+Backend no carga `.env` implícitamente: Local recibe variables de arranque y QA de runtime/pipeline. Fuera de localhost, tenant se resuelve por membresías y vive en memoria; no fallback demo ni tokens persistidos. Admin runtime QA usa autoridad Firebase para gestión de identidades; no concede permisos ERClave.
 
-## Ajustes UAT Local CHG-266
+Usuario aprueba releases/autodeploy después de pruebas locales. No migrar, seed, cargar datos ni desplegar QA/Produccion por inferencia. Usar skill de fronteras y, para release, `erclave-qa-release`, aprobaciones por recurso/gate y [flujo Local→QA](../operaciones/flujo_local_a_qa.md). Las autorizaciones históricas no son instrucciones actuales.
 
-Mantener listado como entrada de Proveedores y separar captura en modal. Corregir la compresión con clases y container queries acotadas, sin alterar globalmente el riel. Explicar transiciones de cotización según permiso efectivo; conservar el ciclo backend y restaurar únicamente el baseline Owner del tenant demo Local con los cuatro permisos ya declarados en OpenAPI.
+`verify:postgres` exige loopback `5434/erclave_local` y falla ante skips; `verify:local` agrega navegador con Emulator y URLs locales. Registrar pruebas realmente ejecutadas; no reutilizar resultados de otro corte.
 
-Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
-
-
-## Solicitudes compactas Local CHG-267
-
-Agrupar todas las bandejas operativas de Movimientos en un desplegable inicial cerrado, antes del historial. Mostrar existencia de pendientes sin sumar páginas como totales. Mantener consultas y comandos existentes; distinguir errores y carga. La expansión es temporal de la pantalla, no preferencia persistente global.
-
-Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.
-
-
-## Recuperación de refacciones Local CHG-268
-
-CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
-
-
-## Candidato de continuidad CHG-269
-
-CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
-
-
-## Release QA verificado CHG-270
-
-CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
-
-
-## Errores de formulario corregibles CHG-272
-
-La respuesta estructurada de API debe llegar completa al resolvedor de formulario. La propiedad del request se captura antes de awaits; las rutas de payload se vinculan a controles exactos y a la identidad/orden realmente serializados, incluso al filtrar partidas. Los lookups se marcan en su control visible. Campos no editables o rutas desconocidas usan resumen seguro; ningun mensaje generico promete marcas inexistentes.
-
-El sistema conserva captura y distingue validacion, bloqueo de negocio, permisos y fallo tecnico. No muestra diagnosticos del servidor ni guarda contrasenas para restaurarlas. La skill `erclave-form-feedback`, exigida en AGENTS/AGENTES, obliga a evidencia conductual por consumidor presente o futuro. Registro de 54 variantes y 22 casos MAIN no equivale a certificacion funcional exhaustiva. Evidencia y alcance Local: `docs/auditorias/formularios_feedback_2026-09-13.md`. Sin cambio de ownership, contratos ni reglas backend; sin promocion QA.
+El [gobierno_documentacion_viva.md](../arquitectura/gobierno_documentacion_viva.md) define fuentes vivas, evidencia histórica y planned; aplicar matriz y `npm.cmd run validate:documentation`. Estado mutable reside aquí únicamente por referencia a ESTADO_ACTUAL; decisiones nuevas o sustituidas quedan trazadas sin reescribir la historia.

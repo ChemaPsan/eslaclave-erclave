@@ -1,5 +1,7 @@
 # Preparacion del candidato QA - 2026-08-06
 
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](../contexto/ESTADO_ACTUAL.md).
+
 > Estado: preparacion e inventario en lectura. Este documento no autoriza despliegues, migraciones, seeds, cambios de trafico ni escrituras de datos en QA.
 
 ## Candidato local

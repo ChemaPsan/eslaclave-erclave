@@ -1,6 +1,9 @@
 const { fail, ok, readText } = require("./shared");
 
 const frontend = readText("frontend/app.js");
+const purchasingClient = readText("frontend/api/purchasing.js");
+const purchasingContract = readText("contracts/api/purchasing-service.openapi.yaml");
+const adminContract = readText("contracts/api/admin-service.openapi.yaml");
 const manifest = readText("frontend/microfrontends/compras/manifest.js");
 const errors = [];
 
@@ -30,8 +33,20 @@ for (const token of [
   'id="purchasingCancellationForm"',
   'renderFormErrors([t("purchasingCancellationReasonLength")])',
   'minlength="3" maxlength="500"'
+  ,"purchasingReferencesUnavailable"
+  ,"commercialReferenceOptions(references.currencies"
+  ,"commercialReferenceOptions(references.payment_terms"
 ]) {
   if (!frontend.includes(token)) errors.push(`Purchasing UI continuity missing ${token}`);
+}
+
+for (const [source, token] of [
+  [purchasingClient, 'paths={references:"reference-data"}'],
+  [purchasingContract, "/v1/purchasing/reference-data"],
+  [adminContract, "purchasing.supplier.create"],
+  [adminContract, "purchasing.order.update"]
+]) {
+  if (!source.includes(token)) errors.push(`Purchasing commercial catalog contract missing ${token}`);
 }
 
 const purchasingUi = frontend.slice(frontend.indexOf("function purchasingStatus"), frontend.indexOf("function inventoryQueryKey"));

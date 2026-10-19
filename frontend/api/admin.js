@@ -35,9 +35,8 @@ export async function getAdminDashboard() {
     read("admin.catalog.read", "/v1/catalogs/commercial/payment_terms?include_inactive=true"),
     read("admin.setting.read", "/v1/document-template", null)
   ]);
-  const codeSequences = (session?.permissions || []).includes("admin.setting.read")
-    ? await apiRequest("/v1/catalogs/code-sequences", { headers: { "X-Tenant-Id": tenantId } })
-    : { data: [] };
+  const codeSequences = await apiRequest("/v1/catalogs/code-sequences", { headers: { "X-Tenant-Id": tenantId } })
+    .catch(() => ({ data: [] }));
   const canReadTenant = (session?.permissions || []).includes("admin.tenant.read");
 
   return {
@@ -81,6 +80,13 @@ export async function getDocumentTemplate() {
   return (await apiRequest("/v1/document-template", { headers: { "X-Tenant-Id": tenantId } })).data;
 }
 
+export async function getDocumentPresentation(divisionId) {
+  const tenantId = getDemoTenantId();
+  return (await apiRequest(`/v1/configuration/document-presentation/division/${encodeURIComponent(divisionId)}`, {
+    headers: { "X-Tenant-Id": tenantId }
+  })).data;
+}
+
 export async function updateDocumentTemplate(payload) {
   const tenantId = getDemoTenantId();
   return (await apiRequest("/v1/document-template", { method: "PUT", headers: commandHeaders({ "X-Tenant-Id": tenantId }), body: JSON.stringify(payload) })).data;
@@ -120,16 +126,27 @@ export async function updateUnitOfMeasure(unitId, payload) {
 }
 
 
-export async function getSessionContext() {
+export async function getSessionContext(divisionId = null) {
   const tenantId = getDemoTenantId();
   const actorId = getDemoActorId();
   if (!tenantId) throw new Error("No se ha resuelto un tenant activo para la sesion.");
-  const response = await apiRequest("/v1/session/context", {
+  const response = await apiRequest(`/v1/session/context${divisionId ? `?division_id=${encodeURIComponent(divisionId)}` : ""}`, {
     headers: {
       "X-Tenant-Id": tenantId,
       ...(actorId ? { "X-Actor-Id": actorId } : {})
     }
   });
+
+  if (!divisionId && response.data?.scope?.version === 2) {
+    const context = response.data, preferenceKey = `erclave-active-division:${context.tenant.id}:${context.user.id}`;
+    const saved = localStorage.getItem(preferenceKey);
+    const divisions = context.scope.divisions || [];
+    const selected = divisions.find(row => row.id === saved) || divisions[0];
+    if (!selected) { localStorage.removeItem(preferenceKey); return context; }
+    const confirmed = await getSessionContext(selected.id);
+    localStorage.setItem(preferenceKey, confirmed.scope.active_division_id);
+    return confirmed;
+  }
 
   return response.data;
 }

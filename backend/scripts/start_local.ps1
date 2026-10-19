@@ -9,6 +9,8 @@ $ErrorActionPreference = "Stop"
 $backendRoot = Split-Path -Parent $PSScriptRoot
 $repoRoot = Split-Path -Parent $backendRoot
 $frontendRoot = Join-Path $repoRoot "frontend"
+$localFirebaseConfig = Join-Path $repoRoot ".local\firebase-cli\config"
+$localFirebaseCache = Join-Path $repoRoot ".local\firebase-cli\cache"
 $pythonPath = Join-Path $backendRoot ".venv\Scripts\python.exe"
 $postgresBin = Join-Path $PostgresRoot "pgsql\bin"
 $postgresData = Join-Path $PostgresRoot "data"
@@ -27,7 +29,23 @@ function Assert-Port-Free([int]$Port, [string]$Name) {
 foreach ($requiredPath in @($pythonPath, (Join-Path $postgresBin "pg_ctl.exe"))) {
     if (-not (Test-Path -LiteralPath $requiredPath)) { throw "Falta dependencia local: $requiredPath" }
 }
-if (-not (Get-Command firebase.cmd -ErrorAction SilentlyContinue)) { throw "Firebase CLI no esta instalado." }
+$nodeInstall = Join-Path $env:LOCALAPPDATA "Programs\nodejs"
+if (-not (Get-Command firebase.cmd -ErrorAction SilentlyContinue)) {
+    $firebaseCommand = Join-Path $nodeInstall "firebase.cmd"
+    $firebaseCli = Join-Path $nodeInstall "node_modules\firebase-tools\lib\bin\firebase.js"
+    if ((Test-Path -LiteralPath $firebaseCommand) -and (Test-Path -LiteralPath $firebaseCli)) {
+        $env:Path = "$nodeInstall;$env:Path"
+    } else {
+        throw "Firebase CLI no esta instalado o no se encontro Node.js en PATH ni en $nodeInstall."
+    }
+}
+if (-not (Get-Command node.exe -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath (Join-Path $nodeInstall "node.exe"))) {
+    $env:Path = "$nodeInstall;$env:Path"
+}
+if (-not (Get-Command node.exe -ErrorAction SilentlyContinue)) { throw "Node.js no esta disponible para Firebase CLI." }
+New-Item -ItemType Directory -Force -Path $localFirebaseConfig, $localFirebaseCache | Out-Null
+$env:XDG_CONFIG_HOME = $localFirebaseConfig
+$env:XDG_CACHE_HOME = $localFirebaseCache
 if (-not (Get-Command java.exe -ErrorAction SilentlyContinue)) {
     $portableJava = Get-ChildItem -LiteralPath "C:\tmp\microsoft-jdk-21" -Recurse -Filter "java.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $portableJava) { throw "Java no esta instalado; Firebase Emulator no puede iniciar." }
@@ -51,6 +69,7 @@ foreach ($portSpec in @(
     @{ Port = 8008; Name = "Sales API" },
     @{ Port = 8010; Name = "Purchasing API" },
     @{ Port = 8012; Name = "Maintenance API" },
+    @{ Port = 8014; Name = "Cost Center API" },
     @{ Port = $FirebaseAuthPort; Name = "Firebase Auth Emulator" },
     @{ Port = $FirebaseUiPort; Name = "Firebase Emulator UI" }
 )) { Assert-Port-Free $portSpec.Port $portSpec.Name }
@@ -69,13 +88,18 @@ $env:ERCLAVE_HR_DATABASE_URL = $localDbUrl
 $env:ERCLAVE_SALES_DATABASE_URL = $localDbUrl
 $env:ERCLAVE_PURCHASING_DATABASE_URL = $localDbUrl
 $env:ERCLAVE_MAINTENANCE_DATABASE_URL = $localDbUrl
+$env:ERCLAVE_COSTING_DATABASE_URL = $localDbUrl
+$env:ERCLAVE_COST_CENTER_CATALOG_ENABLED = "true"
+$env:ERCLAVE_COSTING_SERVICE_URL = "http://127.0.0.1:8014"
 $env:ERCLAVE_API_PUBLIC_BASE_URL = "http://127.0.0.1:8000"
 $env:ERCLAVE_APP_PUBLIC_BASE_URL = "http://127.0.0.1:4173"
 $env:ERCLAVE_ADMIN_SERVICE_URL = "http://127.0.0.1:8000"
 $env:ERCLAVE_HR_SERVICE_URL = "http://127.0.0.1:8006"
 $env:ERCLAVE_INVENTORY_SERVICE_URL = "http://127.0.0.1:8004"
 $env:ERCLAVE_PRODUCTION_SERVICE_URL = "http://127.0.0.1:8002"
+$env:ERCLAVE_SALES_SERVICE_URL = "http://127.0.0.1:8008"
 $env:ERCLAVE_MAINTENANCE_SERVICE_URL = "http://127.0.0.1:8012"
+$env:ERCLAVE_PURCHASING_SERVICE_URL = "http://127.0.0.1:8010"
 $env:ERCLAVE_BACKOFFICE_ADMIN_EMAILS = $localEmail
 
 & $pythonPath (Join-Path $PSScriptRoot "seed_admin_mvp.py")
@@ -106,10 +130,20 @@ $services = @(
     @{ Adapter = "services.hr_service_adapter:app"; Port = 8006; Name = "hr-local" },
     @{ Adapter = "services.sales_service_adapter:app"; Port = 8008; Name = "sales-local" },
     @{ Adapter = "services.purchasing_service_adapter:app"; Port = 8010; Name = "purchasing-local" },
-    @{ Adapter = "services.maintenance_service_adapter:app"; Port = 8012; Name = "maintenance-local" }
+    @{ Adapter = "services.maintenance_service_adapter:app"; Port = 8012; Name = "maintenance-local" },
+    @{ Adapter = "services.costing_service_adapter:app"; Port = 8014; Name = "costing-local" }
 )
-foreach ($service in $services) {
-    Start-Process -FilePath $pythonPath -ArgumentList "-m", "uvicorn", $service.Adapter, "--host", "127.0.0.1", "--port", "$($service.Port)" -WorkingDirectory $backendRoot -RedirectStandardOutput (Join-Path $backendRoot "$($service.Name).out.log") -RedirectStandardError (Join-Path $backendRoot "$($service.Name).err.log") -WindowStyle Hidden
+$previousServiceName = [Environment]::GetEnvironmentVariable("ERCLAVE_SERVICE_NAME", "Process")
+$previousPublicBaseUrl = [Environment]::GetEnvironmentVariable("ERCLAVE_API_PUBLIC_BASE_URL", "Process")
+try {
+    foreach ($service in $services) {
+        $env:ERCLAVE_SERVICE_NAME = $service.Name -replace '-local$', '-service'
+        $env:ERCLAVE_API_PUBLIC_BASE_URL = "http://127.0.0.1:$($service.Port)"
+        Start-Process -FilePath $pythonPath -ArgumentList "-m", "uvicorn", $service.Adapter, "--host", "127.0.0.1", "--port", "$($service.Port)" -WorkingDirectory $backendRoot -RedirectStandardOutput (Join-Path $backendRoot "$($service.Name).out.log") -RedirectStandardError (Join-Path $backendRoot "$($service.Name).err.log") -WindowStyle Hidden
+    }
+} finally {
+    [Environment]::SetEnvironmentVariable("ERCLAVE_SERVICE_NAME", $previousServiceName, "Process")
+    [Environment]::SetEnvironmentVariable("ERCLAVE_API_PUBLIC_BASE_URL", $previousPublicBaseUrl, "Process")
 }
 Start-Process -FilePath $pythonPath -ArgumentList "-m", "http.server", "4173", "--bind", "127.0.0.1" -WorkingDirectory $frontendRoot -RedirectStandardOutput (Join-Path $frontendRoot "frontend-local.out.log") -RedirectStandardError (Join-Path $frontendRoot "frontend-local.err.log") -WindowStyle Hidden
 
@@ -118,7 +152,7 @@ Write-Output "Ambiente: Local aislado"
 Write-Output "Firebase Auth Emulator: http://127.0.0.1:$FirebaseAuthPort"
 Write-Output "Firebase Emulator UI: http://127.0.0.1:$FirebaseUiPort"
 Write-Output "Frontend: http://127.0.0.1:4173"
-Write-Output "APIs: 8000, 8002, 8004, 8006, 8008, 8010, 8012"
+Write-Output "APIs: 8000, 8002, 8004, 8006, 8008, 8010, 8012, 8014"
 Write-Output "PostgreSQL: 127.0.0.1:$PostgresPort/erclave_local"
 Write-Output "Tenant: $localTenantId"
 Write-Output "Actor: $localActorId ($localEmail)"

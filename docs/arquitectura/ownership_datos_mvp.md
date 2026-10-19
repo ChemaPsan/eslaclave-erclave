@@ -1,8 +1,79 @@
 # ERClave - Ownership de datos y contratos MVP
 
+## CC-15 · CHG-319 · Local
+
+[Compras por División](cont_08_compras_contexto.md): Purchasing conserva contexto de requisición/OC/recepción y condiciones explícitas del proveedor congeladas. Admin autoriza; Inventory conserva validación/costo/proof CC-14. Migración `20261012_0058` nullable sin backfill, downgrade protegido con historia. Accounting apagado, sin QA; CC-16 implementado Local CHG-320; CC-17/18 y CC-19/20 abiertos.
+
+## CC-14 · CHG-317 · Local
+
+[Productores, transferencias y sobrantes](cont_08_inventario_productores.md) implementados: Inventory conserva contexto/costo de Purchasing/Maintenance y transferencias misma Sociedad; proofs autenticados, alcance y reintentos. Migración `20261012_0057` nullable sin backfill, downgrade protegido con historia. Sin QA ni Accounting; CC-16 integral y CC-19/20 siguen abiertos; CC-15 implementado CHG-319.
+
+
+
+## Estado y fuentes de vigencia
+
+La conciliación por submódulo vive en [CONTROL_CONTABLE](../contexto/CONTROL_CONTABLE.md); [ESTADO_ACTUAL](../contexto/ESTADO_ACTUAL.md) distingue Local de QA y [PENDIENTES](../contexto/PENDIENTES.md) fija la continuación. Evidencia de cada corte en [TRAZABILIDAD](../../TRAZABILIDAD.md). No sumar pendientes históricos como trabajo nuevo.
+
+Organización/sesión, [centros CONT-05](cont_05_catalogo_centros.md), asignaciones CONT-07 y [condiciones explícitas sin herencia](cont_07_commercial_condiciones.md) ya están implementados Local. CONT-04 es parcial y CONT-06 sigue abierto. CONT-08 conserva [cotización](cont_08_cotizaciones_contexto.md) → [pedido](cont_08_pedidos_contexto.md), [servicios](cont_08_servicios_contexto.md), [stock/entrega y movimientos manuales](cont_08_stock_contexto.md). [Producción manual CHG-313](cont_08_produccion_contexto.md) y [fabricación comercial CHG-315](cont_08_fabricacion_contexto.md) conectan contexto, recursos, recepción y entrega/costo; recorrido HTTP Local real aprobado, aceptación transversal CC-20 pendiente.
+
+Política CHG-309 confirmada: costos y tarifas en moneda base de Sociedad; documento en otra moneda conserva original, tasa explícita y convertido. Compras CC-15 implementado Local CHG-319; Mantenimiento CC-16 implementado Local CHG-320; Servicios CHG-314 y productores Inventory CHG-317 se conservan; no reinterpretar historia. Analítica Costing y Accounting permanecen planned. Datos reales y aceptación integrada siguen abiertos; estos cortes no fueron promovidos a QA.
+
+## Integración operativa vigente CHG-313/314
+
+[Tarifas CC-10](cont_08_tarifas_capacidad.md), [orden manual CC-11](cont_08_produccion_contexto.md) y [moneda Servicios CC-08](cont_08_servicios_contexto.md) se conservan. CHG-315 conecta [fabricación comercial CC-12](cont_08_fabricacion_contexto.md): prueba Sales, conversión única, conciliación de recepción real y entrega/costo. Head Local0056, sin backfill; recorrido HTTP real aprobado con 60MXN→3USD y limpieza de fixtures verificada. Cada dueño escribe sus tablas; Admin autoriza. Accounting apagado, datos reales CC-19/aceptación transversal CC-20 y QA pendientes.
+
+## Registro de cortes (evidencia histórica)
+
+Los apartados fechados conservan el alcance de su corte; los números de revisión y pendientes citados no son el estado actual.
+
+## Actualización CHG-308 · 2026-10-07
+
+Production conserva contexto de documentos/intentos de creación; Admin autoriza. Prueba mínima prepara integración Inventory sin escribir su schema. Tarifas y recursos conservan dueño; costos históricos sin moneda no se reinterpretan. Ver docs/arquitectura/cont_08_produccion_contexto.md.
+
+
+## Actualización CHG-307 · 2026-10-05
+
+Admin conserva Sociedad/moneda; Inventory costo original, almacén y existencias; Sales congela tipo de cambio y registra costo convertido del pedido. Production sólo valida elegibilidad de producto. Sin escritura entre dueños ni activación contable. Ver docs/arquitectura/cont_08_stock_contexto.md. Las notas de cortes anteriores son históricas.
+
+
+## Actualización CHG-306 · 2026-10-05
+
+Inventory consulta contexto mínimo de Sales y posee snapshots de reservas/salidas; Admin autoriza scope. Sin escritura ni FK cruzada. Surtimiento dimensionado sigue bloqueado; política monetaria pendiente. Ver cont_08_reservas_contexto.md.
+
+
+## Actualización CHG-305 · 2026-10-05
+
+Sales conserva ejecución/costos operativos y contexto fijo. HR/Production sólo autorizan elegibilidad HTTP; no se activa Accounting ni analítica Costing.
+
+
+## Actualización CHG-304 · 2026-10-05
+
+Sales conserva contexto de pedido copiado de cotización; servicios obtienen contexto del pedido. Admin/HR/Production autorizan por HTTP sin escrituras cruzadas. No hay ejecución downstream dimensionada todavía.
+
+
+## Actualización CHG-303 · 2026-10-05
+
+Sales posee snapshot de cotización. Admin autoriza estructura; RH/Production responden elegibilidad por HTTP. Sin FKs ni escrituras entre servicios.
+
+
+
+
+
+## CONT-03 / CHG-293 — alcance organizacional
+
+Admin posee `memberships.metadata.scope` v2, revisión, equivalencias y auditoría de concesiones. Shell conserva sólo preferencia por tenant/usuario; Admin valida División y deriva Sociedad/Emisor. Seeds/onboarding no pueden borrar el alcance existente. La persistencia y filtrado de documentos sigue perteneciendo a cada servicio en CONT-07/08; Costing/Accounting no se activan por este corte. [Contrato](cont_03_sesion_alcances.md).
+
+## CONT-02 / CHG-292 — contratos y escritores de organización
+
+Admin es dueño de los formularios, APIs y tablas de Emisor/Sociedad/División, marcador de autoridad, snapshots y proyección heredada. El JSON deja de ser un escritor independiente al activar la estructura; los endpoints deprecados usan el adaptador del servicio. No hay escrituras ni FK a otros schemas. Costing y Accounting conservan sus responsabilidades futuras; sesión/scopes son CONT-03. [Detalle de contratos y límites](cont_02_administracion_organizacional.md).
+
+## Organización y dimensiones CHG-289
+
+Admin posee Emisores, Sociedades, Divisiones y sus equivalencias/importaciones; CONT-01 incorpora esta persistencia sólo en Local, conservando el JSON como autoridad operativa durante la expansión. Un Emisor puede tener varias Sociedades; cada Sociedad tiene un solo Emisor. Accounting será dueño de libros por Sociedad, con moneda base inicialmente MXN; no de libros por Emisor. Costing conserva el catálogo de Centros de costos, con alta solicitada desde Administración mediante contrato y pertenencia obligatoria a División. En CONT-01 estaban pendientes pantalla, scopes, asignaciones y afectaciones. CONT-02 implementa pantalla/API; scopes y afectaciones siguen en sus cortes. No hay escrituras cruzadas. Ver [CONT-01](cont_01_estructura_organizacional.md) y [plan vigente](plan_preparacion_contabilidad.md).
+
 ## Entrega previa de materiales CHG-264
 
-CHG-264 implementa solo en Local la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
+CHG-264 implementa en Local y QA la salida completa de materiales desde Movimientos antes de iniciar `in_progress`. Liberar conserva reservas; Almacen confirma entrega con `inventory.movement.create`; Produccion valida cantidades/costos confirmados al iniciar y no consume al iniciar/reanudar. Aplica a productos y servicios con receta, sin agregar materiales a las ordenes comerciales de servicio de Sales. Detalle y matriz API: `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md`.
 
 ## Entrega de refacciones Local CHG-263
 
@@ -52,8 +123,8 @@ Complemento recomendado:
 | `admin-service` | Administracion | Tenants, usuarios, roles, permisos, unidades de negocio, modulos activos y configuracion por tenant. |
 | `production-service` | Produccion | Productos/servicios, recetas, versiones de receta, recursos productivos, maquinaria, ordenes y avance por etapas. |
 | `inventory-service` | Almacenes | Almacenes, articulos inventariables, ubicaciones, movimientos, existencias, kardex, reservas y valuacion de materiales. |
-| `sales-service` | Ventas | Local y QA: clientes, contactos, cotizaciones, pedidos, surtido y entregas. Local CHG-255 agrega Ordenes de servicio; devoluciones permanecen planeadas. |
-| `purchasing-service` | Compras | Local y QA: proveedores, requisiciones, ordenes, recepciones comerciales y reconciliacion con Inventory; Local CHG-255 agrega servicios sin movimiento fisico. |
+| `sales-service` | Ventas | Local y QA: clientes, contactos, cotizaciones, pedidos, surtido y entregas. El corte CHG-255, ya desplegado en QA, agrega Ordenes de servicio; devoluciones permanecen planeadas. |
+| `purchasing-service` | Compras | Local y QA: proveedores, requisiciones, ordenes, recepciones comerciales y reconciliacion con Inventory; El corte CHG-255, ya desplegado en QA, agrega servicios sin movimiento fisico. |
 | `maintenance-service` | Mantenimiento | Local y QA: ordenes correctivas, asignaciones, tiempos, solicitudes internas de refacciones y estado de sus efectos. |
 | `billing-service` | Billing / SaaS | Planes comerciales, suscripciones, eventos de pago, activaciones manuales y estado de cobro. |
 | `provisioning-service` | Provisioning | Orquestacion de alta de tenant, activacion de modulos e invitacion del administrador inicial. |
@@ -613,4 +684,11 @@ CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confi
 
 ## Evidencia de servicios CHG-274
 
-CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local y QA head `20260913_0036`; release QA `e57237f`, sin aceptación UAT inferida. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+
+
+### Propietario y retención de adjuntos de servicio
+
+Production posee texto, metadatos y objetos privados de la evidencia de sus órdenes. Otros servicios no escriben esas tablas ni acceden directamente al bucket; el consumidor descarga por API autorizada. QA usa `erclave-qa-service-evidence` con acceso uniforme, prevención pública y una única regla Delete age 365, sin versiones, soft delete ni retenciones adicionales. La identidad runtime tiene en ese bucket solamente `storage.buckets.get`, `storage.objects.create`, `storage.objects.get` y `storage.objects.delete`. El backend rechaza con 503 una configuración incompatible.
+
+La retención aplica a todos los adjuntos, no solo fotografías; no elimina evidencia escrita ni orden. La API aplica el vencimiento exacto y el borrado físico usa purga periódica más lifecycle de respaldo. La configuración verificada no certifica por sí misma carga, descarga o aislamiento en QA; consultar los pendientes de smoke y UAT del release.

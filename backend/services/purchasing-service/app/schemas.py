@@ -139,7 +139,11 @@ class SupplierUpdate(BaseModel):
             if name in self.model_fields_set and getattr(self,name) is None:raise ValueError(f"{name}_cannot_be_null")
         return self
 
+class SupplierCreate(SupplierWrite):
+    code: str | None = Field(default=None, min_length=1, max_length=40)
+
 class RequisitionWrite(BaseModel):
+    division_ref_id: str | None = Field(default=None,min_length=1,max_length=40)
     code: str = Field(min_length=1, max_length=60)
     required_date: date
     priority: Literal["normal", "urgent"] = "normal"
@@ -154,13 +158,18 @@ class RequisitionWrite(BaseModel):
 
 class ReasonRequest(BaseModel): reason: str = Field(min_length=3, max_length=500)
 
+class RequisitionCreate(RequisitionWrite):
+    code: str | None = Field(default=None, min_length=1, max_length=60)
+
 class PurchaseOrderWrite(BaseModel):
+    division_ref_id: str | None = Field(default=None,min_length=1,max_length=40)
+    expected_terms_revision: int | None = Field(default=None,ge=1)
     code: str = Field(min_length=1, max_length=60)
     requisition_id: str | None = None
     direct_purchase_reason: str | None = Field(default=None, max_length=500)
     supplier_id: str
-    currency: str = Field(min_length=3, max_length=12)
-    payment_terms: str = Field(min_length=1, max_length=40)
+    currency: str | None = Field(default=None,min_length=3, max_length=12)
+    payment_terms: str | None = Field(default=None,min_length=1, max_length=40)
     lines: list[PurchaseLineInput] = Field(min_length=1)
     @model_validator(mode="after")
     def origin(self):
@@ -173,12 +182,38 @@ class ReceiptLineInput(BaseModel):
     quantity: Decimal = Field(gt=0, max_digits=18, decimal_places=6)
     warehouse_id: str | None = None
 
+class PurchaseOrderCreate(PurchaseOrderWrite):
+    code: str | None = Field(default=None, min_length=1, max_length=60)
+
 class ReceiptWrite(BaseModel):
     code: str = Field(min_length=1, max_length=60)
     purchase_order_id: str
     received_at: datetime
     supplier_document_reference: str | None = Field(default=None, max_length=120)
+    cost_exchange_rate: Decimal | None = Field(default=None, gt=0, max_digits=18, decimal_places=6)
     lines: list[ReceiptLineInput] = Field(min_length=1)
+
+    @field_validator("received_at")
+    @classmethod
+    def require_receipt_timezone(cls, value):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("purchase_receipt_timezone_required")
+        return value
+
+class ReceiptCreate(ReceiptWrite):
+    code: str | None = Field(default=None, min_length=1, max_length=60)
 
 class DataResponse(BaseModel): data: dict
 class ListResponse(BaseModel): data: list[dict]
+
+class ReferenceOption(BaseModel):
+    code: str
+    name_es: str
+    name_en: str
+
+class PurchasingReferenceDataRead(BaseModel):
+    currencies: list[ReferenceOption]
+    payment_terms: list[ReferenceOption]
+
+class PurchasingReferenceDataResponse(BaseModel):
+    data: PurchasingReferenceDataRead

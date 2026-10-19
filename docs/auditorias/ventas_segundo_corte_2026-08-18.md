@@ -1,5 +1,7 @@
 # Auditoria del segundo corte de Ventas
 
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](../contexto/ESTADO_ACTUAL.md).
+
 Fecha: 2026-08-18.
 
 Ambiente auditado: Local aislado. QA y Produccion no fueron modificados.

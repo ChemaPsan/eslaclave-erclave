@@ -162,3 +162,8 @@ export function getFirebaseAuthEmulatorUrl() {
   if (authMode !== "firebase-emulator") return "";
   return getRuntimeConfigValue("firebaseAuthEmulatorUrl") || "http://127.0.0.1:9099";
 }
+
+export function getCostingApiBaseUrl() {
+  const runtime = getRuntimeConfigValue("costingApiBaseUrl");
+  return isLocalPreviewHost() ? getSafeLocalBaseUrl(getRuntimeConfigValue("localCostingApiBaseUrl") || runtime, "http://127.0.0.1:8014") : runtime;
+}

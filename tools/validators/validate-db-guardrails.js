@@ -18,6 +18,7 @@ const tenantScopedAdminTables = [
 ];
 
 function extractCreateTableBlock(content, tableName) {
+  content = content.replace(/\r\n/g, "\n");
   const marker = `op.create_table(\n        "${tableName}"`;
   const start = content.indexOf(marker);
   if (start === -1) return "";

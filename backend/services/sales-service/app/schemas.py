@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+from erclave_common.document_presentation import DocumentPresentationSnapshot
 
 
 CustomerType = Literal["company", "individual", "government", "internal"]
@@ -261,6 +262,7 @@ class QuoteUpdateRequest(BaseModel):
     promised_delivery_date: date | None = None
     notes: str | None = Field(default=None, max_length=2000)
     lines: list[QuoteLineInput] | None = Field(default=None, min_length=1, max_length=100)
+    cost_exchange_rate: Decimal | None = Field(default=None, gt=0, max_digits=24, decimal_places=12, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def validate_update(self):
@@ -291,9 +293,16 @@ class QuoteLineRead(BaseModel):
     total: Decimal
     standard_unit_cost_snapshot: Decimal | None = None
     estimated_cost: Decimal | None = None
+    estimated_cost_snapshot: dict | None = None
 
 
 class QuoteRead(BaseModel):
+    division_ref_id: str | None = None
+    society_ref_id: str | None = None
+    organization_revision: int = 0
+    commercial_terms_snapshot: dict | None = None
+    presentation_snapshot: DocumentPresentationSnapshot | None = None
+    estimated_cost_snapshot: dict | None = None
     id: str
     code: str
     customer_id: str
@@ -396,6 +405,7 @@ class OrderLineFulfillmentInput(BaseModel):
 
 
 class SalesOrderFulfillmentRequest(BaseModel):
+    cost_exchange_rate: Decimal | None = Field(default=None, gt=0, max_digits=24, decimal_places=12)
     lines: list[OrderLineFulfillmentInput] = Field(min_length=1, max_length=100)
 
     @model_validator(mode="after")
@@ -431,6 +441,7 @@ class SalesOrderLineRead(BaseModel):
     total: Decimal
     standard_unit_cost_snapshot: Decimal | None = None
     estimated_cost: Decimal | None = None
+    estimated_cost_snapshot: dict | None = None
     fulfillment_mode: FulfillmentMode
     fulfillment_status: FulfillmentStatus
     inventory_item_id: str | None = None
@@ -441,6 +452,13 @@ class SalesOrderLineRead(BaseModel):
 
 
 class SalesOrderRead(BaseModel):
+    cost_currency: str | None = None
+    cost_exchange_rate: Decimal | None = None
+    division_ref_id: str | None = None
+    society_ref_id: str | None = None
+    quote_organization_revision: int = 0
+    commercial_terms_snapshot: dict | None = None
+    estimated_cost_snapshot: dict | None = None
     id: str
     code: str
     quote_id: str
@@ -516,6 +534,7 @@ class DeliveryCreateRequest(BaseModel):
 
 
 class DeliveryLineRead(BaseModel):
+    original_actual_cost: Decimal | None = None
     id: str
     order_line_id: str
     line_number: int
@@ -529,6 +548,11 @@ class DeliveryLineRead(BaseModel):
 
 
 class DeliveryRead(BaseModel):
+    division_ref_id: str | None = None
+    society_ref_id: str | None = None
+    cost_currency: str | None = None
+    cost_exchange_rate: Decimal | None = None
+    currency: str | None = None
     id: str
     code: str
     order_id: str
@@ -588,6 +612,8 @@ class ServiceOrderTransitionRequest(BaseModel):
 
 
 class ServiceTimeEntryCreateRequest(BaseModel):
+    cost_currency: str | None = Field(None, pattern=r"^[A-Z]{3}$")
+    cost_exchange_rate: Decimal | None = Field(None, gt=0, max_digits=24, decimal_places=12, allow_inf_nan=False)
     worker_id: str = Field(min_length=1, max_length=40)
     worked_on: date
     minutes: int = Field(gt=0, le=1440)
@@ -596,6 +622,8 @@ class ServiceTimeEntryCreateRequest(BaseModel):
 
 
 class ServiceCostEntryCreateRequest(BaseModel):
+    cost_currency: str | None = Field(None, pattern=r"^[A-Z]{3}$")
+    cost_exchange_rate: Decimal | None = Field(None, gt=0, max_digits=24, decimal_places=12, allow_inf_nan=False)
     cost_type: ServiceCostType
     description: str = Field(min_length=1, max_length=300)
     quantity: Decimal = Field(gt=0, max_digits=18, decimal_places=6)
@@ -623,6 +651,10 @@ class ServiceEvidenceCreateRequest(BaseModel):
 
 
 class ServiceTimeEntryRead(BaseModel):
+    cost_currency: str | None = None
+    document_currency: str | None = None
+    cost_exchange_rate: Decimal | None = None
+    original_total_cost: Decimal | None = None
     id: str
     worker_id: str
     worker_name: str
@@ -635,6 +667,10 @@ class ServiceTimeEntryRead(BaseModel):
 
 
 class ServiceCostEntryRead(BaseModel):
+    cost_currency: str | None = None
+    document_currency: str | None = None
+    cost_exchange_rate: Decimal | None = None
+    original_total_cost: Decimal | None = None
     id: str
     cost_type: ServiceCostType
     description: str
@@ -653,6 +689,11 @@ class ServiceEvidenceRead(BaseModel):
 
 
 class ServiceOrderRead(BaseModel):
+    currency: str | None = None
+    division_ref_id: str | None = None
+    society_ref_id: str | None = None
+    quote_organization_revision: int = 0
+    commercial_terms_snapshot: dict | None = None
     id: str
     code: str
     order_id: str

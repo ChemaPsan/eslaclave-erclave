@@ -1,22 +1,23 @@
 # ERClave - Operaciones
 
-Esta carpeta guarda guias paso a paso para configurar servicios externos, ambientes,
-credenciales, bases de datos, despliegues y tareas operativas del proyecto.
+Procedimientos y evidencia separados. Consultar [estado por ambiente](../contexto/ESTADO_ACTUAL.md) antes de ejecutar comandos; una preparación histórica no autoriza escrituras ni describe el despliegue actual.
 
-La idea es que cualquier integrante pueda repetir una configuracion sin depender de
-memoria o instrucciones sueltas en una conversacion.
+## Procedimientos mantenidos
 
-## Guias disponibles
+- [cloud_sql_postgres_qa.md](cloud_sql_postgres_qa.md)
+- [flujo_local_a_qa.md](flujo_local_a_qa.md)
+- [verificacion_local_integral.md](verificacion_local_integral.md)
 
-- `cloud_sql_postgres_qa.md`: crear y conectar una base PostgreSQL QA en Google Cloud SQL.
-- `preparacion_release_qa_20260831.md`: evidencia historica y plan del candidato QA de siete servicios.
-- `resultado_release_qa_20260901.md`: resultado, incidente controlado y verificacion del release QA de siete servicios.
-- `verificacion_local_integral.md`: PostgreSQL sin omisiones, concurrencia y regresion E2E aislada.
+## Evidencia histórica
 
-## Reglas de uso
+- [Benchmark de volumen histórico](validacion_volumen_inventario_local.md)
 
-- No guardar contrasenas, tokens, llaves privadas ni archivos `.env` reales en el repo.
-- Usar valores placeholder como `<GCP_PROJECT_ID>` o `<DB_PASSWORD>`.
-- Registrar cambios importantes en `TRAZABILIDAD.md`.
-- Preferir ambientes separados: local, QA y produccion.
-- Para ERClave, la base compartida en la nube debe iniciar como QA, no como produccion.
+- [preparacion_release_qa_20260806.md](preparacion_release_qa_20260806.md)
+- [preparacion_release_qa_20260821.md](preparacion_release_qa_20260821.md)
+- [preparacion_release_qa_20260831.md](preparacion_release_qa_20260831.md)
+- [release_qa_20260908.md](release_qa_20260908.md)
+- [release_qa_20260914.md](release_qa_20260914.md)
+- [release_qa_20260923_cont01.md](release_qa_20260923_cont01.md)
+- [resultado_release_qa_20260901.md](resultado_release_qa_20260901.md)
+
+No guardar secretos. Separar Local, QA y Producción, aplicar autorización y pipeline de [flujo Local a QA](flujo_local_a_qa.md), registrar cambios en [TRAZABILIDAD](../../TRAZABILIDAD.md). Navegación completa: [portal](../INICIO.md).

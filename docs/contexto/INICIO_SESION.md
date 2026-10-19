@@ -1,122 +1,119 @@
 # Inicio de sesion ERClave
 
-## Infraestructura de evidencia CHG-277 — promoción pendiente
+## Punto vigente · CHG-336 · ejecutar promoción autorizada
 
-Acceso Cloud resuelto con la cuenta administradora autorizada. El 2026-09-14 se creó `erclave-qa-service-evidence` en erclave/us-central1: Standard, acceso uniforme y prevención pública enforced, sin versionado, soft delete ni retención bloqueada. Se verificó vacío y una única regla Delete con age 365. GitHub `QA_EVIDENCE_BUCKET=erclave-qa-service-evidence` creada y leída de vuelta.
+Usuario confirmo estructura/monedas MXN-USD y los pasos PR/checks, merge, IAM/configuracion, build/promocion y aceptacion. Continuar [registro](../operaciones/promocion_qa_20261019.md), PR16 abierto; verificar CI del head definitivo antes de merge. Inspector gobernado qa-inspect implementado y verify864/352/1 aprobado; ejecucion remota pendiente desde digest Admin del candidato. Metadatos Google200: proyecto370105017372 y backup/PITR configurados; CostingSA creada y confirmada GET200; tres grants minimos aplicados y confirmados: roles/cloudsql.client en proyecto, roles/secretmanager.secretAccessor solo en erclave-database-url-qa y roles/iam.serviceAccountUser al deployer solo sobre CostingSA. Total4 cambios IAM incluyendo identidad; .local/chg336-costing-iam-apply.json status completed_scoped_iam_changes3. Variables GitHub Costing/tenant creadas/verificadas. Migracion limitada a lock5s/sentencia480000ms/task10min. No repetir permisos concedidos ni inferir mapping/scopes/monedas legacy. CHG-335 siguiente es historico.
 
-El usuario autorizó el rol mínimo para `erclave-production-qa@erclave.iam.gserviceaccount.com`: storage.buckets.get y storage.objects.create/get/delete, solo en ese bucket. Rol `projects/erclave/roles/erclaveQaServiceEvidence` creado en disponibilidad general con esos cuatro permisos; asignación directa exclusivamente al bucket guardada y confirmada en consola. No afirmar acceso funcional por health/ready.
+## Punto vigente · CHG-335 · plan QA listo para revisión
 
-Autorizadas las pruebas con tenants temporales UUID y limpieza exclusivamente en loopback5434/erclave_local. `npm run verify:postgres` terminó con **360 aprobadas, cero omitidas** (65.39s); validadores y compilación aprobados. Esto cierra las20 integraciones pendientes y las55 históricas omitidas en la ejecución sin DB. No demuestra UAT ni paridad autenticada QA.
+Continuar desde [acta](../operaciones/paridad_local_qa_20261018.md), [estado](ESTADO_ACTUAL.md) y [pendientes](PENDIENTES.md). Ocho runtimes preparados, frontend inmutable, configuración preservadora, readiness de esquema y guard organizacional READ ONLY. Replay entre actores y recuperaciones parciales corregidos/reprobados Local; consultar evidencia por variante, sin inventar aceptación histórica CC-19 o UI no ejecutada. El usuario eligió preparar estructura sintética QA **para revisión antes de aplicar**; [plan](../../infra/qa/synthetic-organization-plan.json) y monedas MXN/USD aún propuestas. No escribir datos QA ni IAM, PR/merge o gates sin la autorización correspondiente de erclave-qa-release. QA observado sigue e57237f. Fixtures se limpian exclusivamente por IDs propios, sin rebobinar folios ni borrar historia.
 
-PR #15 sigue en borrador; HEAD publicado dffe7642d57111b94b74d95ec62f252b017c0190, CI34816946232 aprobado. No merge, qa-candidate, qa-release, migración ni tráfico/Hosting. Base QA previamente verificada b63cdad. Pendientes: smoke de adjuntos, pipeline protegido, pruebas autenticadas QA y revisión visual Word. No se crearon datos funcionales QA.
+## Candidato para Git autorizado · CHG-334
 
-## Preparación QA y manuales CHG-275
+Publicar el candidato Local en origin/agent/chg-278-qa-release-record con las correcciones CHG-332/333 y protección de bytes de fuentes manuales mediante .gitattributes. Antes de commit comprobar sourceSha256 contra blobs del índice Git, no solo contra el workspace. No hay autorización de merge, PR ni promoción derivada de esta publicación. Reanudar después por CC20-02; consultar estado efectivo del remoto.
 
-Revisión 2026-09-14: siete manuales y guía actualizados para Local con capacidades pendientes de QA; 65 casos en guía/matriz (56 base +9 nuevos), sin aceptación inferida. Las siete APIs QA reportan b63cdad en /version. Se preparó QA_EVIDENCE_BUCKET en qa-release; bucket/IAM aún requieren aprovisionamiento autorizado y smoke. Local head `20260913_0036`; QA documentado `20260908_0034` sin cambios.
+## Reanudar en CC20-02 · CHG-333 · 2026-10-18
 
-Selección segura:29 aprobadas sin skips (23 DB históricas,3 schemas históricos,3 DB nuevas). De las55 históricas antes omitidas se verificaron26 y quedan29 bloqueadas por fixtures de otros tenants/limpieza amplia. No lanzar verify:postgres completo. Detalle, rollback, matriz API y gates en `docs/operaciones/release_qa_20260914.md`. Sin publicación de rama/PR, migración o deploy QA.
+CC20-01 pasa Local (CHG-332) y sus tres pendientes quedaron corregidos Local en [CHG-333](../operaciones/correcciones_cc20_01_20261018.md). Antes de continuar comprobar servicios efectivos y tenant demo. Admin Local se reinició con código nuevo; dos identidades de regresión quedaron sin membresía y sin cuenta Firebase, con registro global deshabilitado y auditoría conservada. Manuales sin cambio semántico/Word; trazabilidad normalizada hasta CHG-333. No hay QA ni migración nueva; Accounting apagado.
 
+## Reanudación después de CC20-01 · 2026-10-18
 
-## Evidencia de servicios CHG-274 — solo Local
+[CC20-01 pasa Local](../operaciones/cc20_01_local_20261018.md) con 21 comprobaciones integradas y UI de preferencia revocada. No repetirlo por la nota preparatoria CHG-327; continuar CC20-02 tras comprobar servicios/fixtures. Usuario controlador sin cambios; tres membresías de ensayo deshabilitadas, sin roles, y tres órdenes propias canceladas conservadas con auditoría. INC-CC20-01-DELETE-01 corregida Local y correlativos normalizados en CHG-333. El arranque detecta Node/Firebase instalados fuera de PATH y usa configuración CLI bajo .local; revalidar disponibilidad efectiva. Accounting apagado, CC-19 real y QA separados.
 
-Validación CHG-274:185 browser aprobadas;19 focalizadas (14 archivo/optimización,3 API y2 PostgreSQL), verify292 aprobadas/58 omitidas en corrida sin DB. Las2 integraciones nuevas sí se ejecutaron por separado, al igual que la de margen del corte anterior;55 generales siguen pendientes. Reversa y expiración reales en fixtures, permisos y tamaños comprobados; revisión visual390/760/1280 y tema oscuro.
+## Punto documental CHG-331 - 2026-10-14
 
-CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+Los siete Word fueron regenerados y cotejados con sus fuentes Markdown, renderizados y revisados visualmente (50 páginas). El registro contiene las huellas nuevas. Siguen siendo candidatos del alcance Local; CC-20, CC-19 real y promoción QA mantienen sus propios criterios. CHG-330 siguiente describe el bloqueo anterior ya resuelto.
 
+## Punto documental CHG-330 - 2026-10-14
 
-## Margen esperado sin tope CHG-273
+La revisión previa a Git corrigió el manual Markdown de Administración, el diagrama a head Local `20261014_0062` y la trazabilidad CHG-322. Siete fuentes de manual posteriores a sus Word mantienen `validate:documentation` fallido por paridad; no renovar hashes sin regeneración, cotejo y revisión visual. No se publicó ni desplegó el árbol. Consultar ESTADO_ACTUAL, PENDIENTES y REGISTRO de manuales antes de preparar un candidato.
 
-Validación CHG-273:14 pruebas focalizadas aprobadas, incluida PostgreSQL real;23 browser de contratos y98 feedback aprobadas; verify275 backend aprobado. En la corrida genérica se omiten56 integraciones;1 (margen) se ejecutó aparte contra DB real,55 generales previas siguen pendientes. API Local8002 reiniciada y esquema servido sin máximo100 comprobado.
+## Punto vigente CHG-329 - selector organizacional Local - 2026-10-14
 
-CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración Local `20260913_0035` aplicada; QA conserva `20260908_0034` y release b63cdad. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
+El selector de Sociedad/División de la barra superior se separó del buscador genérico que se comprimía y recortaba. En Local se observó la lista de 3 Divisiones, se cambió a la Sociedad demo USD, persistió tras recarga y Escape cerró el menú. Centro de costos sigue siendo catálogo por División, sin selección global. Sin cambios de API, DB o QA. CHG-328 siguiente conserva la preparación de datos demo; CC-19 real y CC-20 siguen abiertos.
 
+## Punto vigente CHG-328 - demo sintético Local - 2026-10-14
 
-## Continuidad Local CHG-272: formularios corregibles
+El tenant demo Local `ten_739ee59d765d5e14818674800d` tiene 2 Sociedades (MXN/USD), 3 Divisiones y 3 Centros de costos activos después de altas por APIs Admin/Costing. Los IDs y excepciones están en `.local/cc19-demo-local-manifest.json` y `.local/cc19-demo-*.csv` del workspace actual (ignorados por Git). Treinta y ocho registros legacy siguen sin contexto o División comprobable; no se hizo backfill ni se activó Accounting. CC-19 real y CC-20 integrado siguen abiertos; consultar ESTADO_ACTUAL y PENDIENTES. El punto CHG-327 siguiente describe el estado previo.
 
-Leer `docs/auditorias/formularios_feedback_2026-09-13.md` antes de tocar formularios, validaciones o payloads. Aplicar `.agents/skills/erclave-form-feedback/SKILL.md` conforme a `AGENTS.md`: conservar errores estructurados, rutas exactas e indices enviados, captura, ES/EN, foco y ARIA. No deducir campos por texto diagnostico ni afirmar cobertura total por instalar el helper.
+## Punto vigente CC-20 - CHG-327 - 2026-10-14
 
-Estado: 54 variantes registradas; 174 pruebas browser aprobadas (98 offline, incluidos 14 Backoffice; 22 MAIN y 54 regresion). `verify` y validate aprobados: 262 backend, 55 omitidas sin DB y sintaxis 79. Skill valida y diff limpio. Sin gates tecnicos pendientes de ejecucion del corte; UAT y promocion QA permanecen pendientes. Preservar CHG-271 y todos los cambios del working tree. Solo Local; no publicar, migrar ni promover por inferencia. QA continua en `b63cdad`; la evidencia UAT sigue pendiente.
+El usuario pidió aplicar CC-20 para probar después en Local. [Procedimiento y matriz de 16 casos](../operaciones/cc20_aceptacion_integrada_local.md) preparados; todos Por ejecutar. Antes de la sesión verificar árbol/DB/tenant/servicios, crear sólo fixtures sintéticos por APIs dueñas en tenant autorizado y conservar evidencia por caso. No correr la suite general que crea tenants temporales sin autorización propia. Accounting apagado, CC-19 real separado; no QA ni cierre de CC-20 por esta preparación. CHG-326 siguiente conserva el punto anterior.
 
-## Manuales y guía del tester CHG-271
+## Punto vigente CC-19 - CHG-326 - 2026-10-14
 
-CHG-271 sincroniza los siete manuales funcionales Markdown/Word y la guía de pruebas con QA `b63cdad`, revisión documental 2026-09-10. Entrega: `docs/qa/ENTREGA_TESTER.md`; generación reproducible de tablas y procedimientos mediante herramientas documentales. No cambia runtime, contratos, migraciones, datos, permisos ni despliegues. No publica documentos en GitHub.
+El usuario indico que aun no dispone de datos/equivalencias reales y pidio una guia y diagrama de configuracion contable opcional. Se preparo [CC-19 mapeos y configuracion](../arquitectura/cc19_mapeos_y_configuracion_contable.md); no se hizo backfill ni se cerro CC-19. Retomar con padron de Emisor/Sociedad/Division y equivalencias documentadas por ID. Accounting sigue planned/apagado; la operacion no depende de configurarlo. CC-21 continua implementado Local, CC-20 pendiente. El punto CHG-325 siguiente es historico respecto de esta preparacion.
 
-Incidencia identificada por revisión de código: la bandeja para solicitar sobrantes de Mantenimiento busca `.submodule-screen`, ausente en su render; confirmar/corregir acceso por el agente técnico de Mantenimiento y QA. No se declara disponible el recorrido completo desde pantalla. Compra directa soportada por API pero no expuesta en alta de órdenes de la UI. Ambos límites constan en manuales/guía. UAT autenticada continúa pendiente del tester.
+## Reanudacion vigente - CC-21 - CHG-325 - 2026-10-14
 
+CC-21 implementado solo en Local: costo confirmado de Production por Division y moneda base de Sociedad, vista previa de Sales con tasa explicita, snapshot final al aprobar cotizacion y herencia al pedido. Si falta costo o tasa confiable, la aprobacion continua con estimado y margen nulos. Migracion `20261014_0062` up/down/up en Local autorizado; no QA ni Accounting. Consultar [contrato](../arquitectura/cont_08_costo_estimado_cotizaciones.md), [control](CONTROL_CONTABLE.md), [estado](ESTADO_ACTUAL.md) y [trazabilidad](../../TRAZABILIDAD.md). Siguientes trabajos: datos reales CC-19 y aceptacion integrada CC-20. La revision CHG-324 siguiente es historica.
 
-## Estado vigente tras release QA CHG-270
+## Revision CC-21 - CHG-324 - 2026-10-14
 
-CHG-270 cierra el release QA solicitado y la publicación para otra computadora. PR #14 fusionado; código QA `b63cdad2fbac423c24460e55582ccfc0003e9924` en siete servicios al 100% y Hosting verificado contra su artefacto. Alembic QA `20260908_0034`; candidato `34389669031`, release `34390476667`. Handoff vigente: `docs/contexto/REANUDACION_CHG269.md`. Evidencia, digests, revisiones y rollback: `docs/operaciones/release_qa_20260908.md`. UAT autenticada permanece pendiente para el tester; no se copiaron datos Local ni se modificó Producción.
-
-Las notas de preparación y cortes anteriores que siguen son evidencia histórica; no deben disparar un release duplicado.
-
-
-## Promoción QA en preparación CHG-269
-
-CHG-269 prepara la promoción solicitada de todos los cambios Local CHG-255–268 a QA. Base pública verificada: a119ddf en las siete APIs; destino Alembic 20260908_0034 mediante pipeline protegido. Añade dependencia Inventory→Maintenance y rollback compensatorio de tráfico con evidencia. Ejecución y pendientes en `docs/operaciones/release_qa_20260908.md`. QA no se declara actualizado hasta verificar el release.
+La brecha de costo estimado de cotizaciones se formalizo como CC-21. Revision documental completa; implementacion pendiente. `standard_cost` global de Production carece de moneda/Sociedad y Sales lo compara con el precio de cotizacion y copia al pedido. El usuario confirmo aprobar con costo/margen estimados nulos si faltan costo o tasa confiables. Consultar [revision](../arquitectura/cont_08_costo_estimado_cotizaciones.md), [control](CONTROL_CONTABLE.md) y [pendientes](PENDIENTES.md). No hubo cambio de runtime ni ambiente CHG-324; CC-18 sigue Local, CC-19/20 pendientes.
 
 
-## Continuidad vigente CHG-268
+## Reanudacion vigente - CHG-323 - 2026-10-14
 
-CHG-268 recupera reservas/cancelaciones de refacciones interrumpidas bajo locks por tenant/orden/solicitud y conserva claves Inventory. Corrige serialización Decimal; Mantenimiento ofrece reintento ES/EN con permiso propio, Almacén confirma la entrega por separado. MTO-000001 recuperada en Local: una reserva de 1 H87, existencia física 2, disponible 1, sin salida ni duplicados. Sin migraciones ni permisos nuevos. Detalle: `docs/auditorias/recuperacion_refacciones_2026-09-08.md`.
+CC-18 implementado solo en Local para folios faltantes de RH, Inventory, Purchasing y Maintenance. Usuario confirmo codigo estable derivado del origen para movimientos automaticos Inventory cuando `inventory.movement` esta en modo manual. Migracion `20261014_0061` up/down/up Local; no QA ni Accounting. Continuar con revision de costo estimado, mapeo de datos CC-19 y aceptacion CC-20. Consultar CONTROL_CONTABLE, ESTADO_ACTUAL y TRAZABILIDAD. El apartado CHG-322 siguiente es historico.
+
+## Reanudacion anterior - CHG-322 - 2026-10-14
+
+El usuario reanudo el trabajo con CC-17 y confirmo congelar presentacion al aprobar la cotizacion y al liberar la orden de produccion. El corte esta implementado Local con migracion `20261014_0060`; consultar [CONTROL_CONTABLE](CONTROL_CONTABLE.md), [ESTADO_ACTUAL](ESTADO_ACTUAL.md) y [plantillas](../arquitectura/plantillas_documentales.md). La pausa CHG-321 siguiente es historica. Proximos trabajos: CC-18, costo estimado, datos CC-19 y aceptacion CC-20. No hubo promocion QA ni activacion Accounting.
+
+## Reanudación vigente · CHG-320 · 2026-10-12
+
+**Pausa solicitada · CHG-321 · 2026-10-12.** El usuario dejó expresamente pendiente el trabajo posterior a CC-16. No hay un corte CC-17/18/19/20 en ejecución ni se inició la revisión del costo estimado. Al retomar, comenzar por [PENDIENTES](PENDIENTES.md) y [CONTROL_CONTABLE](CONTROL_CONTABLE.md), comprobar `git status`, HEAD, head Alembic, servicios y ambiente efectivos. El árbol compartido permanece sin commit; no repetir la migración Local0059 ni sus helpers de ensayo. La siguiente implementación propuesta es CC-17, después CC-18 y la revisión monetaria de cotizaciones; CC-19 requiere datos y mapeo reales explícitos, y CC-20 aceptación integrada con evidencia por ambiente. Esta secuencia no autoriza QA, migración de datos reales ni Accounting.
+
+**Evidencia conservada del último corte:** CHG-320 CC-16 implementado Local, Maintenance 50 y RH/Production 123 pruebas con PostgreSQL/API sin omisiones, navegador 271 con APIs interceptadas, y `npm run verify` 738 aprobadas/233 omitidas/1 advertencia en la corrida sin base configurada. Migración `20261012_0059` up/down/up sólo Local. [Trazabilidad](../../TRAZABILIDAD.md) y [contrato CC-16](../arquitectura/cont_08_mantenimiento_contexto.md). Quedan además la revisión visual del Word de Mantenimiento y la aceptación transversal CC-20; la paridad estructural del Word no sustituye esa revisión.
+
+CC-16 implementado Local: [Mantenimiento](../arquitectura/cont_08_mantenimiento_contexto.md) conserva contexto fijo de orden, técnicos y tarifas RH, costo de tiempos, alcance e idempotencia; preserva CC-14 y CC-15 [Purchasing](../arquitectura/cont_08_compras_contexto.md). Head verificado `20261012_0059`; migración aditiva up/down/up sin backfill en loopback5434 y tenant exclusivo. Pruebas PostgreSQL/API y navegador interceptado separadas de CC-20. No se promovió a QA ni se activó Accounting. Revalidar procesos al continuar.
+
+Siguiente desarrollo CC-17/18 y revisión de costo estimado. Conservar CC-10/11/12/14/15/16 implementados. Datos CC-19 y aceptación transversal CC-20 siguen abiertos. Árbol preservado sin commit. Los apartados CHG-315/316 siguientes conservan historia de la pausa anterior. No repetir .local/chg319-migrate.py que esperaba0057.
+
+[Portal documental](../INICIO.md) · [índice clasificado](../INDICE_DOCUMENTAL.md). CHG-311: antes de usar una fuente comprobar vigencia y ambiente; las exportaciones Word se rigen por REGISTRO.
+
+## Punto de pausa anterior · 2026-10-08
+
+Este es el punto de pausa de CHG-315/316. Último corte **CHG-315 implementado en Local**, conservando CHG-313/314, posterior a conciliación documental CHG-311; política monetaria CHG-309. Consultar [estado por ambiente](ESTADO_ACTUAL.md), [pendientes](PENDIENTES.md), [decisiones](DECISIONES.md) y [control contable por submódulo](CONTROL_CONTABLE.md). Las notas acumuladas se conservan en el [archivo histórico](historico/INICIO_SESION_PRE_CHG311.md); no son instrucciones acumulativas.
+
+**Punto de pausa:** CC-12 implementado y recorrido HTTP Local real aprobado. Preservar conversión única, origen autenticado, recuperación, recepción y entrega/costo de [fabricación comercial](../arquitectura/cont_08_fabricacion_contexto.md). En esa pausa quedaba continuar CC-14/15/16; no reimplementar CC-10/11/12 ni el ciclo comercial. El agente técnico de Contabilidad custodia la matriz.
 
 
-## Continuacion CHG-264
+**Cierre antes de reiniciar:** CHG-315 registrado; verify aprobado (596 passed, 196 skipped por suite sin DB, 1 warning), 310 pruebas PostgreSQL/API focales aprobadas y HTTP completo con limpieza verificada. Navegador completo231 y focal final16 aprobados; revisión visual de Word pendiente por LibreOffice ausente. Archivos guardados sin commit; no hay migración ni ensayo en curso. Reanudar por este documento y comprobar procesos antes del arranque canónico.
 
-Materiales de Produccion se entregan desde Movimientos antes del inicio. Leer `docs/auditorias/materiales_produccion_movimientos_2026-09-08.md` y ESTADO_ACTUAL. Cabeza Local `20260908_0034`; preservar CHG-262/263, sin promover por inferencia.
+**Decisión resuelta:** costos y tarifas de materiales, máquinas y mano de obra en moneda base de Sociedad. Otra moneda documental conserva original, convertido y tipo de cambio explícito; misma moneda usa 1. No reinterpretar historia ni preguntar nuevamente la política. Accounting permanece opcional y apagado para esta preparación. Las asignaciones de datos reales siguen pendientes.
 
-> Continuacion Local CHG-263: la entrega de refacciones se confirma desde Movimientos de Almacen. Consultar `docs/auditorias/refacciones_movimientos_2026-09-07.md`; se conserva el working tree previo de CHG-262 y QA no cambia.
+## Pausa y cierre de la primera fase · CHG-316
 
-Este documento define el orden obligatorio para recuperar contexto antes de analizar o modificar el proyecto.
+El usuario pausa para reiniciar su computadora. **La fase de preparación y separación operativa con Accounting apagado sigue abierta; CC-12 sí está cerrado en Local.** No interpretar el cierre de fabricación como cierre de toda Contabilidad ni como autorización para habilitarla.
 
-> Handoff activo: leer `docs/contexto/REANUDACION_CHG261.md`. El arbol quedo consolidado en commits locales hasta CHG-260; distinguir siempre ese estado Local del release QA inmutable y no promover, migrar ni desplegar por inferencia.
+- **Implementación que estaba pendiente en CHG-316:** CC-14 (ahora implementado CHG-317); CC-15 Compras; CC-16 Mantenimiento; CC-17 identidad/configuración/impresión histórica; CC-18 consumidores restantes de folios. Conservar lo ya implementado en cada bloque y consultar el detalle en [CONTROL_CONTABLE](CONTROL_CONTABLE.md).
+- **Revisión funcional pendiente:** costo estimado de cotización al extender la política monetaria; no darla por resuelta por cerrar fabricación o Servicios.
+- **Datos y aceptación pendientes:** CC-19 estructura/asignaciones e históricos; CC-20 recorridos integrados, permisos, cruces de alcance, reintentos, monedas y preparación de QA. Revisión visual de Word pendiente según su registro.
+- **Siguiente trabajo al volver:** comprobar contexto/árbol local y arranque aislado; revisar conjuntamente CC-14/15/16 y ejecutar el siguiente corte vertical con el dueño correspondiente. No repetir CC-10/11/12 ni sus migraciones de ensayo.
 
-> Continuacion Local CHG-262: leer `docs/auditorias/frontend_backend_2026-09-07.md` y `ESTADO_ACTUAL.md`. Hay correcciones posteriores al handoff CHG-261 en el working tree; el estado limpio de aquel handoff es historico.
+Criterios de cierre: completar las brechas funcionales anteriores permite declarar cerrada la implementación de esta fase; completar datos y aceptación permite declarar su cierre integral. El libro, eventos/integración contable futura y activación de Accounting conservan su propio alcance posterior en [CONTROL_CONTABLE](CONTROL_CONTABLE.md); esta pausa no los habilita.
 
-## Secuencia
+## Secuencia de trabajo
 
-1. Ejecutar `npm.cmd run session:context` desde la raiz.
-2. Leer completamente `AGENTS.md` y las secciones aplicables de `AGENTES.md`.
-3. Leer `docs/contexto/ESTADO_ACTUAL.md`, `DECISIONES.md`, `TENANTS.md`, `PENDIENTES.md` y cualquier handoff activo enlazado arriba.
-4. Leer `docs/arquitectura/gobierno_documentacion_viva.md`, el documento de `modulos/` correspondiente y las fuentes de arquitectura que este referencie.
-5. Revisar `git status --short`. Todo cambio previo se considera propiedad del usuario hasta demostrar lo contrario.
-6. Identificar microfrontend, servicio, schema, contrato, permisos y agentes especialistas afectados.
-7. Registrar `Agentes consultados`; para Local→QA usar Arquitectura, Seguridad y QA/Release como minimo.
-8. Confirmar ambiente y `tenant_id` antes de cualquier escritura.
-9. Definir criterios de aceptacion y blast radius antes de implementar.
+1. Ejecutar `npm.cmd run session:context`; si Node/npm no están disponibles, `python tools/context_brief.py` y registrar la limitación.
+2. Leer [AGENTS.md](../../AGENTS.md), los roles pertinentes de [AGENTES.md](../../AGENTES.md), las fuentes de contexto enlazadas arriba y [TENANTS.md](TENANTS.md).
+3. Aplicar [gobierno_documentacion_viva.md](../arquitectura/gobierno_documentacion_viva.md), la ficha de [módulo](../../modulos/README.md) y sus contratos. Consultar historia sólo para el corte necesario, contrastándola con fuentes vivas.
+4. Revisar `git status --short`: preservar cambios anteriores. HEAD/base y procesos se vuelven a comprobar, no se heredan de una nota.
+5. Identificar dueño del dato, servicio, microfrontend, contrato, permisos y dependencias. Registrar `Agentes consultados`, cobertura real y criterios de aceptación.
+6. Confirmar ambiente y `tenant_id` antes de escribir datos. Local aislado es PostgreSQL loopback `127.0.0.1:5434/erclave_local`, Firebase Emulator y APIs locales. Único tenant de ensayo autorizado: `ten_739ee59d765d5e14818674800d`.
+
+## Reanudación técnica de Producción
+
+Leer [preparación Production CHG-308](../arquitectura/cont_08_produccion_contexto.md), [contexto e intento durable](../../backend/services/production-service/app/order_context.py) y [migración 0050](../../backend/alembic/versions/20261007_0050_production_context.py). CHG-315 habilita fabricación dimensionada con prueba Sales y enlace durable; consultar el contrato de fabricación enlazado arriba.
+
+El head Local documentado tras CHG-320 es `20261012_0059`; `20261012_0058` corresponde a CHG-319; `20261012_0057` corresponde a CHG-317; `20261008_0056` corresponde a CHG-315. Los ciclos0054/55 y0056 son evidencia previa sin backfill; no repetir el helper chg317-migrate.py que esperaba0056. Comprobar servicios y base después de un reinicio mediante el [arranque Local aislado](../../backend/scripts/start_local.ps1) y las [fronteras de ambientes](../arquitectura/fronteras_ambientes_local_qa_produccion.md). No asumir PIDs/servicios activos. Los helpers `.local/chg308-*.py` son evidencia de la sesión anterior, no un arranque completo; no repetir el helper de migración CHG-308 que esperaba 0049. No repetir ningún helper .local/chg315-migrate*.py: fue una prueba de esta sesión y no es un arranque. No sustituir Local apagado por recursos QA. CHG-312: el usuario autorizó posteriormente ExecutionPolicy Bypass sólo para el proceso de start_local.ps1; arranque canónico y smoke HTTP de lectura aprobados (chg312-start-local.log, chg312-http-smoke.log). Ocho APIs, frontend y Emulator comprobados; seeds locales de permisos/demo ejecutados. En CHG-312 no había Divisiones autorizadas. Smoke CHG-314 después de recargar Production/Inventory/HR/Sales: una División autorizada, consultas200 sin recursos elegibles y contratos nuevos presentes; CHG-315 añadió y aprobó el ciclo HTTP real con recursos sintéticos, recepción y entrega (chg315-http.log), sin conservar fixtures. No cambia la política permanente ni autoriza QA/Producción.
+
+Conservar la evidencia CHG-308 en [trazabilidad](../../TRAZABILIDAD.md): 231 pruebas focales; verify 532 aprobadas/152 omitidas; migración y smoke Local registrados. Son resultados de ese corte, no pruebas nuevas de esta sesión ni UAT de fabricación.
 
 ## Cierre obligatorio
 
-Antes de declarar terminado un cambio:
+Aplicar la matriz de gobierno, actualizar las fuentes realmente afectadas y registrar el corte en [TRAZABILIDAD.md](../../TRAZABILIDAD.md). Ejecutar `npm.cmd run validate:documentation` y `npm.cmd run verify`; cualquier check omitido o fallido se declara. Si cambia feedback, ejecutar `validate:error-feedback` y verificar ES/EN, severidad y restauración del estado rechazado. La entrega distingue APIs afectadas, pruebas nuevas de evidencia histórica, migraciones, seeds, datos y despliegues.
 
-1. aplicar la matriz de `gobierno_documentacion_viva.md` y actualizar OpenAPI, consumidores, pruebas, documentacion y agentes cuando aplique;
-2. ejecutar `npm.cmd run validate:documentation` y `npm.cmd run verify`;
-3. actualizar `ESTADO_ACTUAL.md` y `PENDIENTES.md` si el estado real cambio;
-4. registrar el corte en `TRAZABILIDAD.md`;
-5. indicar expresamente si hubo migraciones, seeds, despliegues o escrituras externas.
-6. si se modificaron errores, warnings, estados o copy operativo, ejecutar `npm.cmd run validate:error-feedback` y confirmar paridad ES/EN, severidad y restauracion del estado rechazado.
-
-La conversacion es contexto temporal. Estos archivos son la memoria persistente del proyecto.
-
-
-## Reanudación CHG-265
-
-CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
-
-Preservar CHG-262/263/264 y CHG-265 sin commit. Consultar el informe para pruebas, migraciones y APIs. No promover a QA por inferencia.
-
-Validación CHG-265: 257 backend sin DB (51 omitidas), 19 PostgreSQL seleccionadas, 40 navegador; smokes HTTP y migración reversible vacía aprobados. Consulta informe para alcance y pendientes.
-
-
-## Ajustes UAT Local CHG-266
-
-Continuar con los ajustes UAT de Proveedores, Requisiciones, Órdenes y Cotizaciones. El Owner Local ya dispone de emitir/aprobar/vencer/cancelar cotizaciones. Recargar frontend y sesión para verlos. Preservar todos los cambios CHG-262–265. Pendiente aceptación manual del usuario antes de cualquier preparación/promoción QA.
-
-Evidencia y APIs: `docs/auditorias/uat_responsive_compras_ventas_2026-09-08.md`.
-
-
-## Solicitudes compactas Local CHG-267
-
-Preservar CHG-262–266 y la mejora de Movimientos CHG-267: desplegable cerrado al entrar, aviso de pendientes y conservación de apertura al actualizar. Sigue pendiente aceptación manual, sin autorización de promoción QA.
-
-Evidencia y APIs: `docs/auditorias/almacen_solicitudes_desplegables_2026-09-08.md`.
+Una tarea documental no autoriza activar Accounting, levantar QA, promover, crear PR ni completar datos reales por inferencia. Los [handoffs históricos](historico/README.md) conservan memoria, pero este archivo dirige la sesión actual.

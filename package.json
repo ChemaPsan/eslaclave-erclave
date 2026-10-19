@@ -33,11 +33,13 @@
     "test:e2e:local:headed": "playwright test --headed",
     "traceability:draft": "node tools/traceability-draft.js",
     "session:context": "node tools/session-context.js",
+    "session:brief": "python tools/context_brief.py",
     "build:frontend:qa": "node tools/build-qa-frontend.js",
     "qa:document": "python tools/generate-qa-document.py",
     "smoke:maintenance:local": "backend\\.venv\\Scripts\\python.exe backend\\scripts\\smoke_maintenance_local.py",
     "validate:form-feedback": "node tools/validators/validate-form-feedback.js",
-    "test:form-feedback": "playwright test --config playwright.form-feedback.config.js"
+    "test:form-feedback": "playwright test --config playwright.form-feedback.config.js",
+    "docs:index": "node tools/documentation-map.js --write"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0"

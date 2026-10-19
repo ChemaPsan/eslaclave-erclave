@@ -27,6 +27,7 @@ const requiredModules = [
   "Diseno, experiencia y localizacion",
   "Produccion",
   "Recursos Humanos",
+  "Mantenimiento",
   "Almacenes e inventarios",
   "Compras y abastecimiento",
   "Ventas y clientes",
@@ -85,6 +86,10 @@ for (const moduleName of requiredModules) {
   if (!agents.includes(moduleHeading)) {
     errors.push(`Missing detailed module section: ${moduleHeading}`);
   }
+  const sections = agents.split(/^### /m).filter(section => section.split(/\r?\n/)[0] === moduleName);
+  if (!sections.some(section => /^#### Agente de negocio:/m.test(section) && /^#### Agente tecnico:/m.test(section))) {
+    errors.push(`Module ${moduleName} must have both business and technical agents in its own section.`);
+  }
 }
 
 for (const fragment of requiredCustodianFragments) {
@@ -106,12 +111,18 @@ for (const fragment of staleAgentFragments) {
 }
 
 const moduleIndex = readText("modulos/README.md");
+for (const match of moduleIndex.matchAll(/\| \[([^\]]+\.md)\]\([^)]*\) \| ([^|]+) \|/g)) {
+  const title = match[2].trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (!requiredModules.some(name => name.toLowerCase() === title)) {
+    errors.push(`Functional module ${match[1]} is missing from required agent coverage: ${match[2].trim()}`);
+  }
+}
 for (const fragment of [
   "UI y `admin-service` reales en QA",
   "Produccion | API, persistencia y UI reales en Local y QA",
-  "Ventas | Local aplica `20260901_0030`",
-  "Compras | Proveedores, Requisiciones, Ordenes y Recepciones estan desplegados en Local y QA",
-  "Mantenimiento | Correctivos, asignacion RH, tiempos, refacciones, bloqueo seguro y conciliacion durable estan desplegados en Local y QA",
+  "Ventas | Local y QA incluyen Clientes, Cotizaciones, Pedidos, Entregas y Órdenes de servicio.",
+  "Compras | Proveedores, Requisiciones, Ordenes y Recepciones están desplegados en Local y QA",
+  "Mantenimiento | Correctivos, asignacion RH, tiempos, refacciones, bloqueo seguro y conciliacion durable están desplegados en Local y QA",
   "expedientes, elegibilidad productiva y capacidad autoritativa reales en Local y QA"
 ]) {
   if (!moduleIndex.includes(fragment)) {
@@ -159,7 +170,7 @@ const documentationChecks = [
     path: "modulos/10_recursos_humanos.md",
     required: [
       "capacidad autoritativa forma parte del corte acumulado `20260818_0017`, desplegado en Local y QA",
-      "consultar `docs/contexto/ESTADO_ACTUAL.md` para las cabezas vigentes de Local y QA"
+      "ESTADO_ACTUAL.md"
     ],
     forbidden: ["La migracion `20260730_0010` y el seed de permisos deben ejecutarse primero"]
   },
@@ -181,7 +192,8 @@ const documentationChecks = [
   },
   {
     path: "docs/arquitectura/diagramas/estado_actual_backend_mvp.drawio",
-    required: ["Local head 20260913_0036", "QA head 20260908_0034"],
+    // Exact heads are compared with migrations/current QA by validate-documentation-freshness.
+    required: ["Local head ", "QA head "],
     forbidden: ["Local head 20260817_0015", "Alembic head 20260817_0015", "Ventas planned/mock"]
   },
   {

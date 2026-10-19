@@ -1,5 +1,7 @@
 # Auditoria de coherencia frontend/backend — CHG-262
 
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](../contexto/ESTADO_ACTUAL.md).
+
 Fecha de inicio: 2026-09-07. Ambiente: **Local aislado**. Base de codigo revisada: `735312b`, posterior a CHG-261. Los cambios de esta auditoria permanecen en el working tree; no estan publicados en QA.
 
 ## Alcance y criterio

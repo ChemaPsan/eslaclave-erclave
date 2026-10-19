@@ -1,5 +1,7 @@
 # ERClave — Documento Base del Proyecto
 
+> Referencia de diseño y alcance: no demuestra implementación ni despliegue. Consultar [estado vigente](docs/contexto/ESTADO_ACTUAL.md).
+
 ## 1. Contexto general
 
 **ERClave** será un nuevo proyecto bajo la marca paraguas **EsLaClave**, inspirado en la lógica modular de un ERP, pero pensado para iniciar de forma más simple, flexible y escalable.

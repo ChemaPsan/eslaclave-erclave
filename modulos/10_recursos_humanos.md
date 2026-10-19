@@ -1,14 +1,47 @@
 # ERClave — Recursos Humanos
 
-## Feedback de formularios Local CHG-272
+## Vigencia y relaciones · CHG-313
 
-Alta de trabajador verifica RFC con mensaje junto al campo, foco y datos conservados. Los campos inmutables de edicion permanecen inmutables; su rechazo requiere resumen y no habilitarlos. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: `.agents/skills/erclave-form-feedback/SKILL.md`. Evidencia: `docs/auditorias/formularios_feedback_2026-09-13.md`.
+RH base desplegado en QA. Sólo Local: puestos/trabajadores por División y tarifa explícita de asignación implementados. CC-10 agrega confirmación de moneda de Sociedad y consulta de capacidad nominal/elegibilidad por División. Los mismos trabajadores conservan IDs compartidos: no sumar capacidad entre Divisiones. CHG-313 conecta fabricación manual: Production compromete personas globalmente por día y revalida puesto/elegibilidad al iniciar o reanudar. RH sigue dueño del maestro; no inferir nómina.
 
-Solo Local, sin cambio de contratos ni reglas de negocio y sin deploy. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del modulo. QA/manuales CHG-271 se mantienen en su release vigente.
+Estado por ambiente: [ESTADO_ACTUAL](../docs/contexto/ESTADO_ACTUAL.md). Brechas y cierre: [CONTROL_CONTABLE](../docs/contexto/CONTROL_CONTABLE.md). Relación operativa: [01_produccion](01_produccion.md). Contrato/regla: [cont_07_hr_asignaciones](../docs/arquitectura/cont_07_hr_asignaciones.md). Navegación: [índice de módulos](README.md).
+
+Las referencias CHG conservan procedencia; no se suman como pendientes vigentes. La historia de implementación está en [TRAZABILIDAD](../TRAZABILIDAD.md). Costos y tarifas deben usar moneda base de Sociedad (CHG-309); su aplicación se verifica por flujo en el control, sin reinterpretar historia. Centro requerido sólo donde el flujo de imputación esté habilitado.
+
+## Tarifa confirmada y capacidad nominal sólo Local
+
+[Contrato CC-10](../docs/arquitectura/cont_08_tarifas_capacidad.md): guardar/reactivar una asignación de puesto activa exige confirmar explícitamente Costo por hora y moneda base de Sociedad, derivada de la División. Casilla no preseleccionada, cero válido y hasta seis decimales. Sin confirmación histórica no se infiere moneda ni se ofrece la tarifa como costo vigente; desactivar conserva historia.
+
+La consulta desde Asignación por División devuelve trabajadores elegibles únicos y capacidad nominal compartida (`commitments_included=false`). No descuenta compromisos de Production, no reserva personal ni multiplica disponibilidad por asignarlo a varias Divisiones. El consumidor manual de Production combina identidad global y ocupación real desde CHG-313; bloquea solapamientos con historia sin asignación individual. El lookup productivo permite validar/liberar/iniciar/reanudar con permisos puntuales y propósito production. La consulta nominal no reserva personal; QA mantiene el corte previo.
+
+## Actualización CHG-305 · 2026-10-05
+
+Proyección minimizada de trabajadores por División admite permisos puntuales de servicios Sales; asignación y captura de tiempos buscan recursos elegibles, sin escribir RH ni heredar tarifas.
+
+
+## Actualización CHG-304 · 2026-10-05
+
+Lookup de trabajadores por División admite sales.order.create para conversión, con Sales y HR habilitados; respuesta minimizada sin cambios.
+
+
+## Actualización CHG-303 · 2026-10-05
+
+Lookup division-workers admite resource_id exacto para validación de cotización; permisos del consumidor Sales y módulo habilitado. Sin cambios a nómina ni datos personales expuestos.
+
+
+## Asignaciones por División — CHG-300 Local
+
+[Contrato y límites](../docs/arquitectura/cont_07_hr_asignaciones.md): puestos con tarifa de costeo explícita/centro opcional y trabajadores con elegibilidad confirmada por División, sin duplicar maestros. Cambio de puesto exige reconfirmación. No activa nómina/Accounting, no modifica costos ni capacidad de órdenes históricas y todavía no reemplaza las consultas operativas por tenant.
+
+## Feedback de formularios — Local y QA
+
+Alta de trabajador verifica RFC con mensaje junto al campo, foco y datos conservados. Los campos inmutables de edicion permanecen inmutables; su rechazo requiere resumen y no habilitarlos. Se aplica el helper transversal con ES/EN, foco, ARIA y rutas estructuradas. Skill obligatoria: [.agents/skills/erclave-form-feedback/SKILL.md](../.agents/skills/erclave-form-feedback/SKILL.md). Evidencia: [docs/auditorias/formularios_feedback_2026-09-13.md](../docs/auditorias/formularios_feedback_2026-09-13.md).
+
+Feedback desplegado en Local y QA mediante el release `e57237f`. Las pruebas 422 de pantalla usan respuestas simuladas; no sustituyen UAT ni cobertura exhaustiva del módulo. Estado y pendientes autenticados: [docs/contexto/ESTADO_ACTUAL.md](../docs/contexto/ESTADO_ACTUAL.md) y [docs/operaciones/release_qa_20260914.md](../docs/operaciones/release_qa_20260914.md).
 
 ## Coherencia de formularios Local (CHG-262)
 
-Consultar Areas o Puestos no requiere leer expedientes de trabajadores. Areas y puestos nuevos muestran el estatus activo que admite el alta; la edicion conserva su cambio de estatus. Fecha de nacimiento es capturable en el alta y solo lectura al editar, conforme a WorkerUpdate. Evidencia: `docs/auditorias/frontend_backend_2026-09-07.md`.
+Consultar Areas o Puestos no requiere leer expedientes de trabajadores. Areas y puestos nuevos muestran el estatus activo que admite el alta; la edicion conserva su cambio de estatus. Fecha de nacimiento es capturable en el alta y solo lectura al editar, conforme a WorkerUpdate. Evidencia: [docs/auditorias/frontend_backend_2026-09-07.md](../docs/auditorias/frontend_backend_2026-09-07.md).
 
 ## Alcance MVP
 
@@ -18,7 +51,7 @@ Cada puesto registra nombre operativo, nombre visible en receta, minutos disponi
 
 Areas y puestos son generales para toda la organizacion: Administracion, Ventas, Almacenes o cualquier otra funcion puede existir en RH. Crear un puesto nuevo deja **Interviene en produccion** desmarcado; solo debe activarse cuando ese puesto participa realmente en recetas y ordenes.
 
-El propietario funcional y técnico es `hr-service`, con esquema PostgreSQL `hr`, contrato `contracts/api/hr-service.openapi.yaml` y microfrontend `recursos-humanos`. El módulo se contrata por tenant mediante el entitlement `hr`; si está inactivo o suspendido, el backend rechaza las operaciones aunque la ruta se invoque directamente.
+El propietario funcional y técnico es `hr-service`, con esquema PostgreSQL `hr`, contrato [contracts/api/hr-service.openapi.yaml](../contracts/api/hr-service.openapi.yaml) y microfrontend `recursos-humanos`. El módulo se contrata por tenant mediante el entitlement `hr`; si está inactivo o suspendido, el backend rechaza las operaciones aunque la ruta se invoque directamente.
 
 Los permisos asignables son `hr.area.read/create/update` y `hr.position.read/create/update`. Firebase autentica la identidad, pero `admin-service` conserva la fuente de verdad de membresía, estado del tenant, entitlement y permisos efectivos.
 
@@ -52,7 +85,7 @@ El seed de permisos reconcilia de forma idempotente los contratos: conserva los 
 
 ## Operación segura
 
-El schema base de RH nacio en `20260730_0010`; expedientes de trabajadores se agregaron en `20260817_0014` y la capacidad autoritativa forma parte del corte acumulado `20260818_0017`, desplegado en Local y QA. Siempre se ejecuta la cadena Alembic completa hasta la cabeza autorizada del ambiente, nunca una revision aislada como procedimiento operativo. Ninguna migracion, seed, activacion o dato de prueba se aplica a QA sin autorizacion explicita; consultar `docs/contexto/ESTADO_ACTUAL.md` para las cabezas vigentes de Local y QA.
+El schema base de RH nacio en `20260730_0010`; expedientes de trabajadores se agregaron en `20260817_0014` y la capacidad autoritativa forma parte del corte acumulado `20260818_0017`, desplegado en Local y QA. Siempre se ejecuta la cadena Alembic completa hasta la cabeza autorizada del ambiente, nunca una revision aislada como procedimiento operativo. Ninguna migracion, seed, activacion o dato de prueba se aplica a QA sin autorizacion explicita; consultar [docs/contexto/ESTADO_ACTUAL.md](../docs/contexto/ESTADO_ACTUAL.md) para las cabezas vigentes de Local y QA.
 
 ## CHG-209: seleccion escalable
 
@@ -70,9 +103,12 @@ El schema base de RH nacio en `20260730_0010`; expedientes de trabajadores se ag
 
 Consultas de elegibilidad admiten los permisos puntuales de inicio/reanudación de Producción, Mantenimiento y servicios comerciales. Se revalida el trabajador al ejecutar/reanudar; un snapshot histórico no sustituye elegibilidad actual. RH conserva propiedad de personas/puestos/áreas y no escribe órdenes de otros schemas.
 
-CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: `docs/auditorias/flujos_almacen_mensajes_2026-09-08.md`.
+CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confirma bienes en Movimientos y el solicitante original acepta servicios comprados (comprador si la compra fue directa). Ventas prepara entregas y Almacén registra la salida. Las transferencias quedan en tránsito hasta recepción en destino, con recepción parcial y retorno confirmado en origen. Producción y Mantenimiento solicitan devolución de sobrantes de órdenes terminadas/canceladas; Almacén recibe y cada propietario registra su ajuste de costo. Se preserva la salida original. Inicio/reanudación revalida responsables RH y bloqueos de máquinas. Los errores ES/EN indican requisito, responsable y pantalla. Detalle contractual y evidencia: [docs/auditorias/flujos_almacen_mensajes_2026-09-08.md](../docs/auditorias/flujos_almacen_mensajes_2026-09-08.md).
 
 
 ## Disponibilidad QA CHG-270
 
-Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: `docs/operaciones/release_qa_20260908.md`.
+Los cambios Local documentados hasta CHG-268 fueron promovidos en el release `b63cdad` a QA el 9 de septiembre de 2026. Salud/readiness/versión y rechazo de accesos no autenticados comprobados; aceptación funcional autenticada pendiente del tester. Datos QA existentes preservados. Evidencia: [docs/operaciones/release_qa_20260908.md](../docs/operaciones/release_qa_20260908.md).
+# CC-18 · folios de puestos (Local)
+
+Administración asigna el código visible de cada puesto nuevo mediante `hr.position`. En modo administrado, RH solicita el siguiente código con la clave idempotente de alta; en modo manual, la captura `code` es obligatoria y Admin valida y registra el mismo código. RH conserva el código en `hr.labor_roles`, con unicidad por tenant, y lo devuelve en las lecturas de puestos, trabajadores y elegibilidad por División. Los puestos históricos mantienen `code = null`; no se renumeran. Los cambios de nombre y asignación no cambian el código. Mantenimiento congela `position_code` cuando crea nuevos snapshots de mano de obra.

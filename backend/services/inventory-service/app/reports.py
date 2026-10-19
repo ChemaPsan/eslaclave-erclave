@@ -64,9 +64,13 @@ def build_report(repository, tenant_id, report_code, filters):
     if report_code not in REPORT_PERMISSIONS:
         raise ErclaveError("report_not_found", "Inventory report does not exist.", status_code=404)
     params = {"tenant_id": tenant_id}
+    divisions=filters.get("allowed_divisions")
+    if divisions is not None:params["allowed_divisions"]=divisions
+    scope="(w.division_ref_id is null or w.division_ref_id=any(:allowed_divisions))"
     stamp = date.today().isoformat()
     if report_code == "warehouses":
         where = _clauses(filters,{"status":"x.status=:status","type":"x.type=:type","q":"(x.code ilike '%'||:q||'%' or x.name ilike '%'||:q||'%')"},params)
+        if divisions is not None:where.append("(x.division_ref_id is null or x.division_ref_id=any(:allowed_divisions))")
         rows=_query(repository,f"select x.code,x.name,x.type,x.status,x.business_center,x.location,x.owner,x.capacity,x.inventory_policy,x.zone,x.aisle,x.rack,x.level,x.position from inventory.warehouses x where {' and '.join(where)} order by x.code",params)
         columns=[C("code","Código","Code"),C("name","Almacén","Warehouse"),C("type","Tipo","Type"),C("status","Estatus","Status"),C("business_center","Centro de negocio","Business center"),C("location","Ubicación","Location"),C("owner","Responsable","Owner"),C("capacity","Capacidad","Capacity"),C("inventory_policy","Política","Policy"),C("zone","Zona","Zone"),C("aisle","Pasillo","Aisle"),C("rack","Rack","Rack"),C("level","Nivel","Level"),C("position","Posición","Position")]
     elif report_code == "items":
@@ -75,11 +79,13 @@ def build_report(repository, tenant_id, report_code, filters):
         columns=[C("code","Código","Code"),C("name","Artículo","Item"),C("type","Tipo","Type"),C("category","Categoría","Category"),C("base_unit","Unidad base","Base unit"),C("inventory_policy","Política","Policy"),C("minimum_stock","Mínimo","Minimum"),C("maximum_stock","Máximo","Maximum"),C("default_unit_cost","Costo unitario","Unit cost"),C("use_in_recipe","Usa en receta","Used in recipe"),C("status","Estatus","Status"),C("created_at","Creado","Created")]
     elif report_code == "kardex":
         where=_clauses(filters,{"warehouse_id":"x.warehouse_id=:warehouse_id","item_id":"x.inventory_item_id=:item_id","movement_type":"x.movement_type=:movement_type","date_from":"x.occurred_at::date>=:date_from","date_to":"x.occurred_at::date<=:date_to"},params)
+        if divisions is not None:where.append(scope)
         rows=_query(repository,f"""select x.movement_code,x.occurred_at,x.movement_type,i.code item_code,i.name item_name,w.code warehouse_code,w.name warehouse_name,x.direction,x.quantity,x.unit,x.unit_cost,x.status,x.reason,x.source_type,x.source_id
           from inventory.movements x join inventory.items i on i.id=x.inventory_item_id and i.tenant_id=x.tenant_id join inventory.warehouses w on w.id=x.warehouse_id and w.tenant_id=x.tenant_id where {' and '.join(where)} order by x.occurred_at desc,x.movement_code""",params)
         columns=[C("movement_code","Movimiento","Movement"),C("occurred_at","Fecha","Date"),C("movement_type","Tipo","Type"),C("item_code","Artículo","Item"),C("item_name","Nombre","Name"),C("warehouse_code","Almacén","Warehouse"),C("warehouse_name","Nombre de almacén","Warehouse name"),C("direction","Dirección","Direction"),C("quantity","Cantidad","Quantity"),C("unit","Unidad","Unit"),C("unit_cost","Costo unitario","Unit cost"),C("status","Estatus","Status"),C("reason","Motivo","Reason"),C("source_type","Origen","Source"),C("source_id","Referencia","Reference")]
     else:
         extra=[]
+        if divisions is not None:extra.append("and x.warehouse_id in (select w.id from inventory.warehouses w where w.tenant_id=:tenant_id and "+scope+")")
         for key,column in (("warehouse_id","warehouse_id"),("item_id","inventory_item_id"),("condition","stock_status")):
             if filters.get(key) not in (None,""):
                 extra.append(f"and x.{column}=:{key}");params[key]=filters[key]

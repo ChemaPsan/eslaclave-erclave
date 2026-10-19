@@ -1,10 +1,22 @@
 # ERClave - Plan de implementacion backend MVP
 
+> Referencia de diseño y alcance: no demuestra implementación ni despliegue. Consultar [estado vigente](../contexto/ESTADO_ACTUAL.md).
+
+## Estado y fuentes de vigencia
+
+La conciliación por submódulo vive en [CONTROL_CONTABLE](../contexto/CONTROL_CONTABLE.md); [ESTADO_ACTUAL](../contexto/ESTADO_ACTUAL.md) distingue Local de QA y [PENDIENTES](../contexto/PENDIENTES.md) fija la continuación. Evidencia de cada corte en [TRAZABILIDAD](../../TRAZABILIDAD.md). No sumar pendientes históricos como trabajo nuevo.
+
+Organización/sesión, [centros CONT-05](cont_05_catalogo_centros.md), asignaciones CONT-07 y [condiciones explícitas sin herencia](cont_07_commercial_condiciones.md) ya están implementados Local. CONT-04 es parcial y CONT-06 sigue abierto. CONT-08 conserva [cotización](cont_08_cotizaciones_contexto.md) → [pedido](cont_08_pedidos_contexto.md), [servicios](cont_08_servicios_contexto.md), [stock/entrega y movimientos manuales](cont_08_stock_contexto.md). [Producción manual CHG-313](cont_08_produccion_contexto.md) y [fabricación comercial CHG-315](cont_08_fabricacion_contexto.md) conectan contexto, recursos, recepción y entrega/costo; recorrido HTTP Local real aprobado, aceptación transversal CC-20 pendiente.
+
+Política CHG-309 confirmada: costos y tarifas en moneda base de Sociedad; documento en otra moneda conserva original, tasa explícita y convertido. La adaptación completa sigue pendiente, incluidos servicios; no reinterpretar historia. Analítica Costing y Accounting permanecen planned. Datos reales y aceptación integrada siguen abiertos; estos cortes no fueron promovidos a QA.
+
 ## 1. Objetivo
 
 Este documento define el plan recomendado para pasar ERClave de maqueta navegable a backend real en QA, manteniendo la arquitectura SaaS multi-tenant, modular, segura y auditable.
 
 > Estado de uso: conserva la secuencia arquitectonica original. El avance operativo vigente se consulta exclusivamente en `docs/contexto/ESTADO_ACTUAL.md`; varias fases del core ya fueron ejecutadas y este plan no debe usarse como inventario de despliegues.
+
+Para la ampliación de Corporativo/Sociedad/División/Emisor, Centros de costos y Contabilidad usar el plan especializado `docs/arquitectura/plan_preparacion_contabilidad.md`.
 
 El plan se basa en:
 

@@ -6,6 +6,7 @@ const errors = [];
 const requiredFiles = [
   ".github/workflows/qa-candidate.yml",
   ".github/workflows/qa-release.yml",
+  ".github/workflows/qa-inspect.yml",
   ".github/workflows/qa-admin-backoffice-config.yml",
   "backend/scripts/smoke_qa.ps1",
   "backend/scripts/promote_qa_traffic.ps1",
@@ -15,7 +16,12 @@ const requiredFiles = [
   "infra/qa/README.md",
   "tools/build-qa-frontend.js",
   "backend/scripts/configure_qa_tenant.py",
-  ".dockerignore"
+  ".dockerignore",
+  "tools/verify-qa-hosting.js",
+  "backend/scripts/check_qa_operational_readiness.py",
+  "backend/scripts/inspect_qa_release_baseline.py",
+  "infra/qa/synthetic-organization-plan.json",
+  "backend/scripts/qa_candidate_identity.ps1"
 ];
 
 for (const file of requiredFiles) {
@@ -23,17 +29,33 @@ for (const file of requiredFiles) {
 }
 
 if (!errors.length) {
-  const candidate = readText(requiredFiles[0]);
-  const release = readText(requiredFiles[1]);
-  const backofficeConfigWorkflow = readText(requiredFiles[2]);
+  const candidate = readText(".github/workflows/qa-candidate.yml");
+  const release = readText(".github/workflows/qa-release.yml");
+  const backofficeConfigWorkflow = readText(".github/workflows/qa-admin-backoffice-config.yml");
   const pages = readText(".github/workflows/pages.yml");
   const builder = readText("tools/build-qa-frontend.js");
+  const hostingVerifier = readText("tools/verify-qa-hosting.js");
+  const operationalGate = readText("backend/scripts/check_qa_operational_readiness.py");
+  for (const token of ["Check tenant operational readiness before moving stable traffic", "scripts/check_qa_operational_readiness.py", "QA_CONFIRMED_SOCIETY_CURRENCIES", "ERCLAVE_QA_READINESS_CONFIRMATION=CHECK_ERCLAVE_QA"]) {
+    if (!release.includes(token)) errors.push(`QA traffic must require tenant operational readiness: ${token}`);
+  }
+  for (const token of ["SET TRANSACTION READ ONLY", "qa_currency_confirmation_required", "qa_owner_operational_scope_required"]) {
+    if (!operationalGate.includes(token)) errors.push(`Operational readiness must fail closed without writing data: ${token}`);
+  }
+  if (!release.includes("node tools/verify-qa-hosting.js dist/qa-frontend")) {
+    errors.push("QA frontend must verify the bytes actually served by Hosting after deploy.");
+  }
+  for (const token of ["SHA256SUMS", "expectedSha", "https://erclave.web.app/", "createHash(\"sha256\")", "digest === entry.digest"]) {
+    if (!hostingVerifier.includes(token)) errors.push(`Hosting verifier must bind served bytes to the candidate: ${token}`);
+  }
   const frontendConfig = readText("frontend/api/config.js");
   const mockDb = readText("frontend/data/mockDb.js");
   const smokeQa = readText("backend/scripts/smoke_qa.ps1");
   const promoteQaTraffic = readText("backend/scripts/promote_qa_traffic.ps1");
+  const candidateIdentity = readText("backend/scripts/qa_candidate_identity.ps1");
   const configureQaBackoffice = readText("backend/scripts/configure_qa_backoffice.ps1");
   const qaSeed = readText("backend/scripts/seed_admin_qa_demo.py");
+  const configureQaTenant = readText("backend/scripts/configure_qa_tenant.py");
   const dockerfile = readText("backend/Dockerfile");
   const identityPlan = JSON.parse(readText("infra/qa/identity-plan.json"));
   const firebaseQa = JSON.parse(readText("firebase.qa.json"));
@@ -129,18 +151,18 @@ if (!errors.length) {
   ]) {
     if (!release.includes(token)) errors.push(`QA service deployment must handle first-service bootstrap: ${token}`);
   }
-  for (const token of ["actions/checkout@v4", "ref: ${{ github.sha }}", "backend/scripts/smoke_qa.ps1"]) {
+  for (const token of ["actions/checkout@v4", "ref: ${{ inputs.release_sha }}", "backend/scripts/smoke_qa.ps1"]) {
     if (!deployCandidateJob.includes(token)) errors.push(`QA candidate job must check out its immutable workflow smoke source: ${token}`);
   }
   for (const token of ["--format json", "$LASTEXITCODE -ne 0", "ConvertFrom-Json", "$_.tag -eq $RevisionTag"]) {
-    if (!smokeQa.includes(token)) errors.push(`QA smoke must resolve the tagged revision from Cloud Run JSON: ${token}`);
+    if (!candidateIdentity.includes(token)) errors.push(`QA smoke identity helper must resolve the tagged revision from Cloud Run JSON: ${token}`);
   }
-  for (const token of ["actions/checkout@v4", "ref: ${{ github.sha }}", "backend/scripts/promote_qa_traffic.ps1"]) {
+  for (const token of ["actions/checkout@v4", "ref: ${{ inputs.release_sha }}", "backend/scripts/promote_qa_traffic.ps1"]) {
     if (!promoteTrafficJob.includes(token)) errors.push(`QA traffic job must use its immutable promotion source: ${token}`);
   }
   for (const token of [
     "$targets = @()",
-    "$candidates.Count -ne 1",
+    "Assert-QaCandidateIdentity $identity $certified[$service]",
     "$targets.Count -ne $services.Count",
     "services update-traffic",
     '--to-revisions "$($target.Revision)=100"',
@@ -148,26 +170,61 @@ if (!errors.length) {
   ]) {
     if (!promoteQaTraffic.includes(token)) errors.push(`QA traffic promotion must preflight and verify every revision: ${token}`);
   }
+  for (const token of ["Read-QaImages", "Get-QaCandidateIdentity", "Assert-QaCandidateIdentity"]) {
+    if (![smokeQa, promoteQaTraffic].every((source) => source.includes(token))) errors.push(`Certification and promotion must share immutable identity checks: ${token}`);
+  }
+  for (const token of ["revisions describe", "$revision.status.imageDigest -ne $Image", "$containers[0].image -ne $Image", "$versions[0].value -ne $Version", "$tagged.Count -ne 1", "'Revision','Image','Version','Url'", "$images.Count -ne 8"]) {
+    if (!candidateIdentity.includes(token)) errors.push(`Candidate identity must bind all eight exact revisions, images and SHAs: ${token}`);
+  }
+  for (const token of ["certified-qa-revisions-${{ inputs.release_sha }}", "qa-candidate-revisions.json", "actions/upload-artifact@v4"]) {
+    if (!deployCandidateJob.includes(token)) errors.push(`QA services must publish the smoke-certified revision manifest: ${token}`);
+  }
+  for (const token of ["certified-qa-revisions-${{ inputs.release_sha }}", "approved-qa-images-${{ inputs.release_sha }}", "-ExpectedVersion", "-ImageManifestPath", "-CandidateManifestPath certified/qa-candidate-revisions.json"]) {
+    if (!promoteTrafficJob.includes(token)) errors.push(`Traffic approval must consume the exact certified revisions and image bindings: ${token}`);
+  }
+  for (const token of ["$manifest.SourceSha -cne $ExpectedVersion", "$certified.Count -ne 8", "$identity.Previous -cne $certified[$service].Previous", "Assert-QaCandidateIdentity $current", "[array]::Reverse($changed)"]) {
+    if (!promoteQaTraffic.includes(token)) errors.push(`Traffic must reject drift and compensate partial application: ${token}`);
+  }
   for (const token of [
     "configure_qa_tenant:",
-    'test "${{ inputs.configure_qa_tenant }}" = "true"',
+    "if: ${{ inputs.configure_qa_tenant }}",
+    "if: ${{ inputs.execute_database_migration }}",
+    "ERCLAVE_QA_CONFIGURATION_TENANT_ID=$QA_CONFIGURATION_TENANT_ID",
     "scripts/configure_qa_tenant.py"
   ]) {
     if (!release.includes(token)) errors.push(`QA release must explicitly reconcile the QA tenant: ${token}`);
   }
-  for (const service of ["admin", "production", "inventory", "hr", "sales", "purchasing", "maintenance"]) {
+  for (const input of ["execute_database_migration", "configure_qa_tenant"]) {
+    const definition = release.match(new RegExp(`^      ${input}:\\r?\\n((?:        [^\\n]*\\r?\\n)+)`, "m"));
+    if (!definition || !definition[1].includes("default: false")) {
+      errors.push(`QA database action ${input} must default to disabled and be approved independently.`);
+    }
+    if (release.includes(`test "\u0024{{ inputs.${input} }}" = "true"`)) {
+      errors.push(`QA release must not require the independently optional ${input} action.`);
+    }
+  }
+  if (!configureQaTenant.includes("ERCLAVE_QA_CONFIGURATION_TENANT_ID") || !configureQaTenant.includes("owner_tenant_id")) {
+    errors.push("QA permission configuration must require an explicit existing tenant and scope owner grants to it.");
+  }
+  if (configureQaTenant.includes("seed_admin_qa_demo") || configureQaTenant.includes("ensure_demo_tenant")) {
+    errors.push("QA permission configuration must preserve users, memberships, organization and module entitlements instead of running demo seeds.");
+  }
+  for (const service of ["admin", "production", "inventory", "hr", "sales", "purchasing", "maintenance", "costing"]) {
     if (!candidate.includes(`${service}_service_adapter`)) errors.push(`Candidate workflow must build ${service}-service.`);
     if (!identityPlan.serviceAccounts.some((account) => account.accountId === `erclave-${service}-qa`)) {
       errors.push(`Identity plan must include erclave-${service}-qa.`);
     }
   }
   for (const token of [
-    'test "$(wc -l < candidate/qa-images.env)" -eq 7',
+    'test "$(wc -l < candidate/qa-images.env)" -eq 8',
     "SALES_IMAGE",
     "QA_SALES_RUNTIME_SERVICE_ACCOUNT",
     "QA_SALES_API_URL",
     "PURCHASING_IMAGE",
     "MAINTENANCE_IMAGE",
+    "COSTING_IMAGE",
+    "QA_COSTING_RUNTIME_SERVICE_ACCOUNT",
+    "QA_COSTING_API_URL",
     "QA_PURCHASING_RUNTIME_SERVICE_ACCOUNT",
     "QA_MAINTENANCE_RUNTIME_SERVICE_ACCOUNT",
     "QA_PURCHASING_API_URL",
@@ -175,9 +232,41 @@ if (!errors.length) {
     "deploy_candidate sales-service-qa",
     "deploy_candidate purchasing-service-qa",
     "deploy_candidate maintenance-service-qa",
+    "deploy_candidate costing-service-qa",
     "ERCLAVE_PRODUCTION_SERVICE_URL=${{ vars.QA_PRODUCTION_API_URL }}"
   ]) {
-    if (!release.includes(token)) errors.push(`QA release must include the seven-service runtime: ${token}`);
+    if (!release.includes(token)) errors.push(`QA release must include the eight-service runtime: ${token}`);
+  }
+  const runtimeEnvironment = (service) => release.split(/\r?\n/).filter((line) => line.trim().startsWith(`${service}_env=`)).join("\n");
+  for (const service of ["admin", "costing"]) {
+    if (!runtimeEnvironment(service).includes("ERCLAVE_COST_CENTER_CATALOG_ENABLED=true")) {
+      errors.push(`${service} QA runtime must explicitly enable the basic cost-center catalog.`);
+    }
+  }
+  for (const service of ["production", "inventory", "hr"]) {
+    if (!runtimeEnvironment(service).includes("ERCLAVE_COSTING_SERVICE_URL=${{ vars.QA_COSTING_API_URL }}")) {
+      errors.push(`${service} QA runtime must resolve cost-center references through the explicit Costing QA API URL.`);
+    }
+    const identity = identityPlan.serviceAccounts.find((account) => account.accountId === `erclave-${service}-qa`);
+    if (!identity?.runInvokerOn?.includes("costing-service-qa")) {
+      errors.push(`${service} runtime identity must declare its Costing catalog dependency.`);
+    }
+  }
+  const costingIdentity = identityPlan.serviceAccounts.find((account) => account.accountId === "erclave-costing-qa");
+  if (!costingIdentity?.projectRoles?.includes("roles/cloudsql.client") ||
+      !costingIdentity?.secretAccess?.includes("erclave-database-url-qa") ||
+      !costingIdentity?.runInvokerOn?.includes("admin-service-qa")) {
+    errors.push("Costing runtime identity must declare database access and its Admin authority dependency.");
+  }
+  if (costingIdentity?.projectRoles?.some((role) => ["roles/owner", "roles/editor", "roles/firebaseauth.admin"].includes(role))) {
+    errors.push("Costing catalog runtime must not receive project ownership or Firebase identity administration.");
+  }
+  for (const [source, label] of [[smokeQa, "QA smoke"], [promoteQaTraffic, "QA traffic promotion"]]) {
+    if (!source.includes("qa_candidate_identity.ps1") || !candidateIdentity.includes("'costing'") || !candidateIdentity.includes('$qaServices')) errors.push(`${label} must include the Costing runtime through the eight-service identity helper.`);
+  }
+  const inventoryEnvironment = release.split(/\r?\n/).find((line) => line.trim().startsWith('inventory_env=')) || '';
+  if (!inventoryEnvironment.includes("ERCLAVE_PURCHASING_SERVICE_URL=${{ vars.QA_PURCHASING_API_URL }}")) {
+    errors.push("Inventory QA runtime must resolve Purchasing receipt proofs through its explicit QA API URL.");
   }
   const deployerIdentity = identityPlan.serviceAccounts.find(
     (account) => account.accountId === "erclave-github-deployer-qa"
@@ -195,10 +284,13 @@ if (!errors.length) {
   if (!deployerIdentity?.projectRoles?.includes("roles/firebasehosting.admin")) {
     errors.push("QA deployer identity must include roles/firebasehosting.admin for the gated frontend release.");
   }
-  for (const forbidden of ["credentials_json", "service_account_key", "localhost", "firebase-emulator", "demo-erclave"]) {
+  for (const forbidden of ["credentials_json", "service_account_key", "firebase-emulator", "demo-erclave"]) {
     if ([candidate, release].some((content) => content.includes(forbidden))) {
       errors.push(`QA workflows contain forbidden token: ${forbidden}`);
     }
+  }
+  if (/ERCLAVE_[A-Z_]*(?:URL|HOST)=(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|\[::1\])(?:[:/|@\s]|$)/.test(release)) {
+    errors.push("QA runtime environment must not assign a loopback URL or host.");
   }
   if (/\n\s+push:/.test(pages)) errors.push("GitHub Pages mock must not autodeploy from push.");
   for (const token of [
@@ -209,9 +301,29 @@ if (!errors.length) {
     "QA_SALES_API_URL",
     "QA_PURCHASING_API_URL",
     "QA_MAINTENANCE_API_URL",
+    "QA_COSTING_API_URL",
+    'costingApiBaseUrl: requirePublicHttps("QA_COSTING_API_URL")',
     "authMode: \"firebase\""
   ]) {
     if (!builder.includes(token)) errors.push(`QA frontend builder must include: ${token}`);
+  }
+  if (!candidate.includes("npm run build:frontend:qa") && !candidate.includes("node tools/build-qa-frontend.js")) {
+    errors.push("QA candidate must invoke the canonical QA frontend build before upload.");
+  }
+  for (const token of ["SHA256SUMS", "qa-frontend-${{ inputs.release_sha }}"]) {
+    if (!candidate.includes(token)) errors.push(`QA candidate must build and fingerprint the frontend once: ${token}`);
+  }
+  const frontendJob = release.slice(release.indexOf("  frontend:"));
+  for (const token of [
+    "qa-frontend-${{ inputs.release_sha }}",
+    "run-id: ${{ inputs.candidate_run_id }}",
+    "sha256sum --strict --check SHA256SUMS",
+    "manifest['sourceSha'] == os.environ['RELEASE_SHA']"
+  ]) {
+    if (!frontendJob.includes(token)) errors.push(`QA frontend release must verify the exact candidate artifact: ${token}`);
+  }
+  if (frontendJob.includes("node tools/build-qa-frontend.js") || frontendJob.includes("npm run build:frontend:qa")) {
+    errors.push("QA frontend must deploy the approved candidate artifact without rebuilding it during release.");
   }
   if (!builder.includes('const forbidden = ["localhost", "127.0.0.1", "firebase-emulator", "demo-erclave"')) {
     errors.push("QA frontend builder must reject local and emulator tokens.");
@@ -254,7 +366,7 @@ if (!errors.length) {
     errors.push("API-mode frontend cache must retain freshly loaded API data in memory.");
   }
   if (!qaSeed.includes('ACTIVE_DEMO_MODULES = ("admin", "production", "inventory", "hr", "sales", "purchasing", "maintenance")')) {
-    errors.push("QA seed must enable only modules backed by deployed real services.");
+    errors.push("QA seed must retain the seven operational entitlements; the basic Costing catalog must not activate analytical Costing or Accounting.");
   }
   if (!qaSeed.includes("module_code not in ({active_module_codes})")) {
     errors.push("QA seed must deactivate entitlements for modules without real services.");
@@ -267,6 +379,33 @@ if (!errors.length) {
   }
   if (firebaseQa.hosting?.site !== "erclave" || firebaseQa.hosting?.public !== "dist/qa-frontend") {
     errors.push("firebase.qa.json must deploy the sanitized artifact to the erclave QA site.");
+  }
+}
+
+if (!errors.length) {
+  const inspection = readText(".github/workflows/qa-inspect.yml");
+  const inspector = readText("backend/scripts/inspect_qa_release_baseline.py");
+  const release = readText(".github/workflows/qa-release.yml");
+  for (const token of ["workflow_dispatch:", "environment: qa-database", "INSPECT_ERCLAVE_QA",
+    "run['head_sha'] == os.environ['RELEASE_SHA']", "run['repository']['full_name']",
+    "run['head_repository']['full_name']", "Exactly eight immutable bindings required",
+    'test "$WORKFLOW_SHA" = "$RELEASE_SHA"', '--image "$ADMIN_IMAGE"',
+    "ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest", "default_transaction_read_only=on",
+    "ERCLAVE_QA_EXPECTED_CLOUD_SQL_CONNECTION_NAME", "erclave:us-central1:erclave-qa-postgres",
+    "--command python --args=scripts/inspect_qa_release_baseline.py"]) {
+    if (!inspection.includes(token)) errors.push(`QA baseline inspection must preserve its scope/provenance: ${token}`);
+  }
+  if (/^\s+(push|pull_request):/m.test(inspection) || inspection.includes("source candidate/qa-images.env")) {
+    errors.push("QA baseline inspection must remain manual and never source an artifact as executable shell.");
+  }
+  for (const token of ["SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", "information_schema.columns",
+    "qa_target_tenant_not_active", "qa_inspection_confirmation_required", "legacy_unrestricted_semantics",
+    "validate_database_target", "qa_database_target_invalid", "ERCLAVE_QA_EXPECTED_CLOUD_SQL_CONNECTION_NAME",
+    "'/cloudsql/' + expected_connection"]) {
+    if (!inspector.includes(token)) errors.push(`QA baseline inspector must remain fail-closed and read-only: ${token}`);
+  }
+  if (!release.includes("PGOPTIONS=-c lock_timeout=5000 -c statement_timeout=480000")) {
+    errors.push("QA migration must bound lock waits and individual SQL statement duration.");
   }
 }
 

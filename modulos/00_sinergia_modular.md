@@ -1,5 +1,13 @@
 # ERClave — Sinergia, compatibilidad y contratos entre módulos
 
+## Vigencia y relaciones · conciliación CHG-311
+
+Diseño transversal y capacidades futuras; no prueba de runtime. Los eventos económicos, cuentas, periodos y pólizas continúan planned. La operación funciona con Accounting apagado.
+
+Estado por ambiente: [ESTADO_ACTUAL](../docs/contexto/ESTADO_ACTUAL.md). Brechas y cierre: [CONTROL_CONTABLE](../docs/contexto/CONTROL_CONTABLE.md). Relación operativa: [09_contabilidad](09_contabilidad.md). Contrato/regla: [plan_preparacion_contabilidad](../docs/arquitectura/plan_preparacion_contabilidad.md). Navegación: [índice de módulos](README.md).
+
+Las referencias CHG conservan procedencia; no se suman como pendientes vigentes. La historia de implementación está en [TRAZABILIDAD](../TRAZABILIDAD.md). Costos y tarifas deben usar moneda base de Sociedad (CHG-309); su aplicación se verifica por flujo en el control, sin reinterpretar historia. Centro requerido sólo donde el flujo de imputación esté habilitado.
+
 ## 1. Objetivo
 
 Este documento define cómo deberán convivir los módulos de ERClave desde el diseño inicial, para evitar que Producción, Almacenes, Ventas, Compras, Gastos, Costos, Contabilidad y Reportes se construyan como piezas aisladas.
@@ -13,7 +21,7 @@ La regla principal será:
 ## 2. Principios transversales
 
 - Cada registro operativo deberá incluir `tenant_id`.
-- Cada registro relevante deberá poder incluir `centro_de_negocio_id`.
+- Cada registro relevante deberá poder incluir `division_id` y Sociedad derivada.
 - Cada operación deberá conservar un `documento_origen`.
 - Cada operación deberá poder generar eventos para otros módulos.
 - Los módulos deberán validar si sus dependencias están activas para el tenant.
@@ -24,14 +32,14 @@ La regla principal será:
 
 ---
 
-## 3. Identificadores comunes obligatorios
+## 3. Dimensiones y referencias objetivo
 
 Las entidades principales deberán estar preparadas para relacionarse mediante identificadores comunes.
 
 | Campo | Uso |
 |---|---|
 | tenant_id | Aislamiento del cliente SaaS. |
-| centro_de_negocio_id | Alcance operativo o corporativo. |
+| division_id / society_id | División efectiva y Sociedad derivada; nombres exactos según contrato del dueño. |
 | documento_origen_tipo | Tipo de documento que originó la operación. |
 | documento_origen_id | ID del documento que originó la operación. |
 | modulo_origen | Módulo que generó la operación. |
@@ -47,7 +55,7 @@ Las entidades principales deberán estar preparadas para relacionarse mediante i
 
 ## 4. Eventos funcionales recomendados
 
-Los módulos deberán poder publicar o registrar eventos internos para que otros módulos reaccionen.
+Catálogo conceptual futuro; no corresponde a un bus/outbox implementado. Cada evento requerirá contrato versionado, productor, consumidor e idempotencia antes de usarse.
 
 | Evento | Lo genera | Lo consumen |
 |---|---|---|
@@ -101,7 +109,7 @@ Al aprobar un pedido, ERClave deberá poder:
 - generar solicitud de producción si no hay stock suficiente;
 - identificar fecha prometida;
 - calcular margen estimado;
-- validar cuentas contables de ingreso, cliente, impuestos y costo de venta.
+- preparar referencias económicas; validar cuentas únicamente en el futuro consumidor contable habilitado, sin bloquear operación con Accounting apagado.
 
 ### Compras contra almacenes, gastos y contabilidad
 
@@ -168,7 +176,7 @@ Cada operación financiera u operativa con impacto económico deberá poder indi
 | Terminar producción | Aumenta producto terminado | Cierra costo de orden | Genera asiento si aplica | Producción terminada |
 | Aprobar pedido | Reserva o solicita producción | Calcula margen estimado | Valida mapeo de venta | Demanda |
 | Entregar venta | Disminuye producto terminado | Calcula costo de venta | Genera asiento si aplica | Venta y margen |
-| Recibir compra | Aumenta inventario o gasto | Actualiza costos | Genera cuenta por pagar | Compra recibida |
+| Recibir compra | Entrada física confirmada por Inventory, servicios por solicitante | Conserva costo operativo | No genera CxP por sí sola; reconocimiento futuro requiere documento y política aprobada | Compra recibida |
 | Validar gasto | No siempre aplica | Asigna gasto | Genera asiento | Gasto por dimensión |
 | Registrar pago | No aplica | No siempre aplica | Cancela cuenta por pagar/cobrar | Flujo financiero |
 | Ajustar inventario | Ajusta existencias | Genera variación | Genera asiento si aplica | Diferencia inventario |

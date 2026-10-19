@@ -8,6 +8,10 @@ from erclave_common.health import router as health_router
 from erclave_common.middleware import CorrelationIdMiddleware, TenantContextMiddleware
 
 from .api import router as admin_router
+from .organization_api import router as organization_router
+from .scope_api import router as scope_router
+from .configuration_api import router as configuration_router
+from .cost_center_api import router as cost_center_router
 
 
 QA_FIREBASE_ORIGIN_REGEX = r"https://erclave(--[a-z0-9-]+)?\.web\.app|https://erclave\.firebaseapp\.com"
@@ -57,6 +61,10 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(admin_router)
+    app.include_router(organization_router)
+    app.include_router(scope_router)
+    app.include_router(configuration_router)
+    app.include_router(cost_center_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,

@@ -1,5 +1,7 @@
 # Promoción QA de CHG-255–268 — CHG-269
 
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](../contexto/ESTADO_ACTUAL.md).
+
 Estado final, CHG-270: release completado el 9 de septiembre de 2026; siete APIs y Hosting verificados sobre `b63cdad`. El apartado «Resultado verificado» registra ejecuciones, digests, revisiones y rollback. Los apartados iniciales documentan el plan ejecutado.
 
 ## Candidato y alcance

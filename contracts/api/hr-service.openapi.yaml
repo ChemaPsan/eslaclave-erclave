@@ -1,8 +1,15 @@
 openapi: 3.1.0
 info:
   title: ERClave HR Service API
-  version: 0.1.0
+  version: 0.2.0
   summary: Tenant-scoped labor area and position capacity catalogs.
+  description: >-
+    Durable area, position and worker commands bind the authenticated actor,
+    tenant, operation, Idempotency-Key and payload. Reusing a receipt with a
+    different actor returns HTTP 409 idempotency_key_reused. The original actor
+    may replay pre-upgrade receipts only when same-transaction HR audit evidence
+    identifies that actor unambiguously; public request and response schemas
+    remain unchanged.
 servers:
 - url: https://api.eslaclave.com
 security:
@@ -12,6 +19,677 @@ tags:
 - name: Positions
 - name: Workers
 paths:
+  /v1/hr/organization/divisions:
+    get:
+      tags:
+      - Organization assignments
+      summary: Divisions
+      operationId: divisions_v1_hr_organization_divisions_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionChoicesResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: hr
+      x-permissions: [hr.position.read, hr.worker.read]
+  /v1/hr/positions/{resource_id}/division-assignments:
+    get:
+      tags:
+      - Organization assignments
+      summary: Position Divisions
+      operationId: position_divisions_v1_hr_positions__resource_id__division_assignments_get
+      parameters:
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Resource Id
+      - name: division_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 40
+          - type: 'null'
+          title: Division Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PositionDivisionListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: hr
+      x-permissions: [hr.position.read]
+  /v1/hr/positions/{resource_id}/division-assignments/{division_id}:
+    put:
+      tags:
+      - Organization assignments
+      summary: Assign Position
+      operationId: assign_position_v1_hr_positions__resource_id__division_assignments__division_id__put
+      parameters:
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Resource Id
+      - name: division_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Division Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PositionDivisionCommand'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PositionDivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: hr
+      x-permissions: [hr.position.update]
+  /v1/hr/division-positions:
+    get:
+      tags:
+      - Organization assignments
+      summary: Eligible Positions
+      operationId: eligible_positions_v1_hr_division_positions_get
+      parameters:
+      - name: division_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Division Id
+      - name: purpose
+        in: query
+        required: false
+        schema:
+          enum:
+          - all
+          - production
+          - maintenance
+          type: string
+          default: all
+          title: Purpose
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligiblePositionsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: hr
+      x-permissions: [hr.position.read]
+  /v1/hr/workers/{resource_id}/division-assignments:
+    get:
+      tags:
+      - Organization assignments
+      summary: Worker Divisions
+      operationId: worker_divisions_v1_hr_workers__resource_id__division_assignments_get
+      parameters:
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Resource Id
+      - name: division_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 40
+          - type: 'null'
+          title: Division Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerDivisionListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: hr
+      x-permissions: [hr.worker.read]
+  /v1/hr/workers/{resource_id}/division-assignments/{division_id}:
+    put:
+      tags:
+      - Organization assignments
+      summary: Assign Worker
+      operationId: assign_worker_v1_hr_workers__resource_id__division_assignments__division_id__put
+      parameters:
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Resource Id
+      - name: division_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Division Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerDivisionCommand'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerDivisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: hr
+      x-permissions: [hr.worker.update]
+  /v1/hr/division-workers:
+    get:
+      tags:
+      - Organization assignments
+      summary: Eligible Workers
+      operationId: eligible_workers_v1_hr_division_workers_get
+      parameters:
+      - name: division_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Division Id
+      - name: purpose
+        in: query
+        required: false
+        schema:
+          enum:
+          - all
+          - production
+          - maintenance
+          type: string
+          default: all
+          title: Purpose
+      - name: resource_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 40
+          - type: 'null'
+          title: Resource Id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibleWorkersResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '401':
+          description: Stable error envelope; no partial document effect.
+        '403':
+          description: Stable error envelope; no partial document effect.
+        '404':
+          description: Stable error envelope; no partial document effect.
+        '409':
+          description: Stable error envelope; no partial document effect.
+        '503':
+          description: Stable error envelope; no partial document effect.
+      x-required-module: hr
+      x-permissions: [hr.worker.read, sales.order.create, sales.quote.approve, sales.quote.submit, sales.quote.update, sales.service_order.accept, sales.service_order.assign, sales.service_order.cost.create, sales.service_order.evidence.create, sales.service_order.plan, sales.service_order.resume, sales.service_order.start, sales.service_order.submit_acceptance, sales.service_order.time.create, production.order.validate, production.order.release, production.order.start, production.order.resume, maintenance.order.assign, maintenance.order.start, maintenance.order.resume, maintenance.order.reopen, maintenance.time.create]
   /v1/hr/reports/{report_code}/export:
     get:
       tags:
@@ -465,6 +1143,63 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkerResponse'
+  /v1/hr/division-production-capacity:
+    get:
+      tags:
+      - Organization assignments
+      summary: Division Production Capacity
+      operationId: getHrDivisionProductionCapacity
+      parameters:
+      - name: division_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Division Id
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionProductionCapacityResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-permissions: [hr.position.read, production.order.validate, production.order.release]
+      description: 'Capacidad declarada elegible por Division con tarifa confirmada en moneda base vigente de Sociedad. Cada
+        trabajador mantiene identidad global: no sumar capacidad entre Divisiones. No descuenta compromisos, no reserva y
+        no autoriza fabricar.'
+      x-required-module: hr
 components:
   securitySchemes:
     bearerAuth:
@@ -492,6 +1227,380 @@ components:
       schema:
         type: string
   schemas:
+    AssignmentPage:
+      properties:
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - total
+      - limit
+      - offset
+      title: AssignmentPage
+    DivisionChoice:
+      properties:
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        society_id:
+          type: string
+          title: Society Id
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - society_id
+      title: DivisionChoice
+    DivisionChoicesResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DivisionChoice'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: DivisionChoicesResponse
+    EligiblePosition:
+      properties:
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        recipe_name:
+          type: string
+          title: Recipe Name
+        labor_area_id:
+          type: string
+          title: Labor Area Id
+        labor_area_name:
+          type: string
+          title: Labor Area Name
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        hourly_cost:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Hourly Cost
+        hourly_cost_currency_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Hourly Cost Currency Code
+        hourly_cost_society_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Hourly Cost Society Ref Id
+        hourly_cost_confirmed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Hourly Cost Confirmed At
+        cost_center_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Center Ref Id
+        intervenes_in_production:
+          type: boolean
+          title: Intervenes In Production
+        intervenes_in_maintenance:
+          type: boolean
+          title: Intervenes In Maintenance
+      type: object
+      required:
+      - id
+      - name
+      - recipe_name
+      - labor_area_id
+      - labor_area_name
+      - division_ref_id
+      - hourly_cost
+      - intervenes_in_production
+      - intervenes_in_maintenance
+      title: EligiblePosition
+    EligiblePositionsResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/EligiblePosition'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: EligiblePositionsResponse
+    EligibleWorker:
+      properties:
+        id:
+          type: string
+          title: Id
+        employee_number:
+          type: string
+          title: Employee Number
+        full_name:
+          type: string
+          title: Full Name
+        labor_position_id:
+          type: string
+          title: Labor Position Id
+        position_code: {type: [string, 'null']}
+        position_name:
+          type: string
+          title: Position Name
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        worker_assignment_revision: {type: [integer, 'null']}
+        position_assignment_revision: {type: [integer, 'null']}
+        hourly_cost: {type: [number, string, 'null']}
+        hourly_cost_currency_code: {type: [string, 'null']}
+        hourly_cost_society_ref_id: {type: [string, 'null']}
+        society_ref_id: {type: [string, 'null']}
+        hourly_cost_confirmed_at: {type: [string, 'null'], format: date-time}
+        minutes_per_worker: {type: [integer, 'null']}
+      description: Maintenance purpose returns confirmed current Society tariff, nominal daily minutes and assignment revisions; other purposes omit these optional fields.
+      type: object
+      required:
+      - id
+      - employee_number
+      - full_name
+      - labor_position_id
+      - position_name
+      - division_ref_id
+      title: EligibleWorker
+    EligibleWorkersResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/EligibleWorker'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: EligibleWorkersResponse
+    PositionDivisionCommand:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+          default: active
+        hourly_cost:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
+          title: Hourly Cost
+        hourly_cost_currency_code:
+          anyOf:
+          - type: string
+            pattern: ^[A-Z]{3}$
+          - type: 'null'
+          title: Hourly Cost Currency Code
+          description: Obligatoria al activar o confirmar tarifa; debe coincidir con moneda base de Sociedad derivada de Division.
+            Omitir al inactivar conserva moneda historica.
+        cost_center_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Cost Center Ref Id
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      - hourly_cost
+      title: PositionDivisionCommand
+    PositionDivisionListResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/PositionDivisionRead'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: PositionDivisionListResponse
+    PositionDivisionRead:
+      properties:
+        position_id:
+          type: string
+          title: Position Id
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        hourly_cost:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Hourly Cost
+        hourly_cost_currency_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Hourly Cost Currency Code
+        hourly_cost_society_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Hourly Cost Society Ref Id
+        hourly_cost_confirmed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Hourly Cost Confirmed At
+        cost_center_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cost Center Ref Id
+        cost_center_snapshot:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Cost Center Snapshot
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+        revision:
+          type: integer
+          title: Revision
+      type: object
+      required:
+      - position_id
+      - division_ref_id
+      - hourly_cost
+      - status
+      - revision
+      title: PositionDivisionRead
+    PositionDivisionResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/PositionDivisionRead'
+      type: object
+      required:
+      - data
+      title: PositionDivisionResponse
+    WorkerDivisionCommand:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+          default: active
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      title: WorkerDivisionCommand
+    WorkerDivisionListResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/WorkerDivisionRead'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: WorkerDivisionListResponse
+    WorkerDivisionRead:
+      properties:
+        worker_id:
+          type: string
+          title: Worker Id
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        labor_position_id:
+          type: string
+          title: Labor Position Id
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+        revision:
+          type: integer
+          title: Revision
+      type: object
+      required:
+      - worker_id
+      - division_ref_id
+      - labor_position_id
+      - status
+      - revision
+      title: WorkerDivisionRead
+    WorkerDivisionResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/WorkerDivisionRead'
+      type: object
+      required:
+      - data
+      title: WorkerDivisionResponse
     ErrorResponse:
       type: object
       required:
@@ -596,6 +1705,11 @@ components:
       - intervenes_in_maintenance
       - status
       properties:
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code
         id:
           type: string
         labor_area_id:
@@ -626,6 +1740,10 @@ components:
       - position
       - recipe_name
       properties:
+        code:
+          type: [string, 'null']
+          maxLength: 60
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._/-]*$'
         labor_area_id:
           type: string
         position:
@@ -1026,6 +2144,7 @@ components:
         full_name:
           type: string
           title: Full Name
+        position_code: {type: [string, 'null']}
         position_name:
           type: string
           title: Position Name
@@ -1117,6 +2236,7 @@ components:
         full_name:
           type: string
           title: Full Name
+        position_code: {type: [string, 'null']}
         position_name:
           type: string
           title: Position Name
@@ -1139,3 +2259,109 @@ components:
       - labor_area_name
       - status
       title: SalesEligibleWorkerRead
+    DivisionProductionCapacityRead:
+      properties:
+        position_id:
+          type: string
+          title: Position Id
+        position_name:
+          type: string
+          title: Position Name
+        recipe_name:
+          type: string
+          title: Recipe Name
+        labor_area_id:
+          type: string
+          title: Labor Area Id
+        labor_area_name:
+          type: string
+          title: Labor Area Name
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        society_ref_id:
+          type: string
+          title: Society Ref Id
+        active_worker_count:
+          type: integer
+          title: Active Worker Count
+        minutes_per_worker:
+          type: integer
+          title: Minutes Per Worker
+        available_minutes:
+          type: integer
+          title: Available Minutes
+        hourly_cost:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Hourly Cost
+        cost_per_minute:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Cost Per Minute
+        hourly_cost_currency_code:
+          type: string
+          title: Hourly Cost Currency Code
+        eligible_worker_ids:
+          items:
+            type: string
+          type: array
+          title: Eligible Worker Ids
+        capacity_pool_key:
+          type: string
+          title: Capacity Pool Key
+      type: object
+      required:
+      - position_id
+      - position_name
+      - recipe_name
+      - labor_area_id
+      - labor_area_name
+      - division_ref_id
+      - society_ref_id
+      - active_worker_count
+      - minutes_per_worker
+      - available_minutes
+      - hourly_cost
+      - cost_per_minute
+      - hourly_cost_currency_code
+      - eligible_worker_ids
+      - capacity_pool_key
+      title: DivisionProductionCapacityRead
+    DivisionProductionCapacityResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DivisionProductionCapacityRead'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/DivisionCapacityMeta'
+      type: object
+      required:
+      - data
+      title: DivisionProductionCapacityResponse
+    DivisionCapacityMeta:
+      properties:
+        capacity_scope:
+          type: string
+          const: shared_workers
+          title: Capacity Scope
+          default: shared_workers
+        commitments_included:
+          type: boolean
+          const: false
+          title: Commitments Included
+          default: false
+      type: object
+      title: DivisionCapacityMeta
+x-transport-policy:
+  implementation-status: local-only
+  operation-budget-seconds: 25
+  budget-enforcement: cooperative-http-steps-not-database-cancellation
+  request-budget-header: X-Request-Timeout-Ms
+  request-budget-unit: milliseconds
+  request-budget-rule: optional-positive-finite-value-can-only-reduce-budget
+  correlation-header: X-Correlation-Id
+  error-dependency-field: error.details.dependency_service
+  automatic-retries: false

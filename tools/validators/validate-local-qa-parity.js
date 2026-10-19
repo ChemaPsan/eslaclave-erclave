@@ -17,12 +17,12 @@ for (const file of requiredFiles) {
 
 if (!errors.length) {
   const config = readText("frontend/api/config.js");
-  const executableConfig = `${config.replace(/export function /g, "function ")}\n({ getDemoTenantId, getConfiguredTenantId, setActiveTenantId, getDemoActorId });`;
+  const executableConfig = `${config.replace(/export function /g, "function ")}\n({ getDemoTenantId, getConfiguredTenantId, setActiveTenantId, getDemoActorId, getCostingApiBaseUrl });`;
   const remoteRuntime = vm.runInNewContext(executableConfig, {
     URL,
     window: {
       location: { hostname: "erclave.web.app" },
-      ERCLAVE_CONFIG: { apiMode: "api" }
+      ERCLAVE_CONFIG: { apiMode: "api", costingApiBaseUrl: "https://costing-qa.example.invalid", localCostingApiBaseUrl: "http://127.0.0.1:8014" }
     },
     localStorage: {
       getItem: () => { throw new Error("QA runtime must not read tenant or actor from localStorage."); },
@@ -33,6 +33,9 @@ if (!errors.length) {
   if (remoteRuntime.getDemoTenantId() !== "") errors.push("QA runtime must not fall back to the demo tenant before session resolution.");
   if (remoteRuntime.getConfiguredTenantId() !== "") errors.push("QA artifact must not embed a default tenant.");
   if (remoteRuntime.getDemoActorId() !== "") errors.push("QA runtime must rely on Firebase identity, not a demo actor.");
+  if (remoteRuntime.getCostingApiBaseUrl() !== "https://costing-qa.example.invalid") {
+    errors.push("QA runtime must resolve Costing from its deployed URL and ignore Local overrides.");
+  }
   remoteRuntime.setActiveTenantId("ten_session_member");
   if (remoteRuntime.getDemoTenantId() !== "ten_session_member") errors.push("QA runtime must retain the tenant selected from session memberships in memory.");
 
@@ -57,9 +60,7 @@ if (!errors.length) {
   }
 
   const currentState = readText("docs/contexto/ESTADO_ACTUAL.md");
-  for (const token of ["admin-service-qa-bo-1-1", "inventory-service-qa", "hr-service-qa", "CHG-191"]) {
-    if (!currentState.includes(token)) errors.push(`Current state is missing verified QA fact: ${token}`);
-  }
+  if (!/QA está desplegado en `[a-f0-9]{40}`/.test(currentState)) errors.push("Current state must declare the documented QA SHA; a historical revision name is not current release evidence.");
   if (currentState.includes("su configuracion y promocion QA permanecen pendientes")) {
     errors.push("Current state still marks the completed Backoffice promotion as pending.");
   }

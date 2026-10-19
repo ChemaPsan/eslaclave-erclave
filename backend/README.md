@@ -4,7 +4,7 @@ Backend real de ERClave para mover los modulos MVP fuera de la maqueta.
 
 ## Estado actual
 
-Backend FastAPI modular con servicios reales de Administracion, Produccion, Inventario, RH, Ventas y, en Local, Compras y Mantenimiento.
+Backend FastAPI modular con servicios reales de Administracion, Produccion, Inventario, RH, Ventas Compras y Mantenimiento; Local añade el catálogo básico de centros de Costing. Consultar [estado por ambiente](../docs/contexto/ESTADO_ACTUAL.md) y [contratos](../contracts/api/README.md) para alcance y versión; las listas iniciales siguientes no son el inventario completo.
 
 Incluye:
 
@@ -35,7 +35,7 @@ Modelo fisico inicial de `production-service`:
 
 ## Dominio configurable
 
-El dominio publico aun no esta comprado. Por eso ningun servicio debe asumir `api.eslaclave.com` como valor fijo.
+Ningun servicio debe asumir `api.eslaclave.com` como valor fijo.
 
 Usar:
 
@@ -92,7 +92,7 @@ python -m pip install -e ".[dev]"
 
 El camino canonico es `scripts/start_local.ps1`, que fuerza PostgreSQL `erclave_local`, loopback y Firebase Emulator. Los comandos `uvicorn` aislados de esta seccion son diagnosticos avanzados: requieren variables locales explicitas y nunca deben reutilizar `backend/.env`, Cloud SQL Auth Proxy o recursos QA.
 
-En Windows, el comando canonico levanta PostgreSQL local, Firebase Auth Emulator, frontend y las APIs de Administracion, Produccion, Inventario, RH, Ventas, Compras y Mantenimiento:
+En Windows, el comando canonico levanta PostgreSQL local, Firebase Auth Emulator, frontend y las APIs de Administracion, Produccion, Inventario, RH, Ventas, Compras, Mantenimiento y centros de Costing (8014):
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start_local.ps1
@@ -228,7 +228,7 @@ X-Correlation-Id=<id_opcional_para_traza>
 
 En QA con `ERCLAVE_AUTH_MODE=firebase`, las mutaciones de entitlements, usuarios y roles tambien validan el permiso efectivo del usuario autenticado contra `admin-service`. En local/demo se conserva el fallback de desarrollo para no bloquear pruebas locales.
 
-Las mutaciones actuales de entitlements, usuarios, roles y settings registran auditoria en `admin.audit_events`. La invitacion de usuarios asegura identidad Firebase cuando el servicio corre en modo Firebase; la eliminacion borra el acceso en ERClave y elimina la identidad Firebase por email. El onboarding de tenant + owner queda reservado al backoffice interno: con `ERCLAVE_AUTH_MODE=firebase`, el correo autenticado debe estar en `ERCLAVE_BACKOFFICE_ADMIN_EMAILS`. Ese onboarding usa `ERCLAVE_FIREBASE_WEB_API_KEY` para que Firebase envie el correo de recuperacion/activacion de contrasena; si no esta configurado, devuelve un `reset_link` para envio manual. El perfil organizacional del tenant vive en `admin.tenant_settings` con key `organization.profile` y se actualiza via `PUT /v1/settings/organization.profile`.
+Las mutaciones actuales de entitlements, usuarios, roles y settings registran auditoria en `admin.audit_events`. La invitacion de usuarios asegura identidad Firebase cuando el servicio corre en modo Firebase; la eliminacion borra el acceso en ERClave y elimina la identidad Firebase por email. El onboarding de tenant + owner queda reservado al backoffice interno: con `ERCLAVE_AUTH_MODE=firebase`, el correo autenticado debe estar en `ERCLAVE_BACKOFFICE_ADMIN_EMAILS`. Ese onboarding usa `ERCLAVE_FIREBASE_WEB_API_KEY` para que Firebase envie el correo de recuperacion/activacion de contrasena; si no esta configurado, devuelve un `reset_link` para envio manual. En Local la autoridad organizacional es normalizada; `organization.profile` es una proyección de compatibilidad, no un escritor independiente. Ver [CONT-02](../docs/arquitectura/cont_02_administracion_organizacional.md) y [scopes CONT-03](../docs/arquitectura/cont_03_sesion_alcances.md); el estado de QA se consulta por separado.
 
 `POST /v1/tenants` crea tenants desde provisioning de forma idempotente y siempre inicializa `organization.profile`. La autorizacion service-to-service de provisioning queda como siguiente endurecimiento antes de Produccion.
 
@@ -249,7 +249,7 @@ Ejemplo de policy evaluation:
 Configurar primero:
 
 ```text
-ERCLAVE_DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/erclave_local
+ERCLAVE_DATABASE_URL=postgresql+psycopg://user:password@127.0.0.1:5434/erclave_local
 ```
 
 Luego ejecutar desde `backend`:
@@ -289,8 +289,8 @@ Este seed crea o actualiza:
 - usuario `admin.qa@erclave.local`;
 - rol `owner`;
 - membresia activa;
-- modulos activos `admin`, `production`, `inventory` y `hr`;
-- cualquier modulo sin microservicio real, incluidos `sales` e `integrations`, queda inactivo en QA;
+- modulos activos `admin`, `production`, `inventory`, `hr`, `sales`, `purchasing` y `maintenance`;
+- cualquier modulo sin microservicio real, incluido `integrations`, queda inactivo en QA;
 - setting inicial `organization.profile` para corporativo, razones sociales y sucursales;
 - asignacion del rol owner a todos los permisos activos.
 

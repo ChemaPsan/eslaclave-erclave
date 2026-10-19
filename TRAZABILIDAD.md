@@ -1,5 +1,9 @@
 # Trazabilidad de cambios
 
+> Evidencia histórica por corte. El estado vigente se consulta en [ESTADO_ACTUAL](docs/contexto/ESTADO_ACTUAL.md).
+
+> Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](docs/contexto/ESTADO_ACTUAL.md).
+
 Este archivo registra cada ajuste hecho en el repo con nivel de detalle suficiente para auditar qué se cambió, cuándo, por qué, en qué secciones y con qué validacion.
 
 ## Regla de uso
@@ -1724,7 +1728,7 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Archivos | `backend/services/admin-service/app/main.py`, `backend/services/admin-service/app/repositories.py`, `TRAZABILIDAD.md` |
 | Secciones | Backend Admin API, settings, PostgreSQL, Administracion |
 | Descripcion | Se separo la consulta de `AdminRepository.list_settings()` en dos variantes: una sin filtro de modulo y otra con `module_code = :module_code`. Tambien se dejo el registro de routers antes de middlewares en el bootstrap del Admin API. |
-| Motivo | PostgreSQL/psycopg no podia inferir el tipo del parametro en `(:module_code is null or module_code = :module_code)`, causando `500 Internal Server Error` al cargar `/v1/settings?module_code=admin` desde API QA. |
+| Motivo | PostgreSQL/psycopg no podia inferir el tipo del parametro en `(:module_code is null or module_code = :module_code)`, causando `500 Internal Server Error` al cargar `/v1/settingsímodule_code=admin` desde API QA. |
 | Impacto | El endpoint de settings de Administracion ya puede devolver `organization.profile` para el tenant QA sin romper la carga del panel. |
 | Validacion | `python -m py_compile services/admin-service/app/repositories.py services/admin-service/app/main.py`; ejecucion directa de `repo.list_settings('ten_739ee59d765d5e14818674800d', module_code='admin')`; `curl http://127.0.0.1:8010/ready`; `npm.cmd run validate`. |
 | Observaciones | El Admin API local se reinicio despues del cambio y quedo escuchando en `0.0.0.0:8010`. |
@@ -1963,7 +1967,7 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Autor | Codex |
 | Archivos | `frontend/api/backoffice.js`, `frontend/backoffice/app.js`, `frontend/backoffice/styles.css`, `TRAZABILIDAD.md` |
 | Secciones | Backoffice, autenticacion, autorizacion interna |
-| Descripcion | El front de backoffice ahora valida autorizacion contra `GET /v1/backoffice/tenants?limit=1` antes de mostrar cualquier pestaña o formulario interno. Si la API responde rechazo, muestra una pantalla de acceso restringido y no renderiza alta de tenant ni administracion de tenants. |
+| Descripcion | El front de backoffice ahora valida autorizacion contra `GET /v1/backoffice/tenantsílimit=1` antes de mostrar cualquier pestaña o formulario interno. Si la API responde rechazo, muestra una pantalla de acceso restringido y no renderiza alta de tenant ni administracion de tenants. |
 | Motivo | Un usuario owner creado por onboarding podia ver la interfaz del backoffice aunque el backend lo bloqueara con `403`, generando la percepcion de que tenia acceso interno. |
 | Impacto | Solo correos incluidos en `ERCLAVE_BACKOFFICE_ADMIN_EMAILS` ven herramientas de backoffice; los usuarios de tenants quedan fuera incluso si autenticaron correctamente en Firebase. |
 | Validacion | `node --check frontend/backoffice/app.js`; `node --check frontend/api/backoffice.js`; `npm.cmd run validate`. |
@@ -2642,7 +2646,7 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Descripcion | El formulario de receta presenta tres bloques independientes para materiales, mano de obra y maquinaria. Materiales conserva la unidad base de Almacenes; mano de obra usa horas-persona y maquinaria horas-maquina. La UI convierte los tiempos a minutos al construir el payload para mantener compatibilidad con validacion, disponibilidad y costo existentes. |
 | Motivo | Evitar mezclar recursos con semanticas distintas y hacer explicita la magnitud que el usuario debe capturar. |
 | Impacto | Mejora el editor responsive ES/EN sin modificar persistencia ni contratos. Solo ofrece materiales elegibles, puestos productivos activos y maquinaria activa; recetas y ordenes existentes conservan sus cantidades internas en minutos. |
-| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/inventory/items?use_in_recipe=true&status=active` (`inventory-service`, `inventory.item.read`), `GET /v1/inventory/balances?limit=200` (`inventory-service`, `inventory.balance.read`), `GET /v1/hr/areas` (`hr-service`, `hr.area.read`), `GET /v1/hr/positions?production_only=true` (`hr-service`, `hr.position.read`) y `GET /v1/production/machines` (`production-service`, `production.machine.read`); request y response permanecen sin cambios. **APIs no tocadas:** Admin, Ventas y todos los comandos de escritura de Produccion, Inventory y HR. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/inventory/itemsíuse_in_recipe=true&status=active` (`inventory-service`, `inventory.item.read`), `GET /v1/inventory/balancesílimit=200` (`inventory-service`, `inventory.balance.read`), `GET /v1/hr/areas` (`hr-service`, `hr.area.read`), `GET /v1/hr/positionsíproduction_only=true` (`hr-service`, `hr.position.read`) y `GET /v1/production/machines` (`production-service`, `production.machine.read`); request y response permanecen sin cambios. **APIs no tocadas:** Admin, Ventas y todos los comandos de escritura de Produccion, Inventory y HR. |
 | Validacion | Sintaxis JavaScript, `validate-production-cycle.js`, `npm.cmd run validate:responsive` y `npm.cmd run verify`. |
 | Observaciones | Cambio `local-write` de codigo y documentacion. No hubo migraciones, seeds, escrituras de datos, conexiones QA/Produccion ni despliegues. |
 
@@ -2674,7 +2678,7 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Descripcion | El valor seleccionado se presenta como `Nombre - codigo de producto`; los resultados muestran codigo, tipo y unidad. El ID `prs_*` permanece solo en atributos e inputs internos para resolver la relacion. |
 | Motivo | Priorizar informacion reconocible para el usuario y evitar exponer identificadores de infraestructura en la interfaz operativa. |
 | Impacto | Cambio exclusivamente visual y de busqueda: ahora tambien se busca por SKU. No cambia la identidad interna ni los payloads de Recetas o Ventas. |
-| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/production/product-services?limit=200` (`production-service`, `production.product_service.read`); request y response permanecen sin cambios. **APIs no tocadas:** Admin, Inventory, HR, Ventas backend y todos los comandos de escritura. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/production/product-servicesílimit=200` (`production-service`, `production.product_service.read`); request y response permanecen sin cambios. **APIs no tocadas:** Admin, Inventory, HR, Ventas backend y todos los comandos de escritura. |
 | Validacion | Sintaxis JavaScript, guardrail que impide mostrar IDs internos en el resultado de Recetas y `npm.cmd run verify`. |
 | Observaciones | Cambio `local-write` de codigo y documentacion. No hubo migraciones, seeds, escrituras de datos, conexiones QA/Produccion ni despliegues. |
 
@@ -2706,7 +2710,7 @@ Cada cambio relevante debe quedar registrado aqui con:
 | Descripcion | La UI reemplaza títulos `rec_*` por `Nombre del producto - codigo`, acompañados de versión donde corresponde. Los IDs permanecen en `value`, `data-recipe-id`, snapshots y payloads internos. |
 | Motivo | Evitar que identificadores técnicos dominen la experiencia operativa o confundan al usuario final. |
 | Impacto | Cambio exclusivamente de presentación en listas, selectores, confirmaciones, notificaciones y orden imprimible. No modifica identidad, relaciones ni persistencia. |
-| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/production/recipes?limit=200` y `GET /v1/production/product-services?limit=200` (`production-service`; permisos `production.recipe.read` y `production.product_service.read`); request/response permanecen sin cambios. **APIs no tocadas:** Admin, Inventory, HR, Ventas y comandos de escritura de Produccion. |
+| APIs afectadas | **Contratos modificados:** Ninguno. **Endpoints consumidos sin cambio:** `GET /v1/production/recipesílimit=200` y `GET /v1/production/product-servicesílimit=200` (`production-service`; permisos `production.recipe.read` y `production.product_service.read`); request/response permanecen sin cambios. **APIs no tocadas:** Admin, Inventory, HR, Ventas y comandos de escritura de Produccion. |
 | Validacion | Sintaxis JavaScript, paridad i18n, guardrail que impide IDs visibles en títulos de receta y `npm.cmd run verify`. |
 | Observaciones | Cambio `local-write` de codigo y documentacion. No hubo migraciones, seeds, escrituras de datos, conexiones QA/Produccion ni despliegues. |
 
@@ -4477,3 +4481,964 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | Validacion | verify:postgres:360 aprobadas/cero omitidas, validadores y compilación correctos. Consola confirma creación, privacidad, bucket vacío y regla365; API GitHub confirma variable. |
 | APIs afectadas | Ninguna API ERClave modificada. Configuración Cloud Storage y variable GitHub; sin deploy. |
 | Observaciones | Faltan smoke, candidato y release protegidos; revisión visual Word. No afirmar QA actualizado. |
+
+### CHG-278
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-14 23:36 America/Mexico_City |
+| Cambio | Candidato QA fusionado, construido y desplegado sin tráfico |
+| Autor | Codex |
+| Archivos | Contexto ESTADO_ACTUAL/PENDIENTES/INICIO_SESION; plan release_qa_20260914; fronteras de ambientes; diagrama backend; TRAZABILIDAD |
+| Agentes consultados | Arquitectura, Seguridad, QA/Release, Datos/Custodio DB y Producción; revisiones del corte evidence_release_review, qa_db_audit y safe_maintenance_tests. Skills qa-release y environment-boundaries. |
+| Descripcion | Publicación autorizada de documentación, merge PR15, build34932158226 y release34932659212 hasta servicios sin tráfico. Registra migración0036, configuración y siete revisiones. |
+| APIs afectadas | Ninguna modificada en este registro. Smoke GET health/ready/version de siete candidatos aprobado; publicación funcional del delta pendiente de tráfico/frontend. |
+| Validacion | CI34931780981 aprobado, manifiesto con7 digests verificado, jobs DB/config completados y siete candidatos health/ready/version correctos al0%. Local360 aprobadas/cero omitidas. |
+| Observaciones | qa-traffic pendiente por smoke autenticado de evidencia; se solicitó cuenta/orden de prueba autorizada. No Hosting ni datos funcionales QA creados. Revisión visual Word pendiente. |
+
+### CHG-279
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-14 23:49 America/Mexico_City |
+| Cambio | Servicio, receta y orden de prueba QA autorizados |
+| Autor | Codex |
+| Archivos | Contexto ESTADO_ACTUAL/PENDIENTES/INICIO_SESION; plan release_qa_20260914; TRAZABILIDAD |
+| Agentes consultados | Fichas Producción, Arquitectura, Seguridad, QA/Release y Datos/Custodio DB del corte; skills qa-release, environment-boundaries y computer-use. |
+| Descripcion | Alta por UI QA de prd-000002, rec-000002 y OP-000003 exclusivamente para smoke autorizado. Una unidad de servicio, una etapa y6MIN de mano de obra existente. |
+| APIs afectadas | Ningún contrato modificado. Consumidas por frontend: altas de product-services, recipes y orders en Production; validación de recursos y lecturas de catálogos/sesión. |
+| Validacion | Servicio y receta guardados; validación autoritativa de orden lista para liberar; OP-000003 Liberada/0% persistida tras recarga. No prueba de evidencia ni avance100 realizados. |
+| Observaciones | Datos funcionales QA creados por autorización explícita; sin materiales. El frontend publicado carece de formulario nuevo; qa-traffic pendiente. No solicitar nuevamente cuenta/orden. |
+
+
+### CHG-280
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-15 America/Mexico_City |
+| Cambio | Documentación y manuales alineados con QA publicado |
+| Autor | Codex |
+| Archivos | Siete manuales MD/DOCX; guía, entrega y matriz QA; contexto; arquitectura y diagrama; módulos; AGENTES; skills manuales y QA release; generador Word; validador de agentes; plan release; TRAZABILIDAD |
+| Agentes consultados | Revisión complementaria delegada a manual_audit (negocio/técnicos de siete módulos, Custodio manuales y QA), project_docs_audit (Arquitectura/API/Datos/Seguridad/QA), render_audit (herramientas y estructura Word). Skills solution-manuals, environment-boundaries, qa-release, documents y skill-creator. No atribución retroactiva al cambio de runtime. |
+| Descripcion | Registra promoción e57237f/QA0036 completada; retira alcance solo Local en manuales y fichas; identifica antecedentes históricos. Corrige pie/metadatos obsoletos del generador y referencias a cuatro servicios en skill. Ocho Word regenerados; guía y matriz con 65 casos. |
+| APIs afectadas | Ninguna. No cambia contratos ni consume APIs funcionales en esta revisión documental. Usa evidencia del release y smoke registrados. |
+| Validacion | Ocho DOCX con ZIP/XML íntegros, portada/fecha vigentes, tablas y títulos presentes. Ambas skills válidas. Revisión semántica delegada y diff sin errores. npm run verify aprobado: todos los validadores, compilación y 302 backend aprobados/58 omitidos en corrida sin DB; no se repitió la integración PostgreSQL de 360 aprobados/cero omitidos ya registrada en el release. |
+| Observaciones | Sin despliegues ni escrituras QA/Producción. Revisión visual Word pendiente por renderizador ausente. Smoke QA positivo de adjuntos, descarga, cierre100 y UAT siguen pendientes; despliegue no equivale a certificación completa. |
+
+
+### CHG-281
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-16 America/Mexico_City |
+| Cambio | Esperas HTTP coordinadas y evidencia parcial solo Local, sin reintentos |
+| Autor | Codex |
+| Archivos | shared transport/middleware/config/errors; clientes internos; frontend client/evidence/app/i18n; tests; contratos metadatos; auditoría timeouts; contexto; manuales y AGENTES |
+| Agentes consultados | Fichas Arquitectura/API/Seguridad/QA y Producción; revisión delegada project_docs_audit detectó lectura HTTPError sin presupuesto y espera socket no decreciente, ambas corregidas; frontend_timeout_fix implementó y probó frontend. Skills feature, environment-boundaries y form-feedback. |
+| Descripcion | Tolera arranque observado6.86s, acota cuerpos lentos y conserva una sola llamada; no convierte fallo de dependencia en denegación. Mensajes distinguen evidencia confirmada de resultado pendiente. |
+| APIs afectadas | Sin nuevas rutas ni permisos. Contrato transversal X-Request-Timeout-Ms opcional y error.details.dependency_service; propagación correlación en siete APIs. Consumidos POST evidencia y PATCH estado/etapa Production sin cambio payload; cliente frontend compartido. |
+| Validacion | verify:postgres aprobado:368 backend/cero omitidos con fixtures Local autorizados y limpieza. 107 browser offline+4 formularios reales ES/EN aprobados. Validadores y diff aprobados;8 Word estructura válida, visual pendiente. Sin conexiones QA/Prod; resultados en auditoría. |
+| Observaciones | Solo Local; QA e57237f sin modificación. Sin infraestructura, migraciones ni reintentos nuevos. Presupuesto backend cooperativo, no cancelación de transacciones. Conserva cambios previos CHG-280; Word con revisión visual pendiente. |
+
+### CHG-282
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-20 America/Mexico_City |
+| Cambio | Decisión de promoción CHG-281 y estado editorial de manuales |
+| Autor | Codex |
+| Archivos | ESTADO_ACTUAL.md, PENDIENTES.md, REGISTRO.md y TRAZABILIDAD.md |
+| Secciones | Cierre Local, promoción QA pendiente y revisión visual Word |
+| Agentes consultados | Fichas Arquitectura, Seguridad, QA/Release y Custodio de manuales en AGENTES.md; skills environment-boundaries, qa-release, solution-manuals y documents. |
+| Descripcion | Conserva CHG-281 en Local hasta cerrar el smoke autenticado de OP-000003; documenta el bloqueo de revisión visual de los ocho Word. |
+| Motivo | Cerrar explícitamente el estado de los puntos 3 y 4 sin atribuir pruebas ni publicaciones inexistentes. |
+| Impacto | Solo documentación Local. Sin PR, publicación, migración, deploy, datos ni escrituras QA/Producción. |
+| APIs afectadas | Ninguna. No se consultaron ni modificaron endpoints en este registro. |
+| Validacion | Revisión de Git y fuentes vigentes; render_docx.py no arrancó por falta de pdf2image, Word COM devolvió 0x80070520 y el primer DOCX estaba bloqueado por otro proceso. Sin verificación visual nueva. |
+| Observaciones | Release QA vigente e57237f/0036 según evidencia documental; reconfirmar /version antes de preparar candidato. Publicación documental y revisión visual pendientes. |
+
+### CHG-283
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-20 America/Mexico_City |
+| Cambio | Skills y flujo de coherencia formulario-contrato, contexto breve y evidencia QA |
+| Autor | Codex |
+| Archivos | Tres skills nuevas; `tools/context_brief.py`; AGENTS, AGENTES, skill de funcionalidades, package.json, validador de tooling; README, gobierno documental, contexto, auditoría piloto y TRAZABILIDAD. |
+| Secciones | Justificación de campos, create/update/read, catálogos, estado documentado y resultados UAT |
+| Agentes consultados | Fichas de negocio y técnicas de Producción y Compras, Arquitectura API, Diseño/i18n, QA/Release y Custodio de documentación en AGENTES.md. Skills skill-creator, erclave-feature y erclave-form-feedback consultadas; sin delegación. |
+| Descripcion | Añade tres workflows reutilizables y un script de resumen local sin dependencias. Integra disparadores en instrucciones y registra lectura piloto de Producto/Servicio y Proveedor sin mutar funcionalidad. |
+| Motivo | Acelerar cortes nuevos, detectar desajustes de frontend/backend/catálogos y justificar cada campo sin degradar pruebas ni trazabilidad. |
+| Impacto | Documentación, tooling y proceso Local. No cambia APIs, schemas, frontend operativo, datos, QA ni Producción. |
+| APIs afectadas | Ningún contrato modificado ni endpoint llamado por este cambio. El piloto revisa, sin llamar, POST/PATCH de product-services en Production y suppliers en Purchasing, con permisos create/update existentes. Resto de APIs no tocadas. |
+| Validacion | Tres skills aprobadas por quick_validate; `context_brief.py` ejecutado en texto/JSON; `git diff --check`; gate equivalente `tools/verify.js` aprobado mediante runtime JS de VS Code: validadores, compilación y 310 backend aprobadas/58 omitidas sin DB. Piloto de lectura de código, sin browser ni QA. |
+| Observaciones | No se consideran errores funcionales confirmados las diferencias de obligatoriedad sin decisión de negocio. Proveedor tiene cobertura fija de códigos pese a catálogos administrables; corregirlo en corte posterior con pruebas. QA permanece e57237f/0036 documentado. |
+
+### CHG-284
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-20 America/Mexico_City |
+| Cambio | Catálogos comerciales autoritativos en el formulario de Proveedor |
+| Autor | Codex |
+| Archivos | Purchasing/Admin API y tests; frontend app/state/client/i18n y E2E; contratos OpenAPI; validador de Compras; ficha de módulo, auditoría piloto, contexto y TRAZABILIDAD. |
+| Secciones | Alta y edición de proveedor; permisos consumidores de catálogos; referencia comercial de Compras |
+| Agentes consultados | Fichas de Compras, Arquitectura/API, Seguridad/permisos, Diseño/i18n y QA/Release en AGENTES.md. Skills erclave-feature, erclave-form-contract y environment-boundaries; sin delegación. |
+| Descripcion | Añade una lectura de referencias en Purchasing, habilita el consumo autorizado del catálogo Admin y reemplaza listas fijas de moneda/condición por opciones activas. Conserva códigos históricos al editar y bloquea la captura si la referencia no está disponible. |
+| Motivo | Evitar que frontend ofrezca menos códigos que el backend acepta y mantener sincronizados formulario, permisos y autoridad del catálogo. |
+| Impacto | Funcionalidad Local de Proveedores y autorización de lectura Admin. Sin migración, seed, escritura QA/Producción ni cambio de persistencia. |
+| APIs afectadas | Nueva `GET /v1/purchasing/reference-data` (Purchasing; cualquiera de `purchasing.supplier.create`/`.update`; respuesta `currencies[]`, `payment_terms[]` con code/name ES/EN). `GET /v1/catalogs/commercial/{catalog_code}` amplía consumidores a supplier create/update; `GET /v1/catalogs/commercial/{catalog_code}/by-code/{code}` amplía a supplier create/update y order create/update, sin cambio de request/response. `POST/PATCH /v1/purchasing/suppliers` se consumen sin cambio de payload. |
+| Validacion | Purchasing API 8 aprobadas; Admin API 85 aprobadas; OpenAPI runtime/YAML, sintaxis y ciclo de Compras aprobados. Gate completo: todos los validadores, compilación y 313 backend aprobadas/58 omitidas sin PostgreSQL. Caso E2E agregado para códigos dinámicos; ejecución detenida por preflight con stack Local apagado, sin resultado del caso. |
+| Observaciones | QA permanece e57237f/0036. Producto/Servicio conserva decisiones de campos abiertas. El fallback de listas fijas existe sólo en modo no API para la demostración local; API exige referencias autoritativas. |
+
+### CHG-285
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-20 America/Mexico_City |
+| Cambio | Auditoría transversal y referencias comerciales históricas seguras en Ventas |
+| Autor | Codex |
+| Archivos | `frontend/app.js`, `frontend/i18n/translations.js`, `tests/e2e/frontend-contracts.spec.js`, validadores de Ventas y Compras, ficha de Ventas, auditoría transversal, contexto y `TRAZABILIDAD.md`. |
+| Secciones | Formularios de Cliente, Cotización y Proveedor; monedas y condiciones de pago; revisión transversal de selectores y catálogos. |
+| Agentes consultados | Fichas de Ventas, Compras, Producción, Inventarios, RH, Mantenimiento, Administración, Arquitectura/API, Seguridad y QA en `AGENTES.md`; skill `erclave-form-contract`; sin delegación. |
+| Descripcion | Unifica la presentación de referencias comerciales activas e históricas. Clientes y Cotizaciones muestran un código inactivo como no vigente, no seleccionan silenciosamente la primera opción activa y permiten guardar otros cambios conservando el valor histórico; las altas exigen referencias activas. La revisión del resto de módulos distingue entidades configurables de enums cerrados. |
+| Motivo | Evitar sustituciones accidentales al editar registros históricos y aplicar sólo las mejoras necesarias para la fase actual. |
+| Impacto | Funcionalidad Local de Clientes y Cotizaciones, helper compartido con Proveedores y trazabilidad de decisiones. Sin migración, seed, escritura QA/Producción ni cambio de persistencia. |
+| APIs afectadas | Ningún contrato modificado. Se siguen consumiendo `GET /v1/sales/reference-data`, `POST/PATCH /v1/sales/customers` y `POST/PATCH /v1/sales/quotes`; en PATCH se omiten `currency` o `payment_terms` únicamente cuando se conserva una referencia histórica inactiva. No se llamaron endpoints durante la auditoría. |
+| Validacion | Validadores enfocados de Ventas, Compras, i18n y sintaxis aprobados. Gate completo aprobado: todos los validadores, compilación y 313 pruebas backend aprobadas/58 omitidas sin PostgreSQL. Una comprobación aislada en Chrome confirmó que la opción histórica permanece visible y válida, pero no entra en `FormData`; el caso Playwright integrado de Cliente/Cotización sigue pendiente por stack Local apagado. |
+| Observaciones | No se requieren cambios equivalentes ahora en Administración, Inventarios, RH ni Mantenimiento. Producción conserva decisiones funcionales de categoría, centro de costos y área responsable; los catálogos fiscales se difieren al corte de factura/XML, CFDI y cuentas por pagar. QA permanece e57237f/0036. |
+
+### CHG-286
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-21 09:38 America/Mexico_City |
+| Cambio | Análisis de impacto para estructura organizacional y preparación contable |
+| Autor | Codex |
+| Archivos | Auditoría `impacto_preparacion_contabilidad_2026-09-21.md`; contexto ESTADO_ACTUAL/PENDIENTES/INICIO_SESION; fichas de Administración, Costos y Contabilidad; `TRAZABILIDAD.md`. |
+| Secciones | Corporativo/Sociedad/División/Emisor, centros de costos, eventos contables, pagos, códigos y plan de migración. |
+| Agentes consultados | Fichas de Administración, Contabilidad, Costing, Arquitectura/API, Seguridad, Datos y módulos operativos en `AGENTES.md`; skills `erclave-feature` y `erclave-form-contract`; sin delegación. |
+| Descripcion | Documenta el estado comprobado, el modelo objetivo propuesto, la separación Sociedad–Emisor, dimensiones obligatorias, configuración por División, eventos/reversas, matriz de movimientos y fases de implementación. Identifica huecos concretos de códigos en Puesto, Movimiento de inventario, Compras, Mantenimiento y estructura organizacional. |
+| Motivo | Entender el impacto completo antes de modificar la jerarquía o construir Contabilidad, evitando pólizas sin origen y campos sin propósito. |
+| Impacto | Sólo documentación y planeación Local. No cambia runtime, modelos persistentes, migraciones, datos, QA o Producción. |
+| APIs afectadas | Ninguna API modificada o invocada. Revisión estática de contratos y código Admin, Production, Inventory, Sales, Purchasing, HR y Maintenance. |
+| Validacion | `validate-documentation-freshness.js` y `validate-traceability.js` aprobados con el runtime JavaScript de VS Code; `git diff --check` aprobado; `python tools/context_brief.py --json` reconoce CHG-286 como estado y pendiente vigentes. No se ejecutaron pruebas de runtime porque no cambió código ejecutable. |
+| Observaciones | La propuesta no autoriza implementación. Deben cerrarse la semántica Sociedad–Emisor, el dueño del libro, la obligatoriedad del Centro de costos y los valores de backfill. SAT consultado como fuente oficial para distinguir FormaPago, MetodoPago y claves 04/28. |
+
+### CHG-287
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-21 America/Mexico_City |
+| Cambio | Plan de trabajo para estructura organizacional, costos y contabilidad |
+| Autor | Codex |
+| Archivos | Nuevo `docs/arquitectura/plan_preparacion_contabilidad.md`; análisis CHG-286; contexto ESTADO_ACTUAL/PENDIENTES/INICIO_SESION/DECISIONES; plan backend MVP; fichas Administración, Costos y Contabilidad; `TRAZABILIDAD.md`. |
+| Secciones | Definiciones, alcance por División, campos transversales, dependencias, cortes CONT-00…CONT-18, migración, pruebas, seguridad, observabilidad e hitos. |
+| Agentes consultados | Fichas de Administración, Costing, Contabilidad, Arquitectura/API, Seguridad, Datos, QA y módulos operativos en `AGENTES.md`; skills `erclave-feature` y `erclave-form-contract`; sin delegación. |
+| Descripcion | Convierte el análisis de impacto en una secuencia ejecutable. Cada corte define objetivo, cambios de datos/API/UI, ownership, permisos, compatibilidad, pruebas y criterio de salida. Establece expandir→migrar→exigir→retirar y evita un cambio monolítico. |
+| Motivo | Permitir avanzar con velocidad, calidad y trazabilidad, con fronteras claras y sin iniciar Accounting sobre documentos sin dimensiones persistidas. |
+| Impacto | Sólo documentación y planeación Local. No modifica runtime, OpenAPI, migraciones, datos, QA o Producción. |
+| APIs afectadas | Ninguna. El plan enumera rutas y permisos propuestos para cambios futuros, sin modificar contratos actuales. |
+| Validacion | `validate-documentation-freshness.js` y `validate-traceability.js` aprobados con runtime JavaScript de VS Code; enlaces locales comprobados; `git diff --check` aprobado; `context_brief.py --json` reconoce CHG-287. No se ejecutaron pruebas de runtime porque no cambió código ejecutable. |
+| Observaciones | `CONT-00` conserva decisiones funcionales como gates; los IDs CONT no equivalen a CHG implementados. El primer corte técnico posterior será CONT-01. |
+
+### CHG-288
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-22 America/Mexico_City |
+| Cambio | Inicio de CONT-00 y preflight organizacional offline |
+| Autor | Codex |
+| Archivos | `tools/preflight_organization.py`; `backend/services/admin-service/tests/test_organization_preflight.py`; `docs/arquitectura/cont_00_decisiones_y_preflight.md`; plan contable; cuatro fuentes de contexto; ficha de Administración; `AGENTES.md`; `TRAZABILIDAD.md`. Los cambios anteriores del working tree se preservan. |
+| Secciones | Decisiones Sociedad/Emisor/libro, Centro de costos, moneda; ejemplos de aceptación; calidad de datos y preparación de CONT-01. |
+| Agentes consultados | Fichas de Administración negocio/técnica, Costos, Contabilidad, Arquitectura, Datos/Custodio DB, Seguridad y QA en `AGENTES.md`; skills erclave-feature, erclave-db-migration y erclave-environment-boundaries; sin delegación. |
+| Descripcion | Inicia el plan autorizado y concreta las decisiones aún abiertas. Implementa un CLI offline que revisa exportaciones originales sin normalizarlas, modificar archivos, conectar a DB ni imprimir datos fiscales/contactos. Detecta formato inválido, IDs repetidos, relaciones huérfanas/ambiguas y revisiones de códigos/datos fiscales, con rutas estructuradas y hash de origen. |
+| Motivo | Preparar una migración que preserve registros y referencias; la lectura normalizada actual puede ocultar filas inválidas y no resuelve decisiones de cardinalidad o backfill. |
+| Impacto | Código auxiliar y documentación Local. Sin cambios de runtime API/UI, modelos, Alembic, permisos, seeds, datos persistidos, QA o Producción. CONT-00 abierto; CONT-01 a CONT-18 pendientes. |
+| APIs afectadas | Ninguna. Contratos modificados: ninguno. Endpoints consumidos: ninguno. Las APIs existentes se revisaron estáticamente y no se tocaron en este corte. |
+| Validacion | 21 pruebas focalizadas offline aprobadas con el Python de backend/.venv. `npm.cmd run verify` aprobado con Node 24.19.0/npm 11.17.0 fuera del PATH inicial: todos los validadores, compilación y 334 backend aprobadas/58 omitidas sin PostgreSQL. `npm.cmd run session:context` y `git diff --check` aprobados. Intento previo con runtime de VS Code falló al terminar sintaxis; sustituido por Node real. No hay verificación PostgreSQL, browser, UAT o QA nueva. |
+| Observaciones | Las preguntas funcionales siguen pendientes de respuesta. La aprobación de aplicar el plan autoriza trabajo Local, no aporta valores que el plan dejó abiertos. El preflight no se ejecutó contra exportaciones reales ni certifica readiness de migración. QA documentado sigue e57237f/0036. |
+
+### CHG-289
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-22 America/Mexico_City |
+| Cambio | CONT-00 resuelto y CONT-01: estructura con Emisor único por Sociedad y libros por Sociedad |
+| Autor | Codex |
+| Archivos | Modelos Admin; revisión `20260922_0037_organization_structure.py`; `organization_migration.py`; CLI `organization_backfill_local.py`; pruebas `test_organization_migration.py`; documentos CONT-00/01 y plan contable; modelo/ownership/diagrama; contexto; fichas Administración/Costos/Contabilidad; `AGENTES.md`; `TRAZABILIDAD.md`. Se preserva el working tree previo. |
+| Secciones | Cardinalidad, libros por Sociedad, Centro de costos por División, moneda base MXN, expansión organizacional, backfill revisado, equivalencias y compatibilidad. |
+| Agentes consultados | Fichas de Administración negocio/técnica, Costos, Contabilidad, Arquitectura/API, Datos/Custodio DB, Seguridad y QA; skills erclave-feature, erclave-db-migration, erclave-environment-boundaries y erclave-form-contract para formularios futuros; sin delegación. |
+| Descripcion | Registra la respuesta del usuario y sustituye propuestas incompatibles. Crea Emisores, Sociedades con un único Emisor y moneda base, Divisiones, lotes de importación y equivalencias. Backfill en transacción con hashes revisados, locks, auditoría, IDs deterministas, preservación de JSON y conflictos ante cambios de origen/destino. No fusiona RFC ni asigna sucursales huérfanas por inferencia. |
+| Motivo | Implementar la base organizacional aprobada sin perder datos ni activar parcialmente el nuevo modelo en APIs. |
+| Impacto | Sólo Local: Alembic `20260922_0037` aplicada a `127.0.0.1:5434/erclave_local`. JSON y APIs actuales conservan autoridad. UI/scopes, Centros de costos y Accounting permanecen pendientes de CONT-02…18. Sin seeds ni cambios QA/Producción. |
+| APIs afectadas | Ninguna. Contratos modificados: ninguno. Endpoints consumidos: ninguno. Modelos/migración/herramienta interna nuevos; APIs actuales no tocadas en este corte. |
+| Validacion | 51 focalizadas aprobadas/cero omitidas: 30 nuevas (9 PostgreSQL) y 21 del preflight previo. Upgrade/downgrade/re-upgrade, alineación de modelos/PK/tipos, cardinalidad, referencias, idempotencia, lock entre dos conexiones, moneda activa y rollback ante fallo de auditoría. Sólo tenant autorizado y fixtures transaccionales revertidos. `npm.cmd run verify` aprobado: todos los validadores, compilación y 355 backend aprobadas/67 omitidas sin DB; 9 de esas integraciones pasaron por separado, 58 previas no se reejecutaron con DB. Documentación/trazabilidad y `git diff --check` aprobados. |
+| Observaciones | Tenant Local sin razones sociales/sucursales: preview real con cero registros y perfil intacto; conversión no vacía probada con fixtures, sin backfill artificial. Downgrade bloquea tablas pobladas. QA documentado sigue e57237f/0036. CONT-00 cerrado; siguiente corte CONT-02, sin volver a solicitar decisiones resueltas. |
+
+
+### CHG-290
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-23 America/Mexico_City |
+| Cambio | Candidato aislado CONT-01 para la promoción QA solicitada |
+| Autor | Codex |
+| Archivos | Rama agent/chg290-cont01-qa: preflight CONT-00, modelos/migración/importador/CLI/pruebas CONT-01, validadores de agentes/DB y documentación acotada; plan docs/operaciones/release_qa_20260923_cont01.md. |
+| Secciones | Delta exacto, base main, QA read-only, migración 0037, configuración obligatoria del pipeline, validación y rollback. |
+| Agentes consultados | Fichas de Arquitectura, Seguridad, QA/Release, Datos, Custodio DB, API y Administración negocio/técnica; skills erclave-environment-boundaries y erclave-qa-release; sin delegación. |
+| Descripcion | Separa CONT-00/01 sobre main e57237f conservando el working tree previo. Revisa pipeline y evidencia remota: Hosting 200, siete APIs 503 y posteriormente 500, release histórico exitoso. Identifica que configurar QA también concede permiso al Owner de sistema de todos los tenants. |
+| Motivo | Preparar el despliegue solicitado sin incluir cambios locales ajenos ni ejecutar configuración global no informada. |
+| Impacto | Preparación Local y lecturas QA/GitHub. Sin publicación, fusión, build, migración, configuración, revisión Cloud Run, tráfico ni Hosting nuevos. |
+| APIs afectadas | Ninguna modificada; GET /version de las siete APIs y GET /env.js de Hosting consumidos sin cambio. |
+| Validacion | Candidato aislado: npm.cmd run verify aprobado, todos los validadores y compilación, 344 backend aprobadas/67 omitidas sin DB. Corrida focalizada: 51 aprobadas/cero omitidas, incluidas 9 PostgreSQL; perfil y cinco tablas del tenant Local permitido intactos al terminar. Las 58 integraciones previas omitidas no se reejecutaron con DB. git diff --check aprobado. |
+| Observaciones | QA no actualizado. Falta recuperar versión actual y autorizaciones según la guía. Historial CHG-278…289 describe workspace original, no implica inclusión de todos esos cambios en esta rama. |
+
+
+### CHG-291
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-23 America/Mexico_City |
+| Cambio | Arranque Local aislado tras corregir la solicitud de QA |
+| Autor | Codex |
+| Archivos | Contexto ESTADO_ACTUAL/PENDIENTES/INICIO_SESION/DECISIONES, anotación del plan QA y TRAZABILIDAD. Sin cambios de código funcional. |
+| Secciones | Ambiente efectivo, procesos, tenant, arranque, comprobaciones y corrección del objetivo. |
+| Agentes consultados | Fichas de Arquitectura, Seguridad, QA, Datos/Custodio DB y Administración previamente consultadas; skill erclave-environment-boundaries; sin delegación. |
+| Descripcion | El usuario aclara Local. Se ejecuta start_local.ps1 sobre el workspace original; PostgreSQL existente, siete APIs, frontend y Firebase Auth Emulator demo-erclave. El candidato QA se preserva sin publicar y deja de ser tarea activa. |
+| Motivo | Facilitar la revisión de los cambios en Local aislado conforme a la corrección del usuario. |
+| Impacto | Sólo Local. Sin migración nueva ni backfill; catálogo de 171 permisos y demo de ocho módulos reconciliados por el arranque canónico, identidad de emulador y sesión de prueba. Base comprobada antes de escribir: sólo tenant ten_739ee59d765d5e14818674800d. Sin QA/Producción ni publicaciones. |
+| APIs afectadas | Ninguna modificada. Consumidas: GET /health, /ready y /version de siete servicios; GET /v1/session/context de Admin (200 autenticado, 401 sin token); POST accounts:signUp/accounts:signInWithPassword de Firebase Auth Emulator. Frontend y UI Emulator GET /: 200. |
+| Validacion | 21 probes de API aprobados; siete health con environment local, readiness lista, frontend y Emulator UI 200, login emulado/contexto 200 y rechazo sin token 401. Alembic Local 0037 confirmado. Documentación/trazabilidad y diff comprobados; sin nueva suite funcional completa por ser arranque y documentación. |
+| Observaciones | PowerShell ejecutado con Bypass sólo en el proceso para el script local, sin política persistente modificada. Servicios quedan activos. UI organizacional nueva/Accounting siguen pendientes; no confundir arranque con implementación de CONT-02. Credenciales/tokens no se guardan en documentación. |
+
+### CHG-292
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-25 America/Mexico_City |
+| Cambio | CONT-02: APIs y formularios de organización en Local |
+| Autor | Codex |
+| Archivos | Admin organization_api/schemas/store, models/main/repositories/seeds.permissions; revisión 0038; CLI de activación; pruebas de comandos/migración; contrato OpenAPI y validador runtime; cliente/feature/CSS/i18n de organización, app/index/manifiesto Admin; pruebas Playwright y su configuración; documento CONT-02, plan contable, modelo/ownership/API/diagrama, feedback, módulo Administración, contexto, AGENTES y TRAZABILIDAD. Los cambios previos del árbol permanecen. |
+| Secciones | Emisores, Sociedades, Divisiones; autoridad/proyección; permisos; formularios ES/EN; transición, recuperación y pruebas. |
+| Agentes consultados | Fichas de Administración negocio/técnica, Arquitectura/API, Seguridad, Datos/Custodio DB, Diseño/i18n y QA; decisiones de Costos/Contabilidad ya aprobadas. Skills erclave-feature, erclave-db-migration, erclave-form-contract, erclave-form-feedback, erclave-environment-boundaries y erclave-qa-evidence. Sin delegación. |
+| Descripcion | Implementa 18 operaciones con doce permisos y pantalla con búsqueda acotada, alta, edición y estados. Sociedad selecciona un único Emisor y moneda activa inicialmente MXN; División selecciona Sociedad. Guarda tablas, proyección compatible, auditoría e idempotencia en la misma transacción. Revisión de hashes protege activación y cambios posteriores al snapshot; preserva equivalencias/extensiones e historial. |
+| Motivo | Completar el siguiente corte del plan autorizado y habilitar administración real de la estructura antes de propagar scopes y contabilidad. |
+| Impacto | Sólo Local; Alembic 20260925_0038 aplicada, autoridad activada para el tenant autorizado con origen vacío. Doce permisos sincronizados y grants sólo al Owner de ese tenant. Admin 8000 actualizado; frontend 4173 y Firebase Emulator. No modifica otros servicios, recursos QA/Producción, publicaciones ni datos de negocio reales. |
+| APIs afectadas | Admin: GET/POST /v1/organization/fiscal-issuers, /societies, /divisions; GET/PATCH de cada colección /{record_id}; POST /{record_id}/activate y /deactivate, permisos admin.fiscal_issuer/society/division read/create/update/status. Ocho comandos antiguos legal-entities/branches deprecados y adaptados, permiso admin.setting.update conservado; PUT /v1/settings/{key} protege arrays y admite edición corporativa parcial; DELETE /v1/backoffice/tenants/{tenant_id} protege historial bajo allowlist existente. Consumidos sin cambio: GET sesión, settings, currencies y code-sequences. Request/response y todas las rutas enumeradas en [matriz CONT-02](docs/arquitectura/cont_02_administracion_organizacional.md#apis-afectadas). APIs de los demás servicios no tocadas por este corte. |
+| Validacion | npm.cmd run verify aprobado: todos los validadores, compilación, 380 backend aprobadas/85 omitidas sin DB. 94 focalizadas aprobadas sin omisiones, incluidas 27 integraciones organizacionales en PostgreSQL con rollback; 58 integraciones previas no se reejecutaron con DB. Suite form-feedback: 119 aprobadas, incluidas 12 de organización ES/EN; últimas correcciones del selector comprobadas de nuevo en esas 12. Owner local: cuatro lecturas organizacionales 200, tres formularios, contenedor móvil, cero errores JavaScript y cero mutaciones de negocio. Documentación, OpenAPI, responsive y git diff --check aprobados. Logs locales chg292-validation.log, chg292-postgres.log, chg292-form-feedback.log y chg292-browser.log. |
+| Observaciones | Workspace sobre 213f75c con cambios sin commit; sin SHA publicado nuevo. Fixtures de guardado revertidos y browser funcional con APIs simuladas; login/lecturas Local con Firebase SDK adaptado a REST real del emulador. No sustituye UAT. Siguiente CONT-03 sesión/scopes; Centros de costos y Accounting pendientes. El permiso histórico amplio de adaptadores se conserva explícitamente durante transición. |
+
+
+### CHG-293
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-27 America/Mexico_City |
+| Cambio | CONT-03 Local: sesión, alcances y guardianes contables |
+| Autor | Codex |
+| Archivos | Admin organization_scope/scope_api/api/main/repositories/schemas; CLI organization_scopes_local y seed_admin_qa_demo; tres suites scope backend; cliente/feature/i18n organization-scope, admin.js/app.js y CSS organizacional; errores ES/EN; dos suites browser y configuración form-feedback; OpenAPI Admin y validador runtime; AGENTS/AGENTES, skills accounting/module-boundaries y ruta feature; validadores agents/codex-tooling; cobertura de módulos, contrato CONT-03, plan, arquitectura/diagrama, fichas Admin/Contabilidad, contexto y fuente/registro de manual Admin. Cambios previos del árbol preservados. |
+| Secciones | Sesión versionada, selección efectiva, edición de membresías, conversión metadata, cobertura de módulos y protección de fronteras. |
+| Agentes consultados | Fichas de Administración y Contabilidad negocio/técnica, Arquitectura/API/Datos, Custodio DB, Seguridad, Sinergia, Diseño/i18n, QA/Release y Manuales. Skills feature, ambientes, migraciones, contrato/feedback, evidencia, accounting, module-boundaries y skill-creator. Sin delegación. |
+| Descripcion | Scope v2 con wildcard explícito y vacío restrictivo; backend deriva Sociedad/Emisor de División activa. Editor con revisión esperada, idempotencia, auditoría, referencias y feedback ES/EN. Preferencia por tenant/usuario, sin Matriz ficticia. Invitaciones nuevas nacen con alcance vacío; reinvitación, onboarding y seeds preservan alcance existente. Conversión Local por hash revisado. Especialización contable y guardianes documentados; validador exige ambos roles en cada módulo e incorpora Mantenimiento. |
+| Motivo | Aplicar el siguiente corte vertical del plan y cubrir riesgos contables, de ownership y de módulos sin supervisión verificable. |
+| Impacto | Sólo Local. Una membresía convertida del tenant ten_739ee59d765d5e14818674800d; repetición preview cero cambios. Catálogos organizacionales vacíos preservados. Alembic sigue 20260925_0038; stack Local activo con Emulator, sin conexiones ni modificaciones QA/Producción. |
+| APIs afectadas | Admin GET /v1/session/context: query opcional division_id y scope v2, contexto autenticado de membresía. Nuevos GET/PUT /v1/users/{user_id}/organization-scope: admin.user.read/update, revisión e Idempotency-Key en PUT. POST /v1/users/invitations y /v1/provisioning/tenant-onboarding: misma forma contractual, preservación/inicialización de metadata. Consumido sin cambio GET /v1/organization/divisions con admin.division.read. APIs operativas de otros servicios intactas en este corte. Matriz completa en docs/arquitectura/cont_03_sesion_alcances.md. |
+| Validacion | 33 focalizadas aprobadas, incluidas 9 PostgreSQL con rollback; 126 pruebas browser form-feedback aprobadas; smoke browser Local de lectura aprobado, captura móvil inspeccionada. Login real Emulator, sesión/alcance 200, selección ficticia default 403 y siete health 200. Dos skills validadas. Gate final npm run verify aprobado: 404 backend aprobadas/94 omitidas sin DB, todos los validadores y compilación correctos; git diff --check sin errores. Logs chg293-postgres.log, chg293-browser.log, chg293-local-browser.log y chg293-verify.log. |
+| Observaciones | No certifica separación operativa completa ni libro contable. CONT-04/05/07/08 pendientes y asignación de datos existentes solicitada al usuario; desarrollo independiente sigue autorizado. Browser funcional con APIs interceptadas separado del smoke Local real, sin UAT QA. Fuente de manual actualizada; Word pendiente de regeneración y revisión visual. Working tree sobre 213f75c sin commit ni publicación. |
+
+
+### CHG-294
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-27 America/Mexico_City |
+| Cambio | Contabilidad opcional y fronteras de capacidades |
+| Autor | Codex |
+| Archivos | AGENTES.md; skills erclave-accounting y erclave-module-boundaries; docs/arquitectura/contabilidad_opcional_y_capacidades.md, plan_preparacion_contabilidad.md, ownership_datos_mvp.md, cobertura_agentes_modulos.md; módulos 06/08/09; contexto INICIO_SESION/ESTADO_ACTUAL/DECISIONES/PENDIENTES; TRAZABILIDAD.md. |
+| Secciones | Preparación frente a activación; dueños y superficies; ciclo de habilitación e historia; aceptación futura. |
+| Agentes consultados | Fichas de Administración, Costos, Contabilidad, Arquitectura, Sinergia, Seguridad, Datos/Custodio DB y QA. Skills accounting, module-boundaries y skill-creator. Sin delegación. |
+| Descripcion | Analiza código de catálogo MVP, dependencias y manifiestos planned. Documenta estructura operativa independiente de Accounting, catálogo básico Costing visible en Admin y funciones analíticas/contables separadas. Refuerza skills/ficha existente para no generar efectos ni imponer configuración contable con módulo apagado; API/jobs, fecha de inicio, conservación y reactivación sin replay automático. |
+| Motivo | El usuario aclara que Contabilidad será opcional y pide preparar un responsable que proteja esa división. |
+| Impacto | Diseño y gobierno documental únicamente; no cambia runtime, datos, migraciones, permisos, entitlements ni ambientes. |
+| APIs afectadas | Ninguna. Sin contratos modificados ni endpoints consumidos en este corte. |
+| Validacion | Revisión contra catálogo Admin, dependencias y manifiestos; ambas skills válidas; npm run verify aprobado: validadores, compilación y 404 backend aprobadas/94 omitidas sin DB. git diff --check correcto. Log chg294-verify.log. No se atribuyen pruebas funcionales a comportamiento futuro. |
+| Observaciones | Recomendación: catálogo básico independiente de analítica; autorización exacta y obligatoriedad condicional del centro pendientes antes de CONT-05/07/08. Se conserva ownership y se explicita el ajuste a la decisión anterior; no inventar bypass ni centro automático. Último runtime CHG-293, Accounting/Costing siguen planned. |
+
+
+### CHG-295
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-27 America/Mexico_City |
+| Cambio | Plan de separación operativa y Contabilidad opcional |
+| Autor | Codex |
+| Archivos | docs/arquitectura/plan_separacion_modular_y_contabilidad_opcional.md, plan_preparacion_contabilidad.md; docs/contexto/INICIO_SESION.md, ESTADO_ACTUAL.md, PENDIENTES.md; TRAZABILIDAD.md. |
+| Secciones | Secuencia, capacidades, migración, activación, responsables y aceptación. |
+| Agentes consultados | Criterios vigentes de Administración, Costos, Contabilidad, Arquitectura/Sinergia, Seguridad, Datos/Custodio DB y QA; skills accounting/module-boundaries ya consultadas. Sin delegación. |
+| Descripcion | Planifica siete fases ligadas a los cortes CONT existentes, separa el hito operativo del contable, explicita autorización/obligatoriedad pendientes, backfill revisado y pruebas de activación parcial. Define próximo entregable sin iniciar implementación. |
+| Motivo | El usuario solicita un plan basado en Contabilidad opcional y configuración organizacional independiente. |
+| Impacto | Documentación únicamente; no cambia código, contratos, datos, módulos ni ambientes. |
+| APIs afectadas | Ninguna; sin endpoints consumidos. Las matrices de APIs futuras se entregan por corte. |
+| Validacion | Coherencia con CHG-294 y programa CONT; npm run verify aprobado: todos los validadores, compilación y 404 pruebas aprobadas/94 omitidas sin DB. git diff --check correcto. Log chg295-verify.log; no acredita funcionalidades futuras. |
+| Observaciones | Último runtime CHG-293. Catálogo básico y obligatoriedad condicional son diseño por concretar; estructura/mapeo de datos reales pendientes. Sin release QA/Producción. |
+
+
+### CHG-296
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-27 America/Mexico_City |
+| Cambio | Política de capacidades y piloto CONT-04 de configuración por alcance |
+| Autor | Codex |
+| Archivos | Admin capabilities, schemas/api, models/repositories/main, scoped_configuration/configuration_api; migración 0039; pruebas capabilities/scoped_configuration; OpenAPI Admin y validador runtime; cliente/feature/i18n scoped-configuration, feature/CSS organization, errores traducidos; Playwright/configuración; matriz de capacidades y CONT-04, plan/arquitectura/diagrama/contexto/módulos, fuente/registro manual, AGENTES y dos skills, TRAZABILIDAD. Cambios previos preservados. |
+| Agentes consultados | Administración, Costos y Contabilidad negocio/técnico; Arquitectura/API, Seguridad, Datos/Custodio DB, Sinergia, Diseño/i18n y QA. Skills feature, accounting, module-boundaries, ambientes, migraciones, contrato/feedback y manuales. Sin delegación. |
+| Descripcion | Usuario confirma catálogo básico en Admin y centro obligatorio sólo por flujo habilitado. Sesión expone disponibilidad versionada separada de autorización, con planned siempre apagado. Primer recorrido CONT-04: plantilla por Sociedad/División, origen heredado, ajuste completo y restauración; revisión, idempotencia, auditoría y bloqueo organizacional compartido con plantilla corporativa. No propaga todavía a impresiones/documentos operativos. |
+| Motivo | Aplicar el plan sin activar implícitamente Contabilidad ni bloquear operación por configuración contable. |
+| Impacto | Sólo Local, tenant ten_739ee59d765d5e14818674800d verificado; Alembic 20260927_0039 aplicada, tabla aditiva vacía. Upgrade/downgrade vacío/upgrade probados. Datos de pruebas revertidos; sin seeds ni estructura inventada, sin QA/Producción. |
+| APIs afectadas | GET /v1/session/context agrega capability_policy_version/capabilities/cost_center_requirement, sin grants nuevos. Nuevos GET/PUT /v1/configuration/document-template/{scope_type}/{scope_id}, Admin admin.setting.read/update; PUT expected_revision/value e Idempotency-Key, response origen/revisión/override/valor. PUT /v1/document-template y PUT /v1/settings/{key}: forma intacta, bloqueo compartido para plantilla corporativa. Consumidas sin cambio GET /v1/organization/societies y /v1/organization/divisions. APIs operativas ajenas intactas. Matrices completas en documentos de capacidades y CONT-04. |
+| Validacion | 24 focalizadas aprobadas, incluidas 3 PostgreSQL con rollback y protección de downgrade con historial; suite browser completa 130 aprobadas, incluidas 4 nuevas ES/EN. Captura de contenedor 320px inspeccionada. npm run verify: 421 aprobadas/97 omitidas sin DB, validadores y compilación correctos. Admin Local recargado; login Emulator/sesión 200, política v1 y Accounting apagado, ruta nueva 404 para referencia inexistente y 401 sin token, health 200. Sin mutaciones de negocio del smoke. Logs chg296-focused.log, chg296-browser.log y chg296-verify.log. |
+| Observaciones | Fase 1 aplicada; CONT-04 transversal parcial, primer recorrido Admin implementado. Catálogo Costing, otros consumidores/configuraciones y dimensiones operativas pendientes. Word de manual pendiente de regeneración/revisión visual; fuente Markdown actualizada. Browser interceptado no equivale a UAT. No certifica separación completa ni Accounting. |
+
+### CHG-297
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-27 America/Mexico_City |
+| Cambio | CONT-05 catálogo básico de Centros de costos por División |
+| Autor | Codex |
+| Archivos | Costing costing_app y adaptador, migración 0040; Admin capacidades/autoridad de códigos/repositorio/seed de permisos; Settings/start_local; contratos Admin/Costing; cliente/feature/i18n/CSS de centros e integración Organización; pruebas backend/browser y validadores; CONT-05, arquitectura/contexto/módulos, AGENTES/skills y fuente de manual. Cambios anteriores preservados. |
+| Secciones | Disponibilidad Admin, ownership Costing, códigos administrados, alcance y preparación sin Accounting. |
+| Agentes consultados | Costos, Administración y Contabilidad negocio/técnico; Arquitectura/API, Seguridad, Datos/Custodio DB, Sinergia, Diseño/i18n y QA. Skills feature, accounting, module-boundaries, ambientes, migraciones, contrato/feedback y manuales. Sin delegación. |
+| Descripcion | Catálogo básico desde Administración por División, alta/nombre/estado con cuatro permisos exactos, código automático por autoridad Admin dedicada, búsqueda acotada y lectura elegible, alcance v2, revisión optimista, idempotencia y auditoría propia Costing. Flag de runtime false por defecto, habilitado sólo Local. Analítica/Accounting siguen planned. |
+| Motivo | Continuar el plan con política confirmada: catálogo básico independiente y obligación de centro sólo por flujo habilitado. |
+| Impacto | Local aislado y tenant ten_739ee59d765d5e14818674800d comprobados; head 20260927_0040. Upgrade/downgrade vacío/upgrade probados. Cuatro permisos sembrados y Owner actualizado mediante comando auditado sin reemplazar scopes ni activar módulos. Fixtures de negocio PostgreSQL revertidos; sin estructura/centros ficticios permanentes. QA/Producción intactos. |
+| APIs afectadas | Costing GET/POST /v1/cost-centers, GET /v1/cost-centers/eligible, GET/PATCH /v1/cost-centers/{cost_center_id}, POST /v1/cost-centers/{cost_center_id}/activate y /deactivate; permisos read/create/update/status de costing.cost_center. Admin POST /v1/cost-center-codes/next nuevo, costing.cost_center.create; GET /v1/session/context misma forma/nueva disponibilidad; POST /v1/catalogs/code-sequences/{document_type}/next rechaza centros; PATCH /v1/catalogs/code-sequences/{sequence_id}, admin.setting.update, rechaza modo manual para centros. GET /v1/organization/divisions consumido sin cambio. Matriz request/response en CONT-05. Accounting y APIs operativas ajenas sin cambios. |
+| Validacion | 35 focalizadas aprobadas, incluidas 2 PostgreSQL con rollback y protección de downgrade con historia. Suite browser completa 134 aprobadas y siete casos finales de centros aprobados después del ajuste de feedback (incluye entrada desde Admin y error de campo ES/EN); captura de contenedor 320px inspeccionada. Smoke HTTP Local: sesión 200/catálogo disponible/analítica y Accounting apagados; lista 200, elegibilidad inexistente 403, identidad inexistente 404, sin token 401 y tenant ajeno rechazado. npm run verify aprobado: validadores, compilación y 442 backend aprobadas/99 omitidas sin DB. Ambas skills válidas y git diff --check sin errores. Logs chg297-tests.log, chg297-browser.log, chg297-browser-focused.log, chg297-verify.log. |
+| Observaciones | Catálogo básico implementado; no acredita separación de maestros/documentos ni UAT. CONT-04 transversal, CONT-06 folios transversales y CONT-07/08 pendientes. Revalidación por solicitud, sin atomicidad distribuida con cambios concurrentes de organización; códigos reservados pueden dejar huecos ante fallas posteriores. Word del manual pendiente; fuente actualizada. Sin commit/PR/release. |
+
+### CHG-298
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-27 America/Mexico_City |
+| Cambio | CONT-07 primer recorrido Inventory: asignaciones por División |
+| Autor | Codex |
+| Archivos | Shared organization_client; Inventory organization_api/schemas/models/store/main y pruebas; migración 0041; OpenAPI Inventory/validador; cliente/feature/i18n/CSS inventory-organization, integración app/index, errores localizados y pruebas/configuración browser; CONT-07 Inventory, arquitectura/contexto/módulo/manual/AGENTES y TRAZABILIDAD. Cambios anteriores preservados. |
+| Secciones | Expansión de recursos/maestros, disponibilidad por División, centros opcionales y fronteras entre dueños. |
+| Agentes consultados | Inventarios, Administración, Costos y Contabilidad negocio/técnico; Arquitectura/API, Seguridad, Datos/Custodio DB, Sinergia, Diseño/i18n y QA. Skills feature, accounting, module-boundaries, migraciones, ambientes, contrato/feedback, evidencia y manuales. Sin delegación. |
+| Descripcion | Almacén con División explícita/fija y revisión; artículo compartido con asignaciones por División sin duplicarlo, estado y centro opcional validado en Costing. Nuevos endpoints consultan scope v2 y permisos incluso en demo, con revisión/idempotencia/auditoría. Consulta acotada de artículos asignados para futuros consumidores. UI ES/EN en tarjetas de Almacenes/Artículos, selectors acotados y conservación de captura. |
+| Motivo | Continuar separación por Sociedad/División sin activar Accounting ni fabricar estructura o mapeos de datos reales. |
+| Impacto | Local aislado, tenant ten_739ee59d765d5e14818674800d verificado, head 20260927_0041. Upgrade/downgrade sin asignaciones/upgrade probados; fixtures PostgreSQL rollback, sin seeds ni backfill. Inventory Local recargado. Quedan 3 almacenes sin asignar, 0 asignados y 0 asignaciones de artículos permanentes. QA/Producción intactos. |
+| APIs afectadas | Nuevas Inventory: GET /v1/inventory/organization/divisions (warehouse.read o item.read); GET/PATCH /v1/inventory/warehouses/{warehouse_id}/division (warehouse.read/update; division_ref_id/expected_revision); GET /v1/inventory/items/{item_id}/division-assignments (item.read); PUT /v1/inventory/items/{item_id}/division-assignments/{division_id} (item.update; expected_revision/status/cost_center_ref_id); GET /v1/inventory/division-items (item.read). Prefijo de permisos inventory. Escrituras requieren Idempotency-Key, respuestas con revisión, listas con meta. Consumidas sin cambio Admin GET /v1/session/context, Costing GET /v1/cost-centers/{cost_center_id} y GET /v1/cost-centers/eligible, Inventory GET /v1/inventory/warehouses y GET /v1/inventory/items. Accounting y APIs operativas existentes intactas; matriz en CONT-07 Inventory. |
+| Validacion | 21 pruebas focalizadas aprobadas, incluidas 3 PostgreSQL con rollback. Verify final: validadores, compilación y 460 backend aprobadas/102 omitidas sin DB. Browser completo: 145 aprobadas, incluidos 8 recorridos nuevos ES/EN; los 8 se repitieron tras el ajuste final de configuración y aprobaron. git diff --check sin errores. Captura de contenedor 320px inspeccionada. Smoke HTTP Emulator real: sesión/divisiones 200, División inexistente 403, recursos inexistentes 404, sin token 401 y tenant ajeno rechazado; catálogo anterior 200 y almacén conservado sin División. Logs chg298-tests.log, chg298-browser.log, chg298-browser-focused-final.log, chg298-smoke.log y chg298-verify.log. |
+| Observaciones | CONT-07 parcial: Production/HR/Sales/Purchasing pendientes. CONT-08 sin implementar: catálogos/transacciones anteriores todavía por tenant, no afirmar aislamiento operativo completo. Almacén heredado requiere alcance completo para asignación inicial. Centro obligatorio sólo por futuro flujo habilitado; sin transacción distribuida, consumidores futuros revalidan referencias. Manual fuente actualizado; Word pendiente por python-docx/renderizador ausentes. Sin commit/PR/deploy. |
+
+### CHG-299
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-27 America/Mexico_City |
+| Cambio | CONT-07 segundo recorrido: asignaciones de Producción por División |
+| Autor | Codex |
+| Archivos | Production organization_api/schemas/models/store/main y pruebas; migración 0042; contrato OpenAPI/validador; cliente/feature/i18n/CSS production-organization y app/index, catálogo de errores, pruebas/configuración browser; CONT-07 Production, arquitectura/contexto/diagrama/módulo/manual/AGENTES y trazabilidad. Cambios anteriores preservados. |
+| Secciones | Máquinas dimensionadas y productos/servicios compartidos, centros opcionales, permisos/alcances y ownership. |
+| Agentes consultados | Producción, Administración, Costos y Contabilidad negocio/técnica; Arquitectura SaaS/API, Datos/Custodio DB, Seguridad, Sinergia, Diseño/i18n, Manuales y QA. Skills feature, accounting, module-boundaries, migraciones, ambientes, formulario/feedback y evidencia. Fichas como perspectivas; sin subagentes. |
+| Descripcion | Máquina con División explícita/fija y primera asignación por alcance completo. Productos/servicios con asignaciones por División, centro opcional validado por HTTP y snapshot; desactivación conserva historia. Scope v2 efectivo, permisos puntuales, revisión, idempotencia/auditoría Production atómicas y búsquedas paginadas. UI ES/EN desde tarjetas; contrato CORS incluye cabeceras del cliente. |
+| Motivo | Continuar CONT-07 sin duplicar maestros, inventar estructura o activar Contabilidad. |
+| Impacto | Local aislado 127.0.0.1:5434/erclave_local y tenant ten_739ee59d765d5e14818674800d comprobados. Head 20260927_0042; upgrade/downgrade vacío/upgrade correctos. Fixtures sintéticos con rollback; sin seeds/backfill ni asignaciones permanentes. Tres máquinas siguen pendientes, cero asignadas y cero asignaciones de productos/servicios. Production Local recargado en 8002; QA/Producción intactos. |
+| APIs afectadas | Nuevas Production: GET /v1/production/organization/divisions (machine.read o product_service.read); GET/PATCH /v1/production/machines/{machine_id}/division (machine.read/update; division_ref_id/expected_revision, devuelve revisión); GET /v1/production/product-services/{product_service_id}/division-assignments (product_service.read, lista paginada); PUT /v1/production/product-services/{product_service_id}/division-assignments/{division_id} (product_service.update; expected_revision/status/cost_center_ref_id, devuelve asignación/snapshot/revisión); GET /v1/production/division-product-services (product_service.read; division_id/q/paginación). Prefijo de permisos production.; escrituras con Idempotency-Key. Consumidas sin cambio Admin GET /v1/session/context, Costing GET /v1/cost-centers/{cost_center_id} y GET /v1/cost-centers/eligible, Production GET /v1/production/machines y GET /v1/production/product-services. Accounting, recetas, órdenes y APIs operativas ajenas intactas. Matriz completa en CONT-07 Production. |
+| Validacion | 23 focalizadas aprobadas, incluidas 5 PostgreSQL con rollback: productos y servicios, tipos/estados, alcance/tenant, centros opcionales, fallo de dependencia, revisiones, repetición, IDs máximos, compatibilidad heredada y downgrade con historia. Ocho recorridos UI ES/EN aprobados; suite completa 153 aprobadas. Contenedor 320px inspeccionado. Verify: validadores, compilación y 478 backend aprobadas/107 omitidas sin DB. Smoke real Emulator/API Local: sesión/divisiones/catálogo 200, sin token 401, División inexistente 403, recursos inexistentes 404, tenant ajeno rechazado; catálogo/productos y preflight CORS 200. git diff --check sin errores. Logs chg299-migrate.log, chg299-tests.log, chg299-browser.log, chg299-smoke.log, chg299-verify.log. |
+| Observaciones | CONT-07 parcial, HR/Sales/Purchasing pendientes; CONT-08 no implementado: catálogos/recetas/órdenes/movimientos heredados continúan por tenant. Asignaciones no certifican aislamiento operativo completo ni UAT. Sin atomicidad distribuida; futuros consumidores revalidan referencias. Manual Markdown actualizado, Word pendiente de regeneración y revisión visual. Sin commit/PR/release. |
+
+### CHG-300
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-27 America/Mexico_City |
+| Cambio | CONT-07 tercer recorrido: puestos y trabajadores RH por División |
+| Autor | Codex |
+| Archivos | HR organization_api/schemas/models/store/main y pruebas, migración 0043; OpenAPI HR y validador; cliente/feature/i18n/CSS hr-organization, integración app/index, errores, pruebas/config browser; CONT-07 HR, arquitectura/contexto/diagrama/módulo/manual/AGENTES y trazabilidad. Cambios anteriores preservados. |
+| Secciones | Puestos compartidos con tarifa explícita/centro opcional y trabajadores con elegibilidad por División. |
+| Agentes consultados | RH, Administración, Costos y Contabilidad negocio/técnica; Arquitectura SaaS/API, Datos/Custodio DB, Seguridad, Sinergia, Diseño/i18n, Manuales y QA. Skills feature, accounting, module-boundaries, migraciones, ambientes, form-contract/form-feedback, evidencia y manuales. Sin delegación. |
+| Descripcion | Asignación de puesto con tarifa Decimal requerida (cero válido) y centro opcional validado por Costing; trabajador confirma su puesto vigente en División y queda no elegible al cambiar de puesto hasta reconfirmación. Validación de área/puesto/trabajador/asignaciones activos y flags de propósito; lectura minimizada sin identificadores personales sensibles. Revisión, locks propios, idempotencia y auditoría atómicas HR; permisos/scope v2 Admin. Formularios ES/EN con captura conservada, tarifa histórica al desactivar y adaptación puntual del contrato de errores HR. |
+| Motivo | Continuar CONT-07 sin duplicar maestros ni convertir RH en nómina/Accounting; preparación independiente de analítica y Contabilidad. |
+| Impacto | Local aislado 127.0.0.1:5434/erclave_local y tenant ten_739ee59d765d5e14818674800d comprobados. Head 20260927_0043; upgrade/downgrade vacío/upgrade probados. Fixtures sintéticos con rollback; sin seeds, backfill ni asignaciones permanentes. Servicio HR Local recargado en 8006. Siete puestos y doce trabajadores existentes preservados; cero asignaciones de puestos/trabajadores. QA/Producción intactos. |
+| APIs afectadas | Nuevas HR: GET /v1/hr/organization/divisions (position.read o worker.read); GET/PUT /v1/hr/positions/{resource_id}/division-assignments y /v1/hr/positions/{resource_id}/division-assignments/{division_id} respectivamente (position.read/update; escritura expected_revision/status/hourly_cost/cost_center_ref_id; respuesta tarifa/centro/snapshot/revisión); GET/PUT /v1/hr/workers/{resource_id}/division-assignments y /v1/hr/workers/{resource_id}/division-assignments/{division_id} respectivamente (worker.read/update; escritura expected_revision/status; respuesta puesto confirmado/revisión); GET /v1/hr/division-positions (position.read) y GET /v1/hr/division-workers (worker.read), division_id/purpose/q/paginación. Prefijo permisos hr.; escrituras requieren Idempotency-Key. Consumidas sin cambio Admin GET /v1/session/context; Costing GET /v1/cost-centers/{cost_center_id} y GET /v1/cost-centers/eligible; HR GET /v1/hr/areas, GET /v1/hr/positions y GET /v1/hr/workers. CORS agrega PUT; contratos operativos anteriores, Accounting y otros servicios intactos. Matriz en CONT-07 HR. |
+| Validacion | 27 focalizadas aprobadas, incluidas 4 PostgreSQL con rollback: tarifas cero/precisión, scope/tenant, repetición/revisión, centros opcionales/falla, historia, cambios de puesto, estados/flags, privacidad y downgrade con historia. Diez recorridos UI ES/EN aprobados; suite completa 163 aprobadas. Captura de contenedor 320px inspeccionada. Verify: validadores, compilación y 501 backend aprobadas/111 omitidas sin DB. Smoke Emulator/API real: sesión/divisiones/catálogos/asignaciones 200; sin token 401, División inexistente 403, recurso inexistente 404, tenant ajeno rechazado y CORS PUT 200. git diff --check sin errores. Logs chg300-migrate.log, chg300-tests.log, chg300-browser.log, chg300-smoke.log y chg300-verify.log. |
+| Observaciones | CONT-07 parcial: Sales/Purchasing pendientes; CONT-08 no implementado. Las consultas heredadas siguen por tenant y no se duplica/suma capacidad por habilitar varias Divisiones. Sin atomicidad distribuida Admin/Costing; consumidores futuros revalidan. No certifica UAT ni separación operativa completa. Manual Markdown actualizado; Word pendiente por runtime de documentos y revisión visual. Sin commit/PR/release. |
+
+
+### CHG-301
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-28 11:24 |
+| Cambio | CHG-301 — Disponibilidad comercial por División |
+| Autor | Codex |
+| Agentes consultados | Fichas Compras/Ventas/Admin/Contabilidad negocio-técnica, Arquitectura/API, Datos/Custodio DB, Seguridad, Sinergia, Diseño/i18n, Manuales y QA; sin delegación. |
+| Archivos | backend/services/{sales,purchasing}-service/app/{main,organization_api,organization_store,organization_models,organization_schemas}.py; tests/test_{sales,purchasing}_organization.py; backend/alembic/versions/20260928_0044_commercial_dimensions.py; contracts/api/{sales,purchasing}-service.openapi.yaml; tools/validators/validate_openapi_runtime.py; frontend/{app.js,index.html,api/commercial-organization.js,features/commercial-organization.js,features/commercial-organization.css,i18n/commercial-organization.js}; tests/e2e/commercial-organization.spec.js; playwright.form-feedback.config.js; AGENTES.md; docs/contexto/{INICIO_SESION,ESTADO_ACTUAL,PENDIENTES}.md; docs/arquitectura/{cont_07_commercial_asignaciones,apis_mvp,modelo_datos_mvp,ownership_datos_mvp,plan_implementacion_backend_mvp,plan_preparacion_contabilidad,plan_separacion_modular_y_contabilidad_opcional,cobertura_agentes_modulos,fronteras_ambientes_local_qa_produccion}.md; docs/arquitectura/diagramas/estado_actual_backend_mvp.drawio; modulos/{03_compras_abastecimiento,04_ventas_clientes}.md; docs/manuales_solucion/fuentes/{03_compras_abastecimiento,04_ventas_clientes}.md; docs/manuales_solucion/REGISTRO.md; TRAZABILIDAD.md. |
+| Secciones | Disponibilidad comercial CONT-07, asociaciones y elegibilidad por División/Sociedad, pantallas de clientes/proveedores, CORS PUT, alcance/permisos, ownership, estado Local y manuales. |
+| Descripcion | Maestro único por dueño con asociaciones explícitas cliente/proveedor–División. Sociedad derivada de Admin, estado/revisión, bloqueo propio, auditoría e idempotencia transaccionales. Revalidación de maestro/División/Sociedad vigente para elegibilidad. Desactivación conserva historia. UI ES/EN con búsqueda/paginación, reintento estable, captura/feedback y lectura sin mutaciones. |
+| Motivo | Continuar el siguiente bloque tras CHG-300 sin mezclar estructura organizacional con Contabilidad ni duplicar maestros. |
+| Impacto | Alembic Local 0044: dos tablas, FKs internas, índices/constraints; cero backfill/asociaciones permanentes. Preparación en Sales/Purchasing; condiciones comerciales siguen en el maestro y documentos existentes por tenant. QA/Producción intactos. |
+| Validacion | 24 pruebas focalizadas backend/API/PostgreSQL aprobadas con rollback; 12 browser ES/EN aprobadas y captura 320px revisada. Upgrade/downgrade vacío/upgrade aprobados, downgrade con historia rechazado en pruebas. Smoke Emulator/API real read-only: 200/401/403/404 esperados y CORS PUT 200; dos clientes, tres proveedores, cero asociaciones. Suite transversal browser: 175 aprobadas. npm run verify aprobado: todos los validadores, compilación y 515 pruebas backend aprobadas/121 omitidas en el gate general; focal Local con DB 24/24 sin omisiones. git diff --check sin errores. Logs chg301-migrate.log, chg301-tests.log, chg301-browser.log, chg301-browser-full.log, chg301-smoke.log, chg301-verify.log. Local sobre HEAD 213f75c, working tree sin commit. |
+| APIs afectadas | Nuevas Sales GET /v1/sales/organization/divisions, GET /v1/sales/customers/{resource_id}/division-assignments, GET /v1/sales/division-customers (sales.customer.read); PUT /v1/sales/customers/{resource_id}/division-assignments/{division_id} (sales.customer.update). Nuevas Purchasing GET /v1/purchasing/organization/divisions, GET /v1/purchasing/suppliers/{resource_id}/division-assignments, GET /v1/purchasing/division-suppliers (purchasing.supplier.read); PUT /v1/purchasing/suppliers/{resource_id}/division-assignments/{division_id} (purchasing.supplier.update). GET con búsqueda/paginación y metadatos; PUT expected_revision/status + Idempotency-Key devuelve asociación y Sociedad derivada/revisión; rechaza extras. Matriz request/response completa en cont_07_commercial_asignaciones.md. Consumidas sin cambio: Admin GET /v1/session/context, Sales GET /v1/sales/customers, Purchasing GET /v1/purchasing/suppliers. No tocadas: documentos previos, Inventory/Production/HR/Maintenance/Costing/Accounting. |
+| Observaciones | CONT-07 inicial comercial, no cierre total: condiciones por alcance CONT-04/07, documentos CONT-08, folios CONT-06 y mapeo real pendientes. Accounting/analítica deshabilitados; ningún centro obligatorio por esta preparación. Fuentes manuales actualizadas; Word pendiente por runtime documents no disponible, no por falta de python-docx. Sin PR, release, commit, seed ni promoción. |
+
+
+### CHG-302
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-09-28 16:12 |
+| Cambio | CHG-302 — Condiciones comerciales explícitas por División |
+| Autor | Codex |
+| Agentes consultados | Fichas Compras/Ventas/Admin/Contabilidad negocio-técnica; Arquitectura/API, Datos/Custodio DB, Seguridad, Sinergia, Diseño/i18n, Manuales y QA. Skills feature, accounting, module-boundaries, migraciones, ambientes, form-contract/form-feedback, evidencia y manuales; sin delegación. |
+| Archivos | backend/services/{sales,purchasing}-service/app/{commercial_terms_schemas,commercial_terms_store,organization_api,organization_models}.py; tests/test_{sales,purchasing}_organization.py; backend/alembic/versions/20260928_0045_commercial_terms.py; contracts/api/{sales,purchasing}-service.openapi.yaml; frontend/api/commercial-organization.js; frontend/features/{commercial-organization,commercial-terms}.js; frontend/i18n/{commercial-organization,commercial-terms}.js; tests/e2e/commercial-terms.spec.js; playwright.form-feedback.config.js; AGENTES.md; docs/contexto/{INICIO_SESION,ESTADO_ACTUAL,PENDIENTES,DECISIONES}.md; docs/arquitectura/{cont_07_commercial_condiciones,cont_07_commercial_asignaciones,apis_mvp,modelo_datos_mvp,ownership_datos_mvp,plan_implementacion_backend_mvp,plan_preparacion_contabilidad,plan_separacion_modular_y_contabilidad_opcional,cobertura_agentes_modulos,fronteras_ambientes_local_qa_produccion}.md; docs/arquitectura/diagramas/estado_actual_backend_mvp.drawio; modulos/{03_compras_abastecimiento,04_ventas_clientes}.md; docs/manuales_solucion/fuentes/{03_compras_abastecimiento,04_ventas_clientes}.md; docs/manuales_solucion/REGISTRO.md; TRAZABILIDAD.md. |
+| Secciones | Condiciones por División, formulario completo sin herencia, API GET/PUT, tablas e invariantes, permisos, catálogos autoritativos, decisión aprobada, manuales y contexto Local. |
+| Descripcion | Opción 2 elegida por el usuario. Cada División captura moneda/pago y crédito del cliente o plazo del proveedor, sin copiar ni heredar maestro. Registro propio con Sociedad confirmada, revisión, idempotencia y auditoría transaccional; maestro/asociación/División activos para editar. Pendiente de configuración si no hay valores. Cambio de Sociedad exige reconfirmar asociación y condiciones. Read-only preserva historia sin dependencia de catálogos de captura. |
+| Motivo | Separar condiciones comerciales de maestros compartidos según decisión explícita del usuario, preparando documentos dimensionados. |
+| Impacto | Alembic 0045 aditiva sin backfill. Sales/Purchasing conservan ownership y FKs internas; no requiere Costing/Accounting ni modifica documentos previos. Cero condiciones/asociaciones permanentes; QA/Producción intactos. |
+| Validacion | Upgrade/downgrade vacío/upgrade Local aprobados. Backend/API/PostgreSQL focal 42 aprobadas, fixtures con rollback. Browser focal 28 aprobadas ES/EN, de ellas 16 nuevas; captura 320px revisada. Smoke HTTP real read-only con Emulator: referencias/contexto 200, recursos ausentes 404, token 401, scope 403 y catálogos anteriores conservados; no equivale a escritura HTTP end-to-end. Suite transversal browser 191 aprobadas; última corrección de feedback verificada con 16/16 pruebas nuevas ES/EN (un rechazo posterior elimina el aviso de éxito previo). npm run verify aprobado: validadores/compilación y 527 pruebas backend aprobadas, 127 omitidas en gate general; focal PostgreSQL 42/42 sin omisiones. git diff --check sin errores. Logs chg302-migrate.log, chg302-tests.log, chg302-browser.log, chg302-browser-full.log, chg302-browser-final.log, chg302-smoke.log, chg302-verify.log. Working tree sobre HEAD 213f75c sin commit. |
+| APIs afectadas | Nuevas Sales GET y PUT /v1/sales/customers/{resource_id}/division-assignments/{division_id}/commercial-terms con sales.customer.read/update respectivamente. Nuevas Purchasing GET y PUT /v1/purchasing/suppliers/{resource_id}/division-assignments/{division_id}/commercial-terms con purchasing.supplier.read/update respectivamente. PUT expected_revision + values completos + Idempotency-Key; GET/PUT devuelven values explícitos/null, revisión, Sociedad confirmada/actual y flags de configuración/asignación. values null o incompletos rechazados. Consumidas sin cambio: Sales GET /v1/sales/reference-data; Purchasing GET /v1/purchasing/reference-data; Admin GET /v1/session/context, GET /v1/catalogs/commercial/{catalog_code}, GET /v1/catalogs/commercial/{catalog_code}/by-code/{code}; navegación CHG-301 sin cambios contractuales. No tocadas: documentos y APIs Inventory/Production/HR/Maintenance/Costing/Accounting. Matriz completa en cont_07_commercial_condiciones.md. |
+| Observaciones | Siguiente CONT-08: dimensiones/snapshots y validaciones de contexto en documentos; CONT-06 y mapeo real pendientes. Límites capturados no implementan control de saldo/exposición. Markdown manuales actualizado; Word conserva pendiente por runtime documents no disponible, no por falta de python-docx. Sin PR, commit, release, seed ni promoción. |
+
+### CHG-303
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-05 America/Mexico_City |
+| Cambio | CONT-08 parcial: contexto explícito y snapshot en cotizaciones |
+| Autor | Codex |
+| Archivos | Sales quote_context/API/repositorio/reportes/schemas/modelos, HR/Production lookups, shared organization_client, Alembic 0046, contratos Sales/HR/Production, frontend quote-context/app/i18n, pruebas, arquitectura/contexto/diagrama/módulos/manuales/AGENTES. |
+| Secciones | Cotización, elegibilidad, scope, API, persistencia y manual. |
+| Agentes consultados | Fichas Ventas/RH/Producción/Administración/Contabilidad negocio y técnica; Arquitectura/API, Datos/Custodio DB, Seguridad, Sinergia, Diseño/i18n, Manuales y QA; sin delegación. |
+| Descripcion | División explícita fija, Sociedad derivada y snapshot de condiciones en borrador; moneda coincidente sin conversión. Revisión/idempotencia/auditoría. Scope en lectura/mutación/CSV y recursos elegibles. Pedido dimensionado bloqueado antes de efectos. |
+| Motivo | Aplicar condiciones explícitas por División a documentos conservando fronteras. |
+| Impacto | Local 0046 sin backfill; tenant autorizado y fixtures rollback; Accounting opcional. Cotizaciones heredadas siguen por tenant. QA/Producción intactos. |
+| APIs afectadas | Matriz método/ruta/permiso/request/response en docs/arquitectura/cont_08_cotizaciones_contexto.md. Nuevos GET quote-divisions y PUT quote organization-context; Quotes/ciclo/CSV y POST orders; GET HR division-workers y Production division-product-services. Admin consumido sin cambio; Purchasing/Inventory/Maintenance/Costing/Accounting no tocadas. |
+| Validacion | Migración upgrade/downgrade vacío/upgrade aprobados. Focal PostgreSQL/API 99 aprobadas sin omisiones; browser focal 6 y transversal 197 aprobadas ES/EN; captura 320px inspeccionada. npm run verify aprobado: validadores, compilación, 528 backend aprobadas/133 omitidas en gate sin DB. Smoke real Emulator/API Local read-only aprobado; Sales/HR/Production recargados, lookups vivos comprobados. Cero condiciones/asignaciones/cotizaciones dimensionadas permanentes. git diff --check sin errores. Logs chg303-migrate.log, chg303-tests.log, chg303-browser.log, chg303-browser-full.log, chg303-smoke.log, chg303-verify.log. Working tree HEAD 213f75c sin commit. |
+| Observaciones | Primer corte CONT-08, pendientes pedidos/descendientes/Compras/folios/emisor/impresión/mapeo real. Fuente manual actualizada; Word pendiente runtime documents y revisión visual. Sin commit/PR/deploy. |
+
+### CHG-304
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-05 America/Mexico_City |
+| Cambio | CONT-08 parcial: contexto de pedidos y frontera de ejecución |
+| Autor | Codex |
+| Archivos | Sales API/repositorio/schemas/reportes/modelos; Alembic 0047; HR/Production organization_api; OpenAPI Sales/HR/Production; frontend app/order-context/quote-context/i18n/API Sales/form-bindings; pruebas; AGENTES, arquitectura/contexto/diagrama/módulos/manuales y trazabilidad. |
+| Secciones | Conversión, snapshots, scope, cancelación y frontera downstream. |
+| Agentes consultados | Fichas Ventas/RH/Producción/Inventarios/Admin/Contabilidad negocio-técnica y guardianes Arquitectura/API, Datos/Custodio DB, Seguridad, Sinergia, Diseño/i18n, Manuales, QA; sin delegación. |
+| Descripcion | Pedido copia contexto de cotización aprobada; servicios consultan contexto fijo del pedido. Revalidación, locks, idempotencia/auditoría; scope en consulta/CSV/cancelación. Ejecución dimensionada pendiente rechazada antes de efectos. |
+| Motivo | Continuar separación documental sin perder contexto ni activar Accounting. |
+| Impacto | Local 0047 sin backfill. Sólo tenant autorizado, fixtures rollback, sin pedidos dimensionados permanentes. Legacy por tenant conservado. QA/Producción intactos. |
+| APIs afectadas | Matriz completa método/ruta/permiso/request/response en docs/arquitectura/cont_08_pedidos_contexto.md. Sales GET/POST orders, detalle, fulfillment/cancel; GET service-orders y detalle; POST plan/time-entries/cost-entries/evidence/transitions; POST deliveries y GET reports export. HR GET division-workers y Production GET division-product-services admiten order.create. Admin y validaciones previas consumidos sin cambios. Inventory/Purchasing/Maintenance/Costing/Accounting sin cambios. |
+| Validacion | Migración upgrade/downgrade vacío/upgrade aprobados. PostgreSQL/API focal 105 aprobadas sin omisiones. Browser transversal 197 aprobadas. Formularios reales Local: 18/24 inicialmente; cuatro timeouts antes de login y dos fixtures de error corregidas al contrato issues/loc; repetición de los seis casos 6/6 aprobada, total 24 recorridos cubiertos. Dos casos nuevos ES/EN verifican snapshot, escape, consulta sin ejecución, cancelación con clave estable y error 422 vinculado al motivo. Captura 320px inspeccionada. Verify aprobado: validadores/compilación y 528 backend aprobadas/139 omitidas sin DB. Smoke Emulator/API Local read-only aprobado, Sales/HR/Production recargados, sin datos dimensionados permanentes. git diff --check sin errores. Logs chg304-migrate.log, chg304-tests.log, chg304-browser.log, chg304-browser-main.log, chg304-browser-retry.log, chg304-browser-final.log (2/2 finales con límite 3–500 y campo reason), chg304-browser-full.log, chg304-smoke.log, chg304-verify.log. Working tree HEAD 213f75c sin commit. |
+| Observaciones | Siguiente propagación a ejecución y luego Compras; folios, Emisor/impresión y mapeo real pendientes. Manual fuente actualizado; Word pendiente runtime documents y revisión visual. Sin commit/PR/deploy. |
+
+### CHG-305
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-05 America/Mexico_City |
+| Cambio | CONT-08 ejecución de servicios por División |
+| Autor | Codex |
+| Archivos | Sales service_context/API/repositorio/organization_api; HR/Production organization_api; contratos; frontend app/API Sales/service-worker-lookup/i18n; pruebas; AGENTES, arquitectura/contexto/diagrama/módulos/manuales. |
+| Secciones | Ejecución, elegibilidad, búsqueda acotada, reintentos y concurrencia. |
+| Agentes consultados | Fichas Ventas/RH/Producción/Inventarios/Admin/Contabilidad negocio/técnica y guardianes Arquitectura/API, Datos/Custodio DB, Seguridad, Sinergia, Diseño/i18n, Manuales y QA; sin delegación. |
+| Descripcion | Habilita servicios dimensionados hasta aceptación/costo real conservando contexto del pedido. Alcance/recursos vigentes; pausa/cancelación permiten detener. Lookup propio minimizado, claves estables por formulario, lock pedido→servicio y bloqueo de cancelación en curso. |
+| Motivo | Continuar separación por recorrido completo de servicios; productos requieren otro corte cross-service. |
+| Impacto | Local head 0047 sin migración ni backfill. Fixture tenant autorizado con rollback. Accounting/analítica no activadas, costos explícitos en moneda del pedido. QA/Producción intactos. |
+| APIs afectadas | Matriz método/ruta/permiso/contratos en docs/arquitectura/cont_08_servicios_contexto.md. Sales GET service-orders/{id}/eligible-workers nuevo; POST plan/time-entries/cost-entries/evidence/transitions habilitados. HR GET division-workers y Production GET division-product-services amplían consumidores puntuales. Admin/sesión, HR sales-eligible y lecturas Sales consumidas sin cambio. Inventory/Purchasing/Maintenance/Costing/Accounting no modificadas. |
+| Validacion | PostgreSQL/API focal 110 aprobadas sin omisiones. Browser focal pedidos/servicios ES/EN 4/4 aprobado tras corregir fixture que abría transición sin modal visible; reintento con misma clave, selección/costos preservados y errores vinculados. Captura 320px inspeccionada. Browser transversal 197 aprobadas; PowerShell reportó NativeCommandError por advertencia NO_COLOR/FORCE_COLOR en stderr, sin fallos de Playwright. Verify aprobado: validadores/compilación y 528 backend aprobadas/144 omitidas sin DB. Smoke Emulator/API Local read-only aprobado; Sales/HR/Production recargados, sin documentos dimensionados permanentes. git diff --check sin errores. Logs chg305-tests.log, chg305-browser-final.log, chg305-browser-full.log, chg305-smoke.log y chg305-verify.log. Working tree HEAD 213f75c sin commit. |
+| Observaciones | Surtimiento de productos/entregas, Compras, CONT-06, Emisor/impresión y mapeo real pendientes. Sin separación completa. Fuente manual actualizada; Word pendiente runtime documents/revisión visual. Sin commit/PR/release. |
+
+### CHG-306
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-05 America/Mexico_City |
+| Cambio | CONT-08 contexto persistente en reservas y salidas; recorrido de productos aún pendiente |
+| Autor | Codex |
+| Archivos | Inventory reservation_context/API/repositorio/schemas/modelos/reportes; Sales organization_api; shared operational_context/config; Alembic 0048; OpenAPI Inventory/Sales; i18n; pruebas; contexto/arquitectura/módulos/agentes. |
+| Secciones | Autoridad del origen, snapshots, scopes, persistencia y fronteras. |
+| Agentes consultados | Fichas negocio/técnica Inventarios/Ventas/Producción/Contabilidad; guardianes Arquitectura/API, Datos/Custodio DB, Seguridad, Sinergia y QA, sin delegación. |
+| Descripcion | Contexto derivado de Sales, validación local warehouse/item, persistencia y copia al consumo. Alcance antes de comandos/replay; lecturas Inventory y CSV acotados. Rechazo de origen sin permiso correspondiente. |
+| Motivo | Preparar la transferencia de contexto sin habilitar productos antes de completar dependencias y política monetaria. |
+| Impacto | Sólo Local loopback y tenant autorizado, fixtures rollback. Sin datos de negocio permanentes, backfill ni QA/Producción. No completa separación. |
+| APIs afectadas | Matriz exacta método/ruta/permiso/request/response y schema compartido en docs/arquitectura/cont_08_reservas_contexto.md. Nueva proyección Sales; Inventory reserva/consumo/liberación y consultas. Admin sesión consumida sin cambios. Otros servicios sin modificaciones. |
+| Validacion | Upgrade/downgrade vacío/upgrade 0048 aprobados. PostgreSQL/API focal 153 aprobadas sin omisiones. Verify aprobado: validadores/compilación, 528 backend aprobadas y 147 omitidas sin DB; 153 focales con DB aparte. Logs chg306-migrate.log, chg306-tests.log, chg306-verify.log. HEAD 213f75c working tree sin commit. |
+| Observaciones | Surtimiento dimensionado permanece bloqueado. Usuario confirma costo en moneda base de Sociedad y tipo de cambio explícito conservando ambos importes; implementación monetaria siguiente. Mapeo real aún pendiente. Ninguna promoción ni activación contable. Sin cambio de formularios; no nueva certificación browser/UAT. |
+
+
+### CHG-307
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-05 |
+| Cambio | Stock por División y moneda de costo explícita |
+| Autor | Codex |
+| Archivos | Sales/Inventory/Production API, schemas/repos/modelos; shared organization_client/operational_context; Alembic 0049; frontend scoped-stock-fulfillment/movement-cost-context y consumidores; contratos Sales/Inventory/Production; pruebas; agentes, módulos, contexto, arquitectura, diagrama y fuentes manual. |
+| Secciones | Surtido stock, captura de moneda/costo, entrega/consumo, alcance, locks y reconciliación. |
+| Agentes consultados | Fichas negocio/técnico Ventas, Inventarios, Producción, Contabilidad; Arquitectura, Datos/Custodio DB, API, Seguridad, Diseño/i18n, QA/Release, Sinergia modular, Formularios y Manuales. Sin delegación paralela. |
+| Descripcion | Costo Inventory en moneda de Sociedad; tipo explícito y congelado en Sales, costo original/convertido por línea. Almacén/artículo elegibles, alcance antes de efectos/replay. Entradas manuales con costo explícito, historia incompatible bloqueada, locks pedido→entrega y cancelación bloqueada durante confirmación. |
+| Motivo | Aplicar decisión monetaria confirmada y cerrar recorrido stock sin mezclar Sociedades/Divisiones. |
+| Impacto | Sólo Local 0049, sin backfill ni activación contable ni QA. Legacy conserva compatibilidad. Fabricación y otros flujos siguen pendientes. |
+| APIs afectadas | Matriz exacta método/ruta/permiso y request/response en docs/arquitectura/cont_08_stock_contexto.md. Sales stock-options/execution-context/fulfillment/orders/deliveries/warehouse-deliveries/export; Inventory division-stock/warehouse operation-context/movements/reverse/reservations; Production division-product-services. Admin sesión y lecturas de producto/artículo consumidas sin cambio. APIs HR/Purchasing/Maintenance/Costing/Accounting no tocadas. |
+| Validacion | PostgreSQL/API focal: 159 aprobadas sin omisiones (chg307-tests.log). Browser interceptado: 203 aprobadas (chg307-browser-regression.log), más 6 focales repetidas tras ajustar la superficie visual (chg307-browser-final.log). Pantalla principal Almacenes ES/EN: 2 aprobadas (chg307-main-browser.log). npm run verify aprobado: validadores/compilación y 532 passed, 149 skipped en suite general (los skips de integración no se presentan como aprobados). Migración Local up/down vacío/up aprobada; smoke autenticado 401/403/404 y legacy 200, sin registros sintéticos permanentes; APIs Sales/Inventory/Production reiniciadas Local. Captura visual revisada a 320 px. git diff --check sin errores. |
+| Observaciones | No UAT integral: Sales usa autoridades simuladas, browser APIs interceptadas. Pendiente mapeo real, fabricación, demás módulos/impresión/folios y QA. Word pendiente de runtime; fuentes actualizadas. |
+
+### CHG-308
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-07 |
+| Cambio | Preparación de contexto y alcance en Producción |
+| Autor | Codex |
+| Archivos | Production order_context/API/repos/schemas/reports/material_returns/organization_models; Alembic 0050; contrato Production; pruebas organization/API; agentes, módulos, contexto, arquitectura y diagrama. |
+| Secciones | Intentos durables previos a reserva, snapshot, alcance en documentos/comandos/colas/CSV y compatibilidad legacy. |
+| Agentes consultados | Fichas negocio/técnico Producción, Inventory, RH, Sales, Contabilidad; Arquitectura SaaS, Datos/Custodio DB, API, Seguridad, Sinergia, Diseño/i18n, QA/Release y Manuales. Sin agentes paralelos. |
+| Descripcion | Snapshot nullable Production; preparación ligada a actor/hash/asignaciones, proof mínimo con scope; guards antes de efectos/locks y filtros SQL. No nueva captura ni fabricación dimensionada habilitada. |
+| Motivo | Evitar reserva sin documento/contexto verificable y cruces de División al integrar fabricación. |
+| Impacto | Local 0050 sin backfill, datos sintéticos con rollback, QA intacto. Tarifas históricas sin moneda no reinterpretadas; decisión enviada pendiente. |
+| APIs afectadas | Matriz método/ruta/permiso en docs/arquitectura/cont_08_produccion_contexto.md. Sólo Production modificado: orders/reservation-context nuevo, órdenes/estados/recursos/etapas/evidencia/colas/candidatos/solicitudes/devoluciones/reportes con contexto o scope. Admin GET session/context consumido sin cambio; demás APIs no tocadas. |
+| Validacion | Migración Local up/down vacío/up aprobada. 231 pruebas PostgreSQL/API focales aprobadas sin omisiones; verify aprobado con validadores, compilación y 532 passed/152 skipped en suite general. Las omisiones de integración no se cuentan como aprobadas. API Production recargada Local, smoke autenticado proof null 200 y sin token 401, cero contextos/intentos sintéticos permanentes; git diff --check sin errores. No se modificó UI ni se ejecutó nueva UAT de fabricación. Evidencia chg308-tests.log, chg308-verify.log y chg308-smoke.log. |
+| Observaciones | Corte preparatorio: falta integrar tarifas/capacidad/recursos por División, reservas/consumos/recepción y fabricación desde Ventas, UI y aceptación transversal. Sin claim de cierre Production/QA; no modificación de formulario ni nuevos Word. |
+
+### CHG-309
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-07 |
+| Cambio | Guardado de contexto y política monetaria transversal confirmada |
+| Autor | Codex |
+| Archivos | docs/contexto/INICIO_SESION.md, DECISIONES.md, ESTADO_ACTUAL.md, PENDIENTES.md; docs/arquitectura/cont_08_produccion_contexto.md; AGENTES.md; TRAZABILIDAD.md |
+| Secciones | Reanudación tras reinicio, decisión de costos/tarifas, estado comprobado y siguiente implementación. |
+| Agentes consultados | Se conserva revisión de fichas CHG-308; instrucción monetaria comunicada documentalmente a agentes. Sin nueva ejecución de agentes ni revisión funcional atribuida. |
+| Descripcion | Usuario confirma moneda base de Sociedad para toda la operación y pide guardar contexto antes de reiniciar. Se elimina la pregunta pendiente en fuentes vivas y se registra cómo retomar sin repetir bloques ni reaplicar migración. |
+| Motivo | Continuidad de trabajo y conservación de decisión explícita. |
+| Impacto | Sólo documentación; fabricación sigue pendiente. Runtime, datos, head Local 0050 y QA sin cambios. |
+| APIs afectadas | Ninguna modificada ni consumida. |
+| Validacion | Coherencia documental verificada con validate:documentation; no nuevas pruebas funcionales por este guardado. Se preserva evidencia CHG-308 sin atribuirla a implementación futura. |
+| Observaciones | Preservar working tree sin commit; comprobar servicios tras reinicio, no reutilizar PIDs. Política monetaria resuelta; mapeo real aún pendiente. |
+
+### CHG-310
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-07 |
+| Cambio | Custodia contable y matriz de seguimiento por submódulo |
+| Autor | Codex |
+| Archivos | `AGENTS.md`, `AGENTES.md`, `.agents/skills/erclave-accounting/SKILL.md`, `docs/contexto/CONTROL_CONTABLE.md`, `docs/contexto/ESTADO_ACTUAL.md`, `docs/contexto/PENDIENTES.md`, `docs/contexto/INICIO_SESION.md`, `docs/arquitectura/cobertura_agentes_modulos.md`, `docs/arquitectura/gobierno_documentacion_viva.md`, `tools/validators/validate-codex-tooling.js`, `TRAZABILIDAD.md` |
+| Secciones | Ficha técnica contable, skill, matriz de responsabilidades y brechas, reanudación, gobierno documental y validación de fuente requerida. |
+| Agentes consultados | Auditoría previa de esta conversación con tres agentes paralelos Ventas/Inventory, Production/RH y Purchasing/Maintenance; fichas de negocio/técnica Contabilidad y guardianes Arquitectura/API/Datos/Seguridad/Sinergia/QA. Revisión independiente de instrucciones y matriz en este corte. |
+| Descripcion | Se refuerza el agente técnico contable existente como custodio, sin duplicarlo; matriz CC-01 a CC-20 documenta capacidades, dueños, pendientes concretos, cierre y evidencia. Distingue organización, moneda, integración futura y libro; skill y puntos de entrada enlazados. |
+| Motivo | Evitar volver a implementar flujos cerrados y conservar seguimiento verificable por submódulo. |
+| Impacto | Sólo documentación/instrucciones y verificador de presencia del documento. Sin cambios en APIs, UI, datos, migraciones o servicios; head Local documentado 0050, QA sin cambios. Cambios previos del usuario preservados. |
+| APIs afectadas | Ninguna: no hay contratos modificados, endpoints consumidos ni nuevas llamadas a APIs operativas. |
+| Validacion | Skill quick_validate válida; validate:documentation, agentes y tooling aprobados. Revisión independiente de custodia aprobada tras corregir referencia CC-03/13; agregadas referencias a pruebas focales existentes. Verificación general final (mismo entrypoint tools/verify.js, Python del proyecto, sin ERCLAVE_TEST_DATABASE_URL): validadores/compilación y 532 passed, 152 skipped, 1 warning. Omisiones no cuentan como aprobaciones; sin UAT/DB/browser nuevos. Evidencia chg310-verify-final.log; primer intento interrumpido por reinicio del runtime de herramientas, no utilizado como evidencia de éxito. git diff --check aprobado. |
+| Observaciones | Fabricación sigue abierta CHG-308/309. Servicios conservan separación/ciclo con adaptación monetaria pendiente; maestros comerciales implementados no prueban documentos Purchasing. Matriz es detalle de PENDIENTES, no autorización de implementación/release ni prueba funcional nueva. |
+
+### CHG-311
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-07 |
+| Cambio | Conciliación documental integral, navegación Obsidian y custodia automática |
+| Autor | Codex |
+| Archivos | AGENTS.md, AGENTES.md, README.md, TRAZABILIDAD.md; skill erclave-context-reconcile; docs/contexto e histórico, docs/arquitectura y diagramas, modulos, fuentes manuales y registro, readmes backend/contracts/infra, docs/operaciones, auditoría documental, docs/INICIO.md, INDICE_DOCUMENTAL.md, documentacion-registro.json; tools/documentation-map.js y pruebas, validadores documentación/agentes/Sales/paridad, package.json y workflow validate. |
+| Secciones | Vigencia, autoridades, decisiones, relaciones entre módulos/contratos/evidencia, historia y automatización. |
+| Agentes consultados | Delegación real a docs_contexto, docs_arquitectura y docs_modulos_manuales; revisión independiente de cuerpo AGENTES, clasificación, enlaces, diagramas y controles. Coordinación del custodio documental con los dueños funcionales/técnicos existentes. |
+| Descripcion | Fuentes vivas conciliadas sin reabrir trabajo implementado; originales de contexto preservados íntegros con enlaces rebasados. Historia identificada, Word separado de fuente vigente. Portal y registro exhaustivo de documentación propia; índice generado para Obsidian. Automatización detecta archivos sin clasificar, autoridad inválida, historia sin aviso, índice desactualizado y enlaces rotos; verify y CI ejecutan control. |
+| Motivo | Evitar que documentos superados contaminen decisiones y que se duplique implementación; conservar relación verificable entre reglas, contratos, dueños, pruebas y pendientes. |
+| Impacto | Documentación, instrucciones y validación de repositorio. Sin nuevas funciones, APIs, migraciones ejecutadas, seeds, datos ni despliegues; no certifica QA remoto ni UAT. Trabajo previo preservado. |
+| APIs afectadas | Ninguna: no se modificaron contratos ni se consumieron APIs operativas. |
+| Validacion | 169 archivos clasificados; 13 casos del mapa documental aprobados y enlaces locales resueltos; XML de seis diagramas válido, sin render integral. Ocho Word regenerados: paridad textual, ZIP y XML 8/8; hashes fuente/artefacto registrados y validados. Renderer bloqueado por ausencia de LibreOffice soffice.exe, visual pendiente. tools/verify.js aprobado: validadores, compilación, 532 passed, 152 skipped y 1 deprecation warning; sin DB/UAT/remote. Evidencia chg311-verify.log. |
+| Observaciones | Semántica de negocio requiere agentes; links externos/anclas no certificados. Word: ver REGISTRO para paridad y bloqueo visual concreto. Persisten pendientes funcionales y UAT documentados, no implementados en esta auditoría. |
+
+### CHG-312
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-07 |
+| Cambio | Confirmación monetaria de tarifas y consultas de capacidad por División |
+| Autor | Codex |
+| Archivos | HR organization schemas/store/API/models/tests; Production machines schemas/repository/API/machine_capacity/organization API/models/tests; migración20261007_0051; OpenAPI HR/Production; clientes/paneles HR y máquinas, i18n, app, tests browser/config; estado/control/agentes/arquitectura/manuales/registro e índice. |
+| Secciones | CC-10: fuentes monetarias y consultas; CC-11/12 conserva integración pendiente. |
+| Agentes consultados | Delegación real cc10_rh, cc10_production, cc10_ui y docs_modulos_manuales; revisión independiente cruzada RH→Production/UI. Fichas negocio/técnica RH, Producción y Contabilidad; Arquitectura, Datos/Custodio DB, API, Seguridad, Sinergia, Diseño/i18n, QA y Manuales. |
+| Descripcion | Tarifa Decimal con confirmación explícita de moneda base Sociedad; metadatos históricos nullable sin backfill. RH consulta nominal por División con IDs de trabajadores compartidos; Production consulta capacidad neta máquina/fecha descontando compromisos globales. Alcance, auditoría, reintentos y conservación de precisión en UI ES/EN. |
+| Motivo | Preparar recursos monetariamente trazables y capacidad contextual antes de conectar fabricación, sin multiplicar recursos ni reinterpretar costos históricos. |
+| Impacto | Sólo Local: migración0051 sobre erclave_local/loopback5434, tenant demo autorizado; fixtures con rollback. No QA/Producción. Continuación autorizada: seeds locales idempotentes de permisos/demo del arranque canónico; smoke sin mutaciones de negocio. Fabricación no habilitada. |
+| APIs afectadas | HR: PUT/GET /v1/hr/positions/{resource_id}/division-assignments (PUT con /{division_id}), GET /v1/hr/division-positions y nueva GET /v1/hr/division-production-capacity. Production: POST/GET /v1/production/machines, PATCH/GET /v1/production/machines/{machine_id}, nueva GET /v1/production/division-machines. Permisos/request/response y consumidas sin cambio en docs/arquitectura/cont_08_tarifas_capacidad.md. Admin sesión/Costing sólo consumidas; otros contratos no modificados. |
+| Validacion | Migración Local upgrade/downgrade sin confirmación/upgrade aprobada (chg312-migrate.log). Ejecución conjunta PostgreSQL RH organization + Production API/organization: 150 passed, 0 skipped, 1 warning (chg312-tests.log); no sumar ejecuciones separadas. Navegador aislado con APIs interceptadas: 211 passed, incluidos ocho casos nuevos ES/EN (chg312-browser-complete.log). tools/verify.js aprobado: todos los validadores, compilación, 554 passed, 158 skipped y 1 deprecation warning sin ERCLAVE_TEST_DATABASE_URL (chg312-verify.log); omisiones no cuentan como aprobaciones. Regresión extractor de permisos Admin corregida preservando listas inline y permisos multi consumidor; cinco pruebas focales aprobadas. Registro documental: 170 archivos; dos Word con paridad textual/ZIP/XML y hashes validados, visual pendiente. git diff --check aprobado. |
+| Observaciones | RH nominal no descuenta compromisos: consumo/liberación laboral y fabricación siguen CC-11/12. Smoke HTTP Emulator: bloqueo inicial resuelto mediante autorización explícita posterior de Bypass sólo por proceso. Arranque canónico ejecutado; 187 permisos sincronizados y seed demo local de ocho módulos. Health de ocho APIs/frontend, login/sesión y catálogos 200; rutas nuevas con División ausente 403, token ausente 401 y tenant ajeno 422. Cero Divisiones autorizadas: consulta positiva con recursos y escritura HTTP sin ejecutar; no declarar UAT completa. Logs chg312-start-local.log y chg312-http-smoke.log. Verificación posterior al arranque aprobada: validadores/compilación, 554 passed, 158 skipped y 1 warning (chg312-post-start-verify.log); documentación y diff --check aprobados. Word RH/Production regenerados con paridad textual, visual pendiente por LibreOffice ausente. Hash legacy sólo acepta importes representables sin pérdida; nuevas capturas limitadas a Decimal6. |
+
+### CHG-313
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-08 |
+| Cambio | Órdenes manuales por División, compromiso laboral global y recepción de terminado |
+| Autor | Codex |
+| Archivos | Production API/repos/schemas/scoped_resources/context/model/tests; migration0052; Inventory proof/disponibilidad/recepción/modelos de respuesta/tests; HR lookup/tests; contratos; frontend orden/i18n/browser; documentación vigente. |
+| Secciones | CC-11 y consumidor Production de CC-14; CC-12 sigue pendiente. |
+| Agentes consultados | Delegación real cc10_production, auditoria_ventas_inventario y cc10_ui; raíz RH/integración/documentación. Fichas funcionales/técnicas de dueños, Contabilidad y guardianes transversales. |
+| Descripcion | División explícita y contexto autoritativo; recursos monetariamente confirmados, compromisos por persona/día globales entre Divisiones, intento durable anterior a reserva, reintentos sin re-reservar, costo original exacto y recepción PT con alcance. |
+| Motivo | Consumir fuentes CC-10 sin duplicar capacidad ni perder origen/moneda en Inventory. |
+| Impacto | Local aislado tenant demo; migración0052 y pruebas con rollback. Sin inferencia de históricos, activación contable ni QA/Producción. |
+| APIs afectadas | Production POST /v1/production/resource-validations, POST /v1/production/orders, GET /v1/production/division-recipes, respuestas de orden/recursos/proyección PT y PATCH de estado; Inventory POST /v1/inventory/availability-checks, POST /v1/inventory/reservation-requests, GET/POST /v1/inventory/finished-goods-receipts; HR GET /v1/hr/division-workers. Matriz de permisos/request/response y consumidas en docs/arquitectura/cont_08_produccion_contexto.md. |
+| Validacion | Migración0051→0053→0051→0053 aprobada Local (chg313-migrate.log). Production116, Inventory91 y RH45 pruebas PostgreSQL/API aprobadas sin omisiones en logs chg313-production-tests.log, chg313-inventory-postgres.log y chg313-hr-postgres.log. Browser focal CC11 6/6; regresión conjunta223 passed (chg314-browser-complete.log). Verify final: validadores/compilación,588 passed175 skipped1warning sin DB (chg314-verify.log); omisiones no equivalen a aprobación. |
+| Observaciones | Fabricación Sales CC-12 permanece bloqueada; no confundir manual por División con ciclo pedido→fabricación→entrega ni con UAT HTTP integrada. Corrección de migración reutiliza UNIQUE tenant/id preexistente; primer intento transaccional no aplicó efectos. |
+
+### CHG-314
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-08 |
+| Cambio | Moneda original y conversión explícita de costos de Servicios |
+| Autor | Codex |
+| Archivos | Sales service_money/API/repos/schemas/model/tests, migration0053, contrato Sales, frontend/i18n/casos monetarios, arquitectura/control/manuales. |
+| Secciones | CC-08: tiempos y costos; ciclo operativo conservado. |
+| Agentes consultados | Raíz backend y documentación; auditoria_ventas_inventario pruebas PostgreSQL/edge cases; cc10_ui frontend. Dueños Ventas/Contabilidad, Datos, API, Seguridad, Diseño/i18n y QA. |
+| Descripcion | Nuevas entradas dimensionadas confirman moneda Sociedad, guardan original Decimal6, tasa Decimal12 y total convertido documental. Legacy nullable; aceptación nueva bloquea historia monetaria desconocida. Replay conserva snapshot. |
+| Motivo | Cumplir política CHG-309 sin reconstruir ciclo ni reinterpretar importes históricos. |
+| Impacto | Migration0053 sólo Local demo, sin backfill. Constraints coherentes y downgrade protegido por entradas/auditoría monetaria. |
+| APIs afectadas | Sales POST /v1/sales/service-orders/{service_order_id}/time-entries y /cost-entries: nuevos campos monetarios. GET /v1/sales/service-orders y /{service_order_id}, y respuestas ServiceOrderRead de comandos: currency/metadatos aditivos; POST /transitions/{action} protege aceptación con historia desconocida. Permisos y detalle en docs/arquitectura/cont_08_servicios_contexto.md. Admin/HR/Production sólo consumidas en este corte; otros contratos sin modificación CC08. |
+| Validacion | Migration0053 ciclo vacío aprobada. Sales PostgreSQL/API74 passed0skips (chg314-sales-postgres.log), incluido constraint/downgrade/historia/conversión/replay/rango. Browser focal6/6; regresión completa223 passed (chg314-browser-complete.log). Verify final validadores/compilación y588 passed175 skipped1warning (chg314-verify.log). Cinco fixtures de tenants temporales no autorizados quedaron fuera de la ejecución PG; suite general sin DB los omite. Cuatro Word con paridad textual/ZIP/XML/tablas y hashes comprobados; visual pendiente por LibreOffice ausente. Diagrama XML, docs/index170 y diff--check aprobados. |
+| Observaciones | Cero válido; no tasa inferida entre monedas distintas. Original/convertido fuera de precisión de almacenamiento produce422 antes de DB. Costo estimado de cotización sigue pendiente de revisión específica. Cuatro APIs Local recargadas; smoke health/login/sesión/contratos aprobado, una División autorizada con consultas200 vacías, sin negocio HTTP escrito (chg314-http-smoke.log). Primer browser transversal falló carga dinámica de recurso tras206 aprobadas; nueva corrida completa con servidor fresco/diagnóstico pasó223, sin cambiar ese módulo. Se corrigieron imports tardíos de dos tests para colección conjunta; no lógica runtime. |
+
+### CHG-315
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-08 |
+| Cambio | CC-12 fabricación comercial por División, recepción real y entrega con costo exacto |
+| Autor | Codex |
+| Archivos | Production sales_source/sales_conversion_store/sales_conversion_api/API/repos/schemas/models/tests; Sales production_fulfillment_api/production_reconciliation/stock_context/API/authorities/repos/schemas/models/tests; Inventory receipt proof/context/repos/schemas/tests; migraciones0054/55/56; OpenAPI3; UI solicitud/bandeja/seguimiento, APIs/i18n/tests; smoke_cc12_local y fixture; validadorOpenAPI; fuentes vivas/manuales/diagramas/contexto/control/registro/índice. Cambios previos preservados. |
+| Secciones | CC-12 implementado Local; preserva CC-08/10/11/13. CC-14 otros productores y CC-15–20 permanecen pendientes. |
+| Agentes consultados | Delegación real cc10_production, auditoria_ventas_inventario y cc10_ui; raíz integración HTTP/DB/documentación. Dueños funcionales/técnicos Sales/Production/Inventory, Contabilidad, Arquitectura, Datos, API, Seguridad, Sinergia, Diseño/i18n, QA y manuales. Skills feature/accounting/module-boundaries/environment-boundaries/db-migration/form-contract/form-feedback/context-reconcile/qa-evidence/solution-manuals. |
+| Descripcion | Sales congela plan e intención; Production prueba origen por HTTP, convierte una sola vez con intento/enlace durable y conserva recursos/costos por División. Inventory confirma recepción real; Sales concilia/reserva con recuperación y entrega conservando original/tasa/convertido. Cancelación coordina estado productivo. UI ES/EN utiliza autoridades y errores estructurados. Corrección precisión: original de Inventory conserva6dec antes de redondear moneda documental. |
+| Motivo | Cerrar pedido→fabricación→consumo→terminado→entrega/costo sin duplicar órdenes, reservas ni stock ante reintentos, sin ampliar alcance ni reinterpretar historia. |
+| Impacto | Sólo Local loopback5434/erclave_local y tenant demo autorizado. Alembic0054/55/56, sin backfill; fixtures PostgreSQL con rollback y fixtureHTTP sintético con limpieza por IDs propios verificada. Sin commit, QA/Producción ni activación Accounting. |
+| APIs afectadas | Matriz exacta de métodos/rutas/permisos/request/response y consumidores sin cambio en [fabricación CC-12](docs/arquitectura/cont_08_fabricacion_contexto.md). Modificados Production/Sales/Inventory; Admin/RH consumidos; Purchasing/Maintenance/Costing/Accounting sin nuevo contrato. |
+| Validacion | Production137passed0skips (chg315-production-tests.log); Inventory97+Sales76=173passed0skips secuenciales sobre PostgreSQL0056 (chg315-sales-inventory-final.log). Navegador completo231passed con APIs interceptadas (chg315-browser-full.log); focal inicial14passed y final16passed tras dos negativos de permisos (chg315-browser-permissions.log); cuatro validadores frontend aprobados. Migraciones0054/55 ciclo vacío y0056upgrade/downgrade/upgrade aprobados (chg315-migrate-final.log, chg315-migrate56.log). HTTP real autenticado completo aprobado:60MXN→3USD, rechazo antes de terminado/recepción, conversión/recepción/conciliación/entrega reintentadas sin duplicados, limpieza verificada (chg315-http.log). Verify final aprobado: todos los validadores, compilación y596passed196skipped1warning sin DB (chg315-verify.log); omisiones no equivalen a aprobación. Registro documental171 fuentes, cuatro Word con paridad708párrafos/celdas10tablas y hashes (chg315-manual-parity.log), git diff--check aprobado. |
+| Observaciones | Las primeras corridas HTTP corrigieron fixtures (clienteactivo, snapshotformal, enumfinishedGood y transiciónautomática); no se debilitó validación runtime. Verify conjunto detectó formato YAML de permisos incompatible con extractor histórico e import tardío de prueba Production; listas inline restauradas (catálogo5/5) e import corregido sin ampliar permisos. Se detectó/corrigió redondeo prematuro; casoPG4.123456USD→82.47MXN con tasa20. ManualesWord regenerados/paridadtextual; visual sigue pendiente porque faltaLibreOffice, no certificados para distribución. CC-19 datos reales y CC-20 transversal/QA siguen abiertos. Punto de reinicio en INICIO_SESION; no reejecutar helpers demigración históricos. |
+
+### CHG-316
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-08 |
+| Cambio | Pausa para reinicio y criterios de cierre de la primera fase contable |
+| Autor | Codex |
+| Archivos | docs/contexto/INICIO_SESION.md, PENDIENTES.md, ESTADO_ACTUAL.md, CONTROL_CONTABLE.md; TRAZABILIDAD.md e índice documental. |
+| Agentes consultados | Fuentes vigentes del custodio contable y de los dueños consolidadas en CHG-315; skill erclave-context-reconcile. Sin nueva delegación ni auditoría funcional. |
+| Descripcion | Distingue CC-12 cerrado Local de fase abierta; registra desarrollo CC-14–18, revisión de costo estimado, datos CC-19, aceptación CC-20 y siguiente corte por dueño. Conserva evidencia previa y límites de Accounting apagado. |
+| APIs afectadas | Ninguna; cambio documental, sin consultas operativas, migraciones, seeds, despliegues ni commit. |
+| Validacion | Contexto Node y Python revisado. Verify aprobado: validadores/documentación, compilación, 596 passed, 196 skipped y 1 warning sin DB (chg316-verify.log). Índice171 documentos y diff--check aprobados. No son nuevas pruebas integradas CC-20. |
+| Observaciones | Usuario pausa para reiniciar. Al volver entrar por INICIO_SESION, preservar cambios locales y no repetir migraciones de ensayo. CC-12 no se reabre; libro e integración contable futura no habilitados. |
+
+### CHG-317
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-12 |
+| Cambio | CC-14: productores Inventory, transferencias y sobrantes con contexto, costo y recuperación |
+| Autor | Codex |
+| Archivos | Inventory API/repos/producer_context/handoffs/material_returns/schemas/models/tests; Purchasing receipt_context/API/repos/authorities/schema/model/tests; Maintenance inventory_context/API/repos/retornos/model/tests; migración0057; OpenAPI3; configuración/cableado Inventory→Purchasing; formulario recepción/cliente/reintento y navegador; fuentes vivas, manuales y registro. Trabajo previo sin commit preservado. |
+| Agentes consultados | Delegación real: estado_codigo (Purchasing, configuración, manuales), pendientes (Maintenance, revisión de proofs y negativos), qa_playwright (transferencias/sobrantes y navegador); raíz Inventory/integración/migración/documentación. Fichas negocio/técnico de dueños; Contabilidad, Arquitectura/API, Datos/Custodio DB, Seguridad, Sinergia, Diseño/i18n y QA. Skills context-reconcile, feature, accounting, module-boundaries, environment-boundaries, db-migration, form-contract, form-feedback, qa-evidence y solution-manuals/documents. |
+| Descripcion | Pruebas de origen autenticadas desde intención durable; costo de recepción documental→Sociedad explícito, snapshots exactos, movimientos únicos por partida. Transferencias misma Sociedad congelan ambos extremos; retornos conservan costo/contexto y recuperan conciliación sin repetir entrada. Alcance verificado antes de comandos y replay; reservas Maintenance terminales no se reactivan. Formulario ES/EN conserva clave/fecha si captura no cambia. |
+| Motivo | Completar CC-14 sin rehacer Sales/Production ni confundir recepción/materiales adaptados con separación global CC-15/16. |
+| Impacto | Sólo Local 127.0.0.1:5434/erclave_local, tenant ten_739ee59d765d5e14818674800d. PostgreSQL iniciado; migración0057 nullable sin backfill, upgrade/downgrade/upgrade aprobado. Pruebas con rollback/limpieza por IDs propios; sin otros tenants, seeds, APIs remotas, QA/Producción, commit ni activación Accounting. |
+| APIs afectadas | Matriz de métodos/rutas/permisos/request/response en [CC-14](docs/arquitectura/cont_08_inventario_productores.md). Contratos Inventory/Purchasing/Maintenance modificados; Admin sesión y Production máquina/orden consumidos sin ampliar permisos. Sales/RH/Costing/Accounting sin contrato nuevo. |
+| Validacion | PostgreSQL Local0057: Inventory198, Purchasing62 y Maintenance38 aprobadas, sin omisiones en suites focales; un warning existente Starlette/httpx por ejecución. Proofs API con dependencias controladas; migración up/down/up y protección downgrade con historia. Navegador CC14 seis casos ES/EN y regresión completa239 aprobados con APIs interceptadas. Verify final aprobado: validadores, compilación y backend722 passed/213 skipped/1 warning sin DB; estas omisiones no se contabilizan como aprobadas. Documentación validada, índice172 documentos y diff--check aprobado. Manuales: paridad textual496 párrafos/celdas y8 tablas, ZIP/XML válidos; revisión visual pendiente por LibreOffice ausente. Evidencia .local/chg317-verify-final.log, chg317-inventory-tests-final.log, chg317-purchasing-tests.log, chg317-browser-regression.log y logs Maintenance/manuales del corte. |
+| Observaciones | Conserva precio OC vigente2dec y costo/tasa convertidos6dec; no infiere moneda ni reconstruye historia. Dependencia Inventory→Purchasing preparada en pipeline sin deploy. CC-15/16 integral, CC-17/18, costo estimado, datos CC-19 y aceptación transversal CC-20 siguen abiertos. Manuales Word candidatos; revisión visual pendiente por LibreOffice ausente. Logs chg317-* locales; pruebas Local no son UAT QA ni nuevo ensayo autenticado entre todos los servicios. |
+
+### CHG-318
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-12 |
+| Cambio | Validación de pendientes tras CC-14 |
+| Autor | Codex |
+| Archivos | docs/contexto/PENDIENTES.md, CONTROL_CONTABLE.md, ESTADO_ACTUAL.md, INICIO_SESION.md; índice documental y TRAZABILIDAD.md. |
+| Agentes consultados | Fichas vigentes de Contabilidad, Purchasing/Maintenance y guardianes; evidencia delegada de CHG-317. Skills erclave-context-reconcile y erclave-accounting; sin nueva delegación. |
+| Descripcion | Contrasta pendientes con schemas, consumidor OC, impresión y logs CHG-317. Retira referencias obsoletas de CC-14 pendiente y aclara head0057 frente al0056 histórico. Conserva siguiente desarrollo CC-15/16, luego CC-17/18, revisión costo estimado y CC-19/20. CSV de recepciones ya acotado; separación integral Purchasing sigue pendiente. |
+| Motivo | Evitar repetir capacidades cerradas o usar estado anterior como instrucción vigente. |
+| Impacto | Sólo documentación Local; sin conexiones DB/remotas, mutaciones operativas, migraciones, seeds, despliegues, commit ni activación Accounting. Trabajo previo preservado. |
+| APIs afectadas | Ninguna; revisión estática de contratos/código existentes, sin cambios ni consumo HTTP. |
+| Validacion | Contexto Node/Python y logs existentes revisados: verify CHG-317722 passed/213 skipped/1warning y navegador239 aprobadas; no son ensayos nuevos CHG-318. Verify CHG-318 aprobado: validadores/documentación, compilación y backend722 passed/213 skipped/1warning sin DB (38.17s), log .local/chg318-verify.log. Índice172 documentos y diff--check aprobados; omisiones no acreditadas como aprobaciones. |
+| Observaciones | Desarrollo CC-15–18, costo estimado, datos CC-19, aceptación CC-20, UAT QA y revisión visual Word permanecen abiertos; evidencia previa no acredita aceptación adicional. |
+
+### CHG-319
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-12 |
+| Cambio | CC-15: documentos Purchasing por División y condiciones explícitas |
+| Autor | Codex |
+| Archivos | Purchasing document_context/API/repos/authority/receipt_context/organization lookups/reports/schemas/tests y OpenAPI1.7/README; modelos y migración0058; frontend purchasing-context/recepción/app/API/error catalogs y styles.css acotado a OC y navegador; contrato Compras, módulo/manual fuente/Word/registro; contexto, arquitectura, diagrama, guardianes y trazabilidad. Trabajo previo preservado. |
+| Agentes consultados | Delegación real: estado_codigo backend Purchasing/pruebas; qa_playwright frontend/formularios/navegador; pendientes negocio/revisión independiente/manuales y dobles API. Raíz migración/modelos, contratos, integración y gobierno documental. Fichas negocio/técnico Compras/Contabilidad, Arquitectura/API, Seguridad, Datos/Custodio DB, Sinergia, Diseño/i18n, QA y Manuales. Skills context-reconcile, feature, accounting, module-boundaries, environment-boundaries, db-migration, form-contract, form-feedback, qa-evidence y solution-manuals/documents. |
+| Descripcion | Requisición fija División y contexto Admin; OC ligada hereda origen/contexto y directa exige División/motivo. Condiciones propias del proveedor se validan y congelan: moneda, pago, plazo y revisión. Editar mismo proveedor conserva snapshot; cambio explícito proveedor captura condiciones nuevas. Recepciones incluidas de servicios heredan OC, bienes exigen almacén misma División. Alcance antes de efectos/replay, filtros SQL en listas/bandejas/CSV; replay durable y comandos documentales ligados al actor, sin alterar claves de recuperación CC-14. Formularios ES/EN con búsquedas acotadas, precisión, captura conservada y revisión esperada de términos; rechazan cambios concurrentes sin aceptar condiciones distintas silenciosamente. Layout de OC ajustado sólo en su contenedor, probado320px. |
+| Motivo | Cerrar CC-15 conservando recepción/proof/costo/recuperación CC-14, servicios sin Inventory y documentos históricos sin reinterpretación. |
+| Impacto | Local aislado 127.0.0.1:5434/erclave_local, tenant exclusivo ten_739ee59d765d5e14818674800d. Migración0058 nullable sin backfill, upgrade/downgrade/upgrade comprobados; downgrade con historia bloqueado. Fixtures rollback/limpieza propios; sin tenants temporales, datos reales, QA/Producción, commit ni activación Accounting. |
+| APIs afectadas | Matriz método/ruta/permiso/request/response en [CC-15](docs/arquitectura/cont_08_compras_contexto.md). Contratos Purchasing modificados: requisiciones y transiciones, órdenes y emisión/cancelación, recepciones/bandejas/aceptación/CSV; nuevas proyecciones document-divisions y document-suppliers. Admin sesión/catálogos/unidades e Inventory artículos/asignaciones/almacenes/recepción consumidos sin modificar contratos ni permisos. Sales/Production/HR/Maintenance/Costing/Accounting sin cambios contractuales. |
+| Validacion | PostgreSQL Local0058:77 pruebas focales Purchasing aprobadas/0 omitidas/1 warning, incluidas diez CC-15 PostgreSQL y dos de alcance propio enviar/aprobar; log chg319-purchasing-terms-tests.log. Migración up/down/up y downgrade con historia protegidos. API con dependencias controladas separada de DB. Navegador final255 aprobadas/0 fallos, incluye16CC15+6CC14 y panel320px ES/EN; APIs interceptadas, chg319-browser-regression-final.log. Verify final aprobado: validadores/documentación, compilación y backend727 passed/223 skipped/1warning sinDB (42.45s), chg319-verify-final.log; omisiones no contadas como aprobaciones. Word paridad172 párrafos/celdas3tablas, ZIP/XML válidos; visual pendiente soffice. Índice173 documentos y diff--check aprobados. |
+| Observaciones | Implementación sólo Local; pruebas con interceptores no son aceptación integrada CC-20 ni UAT QA. CC-16–18, costo estimado, datos CC-19 y aceptación CC-20 permanecen abiertos. Revisión visual Word pendiente por LibreOffice ausente. Factura/CxP/devolución proveedor y actualización automática costo base Inventory siguen futuras. Logs chg319-* locales. |
+
+### CHG-320
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-12 |
+| Cambio | CC-16: orden Maintenance por División y costo laboral conservado; implementado Local |
+| Autor | Codex |
+| Archivos | Maintenance runtime/modelos/pruebas/README y contrato1.1; RH proyección técnica/contrato0.2; Production alcance bloqueo/liberación/contrato0.3; migración0059; frontend/API/formularios/i18n/pruebas; arquitectura, módulo11/manual fuente/Word/registro, contexto y trazabilidad. Cambios previos preservados. |
+| Agentes consultados | Delegación real: estado_codigo backend Maintenance y pruebas; qa_playwright UI/navegador; pendientes revisión negocio/seguridad, adaptación dobles API y documentación/manuales. Raíz integración, migración, RH/Production, OpenAPI y gates. Perspectivas Maintenance negocio/técnica, Contabilidad, Arquitectura/API, Datos, Seguridad, Sinergia, Diseño/i18n, QA y Manuales; skills accounting, form-contract, solution-manuals/documents y guardianes aplicables. |
+| Descripcion | Contexto fijo de orden derivado de máquina/origen o División explícita instalación/otro; técnicos RH elegibles y tarifa confirmada en moneda de Sociedad. Tiempos con zona, segundos exactos y snapshot Decimal/costo/revisiones. Capacidad y solapamiento por tenant+persona entre órdenes Maintenance y día UTC; sin reserva conjunta Sales/Production. Alcance antes de replay/efectos y CSV. Refacciones heredan orden, conservando proof/costos/reconciliación CC-14. Legado sin backfill y recuperación permitida con alcance completo. |
+| Motivo | Completar separación dimensional CC-16 preservando ownership y recuperaciones previas, sin activar Accounting ni ampliar a preventivos/agenda transversal. |
+| Impacto | Sólo Local aislado; tenant demo autorizado ten_739ee59d765d5e14818674800d. Migración0059 nullable sin backfill, up/down/up comprobados. Sin QA/Producción, commit ni aceptación transversal. |
+| APIs afectadas | Matriz en [CC-16](docs/arquitectura/cont_08_mantenimiento_contexto.md): Maintenance document-divisions/órdenes/transiciones/tiempos/materiales/reportes; RH division-workers purposemaintenance y proyección mínima con permisos propios; Production maintenance-block/release con scope directo. Inventory consumido sin cambio contractual de este corte. |
+| Validacion | Backend final: seis suites Maintenance50 aprobadas/0 omitidas/1 warning,26.77s (chg320-maintenance-tests.log), incluidos11 casos nuevos CC16 (2puros+9PostgreSQL); unitarios previos22 no se suman al total final. Suite cruzada RH/Production123 aprobadas/0 omitidas (chg320-cross-tests-final.log), incluye mínimo privilegio RH y alcance/legacy Production. Migración0059 up/down/up y revisión tipada aprobados. Navegador completo271 aprobadas/0 omitidas/0 fallos,3.7min (cc16-browser-regression-final.log), incluye16CC16 ES/EN y regresión CC14/15, APIs interceptadas. Word canónico160 párrafos/celdas3tablas, ZIP/XML/paridad aprobados; render intentado falla soffice ausente. Verify final aprobado: validadores, compilación y backend738 aprobadas/233 omitidas/1 warning sin DB (`.local/chg320-verify-final.log`); omisiones no cuentan como aprobaciones. |
+| Observaciones | Implementado Local; sin UAT ni promoción QA. CC-17/18, costo estimado, datos CC-19 y aceptación CC-20 abiertos. Capacidad sólo Maintenance, no agenda intermodular. Word candidato con revisión visual pendiente. |
+
+### CHG-321
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-12 |
+| Cambio | Pausa documental después de CC-16; reanudación y pendientes preservados |
+| Autor | Codex |
+| Archivos | `docs/contexto/INICIO_SESION.md`, `PENDIENTES.md`, `ESTADO_ACTUAL.md`, registro de trazabilidad e índice documental. |
+| Agentes consultados | Fuentes vivas de contexto y matriz del custodio técnico de Contabilidad; se conserva la evidencia de los agentes de CHG-320 sin atribuirles trabajo nuevo. |
+| Descripcion | El usuario pidió dejar pendientes CC-17, CC-18, revisión de costo estimado y CC-19/20. Se registra el último estado Local, el orden propuesto de reanudación y las comprobaciones de ambiente/árbol necesarias antes de actuar. |
+| Motivo | Poder retomar sin inferir cierres, repetir migraciones o confundir pruebas focales con aceptación integrada. |
+| Impacto | Sólo documentación. Sin código, API, migración, seed, datos reales, commit, QA, despliegue o activación de Accounting en este corte. |
+| APIs afectadas | Ninguna. |
+| Validacion | Índice documental actualizado: 174 archivos. `npm run verify` aprobó validadores, documentación, compilación y backend738 aprobadas/233 omitidas/1 advertencia en la corrida sin DB (`.local/chg321-verify.log`). Las omisiones no son aprobaciones; este corte no agregó pruebas funcionales. |
+| Observaciones | CC-16 continúa implementado sólo Local; CC-17/18, costo estimado, CC-19/20 y revisión visual Word quedan abiertos. |
+
+### CHG-322
+
+| Campo | Evidencia |
+|---|---|
+| Fecha | 2026-10-14 |
+| Cambio | CC-17: presentacion efectiva e identidad historica de cotizaciones y ordenes de produccion. |
+| Archivos | Admin, Sales y Production en backend/frontend; contratos OpenAPI; migracion `20261014_0060`; fichas, fuentes Markdown y contexto documental citados abajo. |
+| Agentes consultados | Agentes de Administracion, Ventas y Produccion; guardianes de Arquitectura, Datos, QA y Contabilidad opcional conforme al alcance documentado del corte. |
+| Decision | El usuario confirmo snapshot al aprobar cotizacion y al liberar orden. |
+| Alcance | Solo Local. Admin resuelve plantilla Corporativo > Sociedad > Division e identidad de Emisor/Sociedad/Division. Sales y Production guardan snapshot JSONB en su propio documento; frontend imprime ese valor para historia. Documentos previos sin snapshot no se reinterpretan. Sin QA, datos reales, Accounting ni despliegue. |
+| APIs afectadas | Nuevo GET Admin `/v1/configuration/document-presentation/division/{division_id}` con permisos consumidores y alcance. Respuestas existentes de Sales Quote y Production Order agregan `presentation_snapshot` nullable. Comando existente Sales aprobar y creacion Production consumen Admin antes de persistir. OpenAPI de los tres servicios actualizado. |
+| Migracion | `20261014_0060`, aditiva, dos columnas JSONB nullable y restricciones objeto; downgrade se bloquea si existe historia. Upgrade/downgrade/upgrade realizado en PostgreSQL Local 5434/erclave_local, tenant autorizado confirmado. |
+| Validacion | 136 pruebas focales Admin/Sales/Production aprobadas con PostgreSQL Local; 1 advertencia existente de Starlette/httpx. OpenAPI runtime/contratos y compilacion Python aprobados. Node/npm y LibreOffice no disponibles en el entorno, por lo que validadores frontend/documentacion, navegador, verify integral y Word con revision visual quedan sin ejecutar. Fuentes Markdown de manuales actualizadas; Word previos no cubren CC-17. Las pruebas focales no sustituyen CC-20 ni UAT QA. |
+| Documentos | DECISIONES, CONTROL_CONTABLE, PENDIENTES, ESTADO_ACTUAL, INICIO_SESION, CONT-04, plantillas documentales y modulos Admin/Sales/Production. |
+| Observaciones | Word anterior no representa CC-17; QA y UAT no ejecutados en este corte. |
+
+### CHG-323
+
+**2026-10-14 - CC-18 folios restantes**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal con dueños RH/Inventory, Purchasing y Maintenance |
+| Motivo | Cerrar consumidores de folios CONT-06 solicitados por el usuario. |
+| Decision | Admin es autoridad por tipo y permiso; modo manual de movimientos Inventory automaticos deriva un codigo estable del origen. |
+| Implementacion | Migracion Alembic `20261014_0061`; autoridad Admin y cliente compartido; create/read de Puestos RH, movimientos Inventory, proveedor/requisicion/OC/recepcion Purchasing y orden Maintenance; formularios, OpenAPI, fichas y fuentes Markdown. |
+| Historia | Codigos previos no se renumeran; `code_mode` nuevo nullable donde aplica. Accounting sigue apagado. |
+| Validacion | Migracion up/down/up PostgreSQL Local; Admin 3, Purchasing 39 + guardia de longitud, Maintenance 41, RH/Inventory 34 API + 61 DB y 1 prueba DB RH adicional; validador OpenAPI y diff check. Suites completas sin DB: RH 58 aprobadas/8 omitidas, Inventory 173 aprobadas/26 omitidas. La bateria DB fue anterior al ultimo ajuste del helper; no hubo navegador ni UAT integrada. No QA ni Word validado. |
+| Pendiente | Revision costo estimado, CC-19 datos, CC-20 aceptacion, promocion QA autorizada y Word. Suite Purchasing con tenants temporales excluida por politica AGENTS. |
+
+### CHG-324
+
+**2026-10-14 - revision del costo estimado de cotizaciones**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal, revision Sales/Production y control contable |
+| Motivo | Formalizar la brecha monetaria de costo estimado que habia quedado fuera de una fila CC propia. |
+| Hallazgo | `ProductReference.standard_cost` no lleva moneda/Sociedad; `_write_lines` lo suma contra precio documental sin conversion; asignacion/aprobacion no validan costo y pedido copia el estimado. El reporte comercial recalcula mal `margin_percent` y la tarjeta de pedido muestra cero ante nulo. |
+| Decision | Usuario permite aprobar cotizacion con costo/margen estimados nulos si faltan costo confirmado o tasa. |
+| Cambio | Documento de revision, criterio CC-21 y actualizacion de DECISIONES, CONTROL_CONTABLE y PENDIENTES. Sin cambio runtime, migracion ni datos. |
+| Validacion | Lectura de codigo y contratos Local; no se ejecutaron pruebas para esta revision documental. |
+| Pendiente | Implementar CC-21 con fuente de costo por Sociedad, tasa explicita, conversion, snapshot y presentacion/reportes correctos; despues CC-19/20 segun alcance. |
+
+### CHG-325
+
+**2026-10-14 - CC-21 costo estimado de cotizaciones**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal con duenos de Production, Sales y frontend transversal. |
+| Motivo | Evitar comparar `standard_cost` global sin moneda/Sociedad con el precio documental de cotizacion y conservar la procedencia del estimado. |
+| Decision | Costo confirmado por producto/Division en moneda base de Sociedad; tasa explicita si la cotizacion usa otra moneda. Si falta costo o tasa, permitir aprobacion con costo y margen estimados nulos. |
+| Implementacion | Migracion Alembic `20261014_0062`; fuente confirmada y consulta de Production; vista previa, aprobacion y snapshot de Sales; pedido hereda snapshot; UI, reportes CSV, contratos OpenAPI, fichas y manuales Markdown. |
+| Historia | Columnas nullable sin backfill; cotizaciones y pedidos previos conservan importes, pero los reportes no presentan estimados/margenes sin snapshot verificable. Downgrade protegido cuando existe historia nueva. |
+| Ambiente | Migracion up/down/up en PostgreSQL Local loopback 5434, base `erclave_local` y tenant `ten_739ee59d765d5e14818674800d`, verificados antes de operar. Sin QA, Produccion ni Accounting. |
+| Validacion | Production: 69 pruebas focales Local, compilacion y validador OpenAPI. Sales: 83 pruebas focales Local y validador OpenAPI. Sintaxis JS de seis archivos combinados aprobada; `git diff --check` limpio. No navegador ni UAT integrada. |
+| APIs afectadas | Production: PUT costo confirmado por asignacion y GET costo por producto/Division. Sales: PUT contexto de cotizacion, PATCH borrador, POST enviar/aprobar, POST pedido, GET/list cotizaciones/pedidos y GET reportes CSV; respuestas incluyen snapshots nullable y captura de tasa estimada donde aplica. |
+| Pendiente | Regenerar y revisar visualmente Word, datos reales CC-19 y aceptacion integrada CC-20 antes de promocion autorizada. |
+
+### CHG-326
+
+**2026-10-14 - preparacion CC-19 y configuracion contable opcional**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal con revision de dueños Production/Maintenance, Sales/Purchasing y RH/Inventory; perspectiva transversal de Datos, Arquitectura y Contabilidad. |
+| Motivo | El usuario confirmo que aun no dispone de estructura ni equivalencias reales y solicito documentacion y diagrama de mapeos/cuentas necesarios. |
+| Entrega | [Guia CC-19](docs/arquitectura/cc19_mapeos_y_configuracion_contable.md): diagrama de operacion con Accounting apagado o futuro, matriz por dueño, formato minimo de equivalencia, preflight, configuracion por Sociedad y roles de cuenta por evento. Portal, registro e indice documental y contexto actualizados. |
+| Evidencia | Lectura de contratos/arquitectura y preflight read-only en Local `127.0.0.1:5434/erclave_local`, tenant `ten_739ee59d765d5e14818674800d`: 1 Sociedad/Division; 3 almacenes y 3 maquinas sin Division; contextos historicos nulos. Sin lectura QA/Produccion. |
+| Limite | Sin mapeo real aprobado no se ejecuta backfill ni se cierra CC-19. Las cuentas son roles futuros, no codigos ni reglas fiscales fijadas. Accounting planned/apagado; no cambios de runtime, API, esquema, datos, seeds o migracion. |
+| APIs afectadas | Ninguna. |
+
+### CHG-327
+
+**2026-10-14 - preparacion de aceptacion integrada CC-20**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal con revisión de Production/Maintenance, Sales/Purchasing, Admin/RH/Inventory/Costing y perspectivas QA, Seguridad, Sinergia y Contabilidad. |
+| Motivo | El usuario pidió preparar CC-20 para probar después en Local. |
+| Entrega | [Procedimiento y matriz CC-20](docs/operaciones/cc20_aceptacion_integrada_local.md): 16 recorridos, precondiciones, resultados observables, evidencia y cierre; contexto, portal, registro, índice y guía Local actualizados. |
+| Ambiente | Preparación documental de solo lectura en repositorio Local. No se iniciaron servicios, fixtures, migraciones, pruebas, QA ni Accounting. |
+| Estado | Todos los casos Por ejecutar; no se infiere aceptación de pruebas focales, navegador interceptado ni recorrido HTTP anterior. CC-19 y Word independientes. |
+| APIs afectadas | Ninguna modificada; la ejecución posterior consumirá las APIs existentes de Admin, Costing, RH, Inventory, Production, Sales, Purchasing y Maintenance. |
+
+### CHG-328
+
+**2026-10-14 - configuración sintética Local CC-19/20**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal con consultas de solo lectura de Production/Maintenance, Sales/Purchasing y Admin/RH/Inventory/Costing; perspectiva de Contabilidad, Datos, Arquitectura y Seguridad. |
+| Motivo | El usuario pidió generar Sociedades y mapeos de prueba, y corrigió el destino a Local. |
+| Entrega | Por APIs dueñas se crearon un Emisor, una Sociedad USD, dos Divisiones y tres Centros de costos activos en el tenant demo; se conservó la estructura MXN anterior. Resultado: 2 Sociedades, 3 Divisiones y un Centro por División. Manifest y CSV de estructura en `.local/cc19-demo-*`, ignorados por Git. |
+| Ambiente | Sólo Local aislado: APIs `127.0.0.1:8000/8014`, Firebase Auth Emulator `9099` y PostgreSQL `127.0.0.1:5434/erclave_local`; tenant `ten_739ee59d765d5e14818674800d`. Sin QA/Producción, migración ni despliegue. |
+| Historia | Inventario read-only: 38 registros legacy sin contexto/División comprobable en CSV de excepciones. No se hizo backfill, asignación de maestros históricos, conversión de moneda o reconstrucción de snapshots. |
+| Límite | Accounting permanece planned/apagado; no existe runtime para libros, catálogo de cuentas ni reglas. CC-19 real y aceptación CC-20 siguen abiertos. |
+| APIs afectadas | Contratos modificados: ninguno. Consumidas sin cambio: `POST /v1/organization/fiscal-issuers`, `POST /v1/organization/societies`, `POST /v1/organization/divisions` (Admin); `POST /v1/cost-centers` (Costing); `GET` de esos catálogos para idempotencia/lectura. Otras APIs no tocadas. |
+
+### CHG-329
+
+**2026-10-14 - selector de Sociedad/División usable en Local**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal; revisión de Administración, sesión, diseño responsive, feedback y fronteras de ambiente. |
+| Motivo | El usuario mostró que el selector de la barra superior no permitía cambiar cómodamente de División. |
+| Diagnóstico | `data-entity-selector` convertía el select en un buscador de contexto; el select original medía 1 px y su contenedor recortaba la lista. |
+| Cambio | Control dedicado con botón, opciones completas por Sociedad/División/código, indicador activo, foco/Escape y estado de carga; CSS aislado a la barra superior y textos ES/EN. |
+| Validación | Navegador real en Local: 3 opciones visibles, búsqueda por código, cambio de División y de Sociedad, persistencia al recargar, cierre con Escape y textos ES/EN. Validadores de responsive, i18n, selectores y feedback aprobados; sintaxis JS y `git diff --check` sin error. El validador documental sigue señalando deriva previa de otros cambios. |
+| Ambiente | Sólo frontend Local; sin migración, backfill, QA ni Accounting. |
+| APIs afectadas | Contratos modificados: ninguno. Consumida sin cambio: Admin `GET /v1/session/context?division_id=...`. Otras APIs no tocadas. |
+
+### CHG-330
+
+**2026-10-14 - conciliación documental previa a Git**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal; fichas de Custodio de manuales, Arquitectura, Administración y QA/Release consultadas. |
+| Motivo | Revisar documentación, manuales y controles antes de preparar la publicación del trabajo Local acumulado. |
+| Archivos | Fuente Markdown de Administración, registro de manuales, ficha del módulo, diagrama de backend, contexto vigente, `.gitignore` y trazabilidad. |
+| Cambio | Procedimiento del selector Sociedad/División y límite de Centro de costos en el manual; diagrama actualizado a Local head `20261014_0062`; tres campos faltantes de CHG-322 completados; afirmaciones vigentes de Administración conciliadas; carpetas temporales `.local-config/` y `.tmp/` excluidas de Git. |
+| Validación | `validate:documentation` sólo conserva siete fallas de paridad fuente/Word. `validate:traceability` y `git diff --check` de los archivos editados aprobados. |
+| Pendiente | Regenerar los siete Word desde sus fuentes, comprobar paridad textual y páginas renderizadas, actualizar hashes revisados y volver a ejecutar la validación documental y `verify`. No declarar los Word actuales como manuales vigentes. |
+| Ambiente | Sólo documentación local; sin cambios de API, DB, datos, QA o Producción. |
+| APIs afectadas | Contratos modificados: ninguna. Endpoint documentado y consumido sin cambio por CHG-329: Admin GET `/v1/session/context?division_id=...`. Otras APIs no tocadas en este corte. |
+
+### CHG-331
+
+**2026-10-14 - manuales y candidato Git Local**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal; Custodio de manuales y QA/Release. |
+| Motivo | Resolver las siete discrepancias fuente/Word y revisar el árbol acumulado antes de prepararlo para Git. |
+| Cambio | Siete DOCX regenerados desde Markdown vigente; huellas y revisión actualizadas en el registro; notas de vigencia documental conciliadas. Dos correcciones puntuales de regresión en Admin y fixtures de Maintenance. |
+| Validación | Paridad de texto, tablas e integridad ZIP/XML de los siete Word; LibreOffice 26.8.1, 50 páginas renderizadas e inspeccionadas sin páginas vacías ni recortes. `validate:documentation` y `verify` aprobados; 746 pruebas backend aprobadas, 244 omitidas por condiciones del entorno y una advertencia de dependencia. `git diff --check` sin errores. |
+| Ambiente | Trabajo en Local; no se modificaron QA ni Producción, ni se ejecutó CC-20 integrado o backfill CC-19. |
+| APIs afectadas | Admin `POST /v1/catalogs/code-sequences/costing.cost_center/next`: rechazo 422 de tipo no permitido antes de la consulta de permisos; sin nuevo contrato. |
+
+El inventario Git preparado de este candidato reúne 470 archivos (217 modificados y 253 nuevos): backend 203, frontend 73, documentación 110, contratos 9, pruebas fuera de servicios 24 y herramientas/configuración/otros 51. Incluye 26 migraciones Alembic consecutivas y ocho DOCX; siete manuales se renovaron en este corte. No hay artefactos temporales entre los archivos candidatos ni coincidencias con los patrones de llaves privadas y tokens revisados. El conjunto se agrupa en un commit local de integración porque las migraciones, los contratos, sus consumidores y la evidencia se cruzan entre módulos. La publicación de la rama, PR y promoción QA requieren autorización separada.
+
+### CHG-332
+
+| Campo | Evidencia |
+|---|---|
+| Fecha | 2026-10-18 |
+| Cambio | Registro de CC20-01 ejecutado: Pasa Local, 21 comprobaciones con APIs, PostgreSQL y navegador reales. |
+| Autor | Codex |
+| Agentes consultados | Revisión directa de contratos/fichas Admin y Maintenance y guardianes QA/Seguridad; skills erclave-environment-boundaries, erclave-qa-evidence y context-reconcile. Sin nueva delegación. |
+| Archivos | Acta cc20_01_local_20261018, matriz CC-20, contexto vigente, AGENTES, registro e índice documental. Cambio previo de start_local.ps1 y manuales preservado. |
+| APIs afectadas | Contratos modificados: Ninguno. Endpoints existentes Admin/Maintenance y Auth Emulator consumidos; métodos/rutas/permisos enumerados en el acta. |
+| Validación | [Acta](docs/operaciones/cc20_01_local_20261018.md) y .local/cc20-01-20261018214530. Owner original sin cambios; tres membresías sintéticas sin roles/deshabilitadas, tres órdenes canceladas. |
+| Incidencias | INC-CC20-01-DELETE-01: DELETE usuario auditado falla FK con 500 tras eliminar identidad Firebase; limpieza recuperada mediante revocación de roles y disable, sin borrar auditoría. |
+| Límite | CC20-02–16 pendientes, sin QA/Producción ni activación Accounting. El resumen previo solo reconocia hasta CHG-322: CHG-323-331 ya existian con encabezados de nivel 2 y orden descendente al inicio. Se normalizaron a nivel 3 y orden ascendente sin reconstruir registros ni repetir sus pruebas. |
+
+La conciliacion del 18 de octubre preserva el contenido original de CHG-323-331 (14 de octubre), ya presente en Git HEAD `26e6bb61d5deb73a1965f95a67570d8615fc56e2`; unicamente cambia su ubicacion y formato de encabezado para que los lectores `tools/session-context.js`, `tools/context_brief.py` y `tools/validators/validate-traceability.js` los reconozcan. No agrega evidencia retrospectiva. Las observaciones previas sobre un faltante de registros se conservan en el acta como diagnostico de aquel ensayo, superado por esta inspeccion. La incidencia de borrado y el bloqueo documental descritos arriba corresponden al ensayo; su eventual correccion pertenece a un corte posterior.
+
+
+### CHG-333
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-18 |
+| Cambio | Corregir eliminación de usuario auditado, paridad de dos manuales y reconocimiento de CHG-323–331 antes de continuar CC-20. |
+| Autor | Codex |
+| Archivos | Admin API/repositorio/schemas/tests, OpenAPI Admin, frontend app/i18n y prueba UI; fuentes Producción/Ventas solo CRLF, sin cambio de contenido/Word/huellas; TRAZABILIDAD normalizada, arquitectura/módulo/Admin README, contexto, acta, registro e índice. |
+| Agentes consultados | Delegación real: manuales_paridad verificó bytes/texto Word y UI ES/EN; trazabilidad conservó entradas históricas, hizo revisión independiente que detectó carrera y preparó regresiones PG. Raíz implementó API/persistencia/callbacks, corrió pruebas e integración real/concurrencia y concilió documentos. Perspectivas Admin negocio/técnica, Seguridad, Datos, API, QA y custodia documental; skills feature, environment-boundaries, qa-evidence, context-reconcile y solution-manuals. |
+| Descripcion | Retiro de membresía con autor global/auditoría conservados; Firebase posterior al commit, estado pendiente durable en recibo existente y replay seguro. Invitación/onboarding provisionan bajo lock de usuario. UI ES/EN distingue retiro y limpieza pendiente. Manuales tenían solo diferencia LF/CRLF; CHG-323–331 existían con formato/orden no reconocidos, no se reconstruyó evidencia. CC20-01 registrado CHG-332. |
+| Impacto | Local aislado, tenant demo ten_739ee59d765d5e14818674800d. Head0062 sin migración, seed, backfill ni QA/Producción. Dos fixtures integrados propios sin membresía y sin identidad Firebase, global disabled conservado; PG focal rollback-only. Solo Admin Local reiniciado. |
+| APIs afectadas | Admin DELETE /v1/users/{user_id}, permiso admin.user.delete: response añade firebase_identity_cleanup.status/error_codes; request sin cambio. POST /v1/users/invitations (admin.user.invite) y POST /v1/provisioning/tenant-onboarding (allowlist Backoffice), payloads sin cambio; provisioning bajo lock. Rutas consumidas y no tocadas en acta. |
+| Validacion | API91, PostgreSQL6 y regresión integrada real16 aprobadas; UI ES/EN4 aprobadas con DELETE doble. Paridad textual/ZIP/XML de dos Word aprobada, sin render nuevo al no cambiar DOCX. Verify final aprobado: validadores, compilación y backend751 passed/250 skipped/1 warning en 38.18s, corrida general sin DB; omisiones no contadas como aprobaciones. Documentación/índice179 y diff--check aprobados. .local/chg333-verify.log. [Acta](docs/operaciones/correcciones_cc20_01_20261018.md). |
+| Observaciones | Incidencia INC-CC20-01-DELETE-01 corregida solo Local. CC20-02–16 no ejecutados aquí, CC-19 real y promoción QA separados. Worker automático de cleanup futuro; retry mediante misma clave disponible. Verificación general y artefactos locales se informan con su resultado real. |
+
+
+### CHG-334
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-18 |
+| Cambio | Preparar publicación Git autorizada y conservar los bytes aprobados de fuentes de manuales. |
+| Autor | Codex |
+| Archivos | .gitattributes, seis fuentes manuales por bytes LF/CRLF sin cambio de contenido, gobierno documental, estado, inicio, pendientes y trazabilidad. Incluye en el candidato los cambios Local ya verificados CHG-332/333. |
+| Agentes consultados | Revisión principal de Git/workflows y evidencia de manuales_paridad de CHG-333. Sin nueva delegación; no se atribuyen pruebas históricas a este corte. |
+| Descripcion | sourceSha256 coincidía en workspace pero no en seis blobs HEAD por normalización EOL. Atributo -text conserva los bytes fuente aprobados y sus huellas al publicar/clonar; Word y registro sin cambios. Rama destino agent/chg-278-qa-release-record; despliegues manuales. |
+| Impacto | Git Local y publicación de rama autorizada; sin cambios runtime, DB, migraciones, datos ni despliegue QA/Producción. No autoriza PR ni merge. |
+| APIs afectadas | Ninguna en CHG-334; candidato incluye contratos/pruebas ya documentados en CHG-333. |
+| Validacion | Candidato CHG-333 conserva verify aprobado751 passed/250 skipped/1 warning, PostgreSQL6 e integración16 y UI4. En CHG-334 documentación aprobada;16 huellas fuente/Word coinciden con los blobs del índice Git; diff--check aprobado y diff de manuales ignorando EOL vacío. No se repitieron pruebas runtime porque no cambió código respecto del candidato verificado. |
+| Observaciones | Seis fuentes cambian solo representación LF/CRLF respecto a HEAD; sus bytes finales son los aprobados y no se regeneró Word ni se renovaron hashes. Resultado efectivo del push se verifica contra la referencia remota y se comunica al usuario. CC20-02–16 y CC-19 real siguen abiertos. |
+
+
+### CHG-335
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-18 |
+| Cambio | Corregir bloqueos de paridad Local/QA, certificar recorridos Local por variantes y preparar estructura sintética QA para revisión previa a aplicación. |
+| Autor | Codex |
+| Archivos | Workflows candidato/release; smoke, manifiesto de ocho revisiones y helper de identidad, tráfico/rollback; builder/verificador de bytes frontend; plan IAM Costing y organización sintética; validadores; configuración/readiness y guard operativo; reconciliación de permisos preservadora; repositorios/API actor e intents RH/Inventory/Sales/Purchasing/Maintenance, evidencia Production, UI responsive/retry; contratos/pruebas, runbook/skill, acta y gobierno/contexto. |
+| Agentes consultados | Arquitectura, Seguridad, QA/Release, Datos/Custodio DB, API y dueños Admin/Costing/RH/operativos; ejecutados manuales_paridad (pipeline/Purchasing/evidencia Production), trazabilidad (config/Maintenance/UI/revisión independiente), cc20_integracion (RH/Inventory/Sales/folios/Production-Maintenance), raíz integración/configuración/guard/comercial/gobierno. |
+| Descripcion | Ocho runtimes/dependencias HTTPS, Costing básico sin analítica/Accounting; frontend construido una vez con SHA256SUMS/procedencia y comprobación de Hosting; revisiones/digests/SHA/URL/tráfico estable certificados entre gates. Migración/configuración independientes sin reset de tenant. Readiness DB/head y guard READ ONLY de organización/moneda/scopes/Owner. INC-CC20-13-ACTOR-01 corregida/reprobada y extendida a dueños; intents antes de efectos, recuperación misma clave, timestamps estables. UI conserva captura y corrige código con clave nueva; responsive acotado. |
+| Impacto | Código y Local aislado en único tenant autorizado; lecturas públicas QA y variables GitHub. Usuario autorizó preparar plan sintético para revisión, no aplicación. Sin PR/merge, IAM, cambios de variables, migraciones/configuración/datos QA ni deploy. Sin copia Local ni backfill CC-19 inventado. Publicación sólo de rama según autorización previa; resultado remoto se comprueba aparte. |
+| APIs afectadas | GET /ready compartido añade database_ready y HTTP503 remoto DB/head incompatible. Actor/idempotencia/recovery en RH/Inventory/Sales/Purchasing/Maintenance y POST de evidencia Production:76 rutas/acciones, métodos y permisos enumerados en docs/operaciones/paridad_local_qa_20261018.md. Payloads operativos sin cambios, Purchasing normaliza timestamps ISO. Admin/Costing consumidas sin cambio de negocio; Backoffice/Accounting no tocadas funcionalmente. |
+| Validacion | Verify final833 aprobadas/351 omitidas sin DB/1 advertencia existente, log .local/chg335-verify-complete.log. Focales API/PG autorizadas con rollback separadas: configuración63, guard30, Maintenance44+compatibilidad4, Purchasing31, Production25, Inventory API21 y repositorios actor; acta conserva conteos/logs sin sumar suites superpuestas. HTTP/Chrome reales por variantes; folios100+8 previos, transporte real11, pausa Production15, scopes/listas/CSV30. Smoke+12 escenarios tráfico con proveedor sustituido; YAML2/Bash20, builder/verificador106 hashes con fetch sustituido,16 huellas fuente/Word exactas. No equivalen a UAT QA ni GCS real. |
+| Observaciones | QA observado e57237f en siete APIs, sin Costing configurado en variables consultadas. Plan propone1emisor/2Sociedades MXN-USD/3Divisiones/3centros; faltan baseline privado, confirmación de monedas, visibilidad wildcard y actores. PR/merge/build/IAM/migración26/configuración/revisiones/tráfico/Hosting conservan autorizaciones separadas. Legacy CC-19 sin procedencia y variantes UI no alcanzables quedan delimitadas; stock propio de compras y documentos congelados se conservan sin SQL destructivo/rewind/downgrade. |
+
+### CHG-336
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-19 |
+| Cambio | Registrar autorizacion QA, implementar inspector gobernado previo y limitar esperas de migracion preservando datos y gates. |
+| Autor | Codex |
+| Archivos | Plan sintetico, README infra, acta/contexto/agentes/indice/registro documental y trazabilidad; workflows qa-inspect/qa-release/validate, inspector SELECT de baseline, pruebas focales y validador pipeline; correccion literal del codigo OP en acta CHG-335. |
+| Agentes consultados | Arquitectura, Seguridad/IAM, QA/Release, Datos/Custodio DB y dueños API/Admin/Costing; ejecutados manuales_paridad, trazabilidad y cc20_integracion (inspector y32 focales), raíz integración/GitHub/gobierno. |
+| Descripcion | Usuario confirma estructura MXN/USD y pide PR/checks, merge, IAM/configuracion, build/promocion y aceptacion. PR16 sobre main e57237f; alcance inicial503archivos/26migraciones. Inspector QA implementado sobre digest Admin certificado/socket exacto/READ ONLY. Migracion: lock5000ms/sentencia480000ms/task10min. Inspector: lock5s/sentencia120s/task5min, sin reintentos automaticos. |
+| Impacto | GitHub PR16/CI y creacion/verificacion de QA_COSTING_API_URL determinista, QA_COSTING_RUNTIME_SERVICE_ACCOUNT y QA_CONFIGURATION_TENANT_ID. Lecturas Google de metadatos200 sin valor del secreto. CostingSA creada y confirmada GET200; tres grants minimos aplicados y confirmados: roles/cloudsql.client en proyecto, roles/secretmanager.secretAccessor solo en erclave-database-url-qa y roles/iam.serviceAccountUser al deployer solo sobre CostingSA. Total4 cambios IAM incluyendo identidad; .local/chg336-costing-iam-apply.json status completed_scoped_iam_changes3. No hay jobs/migracion/datos/servicios/trafico/Hosting QA ejecutados todavia. Produccion excluida. |
+| APIs afectadas | Sin cambio de contrato de negocio. GitHub PR/CI/variables; Google proyecto/Firebase/IAM/Hosting/Cloud SQL/politica del secreto/Cloud Run/backups por lectura200; IAM Costing crea identidad y aplica tres grants minimos confirmados, CostingSA GET200. Ejecucion de workflows y escrituras segun baseline/gates pendientes; detalle en acta. |
+| Validacion | Verify final864 aprobadas/352 omitidas sin DB/1 advertencia existente,30.57s, .local/chg336-verify-final.log. YAML4/Bash29 y lectura real Local head0062 aprobados. CI inicial39208234912 aprobado para60f698b; CI del head definitivo y ejecucion remota del inspector pendientes.833/351/1 conserva alcance historico CHG-335. |
+| Observaciones | Proyecto/Firebase370105017372 y recursos200; CostingSA creada/GET200, tres grants minimos confirmados y cuatro cambios IAM totales (.local/chg336-costing-iam-apply.json); backup/PITR configurados, sin restauracion ensayada ni head SQL QA observado. .local/chg336-gcp-baseline-metadata.json y .local/chg336-public-baseline.json. MXN/USD nuevas confirmadas; IDs/legacy/actores requieren baseline sin inferencias. Perfil legacy no vacio exige mapping/comando QA gobernado, no CLI Local. Rollback sin downgrade. |

@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
 from typing import Literal
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator,field_validator
 
 OrderStatus = Literal["draft","requested","assigned","in_progress","waiting_parts","resolved","closed","cancelled"]
 
 class OrderCreate(BaseModel):
-    code:str=Field(min_length=1,max_length=60)
+    division_ref_id:str|None=Field(default=None,min_length=1,max_length=40)
+    code:str|None=Field(default=None,min_length=1,max_length=60)
     target_type:Literal["production_machine","facility","other"]
     production_machine_id:str|None=None
     source_type:Literal["manual","production_order"]="manual"
@@ -45,10 +46,16 @@ class TransitionRequest(BaseModel):
         return self
 
 class TimeEntryCreate(BaseModel):
+    expected_position_assignment_revision:int|None=Field(default=None,ge=1)
     worker_id:str
     started_at:datetime
     ended_at:datetime
     notes:str|None=Field(default=None,max_length=1000)
+    @field_validator('started_at','ended_at')
+    @classmethod
+    def timezone_required(cls,value):
+        if value.tzinfo is None or value.utcoffset() is None:raise ValueError('maintenance_time_timezone_required')
+        return value.astimezone(timezone.utc)
     @model_validator(mode="after")
     def interval(self):
         if self.ended_at<=self.started_at:raise ValueError("invalid_time_interval")

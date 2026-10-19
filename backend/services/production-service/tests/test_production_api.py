@@ -310,15 +310,51 @@ def test_machine_commands_use_contract_and_tenant():
     assert response.status_code==201 and response.json()["data"]["id"]=="maq_demo"
 
 
-def test_maintenance_release_conflict_is_controlled():
+def test_maintenance_release_conflict_is_controlled(monkeypatch):
     class ConflictingReleaseRepository(FakeProductionRepository):
         def maintenance_machine_command(self, *args):
             raise ValueError("maintenance_order_does_not_hold_machine")
     client=client_with_fake_repo()
+    monkeypatch.setattr(api_module,'production_access',lambda *args: type('Scope',(),{'all_divisions':True})())
     app.dependency_overrides[get_production_repository]=lambda:ConflictingReleaseRepository()
     response=client.post("/v1/production/machines/maq_demo/maintenance-release",headers={"X-Tenant-Id":TENANT_ID,"Idempotency-Key":"maintenance-release-conflict"},json={"maintenance_order_id":"mwo_other"})
     assert response.status_code==409
     assert response.json()["error"]["code"]=="maintenance_order_does_not_hold_machine"
+
+def test_maintenance_machine_commands_check_scope_before_effect(monkeypatch):
+    class ScopedRepository(FakeProductionRepository):
+        called=False
+        def get_machine(self,*args):return MachineRead(**{**self._machine().model_dump(),'division_ref_id':'div_outside'})
+        def maintenance_machine_command(self,*args):
+            self.called=True
+            raise AssertionError('Command must not reach Production storage')
+    repository=ScopedRepository()
+    client=client_with_fake_repo()
+    app.dependency_overrides[get_production_repository]=lambda:repository
+    from erclave_common.errors import ErclaveError
+    class Scope:
+        all_divisions=False
+        def division(self,division,active=True):
+            raise ErclaveError('organization_scope_denied','Division is outside scope.',status_code=403)
+    monkeypatch.setattr(api_module,'production_access',lambda *args:Scope())
+    headers={'X-Tenant-Id':TENANT_ID,'Idempotency-Key':'maintenance-scope-test'}
+    for action in ('maintenance-block','maintenance-release'):
+        result=client.post(f'/v1/production/machines/maq_demo/{action}',headers=headers,json={'maintenance_order_id':'mwo_demo'})
+        assert result.status_code==403 and result.json()['error']['code']=='organization_scope_denied'
+    assert not repository.called
+
+def test_legacy_machine_block_requires_full_scope_for_recovery(monkeypatch):
+    client=client_with_fake_repo()
+    class LimitedScope:
+        all_divisions=False
+    monkeypatch.setattr(api_module,'production_access',lambda *args:LimitedScope())
+    headers={'X-Tenant-Id':TENANT_ID,'Idempotency-Key':'maintenance-legacy-scope'}
+    payload={'maintenance_order_id':'mwo_legacy'}
+    denied=client.post('/v1/production/machines/maq_demo/maintenance-block',headers=headers,json=payload)
+    assert denied.status_code==409 and denied.json()['error']['code']=='organization_context_review_required'
+    monkeypatch.setattr(api_module,'production_access',lambda *args:type('Scope',(),{'all_divisions':True})())
+    recovered=client.post('/v1/production/machines/maq_demo/maintenance-block',headers=headers,json=payload)
+    assert recovered.status_code==200
 
 
 def test_resource_validation_returns_backend_decision():
@@ -544,7 +580,7 @@ def test_finished_goods_permission_only_exposes_minimum_projection():
     assert response.status_code==200
     candidate=response.json()["data"][0]
     assert set(candidate)=={"order","product"}
-    assert set(candidate["order"])=={"id","code","product_service_id","quantity","unit","status","unit_cost"}
+    assert set(candidate["order"])=={"id","code","product_service_id","quantity","unit","status","unit_cost","organization_context","original_unit_cost","original_quantity"}
     assert "planned_cost" not in candidate["order"] and "recipe_snapshot" not in candidate["order"]
 
 

@@ -1,5 +1,80 @@
 # ERClave - Modelo de datos MVP
 
+## CC-15 · CHG-319 · Local
+
+[Compras por División](cont_08_compras_contexto.md): Purchasing conserva contexto de requisición/OC/recepción y condiciones explícitas del proveedor congeladas. Admin autoriza; Inventory conserva validación/costo/proof CC-14. Migración `20261012_0058` nullable sin backfill, downgrade protegido con historia. Accounting apagado, sin QA; CC-16 implementado Local CHG-320; CC-17/18 y CC-19/20 abiertos.
+
+## CC-14 · CHG-317 · Local
+
+[Productores, transferencias y sobrantes](cont_08_inventario_productores.md) implementados: Inventory conserva contexto/costo de Purchasing/Maintenance y transferencias misma Sociedad; proofs autenticados, alcance y reintentos. Migración `20261012_0057` nullable sin backfill, downgrade protegido con historia. Sin QA ni Accounting; CC-16 integral y CC-19/20 siguen abiertos; CC-15 implementado CHG-319.
+
+
+
+## Estado y fuentes de vigencia
+
+La conciliación por submódulo vive en [CONTROL_CONTABLE](../contexto/CONTROL_CONTABLE.md); [ESTADO_ACTUAL](../contexto/ESTADO_ACTUAL.md) distingue Local de QA y [PENDIENTES](../contexto/PENDIENTES.md) fija la continuación. Evidencia de cada corte en [TRAZABILIDAD](../../TRAZABILIDAD.md). No sumar pendientes históricos como trabajo nuevo.
+
+Organización/sesión, [centros CONT-05](cont_05_catalogo_centros.md), asignaciones CONT-07 y [condiciones explícitas sin herencia](cont_07_commercial_condiciones.md) ya están implementados Local. CONT-04 es parcial y CONT-06 sigue abierto. CONT-08 conserva [cotización](cont_08_cotizaciones_contexto.md) → [pedido](cont_08_pedidos_contexto.md), [servicios](cont_08_servicios_contexto.md), [stock/entrega y movimientos manuales](cont_08_stock_contexto.md). [Producción manual CHG-313](cont_08_produccion_contexto.md) y [fabricación comercial CHG-315](cont_08_fabricacion_contexto.md) conectan contexto, recursos, recepción y entrega/costo; recorrido HTTP Local real aprobado, aceptación transversal CC-20 pendiente.
+
+Política CHG-309 confirmada: costos y tarifas en moneda base de Sociedad; documento en otra moneda conserva original, tasa explícita y convertido. Compras CC-15 implementado Local CHG-319; Mantenimiento CC-16 implementado Local CHG-320; Servicios CHG-314 y productores Inventory CHG-317 se conservan; no reinterpretar historia. Analítica Costing y Accounting permanecen planned. Datos reales y aceptación integrada siguen abiertos; estos cortes no fueron promovidos a QA.
+
+## Integración operativa vigente CHG-313/314
+
+[Tarifas CC-10](cont_08_tarifas_capacidad.md), [orden manual CC-11](cont_08_produccion_contexto.md) y [moneda Servicios CC-08](cont_08_servicios_contexto.md) se conservan. CHG-315 conecta [fabricación comercial CC-12](cont_08_fabricacion_contexto.md): prueba Sales, conversión única, conciliación de recepción real y entrega/costo. Head Local0056, sin backfill; recorrido HTTP real aprobado con 60MXN→3USD y limpieza de fixtures verificada. Cada dueño escribe sus tablas; Admin autoriza. Accounting apagado, datos reales CC-19/aceptación transversal CC-20 y QA pendientes.
+
+## Registro de cortes (evidencia histórica)
+
+Los apartados fechados conservan el alcance de su corte; los números de revisión y pendientes citados no son el estado actual.
+
+## Actualización CHG-308 · 2026-10-07
+
+Local head `20261007_0050`: contextos en production_orders/sales_order_requests y order_creation_contexts durable previo a reservas. Sin backfill; downgrade bloqueado con historia. Ver docs/arquitectura/cont_08_produccion_contexto.md.
+
+
+## Actualización CHG-307 · 2026-10-05
+
+Local head `20261005_0049`: par cost_currency/cost_exchange_rate en sales.orders, original_actual_cost en sales.delivery_lines y moneda en snapshot Inventory. Nullable para legacy, constraints y downgrade protegido. Sin backfill. Ver docs/arquitectura/cont_08_stock_contexto.md. Las notas de cortes anteriores son históricas.
+
+
+## Actualización CHG-306 · 2026-10-05
+
+Local head `20261005_0048`: organization_context JSONB nullable en inventory.reservations/movements, constraints e índices tenant/División; sin backfill y downgrade bloqueado con historia. Ver cont_08_reservas_contexto.md.
+
+
+## Actualización CHG-305 · 2026-10-05
+
+Sin cambio físico: entradas/costos/evidencia mantienen servicio→pedido por tenant; contexto inmutable en pedido. Lock pedido→servicio para mutaciones dimensionadas y rechazo de cancelación en curso. Head 0047.
+
+
+## Actualización CHG-304 · 2026-10-05
+
+Alembic 20261005_0047: sales.orders agrega contexto completo/ausente, snapshot JSONB y revisión de cotización; índice tenant/División/status. Órdenes de servicio consultan el contexto fijo mediante su pedido propio. Sin backfill.
+
+
+## Actualización CHG-303 · 2026-10-05
+
+Sales.quotes agrega division_ref_id, society_ref_id, organization_revision y commercial_terms_snapshot JSONB, constraint completo/ausente e índice tenant/División/status. Migración 20261005_0046 sin backfill.
+
+
+Tablas nuevas: sales.customer_division_terms y purchasing.supplier_division_terms, PK tenant/recurso/División; FK interna a asociación, Sociedad externa sin FK cruzada, moneda/pago y crédito Numeric(18,2) o plazo entero 0–3650; revisión/timestamps/índice tenant-División. Sin defaults ni backfill.
+
+Tablas nuevas: `sales.customer_division_assignments` y `purchasing.supplier_division_assignments`; PK tenant/recurso/División, FK compuesta interna al maestro, society_ref_id sin FK cruzada, status/revision/timestamps, índice tenant/División/estado. Downgrade bloqueado con asociaciones o auditoría.
+
+
+## CONT-03 / CHG-293 — membresía versionada
+
+Sin columnas/tablas ni revisión Alembic nueva: `admin.memberships.metadata.scope` contiene version 2, revision, society_ids y division_ids. Conversión revisada conserva scope_legacy y metadata ajena. Editor usa locks, revisión esperada, auditoría y command_idempotency existentes; vacío deniega Divisiones y wildcard explícito preserva acceso total. No hay FK ni escritura entre schemas. [Migración y recuperación](cont_03_sesion_alcances.md).
+
+## CONT-02 / CHG-292 — autoridad organizacional Local
+
+Head `20260925_0038`. `admin.fiscal_issuers` agrega `postal_code` opcional de 20 caracteres y `country_code` opcional de 2; `admin.organization_authorities` registra por tenant la activación, hashes, origen completo, snapshot previo archivado, operador y timestamp. Tablas normalizadas autoritativas tras activación; `organization.profile` es proyección compatible. Lock, proyección, auditoría e idempotencia comparten transacción. Downgrade protege autoridad activa y datos fiscales. Modelo, transición, recuperación y API: [CONT-02](cont_02_administracion_organizacional.md). El apartado CONT-01 describe la etapa previa al switch; QA continúa documentado en 0036.
+
+## CONT-01 / CHG-289 — organización normalizada sólo Local
+
+Revisión `20260922_0037`, posterior a `20260913_0036`, aplicada en PostgreSQL Local. Admin incorpora `fiscal_issuers`, `societies`, `divisions`, `organization_imports` y `organization_legacy_mappings`. Emisor 1:N Sociedad; cada Sociedad tiene `issuer_id` obligatorio, moneda base inicialmente MXN y libro futuro propio. División pertenece a Sociedad. PK/FK internas compuestas por tenant, códigos únicos, índices por padre/estado y snapshots de importación con hashes, operador, correlación y equivalencias.
+
+Durante CONT-01 el JSON `organization.profile` permaneció intacto y autoritativo; CONT-02 lo convierte en proyección compatible tras el switch por tenant. Importación explícita y transaccional; no backfill automático ni relación muchos-a-muchos Sociedad–Emisor. El downgrade bloquea si hay datos. Tenant Local revisado sin razones sociales/sucursales; pruebas con fixtures reversibles. QA documentado permanece en `20260913_0036`. Detalle de campos, compatibilidad, rollback y evidencia: [CONT-01](cont_01_estructura_organizacional.md).
+
 ## Registro durable de entrega productiva CHG-264
 
 Revision Local `20260908_0031`, posterior a `20260901_0030`. `production.material_issues` pertenece a Production: PK `(tenant_id, production_order_id)`, FK interna compuesta a orden, `status` processing/needs_reconciliation/issued, `movements` JSONB por reserva externa (id, cantidad y costo unitario), `last_error_code`, `authorized_by` y timestamps. Indice `(tenant_id,status,created_at)` y unique interno `(tenant_id,id)` en orden. No hay FK ni escritura a Inventory. Los recursos conservan actual_quantity/actual_cost al completar todas sus reservas; el costo de la orden se actualiza en la misma transaccion. No backfill ni cambios de permisos/seed. Upgrade, downgrade con tabla vacia y nuevo upgrade probados en Local; antes de cualquier reversa con uso se exige conciliar y conservar evidencia, nunca revertir salidas fisicas por borrar el registro. El servicio usa repositorios SQL, sin ORM propio.
@@ -1754,9 +1829,16 @@ CHG-265 vigente en Local: Compras prepara recepciones pendientes; Almacén confi
 
 ## Productos y servicios: margen esperado CHG-273
 
-CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración Local `20260913_0035` aplicada; QA conserva `20260908_0034` y release b63cdad. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
+CHG-273 permite `expected_margin` mayor a 100 en productos y servicios: porcentaje de utilidad esperada sobre costo, finito y no negativo, sin tope porcentual de negocio. Se retira max HTML y le=100 Pydantic; PostgreSQL usa NUMERIC sin precisión fija y constraint no negativo/finito. Tarjeta muestra el porcentaje guardado sin sustituirlo por margen sobre venta. Ayuda ES/EN. Migración `20260913_0035` aplicada en Local y QA, actualmente en head `20260913_0036`; release QA `e57237f`. Valores existentes conservados; rollback bloquea datos que no caben en el esquema anterior. Detalle: `docs/auditorias/margen_esperado_2026-09-13.md`.
 
 
 ## Evidencia de servicios CHG-274
 
-CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local head `20260913_0036`; QA `20260908_0034` sin cambios. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+CHG-274 implementa evidencia de recepción/inicio y cierre solo en órdenes de Producción cuya receta proviene de un servicio. Texto obligatorio; hasta3 adjuntos opcionales por momento. Fotos JPEG/PNG/WebP/HEIC/HEIF/BMP/TIFF de hasta5MiB se reorientan y convierten en WebP sin metadatos, lado máximo1600px y archivo <=300KiB. PDF/TXT/DOCX/XLSX hasta2MiB; sin archivos ejecutables o macros. Todos los adjuntos vencen a365 días desde carga; texto/orden/metadatos permanecen. Backend impide esperar recursos/iniciar sin recepción y completar100% total/enviar a validación/terminar sin cierre. Productos conservan su recorrido. Local y QA head `20260913_0036`; release QA `e57237f`, sin aceptación UAT inferida. Detalle: `docs/auditorias/evidencia_servicios_2026-09-13.md`.
+
+
+### Persistencia vigente de evidencia
+
+La migración `20260913_0036`, aplicada en Local y QA, crea `production.service_evidence` y `production.service_evidence_files`. La primera conserva orden, fase, descripción, hash de request, actor y fecha; es única por `(tenant_id, order_id, phase)` y valida descripción de 3–4000 caracteres. La segunda conserva nombre, tipo, tamaño, SHA-256, clave privada, vencimiento y fecha de eliminación. Las FKs compuestas incluyen tenant y permanecen dentro de Production. Hay índice por propietario `(tenant_id, evidence_id)` e índice parcial de expiración para registros aún no eliminados.
+
+A los 365 días la API deja de entregar el archivo; la purga elimina el objeto y vacía `object_key`, conservando texto, orden y metadatos. El borrado físico periódico y el lifecycle de GCS son asíncronos. El downgrade se bloquea si existe evidencia: exige archivo o tratamiento explícito de los datos antes de retirar tablas; no es un rollback destructivo automático.

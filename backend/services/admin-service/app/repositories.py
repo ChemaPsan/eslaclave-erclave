@@ -6,8 +6,12 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from erclave_common.db import create_database_engine
+from erclave_common.errors import ErclaveError
 
 from .seeds.catalog import MVP_MODULE_SEEDS, get_module_seed
+from .seeds.permissions import BASIC_COST_CENTER_PERMISSIONS
+from .organization_store import OrganizationStore, authority, lock_organization, structure_hash, error as organization_error
+from .organization_scope import resolve_scope
 
 from .schemas import (
     BackofficeTenantRead,
@@ -194,6 +198,8 @@ class AdminRepository:
             replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
             if replay is not None:
                 return CodeSequenceRead.model_validate(replay)
+            if before["document_type"] == "costing.cost_center" and values.get("mode", "managed") != "managed":
+                organization_error("cost_center_managed_code_required", "mode", 422)
             if "next_number" in values and values["next_number"] < before["next_number"]:
                 raise ValueError("code_sequence_cannot_rewind")
             if values:
@@ -215,6 +221,11 @@ class AdminRepository:
             replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
             if replay is not None:
                 return CodeSequenceAllocationRead.model_validate(replay)
+            if normalized_document_type == "costing.cost_center":
+                connection.execute(text("""insert into admin.code_sequences
+                    (id,tenant_id,document_type,module_code,name_es,name_en,prefix,separator,next_number,padding,mode,system_default,status)
+                    values (:id,:tenant,'costing.cost_center','admin','Centro de costos','Cost center','CC','-',1,6,'managed',true,'active')
+                    on conflict (tenant_id,document_type) do nothing"""), {"id": "seq_"+uuid4().hex[:26], "tenant": tenant_id})
             sequence = connection.execute(text("""select id,document_type,prefix,separator,next_number,padding,mode,status
                 from admin.code_sequences where tenant_id=:tenant_id and document_type=:document_type for update"""), {"tenant_id": tenant_id, "document_type": normalized_document_type}).mappings().first()
             if not sequence or sequence["status"] != "active":
@@ -721,6 +732,11 @@ class AdminRepository:
         correlation_id: str,
     ) -> dict | None:
         with self.engine.begin() as connection:
+            lock_organization(connection, tenant_id)
+            if authority(connection, tenant_id) or connection.execute(text(
+                "select 1 from admin.organization_imports where tenant_id=:tenant limit 1"
+            ), {"tenant": tenant_id}).first():
+                organization_error("organization_tenant_in_use")
             before = connection.execute(
                 text(
                     """
@@ -916,6 +932,7 @@ class AdminRepository:
         modules: list[dict],
         idempotency_key: str,
         correlation_id: str,
+        ensure_identity=None,
     ) -> dict:
         tenant_id = f"ten_{uuid4().hex[:26]}"
         owner_user_id = f"usr_{uuid4().hex[:26]}"
@@ -1093,7 +1110,7 @@ class AdminRepository:
                             else admin.memberships.activated_at
                         end,
                         disabled_at = null,
-                        metadata = excluded.metadata,
+                        metadata = (excluded.metadata - 'scope') || admin.memberships.metadata,
                         updated_at = now()
                     returning id, status
                     """
@@ -1186,6 +1203,9 @@ class AdminRepository:
                 metadata={"source": source, "owner_status": owner_status},
             )
 
+            if ensure_identity:
+                ensure_identity()
+
         session_context = self.get_session_context(tenant_id, owner_user_id) if owner_status == "active" else None
         return {
             "tenant": TenantRead.model_validate(dict(tenant_row)),
@@ -1247,6 +1267,20 @@ class AdminRepository:
         correlation_id: str,
     ) -> SettingRead | None:
         with self.engine.begin() as connection:
+            if key == "document.template":
+                lock_organization(connection, tenant_id)
+            if key == "organization.profile":
+                lock_organization(connection, tenant_id)
+                active = authority(connection, tenant_id)
+                current = connection.execute(text(
+                    "select value from admin.tenant_settings where tenant_id=:tenant and key='organization.profile' for update"
+                ), {"tenant": tenant_id}).scalar() or {}
+                if active:
+                    if structure_hash(current) != active["projection_hash"]:
+                        organization_error("organization_projection_changed")
+                    if any(name in value and value[name] != current[name] for name in ("legal_entities", "branches")):
+                        organization_error("organization_structure_read_only")
+                value = {**current, **value}
             before = connection.execute(
                 text(
                     """
@@ -1532,10 +1566,11 @@ class AdminRepository:
             ).scalars().all()
 
             organization_profile = self._get_or_create_organization_profile(connection, tenant_id)
+            normalized_scope = resolve_scope(connection, tenant_id, membership["metadata"])
 
         entitlement_reads = [EntitlementRead.model_validate(dict(row)) for row in entitlements]
         role_reads = [RoleRead.model_validate(dict(row)) for row in roles]
-        scope = self._build_session_scope(membership["metadata"], organization_profile)
+        scope = SessionScopeRead.model_validate(normalized_scope) if normalized_scope is not None else self._build_session_scope(membership["metadata"], organization_profile)
         return SessionContextRead(
             tenant=TenantRead.model_validate(dict(tenant)),
             user=UserRead.model_validate(dict(user)),
@@ -1760,6 +1795,7 @@ class AdminRepository:
         role_ids: list[str],
         idempotency_key: str,
         correlation_id: str,
+        ensure_identity=None,
     ) -> UserRead:
         user_id = f"usr_{uuid4().hex[:26]}"
         membership_id = f"mem_{uuid4().hex[:26]}"
@@ -1799,8 +1835,8 @@ class AdminRepository:
             membership_row = connection.execute(
                 text(
                     """
-                    insert into admin.memberships (id, tenant_id, user_id, status, invited_at)
-                    values (:membership_id, :tenant_id, :user_id, 'invited', now())
+                    insert into admin.memberships (id, tenant_id, user_id, status, invited_at, metadata)
+                    values (:membership_id, :tenant_id, :user_id, 'invited', now(), cast(:initial_scope as jsonb))
                     on conflict (tenant_id, user_id)
                     do update set
                         status = 'invited',
@@ -1810,7 +1846,8 @@ class AdminRepository:
                     returning id
                     """
                 ),
-                {"membership_id": membership_id, "tenant_id": tenant_id, "user_id": user_id},
+                {"membership_id": membership_id, "tenant_id": tenant_id, "user_id": user_id,
+                 "initial_scope": json.dumps({"scope": {"version": 2, "revision": 0, "society_ids": [], "division_ids": []}})},
             ).mappings().one()
 
             self._replace_membership_roles(connection, tenant_id, membership_row["id"], role_ids)
@@ -1827,6 +1864,11 @@ class AdminRepository:
                 correlation_id=correlation_id,
                 metadata={"role_ids": role_ids},
             )
+            # The user upsert above holds the same row lock as identity cleanup.
+            # Provision only within that section so a completed invitation cannot
+            # have its Firebase identity removed by an older deletion command.
+            if ensure_identity:
+                ensure_identity()
 
         return UserRead.model_validate(dict(row))
 
@@ -1929,11 +1971,20 @@ class AdminRepository:
         user_id: str,
         idempotency_key: str,
         correlation_id: str,
+        actor_email: str | None = None,
     ) -> UserRead | None:
         with self.engine.begin() as connection:
+            operation = "admin.user.delete"
+            request_hash = self._command_request_hash({"user_id": user_id, "actor_email": actor_email})
+            replay = self._begin_idempotent_command(connection, tenant_id, operation, idempotency_key, request_hash)
+            if replay:
+                return UserRead.model_validate(replay)
+            # Invitations/upserts use the same global user row. Serialize membership removal
+            # with them, and retain that row as the stable author of historical audit events.
+            connection.execute(text("select id from admin.users where id=:id for update"), {"id": user_id})
             before = self._get_user_for_tenant(connection, tenant_id, user_id)
             if before is None:
-                return None
+                raise ErclaveError("user_not_found", "User not found for tenant.", status_code=404)
 
             membership_id = connection.execute(
                 text(
@@ -1984,14 +2035,48 @@ class AdminRepository:
                 after_state=after_state,
                 idempotency_key=idempotency_key,
                 correlation_id=correlation_id,
-                metadata={"removed_global_user": remaining_memberships == 0},
+                metadata={"removed_global_user": False, "retained_for_audit": True,
+                          "identity_cleanup_required": remaining_memberships == 0},
+                actor_user_id=self._actor_user_id(connection, actor_email),
             )
             if remaining_memberships == 0:
-                connection.execute(text("delete from admin.users where id = :user_id"), {"user_id": user_id})
+                connection.execute(text("update admin.users set status='disabled',updated_at=now() where id=:user_id"), {"user_id": user_id})
+            self._complete_idempotent_command(connection, tenant_id, operation, idempotency_key, after_state, 200)
 
         deleted = dict(before)
         deleted["status"] = "deleted"
         return UserRead.model_validate(deleted)
+
+    def cleanup_user_identity(self, tenant_id: str, user_id: str, idempotency_key: str, delete_identity) -> dict:
+        """Run only after membership removal commits; revalidate sharing on every retry.
+
+        Keeping the global user row lets audit FKs remain intact. Its row lock also
+        prevents a concurrent invitation from recreating a membership during cleanup.
+        """
+        with self.engine.begin() as connection:
+            command = connection.execute(text("""select response_payload from admin.command_idempotency
+                where tenant_id=:tenant and operation='admin.user.delete' and idempotency_key=:key for update"""),
+                {"tenant": tenant_id, "key": idempotency_key}).mappings().one()
+            response = dict(command["response_payload"])
+            if response["id"] != user_id:
+                raise IdempotencyConflictError("idempotency_key_reused")
+            user = connection.execute(text("select email,status from admin.users where id=:id for update"),
+                                      {"id": user_id}).mappings().one()
+            shared = connection.execute(text("select exists(select 1 from admin.memberships where user_id=:id)"),
+                                        {"id": user_id}).scalar_one()
+            if shared or user["status"] != "disabled":
+                result = {"status": "not_required", "error_codes": []}
+            elif response.get("firebase_identity_cleanup", {}).get("status") == "completed":
+                return response["firebase_identity_cleanup"]
+            else:
+                try:
+                    delete_identity(user["email"])
+                    result = {"status": "completed", "error_codes": []}
+                except ErclaveError as exc:
+                    result = {"status": "pending", "error_codes": [exc.code]}
+            response["firebase_identity_cleanup"] = result
+            self._complete_idempotent_command(connection, tenant_id, "admin.user.delete", idempotency_key, response, 200)
+            return result
 
     def _record_audit_event(
         self,
@@ -2067,6 +2152,10 @@ class AdminRepository:
         correlation_id: str,
     ) -> dict | None:
         with self.engine.begin() as connection:
+            lock_organization(connection, tenant_id)
+            if authority(connection, tenant_id):
+                return OrganizationStore(self).legacy_command(connection, tenant_id, collection_key,
+                    {key: value for key, value in item.items() if key not in ("id", "status")}, None, idempotency_key, correlation_id)
             profile = self._get_or_create_organization_profile(connection, tenant_id)
             if profile is None:
                 return None
@@ -2098,6 +2187,10 @@ class AdminRepository:
         correlation_id: str,
     ) -> dict | None:
         with self.engine.begin() as connection:
+            lock_organization(connection, tenant_id)
+            if authority(connection, tenant_id):
+                return OrganizationStore(self).legacy_command(connection, tenant_id, collection_key,
+                    patch, item_id, idempotency_key, correlation_id)
             profile = self._get_or_create_organization_profile(connection, tenant_id)
             if profile is None:
                 return None
@@ -2824,6 +2917,8 @@ class AdminRepository:
 
     def evaluate_policy(self, tenant_id: str, actor_id: str, module: str, resource: str, action: str) -> PolicyDecision:
         permission_code = f"{module}.{resource}.{action}"
+        if permission_code in BASIC_COST_CENTER_PERMISSIONS:
+            module = "admin"
         with self.engine.connect() as connection:
             tenant_status = connection.execute(
                 text("select status from admin.tenants where id = :tenant_id"),

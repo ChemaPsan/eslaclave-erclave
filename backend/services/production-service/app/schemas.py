@@ -1,4 +1,7 @@
+from erclave_common.operational_context import OperationalContext
+from erclave_common.document_presentation import DocumentPresentationSnapshot
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -266,26 +269,30 @@ ORDER_STATUS_TRANSITIONS = {
 
 
 class MachineCreateRequest(BaseModel):
+    model_config={"extra":"forbid"}
     code: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=200)
     machine_type: str = Field(min_length=1, max_length=120)
     area_ref_id: str = Field(min_length=1,max_length=40)
     area_name: str = Field(min_length=1, max_length=200)
     available_minutes_per_day: float = Field(gt=0)
-    cost_per_minute: float = Field(ge=0)
+    cost_per_minute: Decimal = Field(ge=0, max_digits=18, decimal_places=6)
 
 
 class MachineUpdateRequest(BaseModel):
+    model_config={"extra":"forbid"}
+    cost_currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
     name: str | None = Field(default=None, min_length=1, max_length=200)
     machine_type: str | None = Field(default=None, min_length=1, max_length=120)
     area_ref_id: str | None = Field(default=None,min_length=1,max_length=40)
     area_name: str | None = Field(default=None, min_length=1,max_length=200)
     available_minutes_per_day: float | None = Field(default=None, gt=0)
-    cost_per_minute: float | None = Field(default=None, ge=0)
+    cost_per_minute: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=6)
     status: MachineStatus | None = None
 
     @model_validator(mode="after")
     def area_name_is_authoritative(self):
+        if self.cost_currency is not None and self.cost_per_minute is None:raise ValueError("machine_tariff_amount_required")
         if self.area_name is not None and self.area_ref_id is None:raise ValueError("area_reference_required")
         return self
 
@@ -298,7 +305,11 @@ class MachineRead(BaseModel):
     area_ref_id: str | None = None
     area_name: str | None = None
     available_minutes_per_day: float
-    cost_per_minute: float
+    cost_per_minute: Decimal
+    division_ref_id: str | None = None
+    cost_currency: str | None = None
+    cost_society_ref_id: str | None = None
+    cost_confirmed_at: datetime | None = None
     status: MachineStatus
 
 
@@ -318,6 +329,10 @@ class MaintenanceMachineCommandResponse(BaseModel):
 
 
 class ResourceAvailabilityInput(BaseModel):
+    original_unit_cost: Decimal | None = None
+    cost_currency: str | None = None
+    eligible_worker_ids: list[str] = Field(default_factory=list)
+    minutes_per_worker: Decimal | None = None
     resource_ref_id: str
     resource_type: ResourceType
     available_quantity: float = Field(ge=0)
@@ -328,6 +343,7 @@ class ResourceAvailabilityInput(BaseModel):
 
 
 class ResourceValidationRequest(UnitCodeMixin, BaseModel):
+    division_ref_id: str | None = Field(default=None,min_length=1,max_length=40)
     model_config={"extra":"forbid"}
     recipe_version_id: str
     quantity: float = Field(gt=0)
@@ -344,6 +360,7 @@ class ResourceValidationRequest(UnitCodeMixin, BaseModel):
 
 
 class ResourceDailyAllocation(BaseModel):
+    worker_allocations: list[dict] = Field(default_factory=list)
     planned_date: date
     gross_capacity: float
     committed_quantity: float
@@ -353,6 +370,9 @@ class ResourceDailyAllocation(BaseModel):
 
 
 class ResourceValidationRow(BaseModel):
+    original_unit_cost: Decimal | None = None
+    original_total_cost: Decimal | None = None
+    cost_currency: str | None = None
     resource_type: ResourceType
     resource_ref_id: str | None = None
     resource_code: str
@@ -370,6 +390,9 @@ class ResourceValidationRow(BaseModel):
 
 
 class ResourceValidationRead(BaseModel):
+    organization_context: OperationalContext | None = None
+    cost_currency: str | None = None
+    original_planned_cost: Decimal | None = None
     recipe_version_id: str
     quantity: float
     unit: str
@@ -455,6 +478,10 @@ class OrderStageUpdateRequest(BaseModel):
         return self
 
 class ProductionOrderResourceRead(BaseModel):
+    original_unit_cost: Decimal | None = None
+    original_planned_cost: Decimal | None = None
+    original_actual_cost: Decimal | None = None
+    cost_currency: str | None = None
     id:str
     resource_type:ResourceType
     resource_ref_id:str
@@ -495,6 +522,11 @@ class ProductionOrderStageRead(BaseModel):
 
 
 class ProductionOrderRead(BaseModel):
+    original_quantity: Decimal | None = None
+    original_planned_cost: Decimal | None = None
+    original_actual_cost: Decimal | None = None
+    organization_context: OperationalContext | None = None
+    presentation_snapshot: DocumentPresentationSnapshot | None = None
     id: str
     code: str
     product_service_id: str
@@ -575,6 +607,9 @@ class WarehouseMaterialListResponse(BaseModel):
 
 
 class FinishedGoodsOrderProjection(BaseModel):
+    original_quantity: Decimal | None = None
+    original_unit_cost: Decimal | None = None
+    organization_context: OperationalContext | None = None
     id: str
     code: str
     product_service_id: str
@@ -609,15 +644,20 @@ class FinishedGoodsCandidateListResponse(BaseModel):
 
 
 class ProductionSalesRequestCreate(BaseModel):
+    model_config={"extra":"forbid"}
     sales_order_id: str = Field(min_length=1, max_length=40)
     sales_order_line_id: str = Field(min_length=1, max_length=40)
     product_service_id: str = Field(min_length=1, max_length=40)
-    quantity: float = Field(gt=0)
+    quantity: Decimal = Field(gt=0,max_digits=18,decimal_places=6)
     unit: str = Field(min_length=1, max_length=40)
     requested_due_date: date | None = None
 
 
 class ProductionSalesRequestRead(BaseModel):
+    original_quantity: Decimal | None = None
+    production_order_id: str | None = None
+    production_order_ref_id: str | None = None
+    organization_context: OperationalContext | None = None
     id: str
     sales_order_id: str
     sales_order_line_id: str
@@ -633,8 +673,58 @@ class ProductionSalesRequestRead(BaseModel):
 
 
 class ProductionSalesRequestResponse(BaseModel): data: ProductionSalesRequestRead
-class ProductionSalesRequestListResponse(BaseModel): data: list[ProductionSalesRequestRead]
+class ProductionSalesRequestListResponse(BaseModel):
+    data: list[ProductionSalesRequestRead]
+    meta: dict = Field(default_factory=dict)
 
 
 class OrderStageResponse(BaseModel):
     data: ProductionOrderStageRead
+
+
+class CreationAllocationRead(BaseModel):
+    line_id: str
+    inventory_item_id: str
+    warehouse_id: str
+    quantity: str
+    unit: str
+
+class ProductionReservationContextRead(BaseModel):
+    order_id: str
+    organization_context: OperationalContext
+    allocation: CreationAllocationRead
+
+class ProductionReservationContextResponse(BaseModel):
+    data: ProductionReservationContextRead | None = None
+
+class ProductionSalesRequestCancel(BaseModel):
+    model_config={'extra':'forbid'}
+    reason: str = Field(min_length=3,max_length=500)
+
+class ProductionSalesStatusRead(BaseModel):
+    request_id: str
+    status: Literal['pending_configuration','converted','cancelled']
+    sales_order_id: str
+    sales_order_line_id: str
+    product_service_id: str
+    quantity: Decimal
+    unit: str
+    organization_context: OperationalContext | None = None
+    production_order_id: str | None = None
+    production_order_status: OrderStatus | None = None
+    original_planned_cost: Decimal | None = None
+    original_actual_cost: Decimal | None = None
+    cost_currency: str | None = None
+
+class ProductionSalesStatusResponse(BaseModel):
+    data: ProductionSalesStatusRead
+
+class SalesProductionValidationRequest(ResourceValidationRequest):
+    quantity: Decimal = Field(gt=0,max_digits=18,decimal_places=6)
+
+class SalesProductionOrderCreateRequest(ProductionOrderCreateRequest):
+    quantity: Decimal = Field(gt=0,max_digits=18,decimal_places=6)
+
+class SalesRequestRecipesResponse(BaseModel):
+    data: list[RecipeRead]
+    page: dict

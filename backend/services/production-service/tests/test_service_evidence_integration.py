@@ -17,6 +17,66 @@ for name in list(sys.modules):
 repos=importlib.import_module("app.repositories")
 schemas=importlib.import_module("app.schemas")
 storage=importlib.import_module("app.evidence_files")
+evidence_main=importlib.import_module('app.main')
+evidence_auth=importlib.import_module('app.authorization')
+
+
+def test_phase_receipt_binds_actor_without_restricting_authorized_order_read(monkeypatch):
+    """Only an owned clone in the authorized tenant; no objects or GCS; rollback."""
+    from contextlib import contextmanager
+    # Other service tests replace the generic app.* namespace during collection.
+    # Pin this fixture's original schema module for repository deferred imports.
+    monkeypatch.setitem(sys.modules,'app.schemas',schemas)
+    url=os.getenv('ERCLAVE_TEST_DATABASE_URL')
+    if not url:pytest.skip('Local PostgreSQL required')
+    parsed=make_url(url)
+    assert parsed.host=='127.0.0.1' and parsed.port==5434 and parsed.database=='erclave_local'
+    tenant='ten_739ee59d765d5e14818674800d';tag=uuid4().hex[:12];oid='evidence_actor_'+tag
+    engine=create_engine(url)
+    with engine.connect() as c:
+        tx=c.begin()
+        try:
+            source=c.execute(text("select o.id from production.production_orders o join production.product_services p on p.tenant_id=o.tenant_id and p.id=o.product_service_id where o.tenant_id=:t and p.type='service' order by o.created_at limit 1"),{'t':tenant}).scalar_one_or_none()
+            if source is None:pytest.skip('A Local service order is required for the owned rollback clone')
+            c.execute(text("""insert into production.production_orders(id,tenant_id,code,product_service_id,recipe_id,recipe_version_id,quantity,unit,status,responsible_name_snapshot,planned_cost,recipe_snapshot,resource_validation_snapshot,validated_at,created_by)
+                select :o,tenant_id,:o,product_service_id,recipe_id,recipe_version_id,1,unit,'released','Evidence actor rollback',0,recipe_snapshot,'{}',now(),:a from production.production_orders where tenant_id=:t and id=:source"""),{'o':oid,'a':'actor-a-'+tag,'t':tenant,'source':source})
+            class Transaction:
+                @contextmanager
+                def begin(self):yield c
+                @contextmanager
+                def connect(self):yield c
+            repo=repos.ProductionRepository(engine);repo.engine=Transaction()
+            payload=schemas.ServiceEvidenceRequest(description='Owned actor-bound phase; no attachments')
+            first=repo.save_service_evidence(tenant,oid,'start',payload,'actor-a-'+tag)
+            assert repo.save_service_evidence(tenant,oid,'start',payload,'actor-a-'+tag)==first
+            with pytest.raises(ErclaveError) as denied:
+                repo.save_service_evidence(tenant,oid,'start',payload,'actor-b-'+tag)
+            assert denied.value.status_code==403 and denied.value.code=='idempotency_actor_mismatch'
+            with pytest.raises(ErclaveError) as changed:
+                repo.save_service_evidence(tenant,oid,'start',schemas.ServiceEvidenceRequest(description='Changed immutable phase'),'actor-a-'+tag)
+            assert changed.value.status_code==409 and changed.value.code=='service_evidence_already_recorded'
+            # Reads continue exposing the immutable evidence to the order reader.
+            assert repo.get_order(tenant,oid).service_evidence==first
+            from fastapi.testclient import TestClient
+            main=evidence_main
+            auth=evidence_auth
+            app=main.create_app()
+            route=next(route for route in main.production_router.routes if getattr(route,'path',None)=='/v1/production/orders/{order_id}' and 'GET' in route.methods)
+            read_guard=next(dependency.call for dependency in route.dependant.dependencies if dependency.name=='_')
+            # Only authorization is a double: actor B has the explicit read permission.
+            app.dependency_overrides[read_guard]=lambda:auth.AuthorizedContext(tenant,'actor-b-'+tag,'production.order.read',frozenset({'production.order.read'}))
+            repository_dependency=next(dependency.call for dependency in route.dependant.dependencies if dependency.name=='repository')
+            app.dependency_overrides[repository_dependency]=lambda:repo
+            client=TestClient(app)
+            try:
+                response=client.get('/v1/production/orders/'+oid,headers={'X-Tenant-Id':tenant})
+                assert response.status_code==200
+                evidence=response.json()['data']['service_evidence']
+                assert evidence[0]['id']==first[0]['id'] and evidence[0]['actor_id']=='actor-a-'+tag
+            finally:client.close()
+            assert c.execute(text('select count(*) from production.service_evidence_files where tenant_id=:t and evidence_id=:e'),{'t':tenant,'e':first[0]['id']}).scalar_one()==0
+        finally:tx.rollback()
+    engine.dispose()
 
 
 def test_service_evidence_gates_expiry_idempotency_and_product_isolation():

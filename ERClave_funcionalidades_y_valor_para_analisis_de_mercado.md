@@ -1,5 +1,7 @@
 # ERClave — Funcionalidades y valor agregado para análisis de mercado
 
+> Referencia de diseño y alcance: no demuestra implementación ni despliegue. Consultar [estado vigente](docs/contexto/ESTADO_ACTUAL.md).
+
 ## 1. Objetivo del documento
 
 Este documento resume las funcionalidades, propuesta de valor y diferenciadores de ERClave desde una perspectiva funcional y comercial.

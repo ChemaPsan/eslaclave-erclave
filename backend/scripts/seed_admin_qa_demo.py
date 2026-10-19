@@ -234,7 +234,7 @@ def apply_demo_seed(
                 on conflict (tenant_id, user_id) do update set
                     status = excluded.status,
                     activated_at = coalesce(admin.memberships.activated_at, excluded.activated_at),
-                    metadata = excluded.metadata,
+                    metadata = excluded.metadata || admin.memberships.metadata,
                     updated_at = now()
                 """
             ),
@@ -386,7 +386,7 @@ def apply_demo_seed(
                     on conflict (tenant_id, user_id) do update set
                         status = excluded.status,
                         activated_at = coalesce(admin.memberships.activated_at, excluded.activated_at),
-                        metadata = excluded.metadata,
+                        metadata = excluded.metadata || admin.memberships.metadata,
                         updated_at = now()
                     """
                 ),

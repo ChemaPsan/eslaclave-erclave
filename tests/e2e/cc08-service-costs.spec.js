@@ -1,0 +1,41 @@
+const {test,expect}=require('@playwright/test');
+const fs=require('node:fs');const path=require('node:path');
+const origin='http://127.0.0.1:'+(process.env.ERCLAVE_FORM_TEST_PORT||4183);
+async function setup(page,lang,{currency='USD',legacy=false,scope=true,permission=true}={}){
+ const calls=[];let rejection={status:422,code:'operational_cost_amount_out_of_range',details:{field:'unit_cost',issues:[{loc:['body','unit_cost'],type:'value_error',msg:'operational_cost_amount_out_of_range'}]}};
+ const app=fs.readFileSync(path.join(__dirname,'../../frontend/app.js'),'utf8');
+ if(!/^initializeAuth\(\);\r?\nrender\(\);/m.test(app))throw new Error('App bootstrap changed: audit fixture');
+ await page.route('**/*',async route=>{const req=route.request(),url=new URL(req.url());if(url.hostname!=='127.0.0.1'||url.origin!==origin)return route.abort();
+  if(url.pathname==='/env.js')return route.fulfill({contentType:'text/javascript',body:'window.ERCLAVE_CONFIG='+JSON.stringify({apiMode:'api',localSalesApiBaseUrl:origin})});
+  if(url.pathname==='/app.js')return route.fulfill({contentType:'text/javascript',body:app.replace(/^initializeAuth\(\);\r?\nrender\(\);/m,'// Startup disabled only in this intercepted consumer fixture.')+'\nwindow.cc08={state,mapApiSalesServiceOrder,renderSalesServiceOrderModal};'});
+  if(url.pathname.endsWith('/eligible-workers'))return route.fulfill({json:{data:[{id:'worker-a',full_name:'Worker A',employee_number:'W-A'}],has_more:false}});
+  if(req.method()==='POST'){calls.push({path:url.pathname,payload:req.postDataJSON(),key:req.headers()['idempotency-key']});return route.fulfill({status:rejection.status,json:{error:{code:rejection.code,message:'PRIVATE SQL',details:rejection.details}}});}
+  if(url.pathname.startsWith('/v1/'))return route.fulfill({json:{data:[]}});return route.continue();
+ });
+ await page.addInitScript(()=>{localStorage.clear();localStorage.setItem('erclave-api-mode','api');});await page.goto(origin+'/');await page.waitForFunction(()=>window.cc08);
+ await page.evaluate(({lang,currency,legacy,scope,permission})=>{const {state,mapApiSalesServiceOrder,renderSalesServiceOrderModal}=window.cc08;state.lang=lang;
+ state.sessionApi={status:'ready',data:{permissions:permission?['sales.service_order.time.create','sales.service_order.cost.create']:[],scope:{version:2,divisions:scope?[{id:'div-a',society_id:'soc-a'}]:[],societies:[{id:'soc-a',base_currency:'MXN'}]}}};state.salesApi.workers=[{id:'worker-a',full_name:'Worker A',status:'active'}];
+ const raw={id:'service-a',code:'S-A',status:'in_progress',order_code:'ORDER-A',customer_name:'Customer A',product_service_name:'Service A',product_service_code:'PR-A',currency,division_ref_id:legacy?null:'div-a',society_ref_id:legacy?null:'soc-a',ordered_quantity:1,unit:'H87',actual_cost:'1.00',time_entries:[],cost_entries:[{description:'Confirmed historical cost',quantity:'1',unit_cost:'17.123456',cost_currency:'MXN',cost_exchange_rate:'0.0584',document_currency:'USD',original_total_cost:'17.123456',total_cost:'1.00'},{description:'Legacy historical cost',quantity:'1',unit_cost:'7',total_cost:'7.00'}]};window.cc08.record=mapApiSalesServiceOrder(raw);renderSalesServiceOrderModal(window.cc08.record);
+ },{lang,currency,legacy,scope,permission});return {calls,reject:value=>{rejection=value;}};
+}
+async function fillCost(page,amount='17.123456'){const f=page.locator('#serviceOrderCostForm');await f.locator('[name=description]').fill('Material capture');await f.locator('[name=quantity]').fill('2.5');await f.locator('[name=unit_cost]').fill(amount);return f;}
+for(const lang of ['es','en']){
+ test(lang+': service original currencies, explicit confirmation, exact conversion and stable failed retry',async({page})=>{
+  await page.setViewportSize({width:320,height:900});const state=await setup(page,lang);const f=await fillCost(page);
+  await expect(f.locator('[name=cost_currency]')).toHaveValue('MXN');await expect(f.locator('[name=cost_currency]')).toHaveAttribute('readonly','');await f.locator('[type=submit]').click();expect(state.calls).toHaveLength(0);
+  await f.locator('[name=cost_exchange_rate]').fill('0.058412345678');await f.locator('[name=confirm_cost_currency]').check();await f.locator('[type=submit]').click();await expect.poll(()=>state.calls.length).toBe(1);
+  await expect(f.locator('[name=unit_cost]')).toHaveAttribute('aria-invalid','true');await expect(f.locator('[name=quantity]')).toHaveValue('2.5');await expect(f.locator('[name=cost_exchange_rate]')).toHaveValue('0.058412345678');
+  expect(state.calls[0].payload).toMatchObject({quantity:'2.5',unit_cost:'17.123456',cost_currency:'MXN',cost_exchange_rate:'0.058412345678'});
+  await f.locator('[type=submit]').click();await expect.poll(()=>state.calls.length).toBe(2);expect(state.calls[1].key).toBe(state.calls[0].key);
+  await f.locator('[name=unit_cost]').fill('18.000001');await expect(f.locator('[name=confirm_cost_currency]')).not.toBeChecked();await f.locator('[name=confirm_cost_currency]').check();state.reject({status:403,code:'permission_denied',details:{}});await f.locator('[type=submit]').click();await expect.poll(()=>state.calls.length).toBe(3);expect(state.calls[2].key).not.toBe(state.calls[1].key);await expect(f.locator('[name=unit_cost]')).toHaveValue('18.000001');
+  await expect(page.locator('#modalContent')).toContainText('17.123456 MXN');await expect(page.locator('#modalContent')).toContainText('0.0584 USD');await expect(page.locator('#modalContent')).toContainText(lang==='en'?'Historical entry without confirmed original currency':'Registro histórico sin moneda original confirmada');await expect(page.locator('#modalContent')).not.toContainText('PRIVATE SQL');expect(await page.locator('#modalContent').evaluate(n=>n.scrollWidth<=n.clientWidth)).toBe(true);
+ });
+ test(lang+': same currency uses one; legacy remains usable; missing authority or permission blocks new entry',async({page})=>{
+  let state=await setup(page,lang,{currency:'MXN'});let f=await fillCost(page);await expect(f.locator('[data-service-rate]')).toBeHidden();await f.locator('[name=confirm_cost_currency]').check();await f.locator('[type=submit]').click();await expect.poll(()=>state.calls.length).toBe(1);expect(state.calls[0].payload.cost_exchange_rate).toBe('1');
+  state=await setup(page,lang,{legacy:true});f=await fillCost(page,'17.12');await expect(f.locator('[name=cost_currency]')).toHaveCount(0);await f.locator('[type=submit]').click();await expect.poll(()=>state.calls.length).toBe(1);expect(state.calls[0].payload.unit_cost).toBe('17.12');expect(state.calls[0].payload).not.toHaveProperty('cost_currency');expect(state.calls[0].payload).not.toHaveProperty('cost_exchange_rate');
+  await setup(page,lang,{scope:false});await expect(page.locator('#serviceOrderCostForm [type=submit]')).toBeDisabled();await expect(page.locator('#serviceOrderTimeForm [type=submit]')).toBeDisabled();await setup(page,lang,{permission:false});await expect(page.locator('#serviceOrderCostForm')).toHaveCount(0);await expect(page.locator('#serviceOrderTimeForm')).toHaveCount(0);
+ });
+ test(lang+': time entry keeps decimal hourly cost and binds exchange errors without losing worker or minutes',async({page})=>{
+  const state=await setup(page,lang);const f=page.locator('#serviceOrderTimeForm');await page.waitForFunction(()=>document.querySelector('#serviceOrderTimeForm [name=worker_id]')?.options.length>1);await f.locator('[name=worker_id]').selectOption('worker-a');await f.locator('[name=started_at]').fill('2026-10-08');await f.locator('[name=minutes]').fill('30');await f.locator('[name=hourly_cost]').fill('12.123456');await f.locator('[name=cost_exchange_rate]').fill('0.05');await f.locator('[name=confirm_cost_currency]').check();state.reject({status:422,code:'validation_error',details:{issues:[{loc:['body','cost_exchange_rate'],msg:'PRIVATE SQL',type:'value_error'}]}});await f.locator('[type=submit]').click();await expect.poll(()=>state.calls.length).toBe(1);expect(state.calls[0].payload).toMatchObject({hourly_cost:'12.123456',minutes:30,worker_id:'worker-a',cost_currency:'MXN',cost_exchange_rate:'0.05'});await expect(f.locator('[name=cost_exchange_rate]')).toHaveAttribute('aria-invalid','true');await expect(f.locator('[name=minutes]')).toHaveValue('30');await expect(f.locator('[name=worker_id]')).toHaveValue('worker-a');
+ });
+}

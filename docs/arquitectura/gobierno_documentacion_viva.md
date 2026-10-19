@@ -35,7 +35,7 @@ Las especificaciones futuras deben usar lenguaje explicito como `planned`, `obje
 | Pregunta | Fuente viva principal |
 |---|---|
 | Que existe en Local, QA o Produccion | `docs/contexto/ESTADO_ACTUAL.md` |
-| Que sigue pendiente | `docs/contexto/PENDIENTES.md` |
+| Que sigue pendiente | `docs/contexto/PENDIENTES.md`; detalle contable por submódulo en `docs/contexto/CONTROL_CONTABLE.md`, enlazado y conciliado, sin duplicar inventario |
 | Por que se tomo una decision | `docs/contexto/DECISIONES.md` |
 | Que agente debe revisar el cambio | `AGENTES.md` |
 | Como debe trabajar Codex | `AGENTS.md` |
@@ -55,6 +55,8 @@ Las especificaciones futuras deben usar lenguaje explicito como `planned`, `obje
 | Estado Local/QA/Produccion | estado actual, pendientes, diagrama, runbook o evidencia de release y trazabilidad |
 | Modulo implementado o planeado | manifiesto, contrato, indice de modulos, estado, permisos y agentes |
 | Texto o experiencia visible | ES/EN, ficha funcional, responsive/accesibilidad y trazabilidad |
+| Campo o selector de formulario | Propósito de negocio, alta/edición/lectura, schema y contrato, catálogo dueño, validación backend, pruebas de recorrido y ficha funcional |
+| Resultado UAT o smoke | Caso, ambiente, SHA, rol, pasos, resultado observado y evidencia; actualizar estado sólo si el recorrido completo lo demuestra |
 | Regla para agentes o proceso | `AGENTS.md`, `AGENTES.md`, inicio de sesion, validador y trazabilidad |
 
 ## Separacion por ambiente
@@ -72,6 +74,7 @@ Una capacidad Local no puede describirse simplemente como real si el contexto pu
 
 - El agente de negocio valida reglas, alcance y pendientes del modulo.
 - El agente tecnico valida runtime, contratos, persistencia y estado por ambiente.
+- El agente técnico de Contabilidad custodia `docs/contexto/CONTROL_CONTABLE.md`: relaciona cada submódulo con dueño, capacidad, brecha, criterio de cierre y evidencia; negocio contable valida reglas y cada dueño valida implementación. Mantiene sus filas y los resúmenes de PENDIENTES/ESTADO alineados cuando cambia el estado, preservando historia en TRAZABILIDAD.
 - Arquitectura SaaS valida fronteras y diagramas.
 - Arquitectura de datos y Custodio DB validan modelo, migraciones y cabeza vigente.
 - Arquitectura API valida OpenAPI y consumidores.
@@ -111,3 +114,18 @@ Antes de cerrar un cambio:
 7. informar ambiente, migraciones, seeds, datos y despliegues realmente afectados.
 
 Si una fuente no puede actualizarse en el mismo corte, el cambio queda incompleto y debe registrarse como pendiente explícito; no se permite declarar terminado ignorando el drift.
+
+## Registro, Obsidian y prevención de fuentes obsoletas · CHG-311
+
+El [portal](../INICIO.md) y el [índice](../INDICE_DOCUMENTAL.md) son puntos de entrada. [El registro](../documentacion-registro.json) clasifica cada fuente propia Markdown/draw.io/Word/canvas como vigente, diseño, histórica o exportación pendiente, con custodio y autoridad. Los builds y dependencias no son fuentes documentales.
+
+El custodio de manuales coordina esta cobertura con los agentes de módulo, Arquitectura y QA. Antes de usar un documento, comprobar su clase y ambiente; antes de cerrar un cambio, corregir el cuerpo vigente, relacionar decisión, dueño, contrato y evidencia, y archivar el corte sustituido cuando sea necesario. No añadir un prefacio que contradiga instrucciones antiguas todavía activas.
+
+Al añadir, mover o borrar archivos actualizar el registro y ejecutar npm run docs:index. validate:documentation invoca tools/documentation-map.js y bloquea documentos sin clasificar, duplicados, autoridades inexistentes, historia sin aviso y enlaces locales/índice desactualizados. verify y CI heredan el control. Los enlaces Markdown relativos permiten navegación Obsidian sin configuración personal adicional. No se certifican enlaces remotos, anclas internas, semántica de negocio ni apariencia Word automáticamente.
+
+Las exportaciones Word conservan hashes de fuente/artefacto en el registro. El validador detecta cambios posteriores a la paridad revisada. Ante drift, regenerar y comprobar contenido antes de renovar hashes; un hash nuevo no equivale a revisión visual ni convierte exportación pendiente en publicación final. En CHG-311 paridad textual 8/8 aprobada; renderer bloqueado por ausencia de LibreOffice en runtime.
+
+
+## Huellas de fuentes manuales en Git · CHG-334
+
+Las fuentes de `docs/manuales_solucion/fuentes/` tienen huellas de bytes exactos en el registro de exportaciones Word. `.gitattributes` desactiva su normalización automática de saltos de línea para conservar los bytes aprobados tanto en el commit como al clonar. Antes de publicar, contrastar `sourceSha256` con los blobs del índice Git además del workspace. Este control no sustituye el cotejo textual/visual ni autoriza renovar huellas para omitir una revisión.

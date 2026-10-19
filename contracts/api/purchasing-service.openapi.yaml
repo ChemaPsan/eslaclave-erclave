@@ -1,81 +1,770 @@
 openapi: 3.1.0
 x-implementation-status: implemented
+x-idempotency-actor-binding: 'Local: command receipts bind tenant, operation, key, authenticated actor and request. Actor/payload conflicts or unprovable legacy authorship return 409 before replay/effects; current document scope is revalidated. Reconciliation intents are recorded before external effects. No request/response fields change.'
 info:
   title: ERClave Purchasing Service API
-  version: 1.4.0
-  summary: Source-to-receipt de articulos y servicios con edicion, cancelacion, concurrencia y reconciliacion segura en Local.
+  version: 1.7.0
+  summary: 'CC-15 Local: immutable Division/Society document context, explicit supplier conditions and scoped source-to-receipt; Accounting remains
+    off.'
 servers:
 - url: http://127.0.0.1:8010
 security:
 - bearerAuth: []
 paths:
+  /v1/purchasing/receipts/{receipt_id}/lines/{line_id}/inventory-proof:
+    get:
+      tags:
+      - purchasing
+      summary: Inventory Receipt Proof
+      operationId: inventory_receipt_proof_v1_purchasing_receipts__receipt_id__lines__line_id__inventory_proof_get
+      parameters:
+      - name: receipt_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Receipt Id
+      - name: line_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Line Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - inventory.movement.create
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/suppliers/{resource_id}/division-assignments/{division_id}/commercial-terms:
+    get:
+      tags:
+      - Organization assignments
+      summary: Commercial Terms
+      operationId: commercial_terms_v1_purchasing_suppliers__resource_id__division_assignments__division_id__commercial_terms_get
+      parameters:
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Resource Id
+      - name: division_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Division Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialTermsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.supplier.read
+    put:
+      tags:
+      - Organization assignments
+      summary: Save Commercial Terms
+      operationId: save_commercial_terms_v1_purchasing_suppliers__resource_id__division_assignments__division_id__commercial_terms_put
+      parameters:
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Resource Id
+      - name: division_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Division Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommercialTermsCommand'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialTermsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.supplier.update
+  /v1/purchasing/organization/divisions:
+    get:
+      tags:
+      - Organization assignments
+      summary: Divisions
+      operationId: divisions_v1_purchasing_organization_divisions_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DivisionChoicesResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.supplier.read
+  /v1/purchasing/suppliers/{resource_id}/division-assignments:
+    get:
+      tags:
+      - Organization assignments
+      summary: Assignments
+      operationId: assignments_v1_purchasing_suppliers__resource_id__division_assignments_get
+      parameters:
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Resource Id
+      - name: division_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 40
+          - type: 'null'
+          title: Division Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.supplier.read
+  /v1/purchasing/suppliers/{resource_id}/division-assignments/{division_id}:
+    put:
+      tags:
+      - Organization assignments
+      summary: Assign
+      operationId: assign_v1_purchasing_suppliers__resource_id__division_assignments__division_id__put
+      parameters:
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Resource Id
+      - name: division_id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+          title: Division Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: X-Correlation-Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignmentCommand'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.supplier.update
+  /v1/purchasing/division-suppliers:
+    get:
+      tags:
+      - Organization assignments
+      summary: Eligible
+      operationId: eligible_v1_purchasing_division_suppliers_get
+      parameters:
+      - name: division_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Division Id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligiblePartiesResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '401':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '403':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '404':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '409':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+        '503':
+          description: Stable assignment error envelope; capture and prior state are preserved.
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.supplier.read
+  /v1/purchasing/reference-data:
+    get:
+      operationId: getPurchasingReferenceData
+      summary: Obtiene monedas y condiciones de pago activas para formularios de proveedores.
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.supplier.create
+      - purchasing.supplier.update
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Catalogos comerciales activos del tenant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingReferenceDataResponse'
   /v1/purchasing/reports/{report_code}/export:
     get:
       tags:
-      - Reports
-      operationId: exportPurchasingStandardReport
-      summary: Export a fixed Purchasing report as UTF-8 CSV.
-      x-required-module: purchasing
-      x-permissions: [purchasing.supplier.read, purchasing.requisition.read, purchasing.order.read, purchasing.receipt.read]
+      - purchasing
+      summary: Export Report
+      operationId: export_report_v1_purchasing_reports__report_code__export_get
       parameters:
-      - $ref: '#/components/parameters/TenantHeader'
       - name: report_code
         in: path
         required: true
         schema:
           type: string
+          title: Report Code
       - name: lang
         in: query
+        required: false
         schema:
-          type: string
           enum:
           - es
           - en
+          type: string
           default: es
+          title: Lang
       - name: date_from
         in: query
+        required: false
         schema:
-          type: string
-          format: date
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Date From
       - name: date_to
         in: query
+        required: false
         schema:
-          type: string
-          format: date
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Date To
       - name: status
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
       - name: priority
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Priority
       - name: q
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Q
       - name: currency
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currency
       - name: supplier_id
         in: query
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Supplier Id
       - name: line_type
         in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Line Type
+      - name: X-Tenant-Id
+        in: header
+        required: true
         schema:
           type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
       responses:
         '200':
-          description: CSV export.
-        '204':
-          description: No rows matched the filters.
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.supplier.read
+      - purchasing.requisition.read
+      - purchasing.order.read
+      - purchasing.receipt.read
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
   /v1/purchasing/suppliers:
     get:
       operationId: listPurchasingSuppliers
       x-required-module: purchasing
-      x-permissions: [purchasing.supplier.read]
+      x-permissions:
+      - purchasing.supplier.read
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
       responses:
@@ -84,7 +773,8 @@ paths:
     post:
       operationId: createPurchasingSupplier
       x-required-module: purchasing
-      x-permissions: [purchasing.supplier.create]
+      x-permissions:
+      - purchasing.supplier.create
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
       - $ref: '#/components/parameters/IdempotencyKey'
@@ -101,7 +791,8 @@ paths:
     patch:
       operationId: updatePurchasingSupplier
       x-required-module: purchasing
-      x-permissions: [purchasing.supplier.update]
+      x-permissions:
+      - purchasing.supplier.update
       parameters:
       - $ref: '#/components/parameters/TenantHeader'
       - $ref: '#/components/parameters/IdempotencyKey'
@@ -117,188 +808,10 @@ paths:
           description: Proveedor actualizado.
   /v1/purchasing/requisitions:
     get:
-      operationId: listPurchasingRequisitions
-      x-required-module: purchasing
-      x-permissions: [purchasing.requisition.read]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      responses:
-        '200':
-          description: Requisiciones del tenant.
-    post:
-      operationId: createPurchasingRequisition
-      x-required-module: purchasing
-      x-permissions: [purchasing.requisition.create]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RequisitionWrite'
-      responses:
-        '201':
-          description: Requisicion en borrador.
-  /v1/purchasing/requisitions/{id}:
-    patch:
-      operationId: updatePurchasingRequisition
-      x-required-module: purchasing
-      x-permissions: [purchasing.requisition.update]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RequisitionWrite'
-      responses:
-        '200':
-          description: Requisicion actualizada.
-  /v1/purchasing/requisitions/{id}/submit:
-    post:
-      operationId: submitPurchasingRequisition
-      x-required-module: purchasing
-      x-permissions: [purchasing.requisition.submit]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Requisicion enviada.
-  /v1/purchasing/requisitions/{id}/approve:
-    post:
-      operationId: approvePurchasingRequisition
-      x-required-module: purchasing
-      x-permissions: [purchasing.requisition.approve]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Requisicion aprobada.
-  /v1/purchasing/requisitions/{id}/reject:
-    post:
-      operationId: rejectPurchasingRequisition
-      x-required-module: purchasing
-      x-permissions: [purchasing.requisition.reject]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReasonRequest'
-      responses:
-        '200':
-          description: Requisicion rechazada.
-  /v1/purchasing/requisitions/{id}/cancel:
-    post:
-      operationId: cancelPurchasingRequisition
-      x-required-module: purchasing
-      x-permissions: [purchasing.requisition.cancel]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReasonRequest'
-      responses:
-        '200':
-          description: Requisicion cancelada con motivo auditable.
-  /v1/purchasing/orders:
-    get:
-      operationId: listPurchasingOrders
-      x-required-module: purchasing
-      x-permissions: [purchasing.order.read]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      responses:
-        '200':
-          description: Ordenes de compra del tenant.
-    post:
-      operationId: createPurchasingOrder
-      x-required-module: purchasing
-      x-permissions: [purchasing.order.create]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PurchaseOrderWrite'
-      responses:
-        '201':
-          description: Orden de compra en borrador; si nace de requisicion
-          sus partidas deben coincidir exactamente salvo precio.: null
-  /v1/purchasing/orders/{id}:
-    patch:
-      operationId: updatePurchasingOrder
-      x-required-module: purchasing
-      x-permissions: [purchasing.order.update]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PurchaseOrderWrite'
-      responses:
-        '200':
-          description: Orden en borrador actualizada sin cambiar su origen.
-  /v1/purchasing/orders/{id}/issue:
-    post:
-      operationId: issuePurchasingOrder
-      x-required-module: purchasing
-      x-permissions: [purchasing.order.issue]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Orden emitida y congelada.
-  /v1/purchasing/orders/{id}/cancel:
-    post:
-      operationId: cancelPurchasingOrder
-      x-required-module: purchasing
-      x-permissions: [purchasing.order.cancel]
-      parameters:
-      - $ref: '#/components/parameters/TenantHeader'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReasonRequest'
-      responses:
-        '200':
-          description: Orden cancelada; conserva recepciones previas y libera la requisicion si no hubo recepcion.
-  /v1/purchasing/receipts:
-    get:
-      operationId: listPurchasingReceipts
-      x-required-module: purchasing
-      x-permissions: [purchasing.receipt.read]
+      tags:
+      - purchasing
+      summary: Requisitions
+      operationId: requisitions_v1_purchasing_requisitions_get
       parameters:
       - name: X-Tenant-Id
         in: header
@@ -328,27 +841,26 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ListResponse'
+                $ref: '#/components/schemas/PurchasingDocumentListResponse'
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.requisition.read
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+    post:
       tags:
       - purchasing
-      summary: Receipts
-      x-implementation-status: implemented
-    post:
-      operationId: createPurchasingReceipt
-      x-required-module: purchasing
-      x-permissions: [purchasing.receipt.create]
+      summary: Create Requisition
+      operationId: create_requisition_v1_purchasing_requisitions_post
       parameters:
       - name: X-Tenant-Id
         in: header
@@ -366,7 +878,776 @@ paths:
           title: Authorization
       - name: Idempotency-Key
         in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
         required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequisitionWrite'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.requisition.create
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/requisitions/{id}:
+    patch:
+      tags:
+      - purchasing
+      summary: Update Requisition
+      operationId: update_requisition_v1_purchasing_requisitions__id__patch
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequisitionUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.requisition.update
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/requisitions/{id}/submit:
+    post:
+      tags:
+      - purchasing
+      summary: Submit
+      operationId: submit_v1_purchasing_requisitions__id__submit_post
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.requisition.submit
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/requisitions/{id}/approve:
+    post:
+      tags:
+      - purchasing
+      summary: Approve
+      operationId: approve_v1_purchasing_requisitions__id__approve_post
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.requisition.approve
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/requisitions/{id}/reject:
+    post:
+      tags:
+      - purchasing
+      summary: Reject
+      operationId: reject_v1_purchasing_requisitions__id__reject_post
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.requisition.reject
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/requisitions/{id}/cancel:
+    post:
+      tags:
+      - purchasing
+      summary: Cancel Requisition
+      operationId: cancel_requisition_v1_purchasing_requisitions__id__cancel_post
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.requisition.cancel
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/orders:
+    get:
+      tags:
+      - purchasing
+      summary: Orders
+      operationId: orders_v1_purchasing_orders_get
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.order.read
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+    post:
+      tags:
+      - purchasing
+      summary: Create Order
+      operationId: create_order_v1_purchasing_orders_post
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseOrderWrite'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.order.create
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/orders/{id}:
+    patch:
+      tags:
+      - purchasing
+      summary: Update Order
+      operationId: update_order_v1_purchasing_orders__id__patch
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseOrderUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.order.update
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/orders/{id}/issue:
+    post:
+      tags:
+      - purchasing
+      summary: Issue
+      operationId: issue_v1_purchasing_orders__id__issue_post
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.order.issue
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/orders/{id}/cancel:
+    post:
+      tags:
+      - purchasing
+      summary: Cancel Order
+      operationId: cancel_order_v1_purchasing_orders__id__cancel_post
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.order.cancel
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/receipts:
+    get:
+      tags:
+      - purchasing
+      summary: Receipts
+      operationId: receipts_v1_purchasing_receipts_get
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchasingDocumentListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.receipt.read
+      x-implementation-status: implemented
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+    post:
+      tags:
+      - purchasing
+      summary: Create Receipt
+      operationId: create_receipt_v1_purchasing_receipts_post
+      parameters:
+      - name: X-Tenant-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: Idempotency-Key
+        in: header
+        required: false
         schema:
           anyOf:
           - type: string
@@ -392,30 +1673,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DataResponse'
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      tags:
-      - purchasing
-      summary: Create Receipt
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.receipt.create
       x-implementation-status: implemented
-      description: Prepares a pending_confirmation receipt without receiving goods or accepting services. Pending quantities count against over-receipt
-        checks. Warehouse confirms inventory lines; the original requisition requester (buyer for direct purchases) accepts service lines.
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
   /v1/purchasing/receipts/{id}/reconcile:
     post:
-      operationId: reconcilePurchasingReceipt
-      x-required-module: purchasing
-      x-permissions: [inventory.movement.create, purchasing.receipt.reconcile]
+      tags:
+      - purchasing
+      summary: Reconcile Receipt
+      operationId: reconcile_receipt_v1_purchasing_receipts__id__reconcile_post
       parameters:
       - name: id
         in: path
@@ -439,7 +1718,7 @@ paths:
           title: Authorization
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -459,29 +1738,26 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DataResponse'
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-      tags:
-      - purchasing
-      summary: Reconcile Receipt
+      x-required-module: purchasing
+      x-permissions:
+      - inventory.movement.create
+      - purchasing.receipt.reconcile
       x-implementation-status: implemented
       x-required-modules:
       - purchasing
       - inventory
-      description: Warehouse confirms/retries inventory lines only. The legacy purchasing.receipt.reconcile permission is recognized but alone
-        returns purchase_warehouse_receipt_required; inventory.movement.create is required to post stock. Service lines remain pending requester
-        acceptance.
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
   /v1/purchasing/warehouse-receipts:
     get:
       tags:
@@ -541,18 +1817,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
       x-implementation-status: implemented
       x-required-module: purchasing
-      x-permissions: [inventory.movement.read]
+      x-permissions:
+      - inventory.movement.read
       x-required-modules:
       - purchasing
       - inventory
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
   /v1/purchasing/service-acceptances:
     get:
       tags:
@@ -612,15 +1888,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
       x-implementation-status: implemented
       x-required-module: purchasing
-      x-permissions: [purchasing.order.create, purchasing.requisition.create]
+      x-permissions:
+      - purchasing.order.create
+      - purchasing.requisition.create
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
   /v1/purchasing/receipts/{id}/accept-services:
     post:
       tags:
@@ -650,7 +1927,7 @@ paths:
           title: Authorization
       - name: Idempotency-Key
         in: header
-        required: true
+        required: false
         schema:
           anyOf:
           - type: string
@@ -670,22 +1947,187 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DataResponse'
+                $ref: '#/components/schemas/PurchasingDocumentResponse'
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '403':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '409':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
-        '503':
-          description: Authorization, workflow precondition, or recoverable dependency error; use error.code and details.
       x-implementation-status: implemented
       x-required-module: purchasing
-      x-permissions: [purchasing.order.create, purchasing.requisition.create]
+      x-permissions:
+      - purchasing.order.create
+      - purchasing.requisition.create
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/document-divisions:
+    get:
+      tags:
+      - Organization assignments
+      summary: Document Divisions
+      operationId: listPurchasingDocumentDivisions
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.order.create
+      - purchasing.order.update
+      - purchasing.requisition.create
+      - purchasing.requisition.update
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
+  /v1/purchasing/document-suppliers:
+    get:
+      tags:
+      - Organization assignments
+      summary: Document Suppliers
+      operationId: listPurchasingDocumentSuppliers
+      parameters:
+      - name: division_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 40
+          title: Division Id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 240
+          default: ''
+          title: Q
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-Tenant-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Tenant-Id
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: X-Actor-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Actor-Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-required-module: purchasing
+      x-permissions:
+      - purchasing.order.create
+      - purchasing.order.update
+      description: 'CC-15 Local: current tenant and Division scope are checked before commands, idempotent replay, lists and CSV. Requisitions
+        freeze organization_context; linked orders inherit it, direct orders require division_ref_id. Orders freeze commercial_terms_snapshot
+        (supplier_id, terms_revision, values and Division). Receipts inherit the order context, including services; physical lines require warehouses
+        of the same Division. Legacy documents retain null context without backfill; restricted scopes cannot read unassigned legacy documents
+        and new operational writes require explicit context. Existing CC-14 receipt recovery remains supported.'
 components:
   securitySchemes:
     bearerAuth:
@@ -713,225 +2155,534 @@ components:
       schema:
         type: string
   schemas:
-    SupplierWrite:
+    CommercialTerms:
+      properties:
+        currency:
+          type: string
+          maxLength: 12
+          minLength: 3
+          pattern: ^[A-Z0-9._-]+$
+          title: Currency
+        payment_terms:
+          type: string
+          maxLength: 40
+          minLength: 1
+          pattern: ^[a-z0-9._-]+$
+          title: Payment Terms
+        lead_time_days:
+          type: integer
+          maximum: 3650.0
+          minimum: 0.0
+          title: Lead Time Days
+      additionalProperties: false
       type: object
       required:
-      - code
-      - commercial_name
-      - legal_name
-      - tax_id
-      - tax_regime
-      - billing_email
-      - fiscal_postal_code
       - currency
       - payment_terms
+      - lead_time_days
+      title: CommercialTerms
+    CommercialTermsCommand:
       properties:
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        values:
+          $ref: '#/components/schemas/CommercialTerms'
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      - values
+      title: CommercialTermsCommand
+    CommercialTermsRead:
+      properties:
+        resource_id:
+          type: string
+          title: Resource Id
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        confirmed_society_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmed Society Ref Id
+        current_society_ref_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Society Ref Id
+        revision:
+          type: integer
+          title: Revision
+        values:
+          anyOf:
+          - $ref: '#/components/schemas/CommercialTerms'
+          - type: 'null'
+        requires_confirmation:
+          type: boolean
+          title: Requires Confirmation
+        assignment_active:
+          type: boolean
+          title: Assignment Active
+      type: object
+      required:
+      - resource_id
+      - division_ref_id
+      - confirmed_society_ref_id
+      - current_society_ref_id
+      - revision
+      - values
+      - requires_confirmation
+      - assignment_active
+      title: CommercialTermsRead
+    CommercialTermsResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/CommercialTermsRead'
+      type: object
+      required:
+      - data
+      title: CommercialTermsResponse
+    AssignmentCommand:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+          default: active
+      additionalProperties: false
+      type: object
+      required:
+      - expected_revision
+      title: AssignmentCommand
+    AssignmentListResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AssignmentRead'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: AssignmentListResponse
+    AssignmentPage:
+      properties:
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - total
+      - limit
+      - offset
+      title: AssignmentPage
+    AssignmentRead:
+      properties:
+        supplier_id:
+          type: string
+          title: Supplier Id
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        society_ref_id:
+          type: string
+          title: Society Ref Id
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+        revision:
+          type: integer
+          title: Revision
+      type: object
+      required:
+      - supplier_id
+      - division_ref_id
+      - society_ref_id
+      - status
+      - revision
+      title: AssignmentRead
+    AssignmentResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/AssignmentRead'
+      type: object
+      required:
+      - data
+      title: AssignmentResponse
+    DivisionChoice:
+      properties:
+        id:
+          type: string
+          title: Id
         code:
           type: string
-          maxLength: 40
+          title: Code
+        name:
+          type: string
+          title: Name
+        society_id:
+          type: string
+          title: Society Id
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - society_id
+      title: DivisionChoice
+    DivisionChoicesResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DivisionChoice'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: DivisionChoicesResponse
+    EligiblePartiesResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/EligibleParty'
+          type: array
+          title: Data
+        meta:
+          $ref: '#/components/schemas/AssignmentPage'
+      type: object
+      required:
+      - data
+      - meta
+      title: EligiblePartiesResponse
+    EligibleParty:
+      properties:
+        id:
+          type: string
+          title: Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        division_ref_id:
+          type: string
+          title: Division Ref Id
+        society_ref_id:
+          type: string
+          title: Society Ref Id
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - division_ref_id
+      - society_ref_id
+      title: EligibleParty
+    SupplierWrite:
+      properties:
+        code:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Code
+          description: Obligatorio solo si la secuencia de Admin esta en modo manual; en modo administrado Admin asigna el folio.
         commercial_name:
           type: string
           maxLength: 240
+          minLength: 1
+          title: Commercial Name
         legal_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 240
+          anyOf:
+          - type: string
+            maxLength: 240
+          - type: 'null'
+          title: Legal Name
         tax_id:
-          type:
-          - string
-          - 'null'
-          maxLength: 40
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Tax Id
         tax_regime:
-          type:
-          - string
-          - 'null'
-          pattern: ^\d{3}$
+          anyOf:
+          - type: string
+            pattern: ^\d{3}$
+          - type: 'null'
+          title: Tax Regime
         billing_email:
-          type:
-          - string
-          - 'null'
-          format: email
-          maxLength: 254
+          anyOf:
+          - type: string
+            maxLength: 254
+          - type: 'null'
+          title: Billing Email
         contact_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 200
-        email:
-          type:
-          - string
-          - 'null'
-          format: email
-          maxLength: 254
-        phone:
-          type:
-          - string
-          - 'null'
-          maxLength: 30
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Contact Name
         website:
-          type:
-          - string
-          - 'null'
-          maxLength: 300
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Website
         fiscal_street:
-          type:
-          - string
-          - 'null'
-          maxLength: 200
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Fiscal Street
         fiscal_exterior_number:
-          type:
-          - string
-          - 'null'
-          maxLength: 40
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Fiscal Exterior Number
         fiscal_interior_number:
-          type:
-          - string
-          - 'null'
-          maxLength: 40
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Fiscal Interior Number
         fiscal_neighborhood:
-          type:
-          - string
-          - 'null'
-          maxLength: 160
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Fiscal Neighborhood
         fiscal_municipality:
-          type:
-          - string
-          - 'null'
-          maxLength: 160
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Fiscal Municipality
         fiscal_state:
-          type:
-          - string
-          - 'null'
-          maxLength: 120
+          anyOf:
+          - type: string
+            maxLength: 120
+          - type: 'null'
+          title: Fiscal State
         fiscal_postal_code:
-          type:
-          - string
-          - 'null'
-          maxLength: 12
+          anyOf:
+          - type: string
+            maxLength: 12
+          - type: 'null'
+          title: Fiscal Postal Code
         fiscal_country:
-          type:
-          - string
-          - 'null'
-          minLength: 2
-          maxLength: 2
+          anyOf:
+          - type: string
+            maxLength: 2
+            minLength: 2
+          - type: 'null'
+          title: Fiscal Country
+          default: MX
         currency:
           type: string
           maxLength: 12
+          minLength: 3
+          title: Currency
         payment_terms:
           type: string
           maxLength: 40
+          minLength: 1
+          title: Payment Terms
         lead_time_days:
           type: integer
-          minimum: 0
+          maximum: 3650.0
+          minimum: 0.0
+          title: Lead Time Days
+          default: 0
+        email:
+          anyOf:
+          - type: string
+            maxLength: 254
+          - type: 'null'
+          title: Email
+        phone:
+          anyOf:
+          - type: string
+            maxLength: 30
+          - type: 'null'
+          title: Phone
         status:
           type: string
           enum:
           - active
           - inactive
-    SupplierUpdate:
+          title: Status
+          default: active
       type: object
+      required:
+      - commercial_name
+      - currency
+      - payment_terms
+      title: SupplierWrite
+    SupplierUpdate:
       properties:
         commercial_name:
-          type: string
-          maxLength: 240
+          anyOf:
+          - type: string
+            maxLength: 240
+            minLength: 1
+          - type: 'null'
+          title: Commercial Name
         legal_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 240
+          anyOf:
+          - type: string
+            maxLength: 240
+          - type: 'null'
+          title: Legal Name
         tax_id:
-          type:
-          - string
-          - 'null'
-          maxLength: 40
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Tax Id
         tax_regime:
-          type:
-          - string
-          - 'null'
-          pattern: ^\d{3}$
+          anyOf:
+          - type: string
+            pattern: ^\d{3}$
+          - type: 'null'
+          title: Tax Regime
         billing_email:
-          type:
-          - string
-          - 'null'
-          format: email
-          maxLength: 254
+          anyOf:
+          - type: string
+            maxLength: 254
+          - type: 'null'
+          title: Billing Email
         contact_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 200
-        email:
-          type:
-          - string
-          - 'null'
-          format: email
-          maxLength: 254
-        phone:
-          type:
-          - string
-          - 'null'
-          maxLength: 30
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Contact Name
         website:
-          type:
-          - string
-          - 'null'
-          maxLength: 300
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Website
         fiscal_street:
-          type:
-          - string
-          - 'null'
-          maxLength: 200
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Fiscal Street
         fiscal_exterior_number:
-          type:
-          - string
-          - 'null'
-          maxLength: 40
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Fiscal Exterior Number
         fiscal_interior_number:
-          type:
-          - string
-          - 'null'
-          maxLength: 40
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Fiscal Interior Number
         fiscal_neighborhood:
-          type:
-          - string
-          - 'null'
-          maxLength: 160
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Fiscal Neighborhood
         fiscal_municipality:
-          type:
-          - string
-          - 'null'
-          maxLength: 160
+          anyOf:
+          - type: string
+            maxLength: 160
+          - type: 'null'
+          title: Fiscal Municipality
         fiscal_state:
-          type:
-          - string
-          - 'null'
-          maxLength: 120
+          anyOf:
+          - type: string
+            maxLength: 120
+          - type: 'null'
+          title: Fiscal State
         fiscal_postal_code:
-          type:
-          - string
-          - 'null'
-          maxLength: 12
+          anyOf:
+          - type: string
+            maxLength: 12
+          - type: 'null'
+          title: Fiscal Postal Code
         fiscal_country:
-          type:
-          - string
-          - 'null'
-          minLength: 2
-          maxLength: 2
+          anyOf:
+          - type: string
+            maxLength: 2
+            minLength: 2
+          - type: 'null'
+          title: Fiscal Country
         currency:
-          type: string
-          maxLength: 12
+          anyOf:
+          - type: string
+            maxLength: 12
+            minLength: 3
+          - type: 'null'
+          title: Currency
         payment_terms:
-          type: string
-          maxLength: 40
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Payment Terms
         lead_time_days:
-          type: integer
-          minimum: 0
+          anyOf:
+          - type: integer
+            maximum: 3650.0
+            minimum: 0.0
+          - type: 'null'
+          title: Lead Time Days
+        email:
+          anyOf:
+          - type: string
+            maxLength: 254
+          - type: 'null'
+          title: Email
+        phone:
+          anyOf:
+          - type: string
+            maxLength: 30
+          - type: 'null'
+          title: Phone
         status:
-          type: string
-          enum:
-          - active
-          - inactive
+          anyOf:
+          - type: string
+            enum:
+            - active
+            - inactive
+          - type: 'null'
+          title: Status
+      type: object
+      title: SupplierUpdate
     PurchaseLine:
       type: object
       description: Una partida inventariable exige inventory_item_id; una partida de servicio lo prohibe. unit_code siempre se valida contra el
@@ -994,72 +2745,134 @@ components:
           - 'null'
           minimum: 0
     RequisitionWrite:
-      type: object
-      required:
-      - code
-      - required_date
-      - priority
-      - lines
       properties:
+        division_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Division Ref Id
         code:
-          type: string
-          maxLength: 60
+          anyOf:
+          - type: string
+            maxLength: 60
+            minLength: 1
+          - type: 'null'
+          title: Code
+          description: Obligatorio solo en modo manual; Admin asigna el folio administrado.
         required_date:
           type: string
           format: date
+          title: Required Date
         priority:
           type: string
           enum:
           - normal
           - urgent
+          title: Priority
+          default: normal
         source_type:
           type: string
           enum:
           - manual
           - inventory_shortage
           - production_shortage
+          title: Source Type
+          default: manual
         source_id:
-          type:
-          - string
-          - 'null'
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Source Id
         lines:
+          items:
+            $ref: '#/components/schemas/PurchaseLineInput'
           type: array
           minItems: 1
-          description: Partidas solicitadas; un mismo articulo de Inventory no puede repetirse dentro de la requisicion.
-          items:
-            $ref: '#/components/schemas/PurchaseLine'
-    PurchaseOrderWrite:
+          title: Lines
       type: object
       required:
-      - code
-      - supplier_id
-      - currency
-      - payment_terms
+      - required_date
       - lines
+      title: RequisitionWrite
+    RequisitionUpdate:
+      allOf:
+      - $ref: '#/components/schemas/RequisitionWrite'
+      - type: object
+        required:
+        - code
+      description: Conserva el folio. Si code_mode es managed, el codigo enviado debe ser igual al persistido.
+    PurchaseOrderWrite:
       properties:
+        division_ref_id:
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Division Ref Id
+        expected_terms_revision:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Expected Terms Revision
         code:
-          type: string
-          maxLength: 60
+          anyOf:
+          - type: string
+            maxLength: 60
+            minLength: 1
+          - type: 'null'
+          title: Code
+          description: Obligatorio solo en modo manual; Admin asigna el folio administrado.
         requisition_id:
-          type:
-          - string
-          - 'null'
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Requisition Id
         direct_purchase_reason:
-          type:
-          - string
-          - 'null'
-          maxLength: 500
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Direct Purchase Reason
         supplier_id:
           type: string
+          title: Supplier Id
         currency:
-          type: string
+          anyOf:
+          - type: string
+            maxLength: 12
+            minLength: 3
+          - type: 'null'
+          title: Currency
         payment_terms:
-          type: string
+          anyOf:
+          - type: string
+            maxLength: 40
+            minLength: 1
+          - type: 'null'
+          title: Payment Terms
         lines:
+          items:
+            $ref: '#/components/schemas/PurchaseLineInput'
           type: array
           minItems: 1
-          items:
-            $ref: '#/components/schemas/PurchaseLine'
+          title: Lines
+      type: object
+      required:
+      - supplier_id
+      - lines
+      title: PurchaseOrderWrite
+    PurchaseOrderUpdate:
+      allOf:
+      - $ref: '#/components/schemas/PurchaseOrderWrite'
+      - type: object
+        required:
+        - code
+      description: Conserva el folio. Si code_mode es managed, el codigo enviado debe ser igual al persistido.
     ReceiptLine:
       type: object
       required:
@@ -1080,10 +2893,13 @@ components:
     ReceiptWrite:
       properties:
         code:
-          type: string
-          maxLength: 60
-          minLength: 1
+          anyOf:
+          - type: string
+            maxLength: 60
+            minLength: 1
+          - type: 'null'
           title: Code
+          description: Obligatorio solo en modo manual; Admin asigna el folio administrado.
         purchase_order_id:
           type: string
           title: Purchase Order Id
@@ -1097,6 +2913,14 @@ components:
             maxLength: 120
           - type: 'null'
           title: Supplier Document Reference
+        cost_exchange_rate:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
+          - type: 'null'
+          title: Cost Exchange Rate
         lines:
           items:
             $ref: '#/components/schemas/ReceiptLineInput'
@@ -1105,20 +2929,92 @@ components:
           title: Lines
       type: object
       required:
-      - code
       - purchase_order_id
       - received_at
       - lines
       title: ReceiptWrite
-    ReasonRequest:
+    InventoryReceiptProof:
       type: object
       required:
-      - reason
+      - receipt_id
+      - purchase_order_id
+      - receipt_line_id
+      - order_line_id
+      - inventory_item_id
+      - warehouse_id
+      - quantity
+      - unit
+      - occurred_at
+      - inventory_idempotency_key
+      - organization_context
+      - original_currency
+      - original_unit_cost
+      - cost_exchange_rate
+      - unit_cost
+      properties:
+        receipt_id:
+          type: string
+        purchase_order_id:
+          type: string
+        receipt_line_id:
+          type: string
+        order_line_id:
+          type: string
+        inventory_item_id:
+          type: string
+        warehouse_id:
+          type: string
+        quantity:
+          type: string
+          description: Exact positive quantity
+        unit:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        inventory_idempotency_key:
+          type: string
+        original_currency:
+          type: string
+        original_unit_cost:
+          type: string
+          description: Exact purchase order unit price in document currency
+        cost_exchange_rate:
+          type: string
+          description: Document currency to Society currency multiplier
+        unit_cost:
+          type: string
+          description: Society currency unit cost rounded half up to six decimals
+        organization_context:
+          type: object
+          required:
+          - division_ref_id
+          - society_ref_id
+          - division_code
+          - division_name
+          - cost_currency
+          properties:
+            division_ref_id:
+              type: string
+            society_ref_id:
+              type: string
+            division_code:
+              type: string
+            division_name:
+              type: string
+            cost_currency:
+              type: string
+    ReasonRequest:
       properties:
         reason:
           type: string
-          minLength: 3
           maxLength: 500
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: ReasonRequest
     ListResponse:
       properties:
         data:
@@ -1198,3 +3094,209 @@ components:
       required:
       - data
       title: DataResponse
+    ReferenceOption:
+      properties:
+        code:
+          type: string
+          title: Code
+        name_es:
+          type: string
+          title: Name Es
+        name_en:
+          type: string
+          title: Name En
+      type: object
+      required:
+      - code
+      - name_es
+      - name_en
+      title: ReferenceOption
+    PurchasingReferenceDataRead:
+      properties:
+        currencies:
+          items:
+            $ref: '#/components/schemas/ReferenceOption'
+          type: array
+          title: Currencies
+        payment_terms:
+          items:
+            $ref: '#/components/schemas/ReferenceOption'
+          type: array
+          title: Payment Terms
+      type: object
+      required:
+      - currencies
+      - payment_terms
+      title: PurchasingReferenceDataRead
+    PurchasingReferenceDataResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/PurchasingReferenceDataRead'
+      type: object
+      required:
+      - data
+      title: PurchasingReferenceDataResponse
+    PurchaseLineInput:
+      properties:
+        line_type:
+          type: string
+          enum:
+          - inventory_item
+          - service
+          title: Line Type
+        inventory_item_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Inventory Item Id
+        description:
+          type: string
+          maxLength: 300
+          minLength: 1
+          title: Description
+        quantity:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,12}|(?=[\d.]{1,19}0*$)\d{0,12}\.\d{0,6}0*$)
+          title: Quantity
+        unit_code:
+          type: string
+          maxLength: 20
+          minLength: 1
+          title: Unit Code
+        unit_price:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,16}|(?=[\d.]{1,19}0*$)\d{0,16}\.\d{0,2}0*$)
+          - type: 'null'
+          title: Unit Price
+      type: object
+      required:
+      - line_type
+      - description
+      - quantity
+      - unit_code
+      title: PurchaseLineInput
+    PurchasingOrganizationContext:
+      additionalProperties: false
+      properties:
+        cost_currency:
+          anyOf:
+          - pattern: ^[A-Z]{3}$
+            type: string
+          - type: 'null'
+          default: null
+          title: Cost Currency
+        division_ref_id:
+          maxLength: 40
+          minLength: 1
+          title: Division Ref Id
+          type: string
+        society_ref_id:
+          maxLength: 40
+          minLength: 1
+          title: Society Ref Id
+          type: string
+        division_code:
+          maxLength: 120
+          minLength: 1
+          title: Division Code
+          type: string
+        division_name:
+          maxLength: 240
+          minLength: 1
+          title: Division Name
+          type: string
+      required:
+      - division_ref_id
+      - society_ref_id
+      - division_code
+      - division_name
+      title: OperationalContext
+      type: object
+    PurchasingCommercialTermsSnapshot:
+      type: object
+      required:
+      - supplier_id
+      - terms_revision
+      - values
+      - division
+      properties:
+        supplier_id:
+          type: string
+        terms_revision:
+          type: integer
+          minimum: 1
+        values:
+          type: object
+          required:
+          - currency
+          - payment_terms
+          - lead_time_days
+          properties:
+            currency:
+              type: string
+            payment_terms:
+              type: string
+            lead_time_days:
+              type: integer
+              minimum: 0
+              maximum: 3650
+        division:
+          type: object
+          required:
+          - id
+          - society_id
+          - code
+          - name
+          properties:
+            id:
+              type: string
+            society_id:
+              type: string
+            code:
+              type: string
+            name:
+              type: string
+    PurchasingDocumentRead:
+      type: object
+      additionalProperties: true
+      properties:
+        organization_context:
+          anyOf:
+          - $ref: '#/components/schemas/PurchasingOrganizationContext'
+          - type: 'null'
+        commercial_terms_snapshot:
+          anyOf:
+          - $ref: '#/components/schemas/PurchasingCommercialTermsSnapshot'
+          - type: 'null'
+    PurchasingDocumentResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          $ref: '#/components/schemas/PurchasingDocumentRead'
+    PurchasingDocumentListResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchasingDocumentRead'
+x-transport-policy:
+  implementation-status: local-only
+  operation-budget-seconds: 25
+  budget-enforcement: cooperative-http-steps-not-database-cancellation
+  request-budget-header: X-Request-Timeout-Ms
+  request-budget-unit: milliseconds
+  request-budget-rule: optional-positive-finite-value-can-only-reduce-budget
+  correlation-header: X-Correlation-Id
+  error-dependency-field: error.details.dependency_service
+  automatic-retries: false

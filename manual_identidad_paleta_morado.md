@@ -1,5 +1,7 @@
 # Manual de Identidad y Lineamientos Generales de App
 
+> Referencia de diseño y alcance: no demuestra implementación ni despliegue. Consultar [estado vigente](docs/contexto/ESTADO_ACTUAL.md).
+
 Este manual define una línea visual, funcional y de experiencia reutilizable para nuevas aplicaciones. Su objetivo es servir como guía base para próximos proyectos, sin depender de una industria, módulo o caso de negocio específico.
 
 La identidad propone una experiencia moderna, clara y operativa: una app que se sienta confiable, compacta, fácil de usar y consistente en móvil.

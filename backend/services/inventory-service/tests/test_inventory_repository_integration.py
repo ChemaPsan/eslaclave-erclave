@@ -143,7 +143,10 @@ def test_material_return_records_one_entry_and_retries_owner_reconciliation(stoc
     assert first.status=='received_pending_reconciliation'
     assert repo.get_material_return('other-tenant',request.id) is None
     owner.fail=False
-    second=inventory_api.receive_material_return(request.id,t,None,key+'-retry',repo,owner,access).data
+    other_actor=inventory_api.AuthorizedContext(t,actor+'-other','inventory.movement.create',frozenset({'inventory.movement.create'}))
+    with pytest.raises(ErclaveError) as different:inventory_api.receive_material_return(request.id,t,None,key+'-receive',repo,owner,other_actor)
+    assert different.value.code=='idempotency_key_reused' and owner.calls==1
+    second=inventory_api.receive_material_return(request.id,t,None,key+'-receive',repo,owner,access).data
     assert second.status=='completed' and second.movement_id==first.movement_id
     inventory_api.receive_material_return(request.id,t,None,key+'-again',repo,owner,access)
     assert owner.calls==2
@@ -153,6 +156,8 @@ def test_material_return_records_one_entry_and_retries_owner_reconciliation(stoc
     assert forbidden.value.code=='permission_denied'
     pending=inventory_api.request_material_return(payload,t,None,key+'-cancel-request',repo,owner,access).data
     assert inventory_api.cancel_material_return(pending.id,schemas.ReverseRequest(reason='Sobrante utilizado'),t,key+'-cancel',repo,access).data.status=='cancelled'
+    with pytest.raises(ErclaveError) as different:inventory_api.cancel_material_return(pending.id,schemas.ReverseRequest(reason='Sobrante utilizado'),t,key+'-cancel',repo,other_actor)
+    assert different.value.code=='idempotency_key_reused'
     assert inventory_api.cancel_material_return(pending.id,schemas.ReverseRequest(reason='Sobrante utilizado'),t,key+'-cancel',repo,access).data.status=='cancelled'
     with pytest.raises(ErclaveError) as cancelled:inventory_api.receive_material_return(pending.id,t,None,key+'-cancel-receive',repo,owner,access)
     assert cancelled.value.code=='material_return_not_receivable'
