@@ -116,9 +116,11 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 
 ## 4. Inventario documentado por ambiente
 
-### 4.1 QA: último release documentado, 14 de septiembre de 2026
+### 4.1 QA: release estable anterior y migracion observada CHG-336
 
 [Release CHG-280](../operaciones/release_qa_20260914.md): PR #15 fusionado, SHA `e57237fe90319f88e1db8ed8d2e686604d2d9c54`, siete servicios y Hosting, Alembic `20260913_0036`. Es evidencia registrada, no una comprobación remota de esta auditoría. [ESTADO_ACTUAL](../contexto/ESTADO_ACTUAL.md) es autoridad para actualizaciones posteriores.
+
+Actualizacion19oct2026: Cloud SQL head0062 observado por inspector gobernado;7estables mantienen e572/Hosting previo, candidatos8 SHA6312 probados tecnicamente. Costing bootstrap nuevo100%; sin promocion conjunta ni UAT. [Registro CHG-336](../operaciones/promocion_qa_20261019.md). El0036 del release14sept anterior es historico, no head actual.
 
 | Componente o capacidad | Estado confirmado | Evidencia o limite |
 |---|---|---|
@@ -126,15 +128,15 @@ Si cualquiera de esos recursos pertenece a QA, la ejecucion debe denominarse **l
 | `admin-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | `production-service-qa` | Activo | Cloud Run respondio HTTP 200 y reporto ambiente `qa` |
 | Firebase Auth | Integrado | Login y sesion QA documentados |
-| Cloud SQL `erclave_qa` | Migrado | Revision documentada `20260913_0036` |
+| Cloud SQL `erclave_qa` | Migrado CHG-336, sin promocion conjunta | Revision documentada `20261014_0062`; inspector39212276418 SUCCESS06:57:54Z. Perfil/Owner/scopes/15secuencias previas preservados; autoridad organizacionalfalse/tablas vacias |
 | Administracion | Real QA | Tenant, sesion, permisos, roles, entitlements y organizacion |
 | Productos y servicios | Real QA | API de Produccion desplegada |
 | Recetas y versiones | Real QA | Integracion publicada y documentada |
 | Ordenes de produccion | Real QA | Ciclo base con reservas/entrega de materiales; la fabricación por Sociedad/División sigue sólo en preparación Local |
 | `inventory-service` | Activo QA | Servicio real sobre el SHA certificado vigente |
-| Schema `inventory` | Presente en QA | Incluido en Alembic QA `20260913_0036`; datos sólo por UAT autorizada |
+| Schema `inventory` | Presente en QA | Head DB actual `20261014_0062`, migracion CHG-336 observada; runtime estable previo y candidato separado, sin UAT nueva por este DDL |
 | `hr-service` | Activo QA | Servicio real y entitlement estructural activo |
-| Schema `hr` | Presente en QA | Incluido en Alembic QA `20260913_0036`; datos sólo por UAT autorizada |
+| Schema `hr` | Presente en QA | Head DB actual `20261014_0062`, migracion CHG-336 observada; runtime estable previo y candidato separado, sin UAT nueva por este DDL |
 | Ventas | Activo QA | Servicio real; activacion efectiva depende del entitlement |
 | Compras | Activo QA | `purchasing-service-qa`, schema propio; Inventory interviene cuando la compra recibe bienes inventariables |
 | Mantenimiento | Activo QA | `maintenance-service-qa`, schema propio y dependencias RH e Inventory |

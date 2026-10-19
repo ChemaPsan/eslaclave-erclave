@@ -2,11 +2,13 @@
 
 ## Prioridad vigente · CHG-336 · ejecutar QA por etapas
 
-- Verificar CI del PR16 y fusionar el head validado; registrar mergeSHA inmutable.
-- Completar baseline SQL QA con el nuevo inspector qa-inspect desde digest Admin certificado: head, hashes legacy/autoridad, IDs/monedas y miembros/scopes. Implementacion y verify864/352/1 aprobados; ejecucion remota pendiente. Metadatos Google/backup/PITR ya leidos200 y tres variables GitHub Costing/tenant creadas/verificadas. CostingSA creada y confirmada GET200; tres grants minimos aplicados y confirmados: roles/cloudsql.client en proyecto, roles/secretmanager.secretAccessor solo en erclave-database-url-qa y roles/iam.serviceAccountUser al deployer solo sobre CostingSA. Total4 cambios IAM incluyendo identidad; .local/chg336-costing-iam-apply.json status completed_scoped_iam_changes3. Migracion limitada a lock5000ms/sentencia480000ms/task10min; verificar head/estado transaccional tras fallo antes de reintentar.
-- Ejecutar candidate/release por gates protegidos, sin deshabilitar controles ni reconstruir artefactos aprobados.
-- Aplicar la estructura sintética MXN/USD confirmada cuando baseline permita su ejecución; perfil legacy no vacío exige mapping/comando QA gobernado.
-- Crear centros con Admin estable V2, verificar bytes Hosting y aceptación funcional QA. No inventar CC-19 real ni un segundo tenant. [Registro](../operaciones/promocion_qa_20261019.md).
+- Inspector postmigracion39212276418 SUCCESS: head20261014_0062 real y preservacion automatizada de perfil/Owner/scopes/15secuencias previas,5nuevas; tablas normalizadas presentes/vacias, autoridadfalse. No repetir migracion ni afirmar promocion/UAT por este resultado.
+- Completar login Owner appQA solicitado en Chrome dedicado (QA_APP_LOGIN_REQUIREDCDPmanual), verificar tenant/actor efectivo y aplicar solamente ORG6POST aprobado. Helper ORG6POST revisado offline/nunca aplicado; planverificado hashcb1714304e4bfe94579f4624fe2a0f20318ae8c293def10fbe22fd8849ec42f1. Todavia no hay estructura ni IDs de Sociedades nuevos.
+- Confirmar monedas por IDs reales y establecer QA_CONFIRMED_SOCIETY_CURRENCIES. El fallo release39211797633 fue JSONDecodeError sobre variable vacia antes de crear guard SQL; no un rechazo SQL qa_currency_confirmation_required.
+- Migracion y configure owner grants ya SUCCESS,8 candidatos/smoke aprobados. No repetir esos pasos DB por el fallo posterior. Mantener release_sha=6312fc8e43efa90a82dc84b161abe47d6bab7ad8 y digests; si se repite deploy certificar revisiones exactas nuevas.
+- Completar guard operativo y gates pendientes qa-traffic/frontend, bytes Hosting y aceptacion funcional. Siete estables previos siguen100%/candidatos0%; Costing tiene bootstrap inicial100% aprobado, no promocion conjunta. Crear centros con AdminV2 estable y datos previos preservados. [Registro](../operaciones/promocion_qa_20261019.md).
+
+- Mantener main/release_sha6312 durante release; publicar seguimiento como PR documental draft sin fusionarlo hasta cerrar, por requisito qa-inspect github.sha=release_sha. Publico06:58:18Z yHosting conservados; app login async/CDP QA_APP_LOGIN_REQUIRED pendiente.
 
 ## Prioridad vigente · CHG-335 · paridad Local/QA
 
