@@ -22,6 +22,10 @@ Cada environment debe requerir aprobacion directa del propietario:
 
 Estado comprobado el 2026-08-08: los cinco environments existen y requieren aprobacion de `ChemaPsan`; las variables enumeradas abajo estan configuradas en el repositorio.
 
+Inspector previo implementado CHG-336: .github/workflows/qa-inspect.yml y backend/scripts/inspect_qa_release_baseline.py, digest Admin de candidato exitoso y mismo SHA, socket Cloud SQL QA exacto, tenant explicito y DB READ ONLY. Ejecutarlo creara/actualizara un job tecnico Cloud Run, no datos de negocio. Validacion aprobada, ejecucion remota pendiente. Inspector: lock5s/sentencia120s/task5min; migracion release: lock5s/sentencia480000ms/task10min. [Estado comprobado](../../docs/operaciones/promocion_qa_20261019.md).
+
+CHG-336: CostingSA creada y confirmada GET200; tres grants minimos aplicados y confirmados: roles/cloudsql.client en proyecto, roles/secretmanager.secretAccessor solo en erclave-database-url-qa y roles/iam.serviceAccountUser al deployer solo sobre CostingSA. Total4 cambios IAM incluyendo identidad; .local/chg336-costing-iam-apply.json status completed_scoped_iam_changes3. Las variables GitHub Costing/tenant ya fueron creadas/verificadas; servicio y baseline SQL QA siguen pendientes. El 404 inmediato despues de crear la cuenta fue propagacion, seguido por GET200.
+
 ## Variables del repositorio
 
 | Variable | Valor esperado o fuente |

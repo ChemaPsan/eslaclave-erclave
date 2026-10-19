@@ -6,6 +6,7 @@ const errors = [];
 const requiredFiles = [
   ".github/workflows/qa-candidate.yml",
   ".github/workflows/qa-release.yml",
+  ".github/workflows/qa-inspect.yml",
   ".github/workflows/qa-admin-backoffice-config.yml",
   "backend/scripts/smoke_qa.ps1",
   "backend/scripts/promote_qa_traffic.ps1",
@@ -18,6 +19,7 @@ const requiredFiles = [
   ".dockerignore",
   "tools/verify-qa-hosting.js",
   "backend/scripts/check_qa_operational_readiness.py",
+  "backend/scripts/inspect_qa_release_baseline.py",
   "infra/qa/synthetic-organization-plan.json",
   "backend/scripts/qa_candidate_identity.ps1"
 ];
@@ -27,9 +29,9 @@ for (const file of requiredFiles) {
 }
 
 if (!errors.length) {
-  const candidate = readText(requiredFiles[0]);
-  const release = readText(requiredFiles[1]);
-  const backofficeConfigWorkflow = readText(requiredFiles[2]);
+  const candidate = readText(".github/workflows/qa-candidate.yml");
+  const release = readText(".github/workflows/qa-release.yml");
+  const backofficeConfigWorkflow = readText(".github/workflows/qa-admin-backoffice-config.yml");
   const pages = readText(".github/workflows/pages.yml");
   const builder = readText("tools/build-qa-frontend.js");
   const hostingVerifier = readText("tools/verify-qa-hosting.js");
@@ -377,6 +379,33 @@ if (!errors.length) {
   }
   if (firebaseQa.hosting?.site !== "erclave" || firebaseQa.hosting?.public !== "dist/qa-frontend") {
     errors.push("firebase.qa.json must deploy the sanitized artifact to the erclave QA site.");
+  }
+}
+
+if (!errors.length) {
+  const inspection = readText(".github/workflows/qa-inspect.yml");
+  const inspector = readText("backend/scripts/inspect_qa_release_baseline.py");
+  const release = readText(".github/workflows/qa-release.yml");
+  for (const token of ["workflow_dispatch:", "environment: qa-database", "INSPECT_ERCLAVE_QA",
+    "run['head_sha'] == os.environ['RELEASE_SHA']", "run['repository']['full_name']",
+    "run['head_repository']['full_name']", "Exactly eight immutable bindings required",
+    'test "$WORKFLOW_SHA" = "$RELEASE_SHA"', '--image "$ADMIN_IMAGE"',
+    "ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest", "default_transaction_read_only=on",
+    "ERCLAVE_QA_EXPECTED_CLOUD_SQL_CONNECTION_NAME", "erclave:us-central1:erclave-qa-postgres",
+    "--command python --args=scripts/inspect_qa_release_baseline.py"]) {
+    if (!inspection.includes(token)) errors.push(`QA baseline inspection must preserve its scope/provenance: ${token}`);
+  }
+  if (/^\s+(push|pull_request):/m.test(inspection) || inspection.includes("source candidate/qa-images.env")) {
+    errors.push("QA baseline inspection must remain manual and never source an artifact as executable shell.");
+  }
+  for (const token of ["SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", "information_schema.columns",
+    "qa_target_tenant_not_active", "qa_inspection_confirmation_required", "legacy_unrestricted_semantics",
+    "validate_database_target", "qa_database_target_invalid", "ERCLAVE_QA_EXPECTED_CLOUD_SQL_CONNECTION_NAME",
+    "'/cloudsql/' + expected_connection"]) {
+    if (!inspector.includes(token)) errors.push(`QA baseline inspector must remain fail-closed and read-only: ${token}`);
+  }
+  if (!release.includes("PGOPTIONS=-c lock_timeout=5000 -c statement_timeout=480000")) {
+    errors.push("QA migration must bound lock waits and individual SQL statement duration.");
   }
 }
 

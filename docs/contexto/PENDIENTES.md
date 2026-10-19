@@ -3,7 +3,7 @@
 ## Prioridad vigente · CHG-336 · ejecutar QA por etapas
 
 - Verificar CI del PR16 y fusionar el head validado; registrar mergeSHA inmutable.
-- Completar baseline Google/QA, IAM/variables mínimos Costing y recovery/PITR; identificar tenant, monedas existentes y actores.
+- Completar baseline SQL QA con el nuevo inspector qa-inspect desde digest Admin certificado: head, hashes legacy/autoridad, IDs/monedas y miembros/scopes. Implementacion y verify864/352/1 aprobados; ejecucion remota pendiente. Metadatos Google/backup/PITR ya leidos200 y tres variables GitHub Costing/tenant creadas/verificadas. CostingSA creada y confirmada GET200; tres grants minimos aplicados y confirmados: roles/cloudsql.client en proyecto, roles/secretmanager.secretAccessor solo en erclave-database-url-qa y roles/iam.serviceAccountUser al deployer solo sobre CostingSA. Total4 cambios IAM incluyendo identidad; .local/chg336-costing-iam-apply.json status completed_scoped_iam_changes3. Migracion limitada a lock5000ms/sentencia480000ms/task10min; verificar head/estado transaccional tras fallo antes de reintentar.
 - Ejecutar candidate/release por gates protegidos, sin deshabilitar controles ni reconstruir artefactos aprobados.
 - Aplicar la estructura sintética MXN/USD confirmada cuando baseline permita su ejecución; perfil legacy no vacío exige mapping/comando QA gobernado.
 - Crear centros con Admin estable V2, verificar bytes Hosting y aceptación funcional QA. No inventar CC-19 real ni un segundo tenant. [Registro](../operaciones/promocion_qa_20261019.md).

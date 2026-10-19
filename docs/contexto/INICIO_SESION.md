@@ -2,7 +2,7 @@
 
 ## Punto vigente · CHG-336 · ejecutar promoción autorizada
 
-Usuario confirmó estructura/monedas MXN-USD y todos los siguientes pasos enumerados. Continuar [registro](../operaciones/promocion_qa_20261019.md): PR16 abierto, comprobar CI del head definitivo y merge; luego IAM/variables mínimos, baseline QA, candidato inmutable y gates protegidos. No pedir otra vez permisos ya otorgados. Datos previos se preservan; sin mapping no inventar transición legacy ni scopes. Las notas CHG-335 siguientes describen el estado anterior a esta nueva instrucción.
+Usuario confirmo estructura/monedas MXN-USD y los pasos PR/checks, merge, IAM/configuracion, build/promocion y aceptacion. Continuar [registro](../operaciones/promocion_qa_20261019.md), PR16 abierto; verificar CI del head definitivo antes de merge. Inspector gobernado qa-inspect implementado y verify864/352/1 aprobado; ejecucion remota pendiente desde digest Admin del candidato. Metadatos Google200: proyecto370105017372 y backup/PITR configurados; CostingSA creada y confirmada GET200; tres grants minimos aplicados y confirmados: roles/cloudsql.client en proyecto, roles/secretmanager.secretAccessor solo en erclave-database-url-qa y roles/iam.serviceAccountUser al deployer solo sobre CostingSA. Total4 cambios IAM incluyendo identidad; .local/chg336-costing-iam-apply.json status completed_scoped_iam_changes3. Variables GitHub Costing/tenant creadas/verificadas. Migracion limitada a lock5s/sentencia480000ms/task10min. No repetir permisos concedidos ni inferir mapping/scopes/monedas legacy. CHG-335 siguiente es historico.
 
 ## Punto vigente · CHG-335 · plan QA listo para revisión
 

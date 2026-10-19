@@ -26,6 +26,7 @@ on:
       - ".github/workflows/pages.yml"
       - ".github/workflows/qa-candidate.yml"
       - ".github/workflows/qa-release.yml"
+      - ".github/workflows/qa-inspect.yml"
       - ".github/workflows/qa-admin-backoffice-config.yml"
   push:
     branches:
@@ -52,6 +53,7 @@ on:
       - ".github/workflows/pages.yml"
       - ".github/workflows/qa-candidate.yml"
       - ".github/workflows/qa-release.yml"
+      - ".github/workflows/qa-inspect.yml"
       - ".github/workflows/qa-admin-backoffice-config.yml"
   workflow_dispatch:
 

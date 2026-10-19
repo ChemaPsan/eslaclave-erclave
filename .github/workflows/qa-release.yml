@@ -207,7 +207,7 @@ jobs:
             --service-account "${{ vars.QA_MIGRATOR_SERVICE_ACCOUNT }}" \
             --set-cloudsql-instances "${{ vars.QA_CLOUD_SQL_CONNECTION_NAME }}" \
             --set-secrets ERCLAVE_DATABASE_URL=erclave-database-url-qa:latest \
-            --set-env-vars ERCLAVE_ENVIRONMENT=qa \
+            --set-env-vars "^|^ERCLAVE_ENVIRONMENT=qa|PGOPTIONS=-c lock_timeout=5000 -c statement_timeout=480000" \
             --command alembic --args=-c,/app/alembic.ini,upgrade,head \
             --max-retries 0 --task-timeout 10m --quiet
           gcloud run jobs execute erclave-migrate-qa \
