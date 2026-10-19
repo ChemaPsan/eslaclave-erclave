@@ -1,5 +1,9 @@
 # admin-service
 
+## Eliminación de membresía y limpieza de identidad · CHG-333 · Local
+
+`DELETE /v1/users/{user_id}` requiere `admin.user.delete` y clave idempotente; conserva autores/auditoría, retira la membresía y confirma SQL antes de Firebase. Responde con `firebase_identity_cleanup` completed/pending/not_required; el mismo comando puede reintentar sin tocar reinvitaciones. Invitación y onboarding ejecutan provisioning bajo el lock de usuario. [Contrato y evidencia](../../../docs/operaciones/correcciones_cc20_01_20261018.md).
+
 Servicio implementado de Administración: tenants, identidad y membresías, roles/permisos, entitlements, configuración, auditoría y autorización transversal. Las capacidades Local y QA se consultan en [ESTADO_ACTUAL](../../../docs/contexto/ESTADO_ACTUAL.md); no se deduce despliegue por existencia de código.
 
 ## Autoridad y relaciones
@@ -20,4 +24,4 @@ Los permisos se extraen de los contratos mediante [permissions.py](app/seeds/per
 
 ## Límites y continuidad
 
-Onboarding e invitación conservan estados de entrega pendiente si el efecto Firebase falla después de persistir. La conciliación durable, endurecimiento service-to-service y aceptación integrada pendientes se siguen en [PENDIENTES](../../../docs/contexto/PENDIENTES.md). Separación y tareas por submódulo: [CONTROL_CONTABLE](../../../docs/contexto/CONTROL_CONTABLE.md).
+El provisioning de identidad en onboarding/invitación se realiza bajo bloqueo y revierte la transacción si falla. El envío de invitación posterior al onboarding conserva su entrega pendiente si falla; la eliminación de usuario conserva su limpieza pendiente después de retirar la membresía. La conciliación durable, endurecimiento service-to-service y aceptación integrada pendientes se siguen en [PENDIENTES](../../../docs/contexto/PENDIENTES.md). Separación y tareas por submódulo: [CONTROL_CONTABLE](../../../docs/contexto/CONTROL_CONTABLE.md).

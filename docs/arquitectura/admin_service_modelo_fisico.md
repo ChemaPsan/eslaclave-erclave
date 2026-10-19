@@ -1,5 +1,9 @@
 # Modelo fisico inicial de `admin-service`
 
+## Conservación de autores al retirar membresías · CHG-333 · Local
+
+`DELETE /v1/users/{user_id}` conserva la fila `admin.users` requerida por `audit_events.actor_user_id`. Retira solo `membership_roles` y `memberships` del tenant autorizado; sin membresías restantes actualiza el estado global a `disabled`. Se reutiliza `admin.command_idempotency` para replay ligado al actor y para el resultado de limpieza Firebase. El efecto externo ocurre después del commit, bajo lock de usuario que revalida membresías/reinvitación; las invitaciones y onboarding provisionan dentro del mismo lock. No cambian tablas ni Alembic0062. [Detalle y pruebas](../operaciones/correcciones_cc20_01_20261018.md).
+
 Estado: modelo inicial implementado y ampliado. La organización normalizada Local, autoridad y compatibilidad se describen en [CONT-02](cont_02_administracion_organizacional.md); estado por ambiente en [ESTADO_ACTUAL](../contexto/ESTADO_ACTUAL.md). Este inventario inicial no sustituye migraciones posteriores.
 
 Este documento aterriza el primer modelo fisico real de `admin-service` en PostgreSQL/Cloud SQL. El objetivo es crear la fuente de verdad para tenants, usuarios, roles, permisos, modulos contratados, configuracion organizacional, membresias y auditoria.

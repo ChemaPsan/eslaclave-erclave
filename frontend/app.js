@@ -29,6 +29,7 @@ import { modules, erpSubmoduleCatalog } from "./data/modules.js";
 import { defaultRecipes } from "./data/resources.js";
 import { mockDb } from "./data/mockDb.js";
 import { translations } from "./i18n/translations.js";
+import { adminUserCopy } from "./i18n/admin-users.js";
 import { getInventoryMaterialReturns, requestInventoryMaterialReturn, receiveInventoryMaterialReturn, cancelInventoryMaterialReturn } from "./api/inventory.js";
 import { getProductionReturnableMaterials, getFailedProductionCreations, recoverProductionCreation } from "./api/production.js";
 import { getMaintenanceReturnableMaterials } from "./api/maintenance.js";
@@ -1220,13 +1221,15 @@ function deleteAdminUser(userId) {
   if (getApiMode() !== "api" || state.adminApi.status === "loading" || userId === getDemoActorId()) return;
   const user = getAdminPanelData().users.find((item) => item.id === userId);
   if (!user) return;
-  const confirmed = window.confirm(`Eliminar a ${user.email} de ERClave y Firebase? Necesitara una nueva invitacion para volver.`);
+  const copy = adminUserCopy[state.lang === "en" ? "en" : "es"];
+  const confirmed = window.confirm(copy.confirmDelete.replace("{email}", user.email));
   if (!confirmed) return;
   state.adminApi = { ...state.adminApi, status: "loading", error: "" };
   render();
   deleteTenantUser(userId)
     .then((deletedUser) => {
-      showToast(`Usuario ${deletedUser.email} eliminado.`);
+      const pending = deletedUser.firebase_identity_cleanup?.status === "pending";
+      showToast((pending ? copy.cleanupPending : copy.deleted).replace("{email}", deletedUser.email), pending ? "warning" : "info");
       state.adminApi = { status: "idle", data: state.adminApi.data, error: "" };
       loadAdminApiDashboard();
     })

@@ -124,3 +124,8 @@ El custodio de manuales coordina esta cobertura con los agentes de módulo, Arqu
 Al añadir, mover o borrar archivos actualizar el registro y ejecutar npm run docs:index. validate:documentation invoca tools/documentation-map.js y bloquea documentos sin clasificar, duplicados, autoridades inexistentes, historia sin aviso y enlaces locales/índice desactualizados. verify y CI heredan el control. Los enlaces Markdown relativos permiten navegación Obsidian sin configuración personal adicional. No se certifican enlaces remotos, anclas internas, semántica de negocio ni apariencia Word automáticamente.
 
 Las exportaciones Word conservan hashes de fuente/artefacto en el registro. El validador detecta cambios posteriores a la paridad revisada. Ante drift, regenerar y comprobar contenido antes de renovar hashes; un hash nuevo no equivale a revisión visual ni convierte exportación pendiente en publicación final. En CHG-311 paridad textual 8/8 aprobada; renderer bloqueado por ausencia de LibreOffice en runtime.
+
+
+## Huellas de fuentes manuales en Git · CHG-334
+
+Las fuentes de `docs/manuales_solucion/fuentes/` tienen huellas de bytes exactos en el registro de exportaciones Word. `.gitattributes` desactiva su normalización automática de saltos de línea para conservar los bytes aprobados tanto en el commit como al clonar. Antes de publicar, contrastar `sourceSha256` con los blobs del índice Git además del workspace. Este control no sustituye el cotejo textual/visual ni autoriza renovar huellas para omitir una revisión.

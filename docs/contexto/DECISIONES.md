@@ -1,5 +1,9 @@
 # Decisiones vigentes de ERClave
 
+## Conservar auditoría al retirar una membresía · CHG-333 · 2026-10-18
+
+Se implementa la regla ya descrita por el manual de Administración: Eliminar retira la membresía y Firebase solo cuando no está compartido. Las FKs de autoría se conservan manteniendo la fila global, deshabilitada cuando ya no tiene membresías. El recibo de comando registra limpieza externa posterior al commit y permite reintentar; no se presenta un fallo de proveedor como reversión de una membresía ya retirada. [Justificación y evidencia Local](../operaciones/correcciones_cc20_01_20261018.md).
+
 ## CC-21 - costo estimado de cotizaciones - 2026-10-14
 
 El usuario confirmo que una cotizacion puede aprobarse si falta costo confirmado en moneda base de Sociedad o tasa explicita hacia la moneda documental. En ese caso costo y margen estimados quedan nulos, nunca cero supuesto ni importe de moneda desconocida. Cuando existen, Sales conserva origen, tasa y convertido por partida y congela el resultado al aprobar; historia no se reinterpreta. [Revision y criterio](../arquitectura/cont_08_costo_estimado_cotizaciones.md).

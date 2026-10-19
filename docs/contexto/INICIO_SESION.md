@@ -1,5 +1,17 @@
 # Inicio de sesion ERClave
 
+## Candidato para Git autorizado · CHG-334
+
+Publicar el candidato Local en origin/agent/chg-278-qa-release-record con las correcciones CHG-332/333 y protección de bytes de fuentes manuales mediante .gitattributes. Antes de commit comprobar sourceSha256 contra blobs del índice Git, no solo contra el workspace. No hay autorización de merge, PR ni promoción derivada de esta publicación. Reanudar después por CC20-02; consultar estado efectivo del remoto.
+
+## Reanudar en CC20-02 · CHG-333 · 2026-10-18
+
+CC20-01 pasa Local (CHG-332) y sus tres pendientes quedaron corregidos Local en [CHG-333](../operaciones/correcciones_cc20_01_20261018.md). Antes de continuar comprobar servicios efectivos y tenant demo. Admin Local se reinició con código nuevo; dos identidades de regresión quedaron sin membresía y sin cuenta Firebase, con registro global deshabilitado y auditoría conservada. Manuales sin cambio semántico/Word; trazabilidad normalizada hasta CHG-333. No hay QA ni migración nueva; Accounting apagado.
+
+## Reanudación después de CC20-01 · 2026-10-18
+
+[CC20-01 pasa Local](../operaciones/cc20_01_local_20261018.md) con 21 comprobaciones integradas y UI de preferencia revocada. No repetirlo por la nota preparatoria CHG-327; continuar CC20-02 tras comprobar servicios/fixtures. Usuario controlador sin cambios; tres membresías de ensayo deshabilitadas, sin roles, y tres órdenes propias canceladas conservadas con auditoría. INC-CC20-01-DELETE-01 corregida Local y correlativos normalizados en CHG-333. El arranque detecta Node/Firebase instalados fuera de PATH y usa configuración CLI bajo .local; revalidar disponibilidad efectiva. Accounting apagado, CC-19 real y QA separados.
+
 ## Punto documental CHG-331 - 2026-10-14
 
 Los siete Word fueron regenerados y cotejados con sus fuentes Markdown, renderizados y revisados visualmente (50 páginas). El registro contiene las huellas nuevas. Siguen siendo candidatos del alcance Local; CC-20, CC-19 real y promoción QA mantienen sus propios criterios. CHG-330 siguiente describe el bloqueo anterior ya resuelto.

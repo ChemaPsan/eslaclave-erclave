@@ -2036,6 +2036,7 @@ paths:
       tags: [Users]
       operationId: deleteUser
       summary: Delete a tenant user and its identity when no other membership remains.
+      description: Membership removal commits before Firebase cleanup. The global user is retained for audit references. Cleanup revalidates all memberships under a user lock; shared or re-invited identities are preserved. A pending cleanup is reported in a successful response and can be retried with the same Idempotency-Key. Replays are bound to the requesting actor and user.
       x-required-module: admin
       x-permissions: [admin.user.delete]
       parameters:
@@ -2049,11 +2050,15 @@ paths:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
-          description: User deleted.
+          description: Membership removed; inspect firebase_identity_cleanup for external cleanup status.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserResponse'
+                $ref: '#/components/schemas/UserDeleteResponse'
+        '404':
+          description: User is not a member of this tenant and no matching replay exists.
+        '409':
+          description: Idempotency key reused for another user or actor.
   /v1/users/{user_id}/disable:
     post:
       tags: [Users]
@@ -4525,6 +4530,27 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/User'
+    UserDeleteResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          allOf:
+            - $ref: '#/components/schemas/User'
+            - type: object
+              required: [firebase_identity_cleanup]
+              properties:
+                firebase_identity_cleanup:
+                  type: object
+                  required: [status, error_codes]
+                  properties:
+                    status:
+                      type: string
+                      enum: [completed, pending, not_required]
+                    error_codes:
+                      type: array
+                      items:
+                        type: string
     UserListResponse:
       type: object
       properties:

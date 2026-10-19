@@ -1,5 +1,9 @@
 # ERClave — Módulo de Administración y Configuración
 
+## Baja de usuario con auditoría · CHG-333 · Solo Local
+
+Eliminar retira la membresía del tenant y sus roles, conserva identidad global y auditoría y, si no quedan membresías, deshabilita el registro global y limpia Firebase. Compartir identidad con otro tenant impide borrarla. La respuesta y UI distinguen limpieza externa pendiente; repetir el mismo comando no vuelve a retirar una reinvitación. Invitación y onboarding coordinan provisioning mediante bloqueo. [Evidencia y contrato](../docs/operaciones/correcciones_cc20_01_20261018.md).
+
 ## Selector de Sociedad / División · CHG-329 · Local
 
 La barra superior presenta la Sociedad y División activas en un control dedicado. La lista muestra los nombres completos y código de cada División autorizada; elegir otra revalida la sesión y conserva la preferencia por usuario/tenant. Soporta mouse, foco de teclado y Escape. Centro de costos se consulta y edita desde Administración → Organización → Divisiones → Centros de costos; no forma parte del selector global.

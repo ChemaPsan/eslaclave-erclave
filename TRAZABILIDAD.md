@@ -2,132 +2,6 @@
 
 > Evidencia histórica por corte. El estado vigente se consulta en [ESTADO_ACTUAL](docs/contexto/ESTADO_ACTUAL.md).
 
-## CHG-331 - 2026-10-14 - manuales y candidato Git Local
-
-| Campo | Registro |
-|---|---|
-| Autor | Agente principal; Custodio de manuales y QA/Release. |
-| Motivo | Resolver las siete discrepancias fuente/Word y revisar el árbol acumulado antes de prepararlo para Git. |
-| Cambio | Siete DOCX regenerados desde Markdown vigente; huellas y revisión actualizadas en el registro; notas de vigencia documental conciliadas. Dos correcciones puntuales de regresión en Admin y fixtures de Maintenance. |
-| Validación | Paridad de texto, tablas e integridad ZIP/XML de los siete Word; LibreOffice 26.8.1, 50 páginas renderizadas e inspeccionadas sin páginas vacías ni recortes. `validate:documentation` y `verify` aprobados; 746 pruebas backend aprobadas, 244 omitidas por condiciones del entorno y una advertencia de dependencia. `git diff --check` sin errores. |
-| Ambiente | Trabajo en Local; no se modificaron QA ni Producción, ni se ejecutó CC-20 integrado o backfill CC-19. |
-| APIs afectadas | Admin `POST /v1/catalogs/code-sequences/costing.cost_center/next`: rechazo 422 de tipo no permitido antes de la consulta de permisos; sin nuevo contrato. |
-
-El inventario Git preparado de este candidato reúne 470 archivos (217 modificados y 253 nuevos): backend 203, frontend 73, documentación 110, contratos 9, pruebas fuera de servicios 24 y herramientas/configuración/otros 51. Incluye 26 migraciones Alembic consecutivas y ocho DOCX; siete manuales se renovaron en este corte. No hay artefactos temporales entre los archivos candidatos ni coincidencias con los patrones de llaves privadas y tokens revisados. El conjunto se agrupa en un commit local de integración porque las migraciones, los contratos, sus consumidores y la evidencia se cruzan entre módulos. La publicación de la rama, PR y promoción QA requieren autorización separada.
-
-> CHG-330 y anteriores siguientes conservan su evidencia histórica.
-
-## CHG-330 - 2026-10-14 - conciliación documental previa a Git
-
-| Campo | Registro |
-|---|---|
-| Autor | Agente principal; fichas de Custodio de manuales, Arquitectura, Administración y QA/Release consultadas. |
-| Motivo | Revisar documentación, manuales y controles antes de preparar la publicación del trabajo Local acumulado. |
-| Archivos | Fuente Markdown de Administración, registro de manuales, ficha del módulo, diagrama de backend, contexto vigente, `.gitignore` y trazabilidad. |
-| Cambio | Procedimiento del selector Sociedad/División y límite de Centro de costos en el manual; diagrama actualizado a Local head `20261014_0062`; tres campos faltantes de CHG-322 completados; afirmaciones vigentes de Administración conciliadas; carpetas temporales `.local-config/` y `.tmp/` excluidas de Git. |
-| Validación | `validate:documentation` sólo conserva siete fallas de paridad fuente/Word. `validate:traceability` y `git diff --check` de los archivos editados aprobados. |
-| Pendiente | Regenerar los siete Word desde sus fuentes, comprobar paridad textual y páginas renderizadas, actualizar hashes revisados y volver a ejecutar la validación documental y `verify`. No declarar los Word actuales como manuales vigentes. |
-| Ambiente | Sólo documentación local; sin cambios de API, DB, datos, QA o Producción. |
-| APIs afectadas | Contratos modificados: ninguna. Endpoint documentado y consumido sin cambio por CHG-329: Admin GET `/v1/session/context?division_id=...`. Otras APIs no tocadas en este corte. |
-
-> CHG-329 y anteriores siguientes conservan su evidencia de cada corte.
-
-## CHG-329 - 2026-10-14 - selector de Sociedad/División usable en Local
-
-| Campo | Registro |
-|---|---|
-| Autor | Agente principal; revisión de Administración, sesión, diseño responsive, feedback y fronteras de ambiente. |
-| Motivo | El usuario mostró que el selector de la barra superior no permitía cambiar cómodamente de División. |
-| Diagnóstico | `data-entity-selector` convertía el select en un buscador de contexto; el select original medía 1 px y su contenedor recortaba la lista. |
-| Cambio | Control dedicado con botón, opciones completas por Sociedad/División/código, indicador activo, foco/Escape y estado de carga; CSS aislado a la barra superior y textos ES/EN. |
-| Validación | Navegador real en Local: 3 opciones visibles, búsqueda por código, cambio de División y de Sociedad, persistencia al recargar, cierre con Escape y textos ES/EN. Validadores de responsive, i18n, selectores y feedback aprobados; sintaxis JS y `git diff --check` sin error. El validador documental sigue señalando deriva previa de otros cambios. |
-| Ambiente | Sólo frontend Local; sin migración, backfill, QA ni Accounting. |
-| APIs afectadas | Contratos modificados: ninguno. Consumida sin cambio: Admin `GET /v1/session/context?division_id=...`. Otras APIs no tocadas. |
-
-> CHG-328 y anteriores siguientes son historia por corte; consultar ESTADO_ACTUAL para vigencia.
-
-## CHG-328 - 2026-10-14 - configuración sintética Local CC-19/20
-
-| Campo | Registro |
-|---|---|
-| Autor | Agente principal con consultas de solo lectura de Production/Maintenance, Sales/Purchasing y Admin/RH/Inventory/Costing; perspectiva de Contabilidad, Datos, Arquitectura y Seguridad. |
-| Motivo | El usuario pidió generar Sociedades y mapeos de prueba, y corrigió el destino a Local. |
-| Entrega | Por APIs dueñas se crearon un Emisor, una Sociedad USD, dos Divisiones y tres Centros de costos activos en el tenant demo; se conservó la estructura MXN anterior. Resultado: 2 Sociedades, 3 Divisiones y un Centro por División. Manifest y CSV de estructura en `.local/cc19-demo-*`, ignorados por Git. |
-| Ambiente | Sólo Local aislado: APIs `127.0.0.1:8000/8014`, Firebase Auth Emulator `9099` y PostgreSQL `127.0.0.1:5434/erclave_local`; tenant `ten_739ee59d765d5e14818674800d`. Sin QA/Producción, migración ni despliegue. |
-| Historia | Inventario read-only: 38 registros legacy sin contexto/División comprobable en CSV de excepciones. No se hizo backfill, asignación de maestros históricos, conversión de moneda o reconstrucción de snapshots. |
-| Límite | Accounting permanece planned/apagado; no existe runtime para libros, catálogo de cuentas ni reglas. CC-19 real y aceptación CC-20 siguen abiertos. |
-| APIs afectadas | Contratos modificados: ninguno. Consumidas sin cambio: `POST /v1/organization/fiscal-issuers`, `POST /v1/organization/societies`, `POST /v1/organization/divisions` (Admin); `POST /v1/cost-centers` (Costing); `GET` de esos catálogos para idempotencia/lectura. Otras APIs no tocadas. |
-
-> CHG-327 y anteriores siguientes son historia por corte; consultar ESTADO_ACTUAL para vigencia.
-
-## CHG-327 - 2026-10-14 - preparacion de aceptacion integrada CC-20
-
-| Campo | Registro |
-|---|---|
-| Autor | Agente principal con revisión de Production/Maintenance, Sales/Purchasing, Admin/RH/Inventory/Costing y perspectivas QA, Seguridad, Sinergia y Contabilidad. |
-| Motivo | El usuario pidió preparar CC-20 para probar después en Local. |
-| Entrega | [Procedimiento y matriz CC-20](docs/operaciones/cc20_aceptacion_integrada_local.md): 16 recorridos, precondiciones, resultados observables, evidencia y cierre; contexto, portal, registro, índice y guía Local actualizados. |
-| Ambiente | Preparación documental de solo lectura en repositorio Local. No se iniciaron servicios, fixtures, migraciones, pruebas, QA ni Accounting. |
-| Estado | Todos los casos Por ejecutar; no se infiere aceptación de pruebas focales, navegador interceptado ni recorrido HTTP anterior. CC-19 y Word independientes. |
-| APIs afectadas | Ninguna modificada; la ejecución posterior consumirá las APIs existentes de Admin, Costing, RH, Inventory, Production, Sales, Purchasing y Maintenance. |
-
-> CHG-326 y anteriores siguientes son historia por corte; consultar ESTADO_ACTUAL para vigencia.
-
-## CHG-326 - 2026-10-14 - preparacion CC-19 y configuracion contable opcional
-
-| Campo | Registro |
-|---|---|
-| Autor | Agente principal con revision de dueños Production/Maintenance, Sales/Purchasing y RH/Inventory; perspectiva transversal de Datos, Arquitectura y Contabilidad. |
-| Motivo | El usuario confirmo que aun no dispone de estructura ni equivalencias reales y solicito documentacion y diagrama de mapeos/cuentas necesarios. |
-| Entrega | [Guia CC-19](docs/arquitectura/cc19_mapeos_y_configuracion_contable.md): diagrama de operacion con Accounting apagado o futuro, matriz por dueño, formato minimo de equivalencia, preflight, configuracion por Sociedad y roles de cuenta por evento. Portal, registro e indice documental y contexto actualizados. |
-| Evidencia | Lectura de contratos/arquitectura y preflight read-only en Local `127.0.0.1:5434/erclave_local`, tenant `ten_739ee59d765d5e14818674800d`: 1 Sociedad/Division; 3 almacenes y 3 maquinas sin Division; contextos historicos nulos. Sin lectura QA/Produccion. |
-| Limite | Sin mapeo real aprobado no se ejecuta backfill ni se cierra CC-19. Las cuentas son roles futuros, no codigos ni reglas fiscales fijadas. Accounting planned/apagado; no cambios de runtime, API, esquema, datos, seeds o migracion. |
-| APIs afectadas | Ninguna. |
-
-> CHG-325 y anteriores siguientes son cortes historicos; consultar ESTADO_ACTUAL para vigencia.
-
-## CHG-325 - 2026-10-14 - CC-21 costo estimado de cotizaciones
-
-| Campo | Registro |
-|---|---|
-| Autor | Agente principal con duenos de Production, Sales y frontend transversal. |
-| Motivo | Evitar comparar `standard_cost` global sin moneda/Sociedad con el precio documental de cotizacion y conservar la procedencia del estimado. |
-| Decision | Costo confirmado por producto/Division en moneda base de Sociedad; tasa explicita si la cotizacion usa otra moneda. Si falta costo o tasa, permitir aprobacion con costo y margen estimados nulos. |
-| Implementacion | Migracion Alembic `20261014_0062`; fuente confirmada y consulta de Production; vista previa, aprobacion y snapshot de Sales; pedido hereda snapshot; UI, reportes CSV, contratos OpenAPI, fichas y manuales Markdown. |
-| Historia | Columnas nullable sin backfill; cotizaciones y pedidos previos conservan importes, pero los reportes no presentan estimados/margenes sin snapshot verificable. Downgrade protegido cuando existe historia nueva. |
-| Ambiente | Migracion up/down/up en PostgreSQL Local loopback 5434, base `erclave_local` y tenant `ten_739ee59d765d5e14818674800d`, verificados antes de operar. Sin QA, Produccion ni Accounting. |
-| Validacion | Production: 69 pruebas focales Local, compilacion y validador OpenAPI. Sales: 83 pruebas focales Local y validador OpenAPI. Sintaxis JS de seis archivos combinados aprobada; `git diff --check` limpio. No navegador ni UAT integrada. |
-| APIs afectadas | Production: PUT costo confirmado por asignacion y GET costo por producto/Division. Sales: PUT contexto de cotizacion, PATCH borrador, POST enviar/aprobar, POST pedido, GET/list cotizaciones/pedidos y GET reportes CSV; respuestas incluyen snapshots nullable y captura de tasa estimada donde aplica. |
-| Pendiente | Regenerar y revisar visualmente Word, datos reales CC-19 y aceptacion integrada CC-20 antes de promocion autorizada. |
-
-> Los cortes CHG-324 y anteriores siguientes son historia de su fecha.
-
-## CHG-324 - 2026-10-14 - revision del costo estimado de cotizaciones
-
-| Campo | Registro |
-|---|---|
-| Autor | Agente principal, revision Sales/Production y control contable |
-| Motivo | Formalizar la brecha monetaria de costo estimado que habia quedado fuera de una fila CC propia. |
-| Hallazgo | `ProductReference.standard_cost` no lleva moneda/Sociedad; `_write_lines` lo suma contra precio documental sin conversion; asignacion/aprobacion no validan costo y pedido copia el estimado. El reporte comercial recalcula mal `margin_percent` y la tarjeta de pedido muestra cero ante nulo. |
-| Decision | Usuario permite aprobar cotizacion con costo/margen estimados nulos si faltan costo confirmado o tasa. |
-| Cambio | Documento de revision, criterio CC-21 y actualizacion de DECISIONES, CONTROL_CONTABLE y PENDIENTES. Sin cambio runtime, migracion ni datos. |
-| Validacion | Lectura de codigo y contratos Local; no se ejecutaron pruebas para esta revision documental. |
-| Pendiente | Implementar CC-21 con fuente de costo por Sociedad, tasa explicita, conversion, snapshot y presentacion/reportes correctos; despues CC-19/20 segun alcance. |
-
-
-## CHG-323 - 2026-10-14 - CC-18 folios restantes
-
-| Campo | Registro |
-|---|---|
-| Autor | Agente principal con dueños RH/Inventory, Purchasing y Maintenance |
-| Motivo | Cerrar consumidores de folios CONT-06 solicitados por el usuario. |
-| Decision | Admin es autoridad por tipo y permiso; modo manual de movimientos Inventory automaticos deriva un codigo estable del origen. |
-| Implementacion | Migracion Alembic `20261014_0061`; autoridad Admin y cliente compartido; create/read de Puestos RH, movimientos Inventory, proveedor/requisicion/OC/recepcion Purchasing y orden Maintenance; formularios, OpenAPI, fichas y fuentes Markdown. |
-| Historia | Codigos previos no se renumeran; `code_mode` nuevo nullable donde aplica. Accounting sigue apagado. |
-| Validacion | Migracion up/down/up PostgreSQL Local; Admin 3, Purchasing 39 + guardia de longitud, Maintenance 41, RH/Inventory 34 API + 61 DB y 1 prueba DB RH adicional; validador OpenAPI y diff check. Suites completas sin DB: RH 58 aprobadas/8 omitidas, Inventory 173 aprobadas/26 omitidas. La bateria DB fue anterior al ultimo ajuste del helper; no hubo navegador ni UAT integrada. No QA ni Word validado. |
-| Pendiente | Revision costo estimado, CC-19 datos, CC-20 aceptacion, promocion QA autorizada y Word. Suite Purchasing con tenants temporales excluida por politica AGENTS. |
-
-
 > Evidencia histórica: conserva observaciones y decisiones de su fecha; no usar como estado o instrucciones actuales. Consultar [fuente vigente](docs/contexto/ESTADO_ACTUAL.md).
 
 Este archivo registra cada ajuste hecho en el repo con nivel de detalle suficiente para auditar qué se cambió, cuándo, por qué, en qué secciones y con qué validacion.
@@ -5361,3 +5235,179 @@ Cuando hagamos una edicion nueva, se debe agregar una entrada adicional con el s
 | Validacion | 136 pruebas focales Admin/Sales/Production aprobadas con PostgreSQL Local; 1 advertencia existente de Starlette/httpx. OpenAPI runtime/contratos y compilacion Python aprobados. Node/npm y LibreOffice no disponibles en el entorno, por lo que validadores frontend/documentacion, navegador, verify integral y Word con revision visual quedan sin ejecutar. Fuentes Markdown de manuales actualizadas; Word previos no cubren CC-17. Las pruebas focales no sustituyen CC-20 ni UAT QA. |
 | Documentos | DECISIONES, CONTROL_CONTABLE, PENDIENTES, ESTADO_ACTUAL, INICIO_SESION, CONT-04, plantillas documentales y modulos Admin/Sales/Production. |
 | Observaciones | Word anterior no representa CC-17; QA y UAT no ejecutados en este corte. |
+
+### CHG-323
+
+**2026-10-14 - CC-18 folios restantes**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal con dueños RH/Inventory, Purchasing y Maintenance |
+| Motivo | Cerrar consumidores de folios CONT-06 solicitados por el usuario. |
+| Decision | Admin es autoridad por tipo y permiso; modo manual de movimientos Inventory automaticos deriva un codigo estable del origen. |
+| Implementacion | Migracion Alembic `20261014_0061`; autoridad Admin y cliente compartido; create/read de Puestos RH, movimientos Inventory, proveedor/requisicion/OC/recepcion Purchasing y orden Maintenance; formularios, OpenAPI, fichas y fuentes Markdown. |
+| Historia | Codigos previos no se renumeran; `code_mode` nuevo nullable donde aplica. Accounting sigue apagado. |
+| Validacion | Migracion up/down/up PostgreSQL Local; Admin 3, Purchasing 39 + guardia de longitud, Maintenance 41, RH/Inventory 34 API + 61 DB y 1 prueba DB RH adicional; validador OpenAPI y diff check. Suites completas sin DB: RH 58 aprobadas/8 omitidas, Inventory 173 aprobadas/26 omitidas. La bateria DB fue anterior al ultimo ajuste del helper; no hubo navegador ni UAT integrada. No QA ni Word validado. |
+| Pendiente | Revision costo estimado, CC-19 datos, CC-20 aceptacion, promocion QA autorizada y Word. Suite Purchasing con tenants temporales excluida por politica AGENTS. |
+
+### CHG-324
+
+**2026-10-14 - revision del costo estimado de cotizaciones**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal, revision Sales/Production y control contable |
+| Motivo | Formalizar la brecha monetaria de costo estimado que habia quedado fuera de una fila CC propia. |
+| Hallazgo | `ProductReference.standard_cost` no lleva moneda/Sociedad; `_write_lines` lo suma contra precio documental sin conversion; asignacion/aprobacion no validan costo y pedido copia el estimado. El reporte comercial recalcula mal `margin_percent` y la tarjeta de pedido muestra cero ante nulo. |
+| Decision | Usuario permite aprobar cotizacion con costo/margen estimados nulos si faltan costo confirmado o tasa. |
+| Cambio | Documento de revision, criterio CC-21 y actualizacion de DECISIONES, CONTROL_CONTABLE y PENDIENTES. Sin cambio runtime, migracion ni datos. |
+| Validacion | Lectura de codigo y contratos Local; no se ejecutaron pruebas para esta revision documental. |
+| Pendiente | Implementar CC-21 con fuente de costo por Sociedad, tasa explicita, conversion, snapshot y presentacion/reportes correctos; despues CC-19/20 segun alcance. |
+
+### CHG-325
+
+**2026-10-14 - CC-21 costo estimado de cotizaciones**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal con duenos de Production, Sales y frontend transversal. |
+| Motivo | Evitar comparar `standard_cost` global sin moneda/Sociedad con el precio documental de cotizacion y conservar la procedencia del estimado. |
+| Decision | Costo confirmado por producto/Division en moneda base de Sociedad; tasa explicita si la cotizacion usa otra moneda. Si falta costo o tasa, permitir aprobacion con costo y margen estimados nulos. |
+| Implementacion | Migracion Alembic `20261014_0062`; fuente confirmada y consulta de Production; vista previa, aprobacion y snapshot de Sales; pedido hereda snapshot; UI, reportes CSV, contratos OpenAPI, fichas y manuales Markdown. |
+| Historia | Columnas nullable sin backfill; cotizaciones y pedidos previos conservan importes, pero los reportes no presentan estimados/margenes sin snapshot verificable. Downgrade protegido cuando existe historia nueva. |
+| Ambiente | Migracion up/down/up en PostgreSQL Local loopback 5434, base `erclave_local` y tenant `ten_739ee59d765d5e14818674800d`, verificados antes de operar. Sin QA, Produccion ni Accounting. |
+| Validacion | Production: 69 pruebas focales Local, compilacion y validador OpenAPI. Sales: 83 pruebas focales Local y validador OpenAPI. Sintaxis JS de seis archivos combinados aprobada; `git diff --check` limpio. No navegador ni UAT integrada. |
+| APIs afectadas | Production: PUT costo confirmado por asignacion y GET costo por producto/Division. Sales: PUT contexto de cotizacion, PATCH borrador, POST enviar/aprobar, POST pedido, GET/list cotizaciones/pedidos y GET reportes CSV; respuestas incluyen snapshots nullable y captura de tasa estimada donde aplica. |
+| Pendiente | Regenerar y revisar visualmente Word, datos reales CC-19 y aceptacion integrada CC-20 antes de promocion autorizada. |
+
+### CHG-326
+
+**2026-10-14 - preparacion CC-19 y configuracion contable opcional**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal con revision de dueños Production/Maintenance, Sales/Purchasing y RH/Inventory; perspectiva transversal de Datos, Arquitectura y Contabilidad. |
+| Motivo | El usuario confirmo que aun no dispone de estructura ni equivalencias reales y solicito documentacion y diagrama de mapeos/cuentas necesarios. |
+| Entrega | [Guia CC-19](docs/arquitectura/cc19_mapeos_y_configuracion_contable.md): diagrama de operacion con Accounting apagado o futuro, matriz por dueño, formato minimo de equivalencia, preflight, configuracion por Sociedad y roles de cuenta por evento. Portal, registro e indice documental y contexto actualizados. |
+| Evidencia | Lectura de contratos/arquitectura y preflight read-only en Local `127.0.0.1:5434/erclave_local`, tenant `ten_739ee59d765d5e14818674800d`: 1 Sociedad/Division; 3 almacenes y 3 maquinas sin Division; contextos historicos nulos. Sin lectura QA/Produccion. |
+| Limite | Sin mapeo real aprobado no se ejecuta backfill ni se cierra CC-19. Las cuentas son roles futuros, no codigos ni reglas fiscales fijadas. Accounting planned/apagado; no cambios de runtime, API, esquema, datos, seeds o migracion. |
+| APIs afectadas | Ninguna. |
+
+### CHG-327
+
+**2026-10-14 - preparacion de aceptacion integrada CC-20**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal con revisión de Production/Maintenance, Sales/Purchasing, Admin/RH/Inventory/Costing y perspectivas QA, Seguridad, Sinergia y Contabilidad. |
+| Motivo | El usuario pidió preparar CC-20 para probar después en Local. |
+| Entrega | [Procedimiento y matriz CC-20](docs/operaciones/cc20_aceptacion_integrada_local.md): 16 recorridos, precondiciones, resultados observables, evidencia y cierre; contexto, portal, registro, índice y guía Local actualizados. |
+| Ambiente | Preparación documental de solo lectura en repositorio Local. No se iniciaron servicios, fixtures, migraciones, pruebas, QA ni Accounting. |
+| Estado | Todos los casos Por ejecutar; no se infiere aceptación de pruebas focales, navegador interceptado ni recorrido HTTP anterior. CC-19 y Word independientes. |
+| APIs afectadas | Ninguna modificada; la ejecución posterior consumirá las APIs existentes de Admin, Costing, RH, Inventory, Production, Sales, Purchasing y Maintenance. |
+
+### CHG-328
+
+**2026-10-14 - configuración sintética Local CC-19/20**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal con consultas de solo lectura de Production/Maintenance, Sales/Purchasing y Admin/RH/Inventory/Costing; perspectiva de Contabilidad, Datos, Arquitectura y Seguridad. |
+| Motivo | El usuario pidió generar Sociedades y mapeos de prueba, y corrigió el destino a Local. |
+| Entrega | Por APIs dueñas se crearon un Emisor, una Sociedad USD, dos Divisiones y tres Centros de costos activos en el tenant demo; se conservó la estructura MXN anterior. Resultado: 2 Sociedades, 3 Divisiones y un Centro por División. Manifest y CSV de estructura en `.local/cc19-demo-*`, ignorados por Git. |
+| Ambiente | Sólo Local aislado: APIs `127.0.0.1:8000/8014`, Firebase Auth Emulator `9099` y PostgreSQL `127.0.0.1:5434/erclave_local`; tenant `ten_739ee59d765d5e14818674800d`. Sin QA/Producción, migración ni despliegue. |
+| Historia | Inventario read-only: 38 registros legacy sin contexto/División comprobable en CSV de excepciones. No se hizo backfill, asignación de maestros históricos, conversión de moneda o reconstrucción de snapshots. |
+| Límite | Accounting permanece planned/apagado; no existe runtime para libros, catálogo de cuentas ni reglas. CC-19 real y aceptación CC-20 siguen abiertos. |
+| APIs afectadas | Contratos modificados: ninguno. Consumidas sin cambio: `POST /v1/organization/fiscal-issuers`, `POST /v1/organization/societies`, `POST /v1/organization/divisions` (Admin); `POST /v1/cost-centers` (Costing); `GET` de esos catálogos para idempotencia/lectura. Otras APIs no tocadas. |
+
+### CHG-329
+
+**2026-10-14 - selector de Sociedad/División usable en Local**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal; revisión de Administración, sesión, diseño responsive, feedback y fronteras de ambiente. |
+| Motivo | El usuario mostró que el selector de la barra superior no permitía cambiar cómodamente de División. |
+| Diagnóstico | `data-entity-selector` convertía el select en un buscador de contexto; el select original medía 1 px y su contenedor recortaba la lista. |
+| Cambio | Control dedicado con botón, opciones completas por Sociedad/División/código, indicador activo, foco/Escape y estado de carga; CSS aislado a la barra superior y textos ES/EN. |
+| Validación | Navegador real en Local: 3 opciones visibles, búsqueda por código, cambio de División y de Sociedad, persistencia al recargar, cierre con Escape y textos ES/EN. Validadores de responsive, i18n, selectores y feedback aprobados; sintaxis JS y `git diff --check` sin error. El validador documental sigue señalando deriva previa de otros cambios. |
+| Ambiente | Sólo frontend Local; sin migración, backfill, QA ni Accounting. |
+| APIs afectadas | Contratos modificados: ninguno. Consumida sin cambio: Admin `GET /v1/session/context?division_id=...`. Otras APIs no tocadas. |
+
+### CHG-330
+
+**2026-10-14 - conciliación documental previa a Git**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal; fichas de Custodio de manuales, Arquitectura, Administración y QA/Release consultadas. |
+| Motivo | Revisar documentación, manuales y controles antes de preparar la publicación del trabajo Local acumulado. |
+| Archivos | Fuente Markdown de Administración, registro de manuales, ficha del módulo, diagrama de backend, contexto vigente, `.gitignore` y trazabilidad. |
+| Cambio | Procedimiento del selector Sociedad/División y límite de Centro de costos en el manual; diagrama actualizado a Local head `20261014_0062`; tres campos faltantes de CHG-322 completados; afirmaciones vigentes de Administración conciliadas; carpetas temporales `.local-config/` y `.tmp/` excluidas de Git. |
+| Validación | `validate:documentation` sólo conserva siete fallas de paridad fuente/Word. `validate:traceability` y `git diff --check` de los archivos editados aprobados. |
+| Pendiente | Regenerar los siete Word desde sus fuentes, comprobar paridad textual y páginas renderizadas, actualizar hashes revisados y volver a ejecutar la validación documental y `verify`. No declarar los Word actuales como manuales vigentes. |
+| Ambiente | Sólo documentación local; sin cambios de API, DB, datos, QA o Producción. |
+| APIs afectadas | Contratos modificados: ninguna. Endpoint documentado y consumido sin cambio por CHG-329: Admin GET `/v1/session/context?division_id=...`. Otras APIs no tocadas en este corte. |
+
+### CHG-331
+
+**2026-10-14 - manuales y candidato Git Local**
+
+| Campo | Registro |
+|---|---|
+| Autor | Agente principal; Custodio de manuales y QA/Release. |
+| Motivo | Resolver las siete discrepancias fuente/Word y revisar el árbol acumulado antes de prepararlo para Git. |
+| Cambio | Siete DOCX regenerados desde Markdown vigente; huellas y revisión actualizadas en el registro; notas de vigencia documental conciliadas. Dos correcciones puntuales de regresión en Admin y fixtures de Maintenance. |
+| Validación | Paridad de texto, tablas e integridad ZIP/XML de los siete Word; LibreOffice 26.8.1, 50 páginas renderizadas e inspeccionadas sin páginas vacías ni recortes. `validate:documentation` y `verify` aprobados; 746 pruebas backend aprobadas, 244 omitidas por condiciones del entorno y una advertencia de dependencia. `git diff --check` sin errores. |
+| Ambiente | Trabajo en Local; no se modificaron QA ni Producción, ni se ejecutó CC-20 integrado o backfill CC-19. |
+| APIs afectadas | Admin `POST /v1/catalogs/code-sequences/costing.cost_center/next`: rechazo 422 de tipo no permitido antes de la consulta de permisos; sin nuevo contrato. |
+
+El inventario Git preparado de este candidato reúne 470 archivos (217 modificados y 253 nuevos): backend 203, frontend 73, documentación 110, contratos 9, pruebas fuera de servicios 24 y herramientas/configuración/otros 51. Incluye 26 migraciones Alembic consecutivas y ocho DOCX; siete manuales se renovaron en este corte. No hay artefactos temporales entre los archivos candidatos ni coincidencias con los patrones de llaves privadas y tokens revisados. El conjunto se agrupa en un commit local de integración porque las migraciones, los contratos, sus consumidores y la evidencia se cruzan entre módulos. La publicación de la rama, PR y promoción QA requieren autorización separada.
+
+### CHG-332
+
+| Campo | Evidencia |
+|---|---|
+| Fecha | 2026-10-18 |
+| Cambio | Registro de CC20-01 ejecutado: Pasa Local, 21 comprobaciones con APIs, PostgreSQL y navegador reales. |
+| Autor | Codex |
+| Agentes consultados | Revisión directa de contratos/fichas Admin y Maintenance y guardianes QA/Seguridad; skills erclave-environment-boundaries, erclave-qa-evidence y context-reconcile. Sin nueva delegación. |
+| Archivos | Acta cc20_01_local_20261018, matriz CC-20, contexto vigente, AGENTES, registro e índice documental. Cambio previo de start_local.ps1 y manuales preservado. |
+| APIs afectadas | Contratos modificados: Ninguno. Endpoints existentes Admin/Maintenance y Auth Emulator consumidos; métodos/rutas/permisos enumerados en el acta. |
+| Validación | [Acta](docs/operaciones/cc20_01_local_20261018.md) y .local/cc20-01-20261018214530. Owner original sin cambios; tres membresías sintéticas sin roles/deshabilitadas, tres órdenes canceladas. |
+| Incidencias | INC-CC20-01-DELETE-01: DELETE usuario auditado falla FK con 500 tras eliminar identidad Firebase; limpieza recuperada mediante revocación de roles y disable, sin borrar auditoría. |
+| Límite | CC20-02–16 pendientes, sin QA/Producción ni activación Accounting. El resumen previo solo reconocia hasta CHG-322: CHG-323-331 ya existian con encabezados de nivel 2 y orden descendente al inicio. Se normalizaron a nivel 3 y orden ascendente sin reconstruir registros ni repetir sus pruebas. |
+
+La conciliacion del 18 de octubre preserva el contenido original de CHG-323-331 (14 de octubre), ya presente en Git HEAD `26e6bb61d5deb73a1965f95a67570d8615fc56e2`; unicamente cambia su ubicacion y formato de encabezado para que los lectores `tools/session-context.js`, `tools/context_brief.py` y `tools/validators/validate-traceability.js` los reconozcan. No agrega evidencia retrospectiva. Las observaciones previas sobre un faltante de registros se conservan en el acta como diagnostico de aquel ensayo, superado por esta inspeccion. La incidencia de borrado y el bloqueo documental descritos arriba corresponden al ensayo; su eventual correccion pertenece a un corte posterior.
+
+
+### CHG-333
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-18 |
+| Cambio | Corregir eliminación de usuario auditado, paridad de dos manuales y reconocimiento de CHG-323–331 antes de continuar CC-20. |
+| Autor | Codex |
+| Archivos | Admin API/repositorio/schemas/tests, OpenAPI Admin, frontend app/i18n y prueba UI; fuentes Producción/Ventas solo CRLF, sin cambio de contenido/Word/huellas; TRAZABILIDAD normalizada, arquitectura/módulo/Admin README, contexto, acta, registro e índice. |
+| Agentes consultados | Delegación real: manuales_paridad verificó bytes/texto Word y UI ES/EN; trazabilidad conservó entradas históricas, hizo revisión independiente que detectó carrera y preparó regresiones PG. Raíz implementó API/persistencia/callbacks, corrió pruebas e integración real/concurrencia y concilió documentos. Perspectivas Admin negocio/técnica, Seguridad, Datos, API, QA y custodia documental; skills feature, environment-boundaries, qa-evidence, context-reconcile y solution-manuals. |
+| Descripcion | Retiro de membresía con autor global/auditoría conservados; Firebase posterior al commit, estado pendiente durable en recibo existente y replay seguro. Invitación/onboarding provisionan bajo lock de usuario. UI ES/EN distingue retiro y limpieza pendiente. Manuales tenían solo diferencia LF/CRLF; CHG-323–331 existían con formato/orden no reconocidos, no se reconstruyó evidencia. CC20-01 registrado CHG-332. |
+| Impacto | Local aislado, tenant demo ten_739ee59d765d5e14818674800d. Head0062 sin migración, seed, backfill ni QA/Producción. Dos fixtures integrados propios sin membresía y sin identidad Firebase, global disabled conservado; PG focal rollback-only. Solo Admin Local reiniciado. |
+| APIs afectadas | Admin DELETE /v1/users/{user_id}, permiso admin.user.delete: response añade firebase_identity_cleanup.status/error_codes; request sin cambio. POST /v1/users/invitations (admin.user.invite) y POST /v1/provisioning/tenant-onboarding (allowlist Backoffice), payloads sin cambio; provisioning bajo lock. Rutas consumidas y no tocadas en acta. |
+| Validacion | API91, PostgreSQL6 y regresión integrada real16 aprobadas; UI ES/EN4 aprobadas con DELETE doble. Paridad textual/ZIP/XML de dos Word aprobada, sin render nuevo al no cambiar DOCX. Verify final aprobado: validadores, compilación y backend751 passed/250 skipped/1 warning en 38.18s, corrida general sin DB; omisiones no contadas como aprobaciones. Documentación/índice179 y diff--check aprobados. .local/chg333-verify.log. [Acta](docs/operaciones/correcciones_cc20_01_20261018.md). |
+| Observaciones | Incidencia INC-CC20-01-DELETE-01 corregida solo Local. CC20-02–16 no ejecutados aquí, CC-19 real y promoción QA separados. Worker automático de cleanup futuro; retry mediante misma clave disponible. Verificación general y artefactos locales se informan con su resultado real. |
+
+
+### CHG-334
+
+| Campo | Contenido |
+|---|---|
+| Fecha | 2026-10-18 |
+| Cambio | Preparar publicación Git autorizada y conservar los bytes aprobados de fuentes de manuales. |
+| Autor | Codex |
+| Archivos | .gitattributes, seis fuentes manuales por bytes LF/CRLF sin cambio de contenido, gobierno documental, estado, inicio, pendientes y trazabilidad. Incluye en el candidato los cambios Local ya verificados CHG-332/333. |
+| Agentes consultados | Revisión principal de Git/workflows y evidencia de manuales_paridad de CHG-333. Sin nueva delegación; no se atribuyen pruebas históricas a este corte. |
+| Descripcion | sourceSha256 coincidía en workspace pero no en seis blobs HEAD por normalización EOL. Atributo -text conserva los bytes fuente aprobados y sus huellas al publicar/clonar; Word y registro sin cambios. Rama destino agent/chg-278-qa-release-record; despliegues manuales. |
+| Impacto | Git Local y publicación de rama autorizada; sin cambios runtime, DB, migraciones, datos ni despliegue QA/Producción. No autoriza PR ni merge. |
+| APIs afectadas | Ninguna en CHG-334; candidato incluye contratos/pruebas ya documentados en CHG-333. |
+| Validacion | Candidato CHG-333 conserva verify aprobado751 passed/250 skipped/1 warning, PostgreSQL6 e integración16 y UI4. En CHG-334 documentación aprobada;16 huellas fuente/Word coinciden con los blobs del índice Git; diff--check aprobado y diff de manuales ignorando EOL vacío. No se repitieron pruebas runtime porque no cambió código respecto del candidato verificado. |
+| Observaciones | Seis fuentes cambian solo representación LF/CRLF respecto a HEAD; sus bytes finales son los aprobados y no se regeneró Word ni se renovaron hashes. Resultado efectivo del push se verifica contra la referencia remota y se comunica al usuario. CC20-02–16 y CC-19 real siguen abiertos. |

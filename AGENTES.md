@@ -1,5 +1,13 @@
 # ERClave - Lista de agentes por modulo
 
+## Correcciones Local verificadas · CHG-333
+
+[Acta CHG-333](docs/operaciones/correcciones_cc20_01_20261018.md). Admin conserva usuario global/auditoría al retirar una membresía; Firebase se limpia después del commit y solo sin membresías, con estado pendiente/reintento explícitos. Invitación/onboarding comparten bloqueo de usuario con cleanup. Agentes ejecutados: manuales_paridad (bytes/texto Word y UI), trazabilidad (normalización y revisión independiente que detectó carrera); raíz implementación, PostgreSQL/API/Emulator y documentación. CC20-02 aún por ejecutar.
+
+## Evidencia CC20-01 Local · 2026-10-18
+
+[Acta CC20-01](docs/operaciones/cc20_01_local_20261018.md): caso aprobado en Local mediante Admin, consumidor Maintenance y navegador real; CC20-02–16 siguen por ejecutar. Admin/Seguridad revisaron INC-CC20-01-DELETE-01; corregida y probada Local en CHG-333. Tres membresías propias quedaron deshabilitadas y sin roles, sin afectar al Owner. La nota CHG-327 siguiente conserva el estado preparatorio. Revisión directa de contratos/fichas y skills de ambientes/evidencia; sin nueva delegación de agentes.
+
 ## Preparacion CC-20 - CHG-327
 
 [Matriz Local de aceptación integrada](docs/operaciones/cc20_aceptacion_integrada_local.md) preparada con casos y evidencia esperada por dueño. QA/Seguridad/Sinergia y los dueños deben registrar ejecución real antes de declarar cierre; ninguno pasó todavía por esta preparación. Accounting apagado, tenant Local exclusivo y datos sintéticos acotados. El uso de APIs interceptadas sólo prueba UI, y la matriz QA remota conserva su estado independiente.

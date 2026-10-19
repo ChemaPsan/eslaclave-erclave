@@ -1,5 +1,9 @@
 # CC-20 — Aceptación integrada en Local
 
+## Resultado observado · 2026-10-18
+
+CC20-01 **Pasa en Local** con 21 comprobaciones integradas (Admin + Maintenance + navegador real). [Acta, versiones, evidencia y limpieza](cc20_01_local_20261018.md). Incidencia auxiliar de borrado de usuarios con auditoría corregida Local en CHG-333. CC20-02–16 siguen Por ejecutar; CC-20 integral permanece abierto. Los apartados de preparación e inventario anteriores se conservan con su fecha, no describen una consulta nueva.
+
 **CHG-327 · 2026-10-14 · paquete preparado, sin ejecución.** Este documento define el recorrido que se probará después en Local aislado. Ninguna fila está aprobada por redactarla. CC-19 (mapeo de datos reales) es independiente: los casos nuevos usan datos sintéticos controlados y los casos históricos sólo registros con procedencia conocida. Accounting permanece apagado.
 
 ## Objetivo y frontera
@@ -24,7 +28,7 @@ Estado inicial de todos los casos: **Por ejecutar**. `Pasa` requiere resultado o
 
 | ID | Recorrido Local | Resultado observable requerido | Estado |
 |---|---|---|---|
-| CC20-01 | Admin: sesión, Emisor → Sociedad → División, selección activa, permiso y alcance. Revocar una División entre lectura y comando. | Backend rechaza detalle, comando, replay y CSV fuera del alcance; la UI no concede acceso por preferencia local. Documento previo conserva contexto. | Por ejecutar |
+| CC20-01 | Admin: sesión, Emisor → Sociedad → División, selección activa, permiso y alcance. Revocar una División entre lectura y comando. | Backend rechaza detalle, comando, replay y CSV fuera del alcance; la UI no concede acceso por preferencia local. Documento previo conserva contexto. | **Pasa Local · 2026-10-18** |
 | CC20-02 | Costing básico y RH: centro por División, puesto/trabajador compartidos, tarifa Decimal6 en moneda base confirmada. | Centro ajeno/inactivo y moneda/Sociedad incorrecta rechazados; cero permitido; trabajador exige puesto vigente. Multiadscripción no duplica capacidad global y la historia no se recalcula. | Por ejecutar |
 | CC20-03 | Inventory: almacenes y artículos por División, entrada manual, reversa, Kardex y saldos. | Una entrada/reversa por origen; existencia, reserva y disponible cuadran. Costo original/moneda y contexto quedan en el movimiento; folios históricos intactos. | Por ejecutar |
 | CC20-04 | Inventory: transferencia parcial entre dos Divisiones de la misma Sociedad, recepción, rechazo/retorno y sobrante. Probar División de otra Sociedad. | Ambos extremos autorizados; tránsito y cantidades reconcilian, costo/contexto originales se conservan; cruce de Sociedad rechazado antes de efectos. | Por ejecutar |

@@ -1095,6 +1095,18 @@
       "status": "vigente",
       "owner": "Inventory, Purchasing, Maintenance y custodio contable",
       "authority": "docs/contexto/CONTROL_CONTABLE.md"
+    },
+    {
+      "path": "docs/operaciones/cc20_01_local_20261018.md",
+      "status": "historico",
+      "owner": "QA, Seguridad y dueños Admin/Maintenance",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
+    },
+    {
+      "path": "docs/operaciones/correcciones_cc20_01_20261018.md",
+      "status": "historico",
+      "owner": "Admin, Seguridad, QA y custodio documental",
+      "authority": "docs/contexto/ESTADO_ACTUAL.md"
     }
   ]
 }

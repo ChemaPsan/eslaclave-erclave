@@ -1,5 +1,13 @@
 # Control de preparación e integración contable
 
+## Continuidad después de las correcciones · CHG-333
+
+[Tres pendientes resueltos Local](../operaciones/correcciones_cc20_01_20261018.md): baja de membresía auditada, paridad de manuales y lectura de trazabilidad. Conserva CC20-01 aprobado Local; CC-20 permanece abierto por CC20-02–16. No modifica reglas contables, datos reales CC-19, head0062 ni despliegue QA.
+
+## Aceptación CC-20 parcial comprobada · 2026-10-18
+
+CC20-01 pasa en Local con evidencia integrada Admin/Maintenance y navegador real: selección y revocación de alcance, denegación de detalle/comandos/replays, exclusión de CSV y preferencia UI revalidada. [Acta](../operaciones/cc20_01_local_20261018.md). CC-20 permanece abierto para CC20-02–16 y alcance transversal CC20-13. Incidencia auxiliar de borrado de usuario con auditoría registrada y corregida Local en CHG-333; no implica activar Accounting ni completar CC-19. La preparación CHG-327 siguiente describe el estado anterior al ensayo.
+
 ## Configuración demo Local - CHG-328 - 2026-10-14
 
 El tenant demo Local ahora tiene 2 Sociedades, 3 Divisiones y un Centro de costos activo por División, creados por Admin/Costing. La estructura habilita la preparación de casos entre Divisiones/Sociedades, pero aún faltan asignaciones, condiciones, actores restringidos y aceptación CC-20. Treinta y ocho registros legacy permanecen como excepciones sin backfill; CC-19 real sigue abierto. Accounting no tiene runtime y no se configuraron libros/cuentas/reglas.

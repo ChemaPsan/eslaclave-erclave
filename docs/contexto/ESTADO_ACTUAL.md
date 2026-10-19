@@ -1,5 +1,19 @@
 # Estado actual de ERClave
 
+## Preparación de publicación Git · CHG-334 · 2026-10-18
+
+El usuario autorizó subir el repositorio. El candidato conserva CHG-333 validado y añade .gitattributes para preservar los bytes de las fuentes de manuales vinculadas a huellas Word. Se detectó que seis fuentes coincidían con el registro en el workspace, pero sus blobs HEAD estaban normalizados a LF y no coincidían. El commit debe conservar sus bytes aprobados (sin cambio de texto ni Word); comprobar las huellas del índice Git antes de publicarlo. Destino: rama agent/chg-278-qa-release-record en origin. Workflows de despliegue manuales; publicar la rama no promueve QA. CC20-02–16 y CC-19 real mantienen sus pendientes.
+
+## Tres correcciones Local cerradas · CHG-333 · 2026-10-18
+
+`verify` y documentación aprobados: 751 pruebas backend aprobadas, 250 omitidas en la corrida general sin DB y una advertencia existente. Las regresiones focales con PostgreSQL/Emulator y UI se registran por separado en el acta.
+
+INC-CC20-01-DELETE-01 corregida Local: retiro de membresía con auditoría preservada, limpieza Firebase posterior y reintento seguro; invitación/onboarding coordinados con el bloqueo de identidad. Dos manuales recuperaron paridad restaurando CRLF sin cambiar contenido/Word. CHG-323–331 sí existían: formato/posición normalizados; CC20-01 registrado como CHG-332. [Acta de correcciones](../operaciones/correcciones_cc20_01_20261018.md). Focal API91, PostgreSQL6, integración real16 y UI4 aprobadas. CC20-02–16 pendientes; CC-19 real y QA mantienen su alcance. Los apartados siguientes describen sus cortes previos.
+
+## CC20-01 ejecutado Local · 2026-10-18
+
+CC20-01 pasa en Local: 21 comprobaciones con Admin, orden Maintenance, PostgreSQL y Chrome/Firebase SDK reales. Revocación de División, comandos/replays, listado/CSV y preferencia local comprobados; Owner original preservado. [Acta y límites](../operaciones/cc20_01_local_20261018.md). CC20-02–16 siguen por ejecutar. Incidencia auxiliar observada entonces y corregida en CHG-333: DELETE de usuario con auditoría devolvía 500 tras eliminar su identidad Firebase; membresías propias deshabilitadas y sin roles, órdenes propias canceladas. CC-19 y QA sin cambios. Las notas CHG siguientes conservan antecedentes.
+
 ## Cierre documental Local para Git - CHG-331 - 2026-10-14
 
 Se regeneraron los siete manuales Word desde sus fuentes vigentes, se comprobó su paridad textual/ZIP/XML/tablas y se revisaron visualmente las 50 páginas renderizadas. Sus huellas se renovaron en el registro documental. Son exportaciones candidatas Local; CC-20 integrado, CC-19 con datos reales y promoción QA permanecen pendientes. La nota CHG-330 siguiente corresponde al estado previo.

@@ -77,6 +77,7 @@ from .schemas import (
     UserInvitationRequest,
     UserListResponse,
     UserResponse,
+    UserDeleteResponse,
     UserUpdateRequest,
     UnitOfMeasureCreateRequest,
     UnitOfMeasureListResponse,
@@ -448,7 +449,6 @@ def onboard_tenant(
                 status_code=409,
                 details={"module_code": item["module_code"], "dependencies": missing},
             )
-    ensure_firebase_user(payload.owner.email, payload.owner.display_name, settings)
     result = repository.onboard_tenant(
         slug=payload.slug,
         commercial_name=payload.commercial_name,
@@ -462,6 +462,7 @@ def onboard_tenant(
         modules=normalized_modules,
         idempotency_key=resolved_idempotency_key,
         correlation_id=resolve_correlation_id(x_correlation_id),
+        ensure_identity=lambda: ensure_firebase_user(payload.owner.email, payload.owner.display_name, settings),
     )
     try:
         result["invitation"] = create_firebase_password_invitation(payload.owner.email, settings)
@@ -1010,7 +1011,6 @@ def invite_user(
     if repository.get_tenant(x_tenant_id) is None:
         raise ErclaveError("tenant_not_found", "Tenant not found.", status_code=404, details={"tenant_id": x_tenant_id})
     resolved_idempotency_key = require_idempotency_key(idempotency_key)
-    ensure_firebase_user(payload.email, payload.display_name, settings)
     return UserResponse(
         data=repository.invite_user(
             tenant_id=x_tenant_id,
@@ -1019,6 +1019,7 @@ def invite_user(
             role_ids=payload.role_ids,
             idempotency_key=resolved_idempotency_key,
             correlation_id=resolve_correlation_id(x_correlation_id),
+            ensure_identity=lambda: ensure_firebase_user(payload.email, payload.display_name, settings),
         )
     )
 
@@ -1070,7 +1071,7 @@ def disable_user(
     return UserResponse(data=user)
 
 
-@router.delete("/users/{user_id}", response_model=UserResponse)
+@router.delete("/users/{user_id}", response_model=UserDeleteResponse)
 def delete_user(
     user_id: str,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
@@ -1079,22 +1080,26 @@ def delete_user(
     _authorization: None = Depends(require_permission_for_header_tenant("admin.user.delete")),
     settings: Settings = Depends(get_settings),
     repository: AdminRepository = Depends(get_admin_repository),
-) -> UserResponse:
+) -> UserDeleteResponse:
     if not x_tenant_id:
         raise ErclaveError("tenant_required", "X-Tenant-Id header is required.", status_code=400)
-    user = repository.get_user_for_tenant(x_tenant_id, user_id)
-    if user is None:
-        raise ErclaveError("user_not_found", "User not found for tenant.", status_code=404, details={"user_id": user_id})
-    delete_firebase_user_by_email(user.email, settings)
-    deleted_user = repository.delete_user(
-        tenant_id=x_tenant_id,
-        user_id=user_id,
-        idempotency_key=require_idempotency_key(idempotency_key),
-        correlation_id=resolve_correlation_id(x_correlation_id),
-    )
+    command_key = require_idempotency_key(idempotency_key)
+    try:
+        deleted_user = repository.delete_user(
+            tenant_id=x_tenant_id,
+            user_id=user_id,
+            idempotency_key=command_key,
+            correlation_id=resolve_correlation_id(x_correlation_id),
+            actor_email=_authorization.email if _authorization else None,
+        )
+    except IdempotencyConflictError as exc:
+        raise ErclaveError("idempotency_key_reused", "Command key conflicts with an earlier request.", status_code=409) from exc
     if deleted_user is None:
         raise ErclaveError("user_not_found", "User not found for tenant.", status_code=404, details={"user_id": user_id})
-    return UserResponse(data=deleted_user)
+    cleanup = repository.cleanup_user_identity(
+        x_tenant_id, user_id, command_key, lambda email: delete_firebase_user_by_email(email, settings)
+    )
+    return UserDeleteResponse(data={**deleted_user.model_dump(), "firebase_identity_cleanup": cleanup})
 
 
 @router.get("/roles", response_model=RoleListResponse)

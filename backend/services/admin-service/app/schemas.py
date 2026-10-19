@@ -282,6 +282,19 @@ class UserResponse(BaseModel):
     data: UserRead
 
 
+class UserIdentityCleanupRead(BaseModel):
+    status: Literal["completed", "pending", "not_required"]
+    error_codes: list[str] = Field(default_factory=list)
+
+
+class UserDeleteRead(UserRead):
+    firebase_identity_cleanup: UserIdentityCleanupRead
+
+
+class UserDeleteResponse(BaseModel):
+    data: UserDeleteRead
+
+
 class PermissionAssignmentRead(BaseModel):
     permission_id: str
     code: str

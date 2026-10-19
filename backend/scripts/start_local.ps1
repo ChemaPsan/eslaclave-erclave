@@ -9,6 +9,8 @@ $ErrorActionPreference = "Stop"
 $backendRoot = Split-Path -Parent $PSScriptRoot
 $repoRoot = Split-Path -Parent $backendRoot
 $frontendRoot = Join-Path $repoRoot "frontend"
+$localFirebaseConfig = Join-Path $repoRoot ".local\firebase-cli\config"
+$localFirebaseCache = Join-Path $repoRoot ".local\firebase-cli\cache"
 $pythonPath = Join-Path $backendRoot ".venv\Scripts\python.exe"
 $postgresBin = Join-Path $PostgresRoot "pgsql\bin"
 $postgresData = Join-Path $PostgresRoot "data"
@@ -27,7 +29,23 @@ function Assert-Port-Free([int]$Port, [string]$Name) {
 foreach ($requiredPath in @($pythonPath, (Join-Path $postgresBin "pg_ctl.exe"))) {
     if (-not (Test-Path -LiteralPath $requiredPath)) { throw "Falta dependencia local: $requiredPath" }
 }
-if (-not (Get-Command firebase.cmd -ErrorAction SilentlyContinue)) { throw "Firebase CLI no esta instalado." }
+$nodeInstall = Join-Path $env:LOCALAPPDATA "Programs\nodejs"
+if (-not (Get-Command firebase.cmd -ErrorAction SilentlyContinue)) {
+    $firebaseCommand = Join-Path $nodeInstall "firebase.cmd"
+    $firebaseCli = Join-Path $nodeInstall "node_modules\firebase-tools\lib\bin\firebase.js"
+    if ((Test-Path -LiteralPath $firebaseCommand) -and (Test-Path -LiteralPath $firebaseCli)) {
+        $env:Path = "$nodeInstall;$env:Path"
+    } else {
+        throw "Firebase CLI no esta instalado o no se encontro Node.js en PATH ni en $nodeInstall."
+    }
+}
+if (-not (Get-Command node.exe -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath (Join-Path $nodeInstall "node.exe"))) {
+    $env:Path = "$nodeInstall;$env:Path"
+}
+if (-not (Get-Command node.exe -ErrorAction SilentlyContinue)) { throw "Node.js no esta disponible para Firebase CLI." }
+New-Item -ItemType Directory -Force -Path $localFirebaseConfig, $localFirebaseCache | Out-Null
+$env:XDG_CONFIG_HOME = $localFirebaseConfig
+$env:XDG_CACHE_HOME = $localFirebaseCache
 if (-not (Get-Command java.exe -ErrorAction SilentlyContinue)) {
     $portableJava = Get-ChildItem -LiteralPath "C:\tmp\microsoft-jdk-21" -Recurse -Filter "java.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $portableJava) { throw "Java no esta instalado; Firebase Emulator no puede iniciar." }

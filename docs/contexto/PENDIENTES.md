@@ -1,5 +1,17 @@
 # Pendientes priorizados de ERClave
 
+## Publicación del candidato Local · CHG-334
+
+Subida de rama autorizada por el usuario; preparar commit y comprobar que las huellas fuente/Word también coinciden con los blobs del índice Git. .gitattributes conserva los bytes aprobados de manuales y evita divergencia al clonar. CC20-02–16 y mapeo real CC-19 permanecen pendientes; la publicación Git no es promoción QA.
+
+## Correcciones previas a CC20-02 resueltas · CHG-333
+
+Resueltos en Local el borrado de usuario auditado, la paridad de manuales Producción/Ventas y el reconocimiento de CHG-323–331. [Evidencia y límites](../operaciones/correcciones_cc20_01_20261018.md). El siguiente recorrido es CC20-02 con sus precondiciones; no se ejecutó en este corte. Reintento de limpieza Firebase mediante la misma clave implementado; worker automático sigue futuro. CC-19 real y aprobación/promoción QA conservan sus propios pendientes.
+
+## Siguiente paso tras CC20-01 Local · 2026-10-18
+
+CC20-01 pasa en Local; [acta, evidencia y alcance](../operaciones/cc20_01_local_20261018.md). Continuar CC20-02–16 con sus precondiciones; no cerrar CC-20 integral por este caso. INC-CC20-01-DELETE-01 quedó corregida Local en CHG-333. Los fixtures quedaron sin acceso y sus órdenes canceladas. CHG-323–331 existían; formato/posición normalizados en CHG-333. Los apartados anteriores por fecha se conservan como antecedentes; CC-19 real y promoción QA siguen pendientes.
+
 ## Candidato Git - CHG-331 - 2026-10-14
 
 Los siete Word y sus fuentes ya tienen paridad y revisión visual de 50 páginas; las huellas del registro están renovadas. `verify` aprobó con 746 pruebas backend, 244 omitidas por condiciones del entorno y una advertencia de dependencia. El árbol acumulado se inventarió y agrupó como candidato de integración Local. Conservarlo como candidato hasta la aceptación CC-20 y una promoción QA autorizada. El pendiente documental CHG-330 siguiente quedó resuelto por este corte.
